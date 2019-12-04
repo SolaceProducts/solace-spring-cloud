@@ -1,0 +1,83 @@
+<?xml  version="1.0"  encoding="UTF-8"?>
+<project  xmlns="http://maven.apache.org/POM/4.0.0"  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0  http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.solace.spring.cloud</groupId>
+        <artifactId>solace-spring-cloud-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../../solace-spring-cloud-parent/pom.xml</relativePath>
+    </parent>
+
+    <artifactId>spring-cloud-stream-binder-solace</artifactId>
+    <packaging>jar</packaging>
+    <name>Solace  Spring  Cloud  Stream  Binder</name>
+    <description>A  Spring  Cloud  Stream  Binder  implementation  using  the  Solace  Java  API  (JCSMP)</description>
+    <url>https://github.com/SolaceProducts/spring-cloud-stream-binder-solace</url>
+
+    <dependencies>
+        <dependency>
+            <groupId>com.solace.spring.cloud</groupId>
+            <artifactId>spring-cloud-stream-binder-solace-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.solacesystems</groupId>
+            <artifactId>sol-jcsmp</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.solace.spring.boot</groupId>
+            <artifactId>solace-java-spring-boot-starter</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-stream</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-stream-binder-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-stream-test-support-internal</artifactId>
+            <version>2.2.1.RELEASE</version>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>commons-logging</groupId>
+            <artifactId>commons-logging</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+            <scope>test</scope>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>
