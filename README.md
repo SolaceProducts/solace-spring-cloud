@@ -87,7 +87,7 @@ Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be
 2. Import `solace-spring-cloud-connector`:
     * Maven
         ```
-        <!-- Solace Cloud -->
+        <!-- Solace Cloud Connector -->
         <dependency>
           <groupId>com.solace.cloud.cloudfoundry</groupId>
           <artifactId>solace-spring-cloud-connector</artifactId>
@@ -96,7 +96,7 @@ Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be
         ```
     * Gradle 
         ```
-        // Solace Cloud
+        // Solace Cloud Connector
         compile("com.solace.cloud.cloudfoundry:solace-spring-cloud-connector:4.1.0")
         ```
 3. You can now get a `SolaceServiceCredentials` object from the `CloudFactory` that you can use to connect to your local Solace PubSub+ instance:
