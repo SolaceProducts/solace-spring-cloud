@@ -24,14 +24,6 @@ This project includes and builds the Solace Spring cloud stream starter, as well
 
 ## Quickstart Guide
 
-TODO
-
-To get started, we need to pull in 2 dependencies:
-1. 
-2. `solace-spring-cloud-bom`
-
-Once these dependencies are declared, we can automatically autowire Solace Spring Cloud beans.
-
 ### Quickstart Guide - Spring Cloud Version Compatibility
 
 The `solace-spring-cloud-bom` will guarantee that the versions of the Solace Spring Cloud starters and autoconfigurations are what works with your version of Spring Boot.
