@@ -114,38 +114,3 @@ target/solace-spring-cloud-connector-3.3.0-SNAPSHOT.jar
 ```
 
 You can install this file in your maven repository locally.
-
-## Contributing
-
-Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduct, and the process for submitting pull requests to us.
-
-## Release Notes and Versioning
-
-This project uses [SemVer](http://semver.org/) for versioning. For the versions available and corresponding release notes, see the [Releases in this repository](https://github.com/SolaceProducts/sl-spring-cloud-connectors/releases).
-
-## Authors
-
-See the list of [contributors](https://github.com/SolaceProducts/sl-spring-cloud-connectors/contributors) who participated in this project.
-
-## License
-
-This project is licensed under the Apache License, Version 2.0. - See the [LICENSE](LICENSE) file for details.
-
-## Resources
-
-For more information about Cloud Foundry and the Solace PubSub+ service these resources:
-- [Solace PubSub+ for Pivotal Cloud Foundry](http://docs.pivotal.io/solace-messaging/)
-- [Cloud Foundry Documentation](http://docs.cloudfoundry.org/)
-- For an introduction to Cloud Foundry: https://www.cloudfoundry.org/
-
-For more information about Spring Cloud try these resources:
-- [Spring Cloud](http://projects.spring.io/spring-cloud/)
-- [Spring Cloud Connectors](http://cloud.spring.io/spring-cloud-connectors/)
-- [Spring Cloud Connectors Docs](http://cloud.spring.io/spring-cloud-connectors/spring-cloud-connectors.html)
-- [Spring Cloud Connectors GitHub](https://github.com/spring-cloud/spring-cloud-connectors)
-
-For more information about Solace technology in general please visit these resources:
-
-- The Solace Developer Portal website at: http://dev.solacesystems.com
-- Understanding [Solace technology.](http://dev.solacesystems.com/tech/)
-- Ask the [Solace community](http://dev.solacesystems.com/community/).

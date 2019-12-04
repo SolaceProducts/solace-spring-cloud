@@ -57,16 +57,16 @@ TODO
 ```xml
     <!-- Add me to your POM.xml -->
     <properties>
-        <spring.cloud.version>Hoxton.RELEASE</spring.cloud.version>
+        <spring.cloud.version>Hoxton.RC1</spring.cloud.version>
 
         <!-- Consult the README versioning table -->
-        <solace.spring.cloud.version>1.0.0</solace.spring.cloud.version>
+        <solace.spring.cloud.bom.version>1.0.0</solace.spring.cloud.bom.version>
     </properties>
 
     <dependencyManagement>
         <groupId>com.solace.spring.cloud</groupId>
         <artifactId>solace-spring-cloud-bom</artifactId>
-        <version>${solace.spring.cloud.version}</version>
+        <version>${solace.spring.cloud.bom.version}</version>
         <type>pom</type>
         <scope>import</scope>
     </dependencyManagement>
@@ -77,7 +77,7 @@ TODO
     /* Add me to your build.gradle */
     buildscript {
         ext {
-            springCloudVersion = 'Hoxton.RELEASE'
+            springCloudVersion = 'Hoxton.RC1'
                                                  
             // Consult the README versioning table
             solaceSpringCloudBomVersion = '1.0.0'
@@ -103,7 +103,7 @@ Note: Gradle 4 isn't natively compatible with Maven BOM's. Thus, we have to use 
     /* Add me to your build.gradle */
     buildscript {
         ext {
-            springCloudVersion = 'Hoxton.RELEASE'
+            springCloudVersion = 'Hoxton.RC1'
 
             // Consult the README versioning table
             solaceSpringCloudBomVersion = '1.0.0'
@@ -186,6 +186,14 @@ This project is the implementation of the Spring Cloud binder for Solace PubSub+
 ## Additional Information
 
 You can find additional information about each of the projects in their respective README's.
+
+### Solace Spring Cloud Stream Binder README
+
+[README](solace-spring-cloud-stream/README.md)
+
+### Solace Spring Cloud Connector README
+
+[README](solace-spring-cloud-connector/README.md)
 
 ## Additional Meta-Information
 
