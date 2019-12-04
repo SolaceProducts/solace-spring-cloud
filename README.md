@@ -7,6 +7,7 @@ This includes the Java (JCSMP) starter and the JMS starter.
 
 ## Table of contents
 * [Quickstart Guide](#quickstart-guide)
+    * [Quickstart Guide - Spring Cloud Version Compatibility](#quickstart-guide---spring-cloud-version-compatibility)
     * [Quickstart Guide - Cloud Stream Binder](#quickstart-guide---cloud-stream-binder)
     * [Quickstart Guide - Cloud Connector](#quickstart-guide---cloud-connector)
 * [Building Locally](#building-locally)
@@ -33,6 +34,20 @@ To get started, we need to pull in 2 dependencies:
 
 Once these dependencies are declared, we can automatically autowire Solace Spring Boot beans.
 
+### Quickstart Guide - Spring Cloud Version Compatibility
+
+The `solace-spring-boot-bom` will guarantee that the versions of the Solace Spring Boot starters and autoconfigurations are what works with your version of Spring Boot.
+Consult the table below to determine what version of the BOM you need for your version of Spring Boot.
+
+| Spring Cloud         |Solace Spring Cloud BOM|Spring Boot      |Solace Spring Boot BOM|
+|----------------------|-----------------------|-----------------|----------------------|
+|Hoxton.RC1            |1.0.0                  | 2.2.0           |1.0.0                 |
+|Hoxton.RELEASE        |                       | 2.2.1           |                      |
+|                      |                       | 2.2.2-SNAPSHOT  |                      |
+
+Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be included implicitly by default.
+
+
 ### Quickstart Guide - Cloud Stream Binder
 
 TODO
@@ -45,21 +60,16 @@ TODO
 ```xml
     <!-- Add me to your POM.xml -->
     <properties>
-        <spring.boot.version>2.2.1.RELEASE</spring.boot.version>
         <spring.cloud.version>Hoxton.RELEASE</spring.cloud.version>
+
+        <!-- Consult the README versioning table -->
+        <solace.spring.cloud.version>1.0.0</solace.spring.cloud.version>
     </properties>
 
     <dependencyManagement>
-        <groupId>com.solace.spring.boot</groupId>
-        <artifactId>solace-spring-boot-bom</artifactId>
-        <version>${spring.boot.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-    </dependencyManagement>
-    <dependencyManagement>
         <groupId>com.solace.spring.cloud</groupId>
         <artifactId>solace-spring-cloud-bom</artifactId>
-        <version>${spring.cloud.version}</version>
+        <version>${solace.spring.cloud.version}</version>
         <type>pom</type>
         <scope>import</scope>
     </dependencyManagement>
@@ -70,8 +80,10 @@ TODO
     /* Add me to your build.gradle */
     buildscript {
         ext {
-            springBootVersion = '2.2.1.RELEASE'
             springCloudVersion = 'Hoxton.RELEASE'
+                                                 
+            // Consult the README versioning table
+            solaceSpringCloudBomVersion = '1.0.0'
         }
         dependencies {
             classpath 'io.spring.gradle:dependency-management-plugin:1.0.8.RELEASE'
@@ -82,8 +94,7 @@ TODO
 
     dependencyManagement {
         imports {
-            mavenBom "com.solace.spring.boot:solace-spring-boot-bom:${springBootVersion}"
-            mavenBom "com.solace.spring.cloud:solace-spring-cloud-bom:${springCloudVersion}"
+            mavenBom "com.solace.spring.cloud:solace-spring-cloud-bom:${solaceSpringCloudBomVersion}"
         }
     }
 ```
@@ -95,14 +106,15 @@ Note: Gradle 4 isn't natively compatible with Maven BOM's. Thus, we have to use 
     /* Add me to your build.gradle */
     buildscript {
         ext {
-            springBootVersion = '2.2.1.RELEASE'
             springCloudVersion = 'Hoxton.RELEASE'
+
+            // Consult the README versioning table
+            solaceSpringCloudBomVersion = '1.0.0'
         }
     }
     
     dependencies {
-        implementation(platform("com.solace.spring.boot:solace-spring-boot-bom:${springBootVersion}"))
-        implementation(platform("com.solace.spring.cloud:solace-spring-cloud-bom:${springCloudVersion}"))
+        implementation(platform("com.solace.spring.cloud:solace-spring-cloud-bom:${solaceSpringCloudBomVersion}"))
     }
 ```
 
