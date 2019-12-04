@@ -11,8 +11,8 @@
 
     <artifactId>spring-cloud-stream-binder-solace</artifactId>
     <packaging>jar</packaging>
-    <name>Solace  Spring  Cloud  Stream  Binder</name>
-    <description>A  Spring  Cloud  Stream  Binder  implementation  using  the  Solace  Java  API  (JCSMP)</description>
+    <name>Solace Spring Cloud Stream Binder</name>
+    <description>A Spring Cloud Stream Binder implementation using the Solace Java API (JCSMP)</description>
 
     <dependencies>
         <dependency>
@@ -24,6 +24,7 @@
         <dependency>
             <groupId>com.solacesystems</groupId>
             <artifactId>sol-jcsmp</artifactId>
+            <version>${sol-jcsmp.version}</version>
         </dependency>
 
         <dependency>
@@ -34,16 +35,19 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot</artifactId>
+            <version>${spring.boot.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-stream</artifactId>
+            <version>${spring-cloud-stream.version}</version>
         </dependency>
 
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-stream-binder-test</artifactId>
+            <version>${spring-cloud-stream.version}</version>
             <scope>test</scope>
         </dependency>
 
@@ -57,24 +61,28 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
+            <version>${junit.version}</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>commons-logging</groupId>
             <artifactId>commons-logging</artifactId>
+            <version>${commons-logging.version}</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
+            <version>${log4j.version}</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
+            <version>${log4j.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
