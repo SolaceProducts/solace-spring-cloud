@@ -13,7 +13,7 @@ This project includes and builds the Solace Spring cloud stream starter, as well
     * [Maven Project Structure](#maven-project-structure)
 * [Additional Information](#additional-information)
     * [Solace Spring Cloud Stream Binder README](#solace-spring-cloud-stream-binder-readme)
-    * [Solace Spring Cloud Connector README](#solace-jms-spring-boot-starter)
+    * [Solace Spring Cloud Connector README](#solace-spring-cloud-connector-readme)
 * [Additional Meta-Information](#additional-meta-information)
     * [Contributing](#contributing)
     * [Authors](#authors)
