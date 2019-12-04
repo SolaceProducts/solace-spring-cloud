@@ -1,9 +1,8 @@
-# Solace Spring Boot
+# Solace Spring Cloud
 
 ## Overview
 
-This project includes and builds all the Solace starters for Spring Boot.
-This includes the Java (JCSMP) starter and the JMS starter.
+This project includes and builds the Solace Spring cloud stream starter, as well as the cloud connector for Solace.
 
 ## Table of contents
 * [Quickstart Guide](#quickstart-guide)
@@ -32,12 +31,12 @@ To get started, we need to pull in 2 dependencies:
 1. 
 2. `solace-spring-cloud-bom`
 
-Once these dependencies are declared, we can automatically autowire Solace Spring Boot beans.
+Once these dependencies are declared, we can automatically autowire Solace Spring Cloud beans.
 
 ### Quickstart Guide - Spring Cloud Version Compatibility
 
-The `solace-spring-boot-bom` will guarantee that the versions of the Solace Spring Boot starters and autoconfigurations are what works with your version of Spring Boot.
-Consult the table below to determine what version of the BOM you need for your version of Spring Boot.
+The `solace-spring-cloud-bom` will guarantee that the versions of the Solace Spring Cloud starters and autoconfigurations are what works with your version of Spring Boot.
+Consult the table below to determine what version of the BOM you need for your version of Spring Cloud.
 
 | Spring Cloud         |Solace Spring Cloud BOM|Spring Boot      |Solace Spring Boot BOM|
 |----------------------|-----------------------|-----------------|----------------------|
@@ -46,7 +45,6 @@ Consult the table below to determine what version of the BOM you need for your v
 |                      |                       | 2.2.2-SNAPSHOT  |                      |
 
 Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be included implicitly by default.
-
 
 ### Quickstart Guide - Cloud Stream Binder
 
@@ -155,7 +153,7 @@ All subprojects are included as modules of solace-spring-boot-build. Running `mv
 #### solace-spring-cloud-build
 
 This POM defines build-related plugins and profiles that are inherited by the BOM as well as the starters and autoconfiguration.
-The version of this POM should match the version of Spring Boot and Spring Cloud that the build will target.
+The version of this POM should match the version of Spring Cloud that the build will target.
 
 Please do not put dependency related properties here - they belong in solace-spring-cloud-parent. The exceptions to this, naturally, are the versions of the Solace starters as well as the version of Spring Boot this build targets.
 If it shouldn't be inherited by the BOM, it doesn't go here.

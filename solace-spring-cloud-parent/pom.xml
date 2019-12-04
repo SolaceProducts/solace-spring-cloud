@@ -38,14 +38,6 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <!-- Import Spring Boot dependency management -->
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-dependencies</artifactId>
-                <version>${spring.boot.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-            <dependency>
                 <!-- Import Spring Cloud dependency management -->
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>
@@ -55,8 +47,8 @@
             </dependency>
             <dependency>
                 <!-- Import Solace Spring Boot dependency management -->
-                <groupId>com.solace.spring.boot</groupId>
-                <artifactId>solace-spring-boot-bom</artifactId>
+                <groupId>com.solace.spring.cloud</groupId>
+                <artifactId>solace-spring-cloud-bom</artifactId>
                 <version>1.0.0-SNAPSHOT</version>
                 <type>pom</type>
                 <scope>import</scope>
@@ -85,6 +77,12 @@
                 <artifactId>spring-cloud-stream-binder-test</artifactId>
                 <version>${spring-cloud-stream.version}</version>
                 <scope>test</scope>
+            </dependency>
+
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-cloud-connectors</artifactId>
+                <version>2.2.1.RELEASE</version>
             </dependency>
 
             <dependency>

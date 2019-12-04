@@ -13,7 +13,6 @@
     <packaging>jar</packaging>
     <name>Solace  Spring  Cloud  Stream  Binder</name>
     <description>A  Spring  Cloud  Stream  Binder  implementation  using  the  Solace  Java  API  (JCSMP)</description>
-    <url>https://github.com/SolaceProducts/spring-cloud-stream-binder-solace</url>
 
     <dependencies>
         <dependency>

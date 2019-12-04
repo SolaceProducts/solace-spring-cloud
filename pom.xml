@@ -46,9 +46,9 @@
     <modules>
         <module>solace-spring-cloud-bom</module>
         <module>solace-spring-cloud-parent</module>
-        <module>solace-spring-cloud/solace-spring-cloud-connector</module>
-        <module>solace-spring-cloud/solace-spring-cloud-stream-binder</module>
-        <module>solace-spring-cloud-autoconfigure/solace-spring-cloud-stream-autoconfigure</module>
+        <module>solace-spring-cloud-connector</module>
+        <module>solace-spring-cloud-stream/solace-spring-cloud-stream-binder</module>
+        <module>solace-spring-cloud-stream/solace-spring-cloud-stream-autoconfigure</module>
         <module>solace-spring-cloud-starters/solace-spring-cloud-stream-starter</module>
     </modules>
 

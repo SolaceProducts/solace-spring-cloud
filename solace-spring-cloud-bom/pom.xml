@@ -16,10 +16,18 @@
 
     <name>Solace Spring Cloud BOM</name>
     <description>BOM for Solace Spring Cloud</description>
-    <url>https://github.com/SolaceDev/solace-spring</url>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <!-- Import Solace Spring Boot dependency management -->
+                <groupId>com.solace.spring.boot</groupId>
+                <artifactId>solace-spring-boot-bom</artifactId>
+                <version>1.0.0-SNAPSHOT</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <dependency>
                 <groupId>com.solace.spring.cloud</groupId>
                 <artifactId>solace-spring-cloud-stream-starter</artifactId>
@@ -43,6 +51,7 @@
                     <flattenMode>bom</flattenMode>
                     <pomElements>
                         <scm>remove</scm>
+                        <dependencies>keep</dependencies>
                     </pomElements>
                 </configuration>
             </plugin>
