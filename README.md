@@ -12,7 +12,7 @@ This project includes and builds the Solace Spring cloud stream starter, as well
 * [Building Locally](#building-locally)
     * [Maven Project Structure](#maven-project-structure)
 * [Additional Information](#additional-information)
-    * [Solace Spring Cloud Stream Binder README]()
+    * [Solace Spring Cloud Stream Binder README](#solace-spring-cloud-stream-binder-readme)
     * [Solace Spring Cloud Connector README](#solace-jms-spring-boot-starter)
 * [Additional Meta-Information](#additional-meta-information)
     * [Contributing](#contributing)
@@ -47,11 +47,87 @@ Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be
 
 ### Quickstart Guide - Cloud Stream Binder
 
-TODO
+1. Import `solace-spring-cloud-bom` for the build tool you are using:
+    * [Using Maven](#maven-quickstart)
+    * [Using Gradle 4](#gradle-4-quickstart)
+    * [Using Gradle 5](#gradle-5-quickstart)
+2. Import `spring-cloud-starter-stream-solace`:
+    * Maven
+        ```xml
+        <!-- Solace Spring Cloud Stream Binder -->
+        <dependency>
+          <groupId>com.solace.spring.cloud</groupId>
+          <artifactId>spring-cloud-starter-stream-solace</artifactId>
+          <version>1.2.+</version>
+        </dependency>
+        ```
+    * Gradle 
+        ```groovy
+            // Solace Spring Cloud Stream Binder
+            compile("com.solace.spring.cloud:spring-cloud-starter-stream-solace:1.2.+")
+        ```
+3. Create your binding in your `application.properties` or `application.yml`. If you are using yaml, it should look something like this:
+    ```yaml
+    spring:
+      cloud:
+        stream:
+          bindings:
+            input:
+              destination: queuename
+              group: myconsumergroup
+    
+    solace:
+      java:
+        host: tcp://192.168.133.64
+        msgVpn: default
+        clientUsername: default
+        clientPassword: default
+        connectRetries: -1
+        reconnectRetries: -1
+    ```
 
 ### Quickstart Guide - Cloud Connector
 
-TODO
+1. Import `solace-spring-cloud-bom` for the build tool you are using:
+    * [Using Maven](#maven-quickstart)
+    * [Using Gradle 4](#gradle-4-quickstart)
+    * [Using Gradle 5](#gradle-5-quickstart)
+2. Import `solace-spring-cloud-connector`:
+    * Maven
+        ```
+        <!-- Solace Cloud -->
+        <dependency>
+          <groupId>com.solace.cloud.cloudfoundry</groupId>
+          <artifactId>solace-spring-cloud-connector</artifactId>
+          <version>4.1.0</version>
+        </dependency>
+        ```
+    * Gradle 
+        ```
+        // Solace Cloud
+        compile("com.solace.cloud.cloudfoundry:solace-spring-cloud-connector:4.1.0")
+        ```
+3. You can now get a `SolaceServiceCredentials` object from the `CloudFactory` that you can use to connect to your local Solace PubSub+ instance:
+    ```java
+    CloudFactory cloudFactory = new CloudFactory();
+    Cloud cloud = cloudFactory.getCloud();
+    SolaceServiceCredentials solaceMessaging = (SolaceServiceCredentials) cloud.getServiceInfo("MyService");
+    ```
+   
+   You can use these credentials to establish a JCSMP session:
+   
+   ```java
+   // Setting up the JCSMP Connection
+   final JCSMPProperties props = new JCSMPProperties();
+   props.setProperty(JCSMPProperties.HOST, solaceMessaging.getSmfHost());
+   props.setProperty(JCSMPProperties.VPN_NAME, solaceMessaging.getMsgVpnName());
+   props.setProperty(JCSMPProperties.USERNAME, solaceMessaging.getClientUsername());
+   props.setProperty(JCSMPProperties.PASSWORD, solaceMessaging.getClientPassword());
+   
+   JCSMPSession session = JCSMPFactory.onlyInstance().createSession(props);
+   session.connect();
+   ```
+
 
 #### Maven Quickstart
 ```xml
@@ -189,11 +265,11 @@ You can find additional information about each of the projects in their respecti
 
 ### Solace Spring Cloud Stream Binder README
 
-[README](solace-spring-cloud-stream/README.md)
+This [README](solace-spring-cloud-stream/README.md) contains more detailed information about configuring and using the Solace Spring Cloud Stream Binder.
 
 ### Solace Spring Cloud Connector README
 
-[README](solace-spring-cloud-connector/README.md)
+This [README](solace-spring-cloud-connector/README.md) contains more detailed information about configuring and using the Solace Spring Cloud Connector.
 
 ## Additional Meta-Information
 

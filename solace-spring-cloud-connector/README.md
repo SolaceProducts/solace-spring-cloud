@@ -11,14 +11,6 @@ A Spring Cloud Connector for an instance of Solace PubSub+ in Cloud Foundry. Spe
 * [Java Applications](#java-applications)
 * [Spring Applications](#spring-applications)
 * [Using it in your Application](#using-it-in-your-application)
-* [Checking out and Building](#checking-out-and-building)
-* [Contributing](#contributing)
-* [Release Notes & Versioning](#release-notes-and-versioning)
-* [Authors](#authors)
-* [License](#license)
-* [Resources](#resources)
-
-
 ---
 
 ## Overview
@@ -98,19 +90,3 @@ compile("com.solace.cloud.cloudfoundry:solace-spring-cloud-connector:4.1.0")
   <version>4.1.0</version>
 </dependency>
 ```
-
-## Checking out and Building
-
-This project depends on maven for building. To build the jar locally, check out the project and build from source by doing the following:
-
-    git clone https://github.com/SolaceProducts/sl-spring-cloud-connectors.git
-    cd sl-spring-cloud-connectors
-    mvn package
-
-This will build a jar file which will be named similar to the following:
-
-```
-target/solace-spring-cloud-connector-3.3.0-SNAPSHOT.jar
-```
-
-You can install this file in your maven repository locally.
