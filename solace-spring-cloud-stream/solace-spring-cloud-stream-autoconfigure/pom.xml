@@ -52,7 +52,7 @@
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-stream-test-support-internal</artifactId>
-            <version>2.2.1.RELEASE</version>
+            <version>${spring-cloud-stream.version}</version>
             <scope>test</scope>
         </dependency>
 
