@@ -42,7 +42,6 @@
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-stream</artifactId>
-            <version>${spring-cloud-stream.version}</version>
         </dependency>
 
         <dependency>
