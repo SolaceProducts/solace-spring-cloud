@@ -35,6 +35,12 @@
             </dependency>
 
             <dependency>
+                <groupId>com.solace.spring.cloud</groupId>
+                <artifactId>spring-cloud-stream-binder-solace</artifactId>
+                <version>${solace.cloud-stream-starter.version}</version>
+            </dependency>
+
+            <dependency>
                 <groupId>com.solace.cloud.cloudfoundry</groupId>
                 <artifactId>solace-spring-cloud-connector</artifactId>
                 <version>${solace.cloud-connector.version}</version>
