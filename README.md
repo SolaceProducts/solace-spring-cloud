@@ -132,11 +132,15 @@ Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be
     </properties>
 
     <dependencyManagement>
-        <groupId>com.solace.spring.cloud</groupId>
-        <artifactId>solace-spring-cloud-bom</artifactId>
-        <version>${solace.spring.cloud.bom.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
+        <dependencies>
+            <dependency>
+                <groupId>com.solace.spring.cloud</groupId>
+                <artifactId>solace-spring-cloud-bom</artifactId>
+                <version>${solace.spring.cloud.bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
     </dependencyManagement>
 ```
 
