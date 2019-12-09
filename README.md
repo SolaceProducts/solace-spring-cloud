@@ -40,9 +40,9 @@ Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be
 ### Quickstart Guide - Cloud Stream Binder
 
 1. Import `solace-spring-cloud-bom` for the build tool you are using:
-    * [Using Maven](#maven-quickstart)
-    * [Using Gradle 4](#gradle-4-quickstart)
-    * [Using Gradle 5](#gradle-5-quickstart)
+    * [Using Maven](#solace-spring-cloud-bom---maven-quickstart)
+    * [Using Gradle 4](#solace-spring-cloud-bom---gradle-5-quickstart)
+    * [Using Gradle 5](#solace-spring-cloud-bom---gradle-4-quickstart)
 2. Import `spring-cloud-starter-stream-solace`:
     * Maven
         ```xml
@@ -81,9 +81,9 @@ Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be
 ### Quickstart Guide - Cloud Connector
 
 1. Import `solace-spring-cloud-bom` for the build tool you are using:
-    * [Using Maven](#maven-quickstart)
-    * [Using Gradle 4](#gradle-4-quickstart)
-    * [Using Gradle 5](#gradle-5-quickstart)
+    * [Using Maven](#solace-spring-cloud-bom---maven-quickstart)
+    * [Using Gradle 4](#solace-spring-cloud-bom---gradle-4-quickstart)
+    * [Using Gradle 5](#solace-spring-cloud-bom---gradle-5-quickstart)
 2. Import `solace-spring-cloud-connector`:
     * Maven
         ```
@@ -121,7 +121,7 @@ Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be
    ```
 
 
-#### Maven Quickstart
+#### Solace Spring Cloud BOM - Maven Quickstart
 ```xml
     <!-- Add me to your POM.xml -->
     <properties>
@@ -144,7 +144,7 @@ Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be
     </dependencyManagement>
 ```
 
-#### Gradle 4 Quickstart
+#### Solace Spring Cloud BOM - Gradle 4 Quickstart
 ```groovy
     /* Add me to your build.gradle */
     buildscript {
@@ -170,7 +170,7 @@ Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be
 
 Note: Gradle 4 isn't natively compatible with Maven BOM's. Thus, we have to use the Spring's dependency management plugin.
 
-#### Gradle 5 Quickstart
+#### Solace Spring Cloud BOM - Gradle 5 Quickstart
 ```groovy
     /* Add me to your build.gradle */
     buildscript {
