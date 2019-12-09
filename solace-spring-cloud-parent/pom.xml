@@ -22,7 +22,6 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <maven.compiler.source>1.8</maven.compiler.source>
 
-        <spring-cloud-stream.version>3.0.0.RELEASE</spring-cloud-stream.version>
         <spring-boot-starter-cloud-connectors.version>2.2.1.RELEASE</spring-boot-starter-cloud-connectors.version>
         <sol-jcsmp.version>10.6.3</sol-jcsmp.version>
 
@@ -42,6 +41,15 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <dependency>
+                <!-- Import Spring Cloud dependency management -->
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring.boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <dependency>
                 <!-- Import Solace Spring Boot dependency management -->
                 <groupId>com.solace.spring.cloud</groupId>

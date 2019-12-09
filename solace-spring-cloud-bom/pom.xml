@@ -13,6 +13,7 @@
     <groupId>com.solace.spring.cloud</groupId>
     <artifactId>solace-spring-cloud-bom</artifactId>
     <packaging>pom</packaging>
+    <version>1.0.0</version>
 
     <name>Solace Spring Cloud BOM</name>
     <description>BOM for Solace Spring Cloud</description>
@@ -24,6 +25,15 @@
                 <groupId>com.solace.spring.boot</groupId>
                 <artifactId>solace-spring-boot-bom</artifactId>
                 <version>1.0.0-SNAPSHOT</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
+            <dependency>
+                <!-- Import Spring Cloud dependency management -->
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring.cloud.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
