@@ -29,11 +29,11 @@ This project includes and builds the Solace Spring cloud stream starter, as well
 The `solace-spring-cloud-bom` will guarantee that the versions of the Solace Spring Cloud starters and autoconfigurations are what works with your version of Spring Boot.
 Consult the table below to determine what version of the BOM you need for your version of Spring Cloud.
 
-| Spring Cloud         |Solace Spring Cloud BOM|Spring Boot      |Solace Spring Boot BOM|
-|----------------------|-----------------------|-----------------|----------------------|
-|Hoxton.RC1            |1.0.0                  | 2.2.0           |1.0.0                 |
-|Hoxton.RELEASE        |                       | 2.2.1           |                      |
-|                      |                       | 2.2.2-SNAPSHOT  |                      |
+| Spring Cloud         |Solace Spring Cloud BOM|Spring Boot        |
+|----------------------|-----------------------|-------------------|
+|Hoxton.RC1            |1.0.0                  | <= 2.2.0          |
+|Hoxton.RELEASE        |                       | <= 2.2.1          |
+|                      |                       | <= 2.2.2-SNAPSHOT |
 
 Note that since Spring Cloud depends on Spring Boot, the Spring Boot BOM will be included implicitly by default.
 
