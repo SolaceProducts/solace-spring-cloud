@@ -10,7 +10,10 @@
     </parent>
 
     <artifactId>spring-cloud-starter-stream-solace</artifactId>
+    <version>1.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
+
+
     <name>Spring Cloud Starter Stream Solace</name>
     <description>Spring Cloud Starter Stream for the Solace Spring Cloud Stream Binder</description>
 

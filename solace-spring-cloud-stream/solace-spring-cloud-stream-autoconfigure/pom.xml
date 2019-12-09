@@ -10,7 +10,9 @@
     </parent>
 
     <artifactId>spring-cloud-stream-binder-solace</artifactId>
+    <version>1.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
+
     <name>Solace Spring Cloud Stream Binder</name>
     <description>A Spring Cloud Stream Binder implementation using the Solace Java API (JCSMP)</description>
 

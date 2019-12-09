@@ -10,7 +10,9 @@
     </parent>
 
     <artifactId>spring-cloud-stream-binder-solace-core</artifactId>
+    <version>1.3.0-SNAPSHOT</version>
     <packaging>jar</packaging>
+
     <name>Solace Spring Cloud Stream Binder</name>
     <description>Core components for the Solace Spring Cloud Stream Binder</description>
     <url>https://github.com/SolaceProducts/spring-cloud-stream-binder-solace</url>
