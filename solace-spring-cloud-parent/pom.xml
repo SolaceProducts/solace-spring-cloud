@@ -22,17 +22,20 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <maven.compiler.source>1.8</maven.compiler.source>
 
-        <spring-boot-starter-cloud-connectors.version>2.2.1.RELEASE</spring-boot-starter-cloud-connectors.version>
-        <sol-jcsmp.version>10.6.3</sol-jcsmp.version>
-
-        <junit.version>4.12</junit.version>
-        <mockito.version>1.10.19</mockito.version>
-        <commons-logging.version>1.2</commons-logging.version>
-        <log4j.version>2.10.0</log4j.version>
+        <solace.jcsmp.version>10.6.3</solace.jcsmp.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <!-- Import Solace Spring Boot dependency management -->
+                <groupId>com.solace.spring.boot</groupId>
+                <artifactId>solace-spring-boot-bom</artifactId>
+                <version>${solace.spring.boot.bom.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <dependency>
                 <!-- Import Spring Cloud dependency management -->
                 <groupId>org.springframework.cloud</groupId>
@@ -41,20 +44,12 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
             <dependency>
                 <!-- Import Spring Cloud dependency management -->
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-dependencies</artifactId>
                 <version>${spring.boot.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-
-            <dependency>
-                <!-- Import Solace Spring Boot dependency management -->
-                <groupId>com.solace.spring.cloud</groupId>
-                <artifactId>solace-spring-cloud-bom</artifactId>
-                <version>1.0.0-SNAPSHOT</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>

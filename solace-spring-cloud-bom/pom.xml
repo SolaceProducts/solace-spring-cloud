@@ -10,10 +10,9 @@
         <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>com.solace.spring.cloud</groupId>
     <artifactId>solace-spring-cloud-bom</artifactId>
     <packaging>pom</packaging>
-    <version>1.0.0</version>
+    <version>1.0.0-SNAPSHOT</version>
 
     <name>Solace Spring Cloud BOM</name>
     <description>BOM for Solace Spring Cloud</description>
@@ -24,16 +23,7 @@
                 <!-- Import Solace Spring Boot dependency management -->
                 <groupId>com.solace.spring.boot</groupId>
                 <artifactId>solace-spring-boot-bom</artifactId>
-                <version>1.0.0-SNAPSHOT</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-
-            <dependency>
-                <!-- Import Spring Cloud dependency management -->
-                <groupId>org.springframework.cloud</groupId>
-                <artifactId>spring-cloud-dependencies</artifactId>
-                <version>${spring.cloud.version}</version>
+                <version>${solace.spring.boot.bom.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -41,19 +31,19 @@
             <dependency>
                 <groupId>com.solace.spring.cloud</groupId>
                 <artifactId>solace-spring-cloud-stream-starter</artifactId>
-                <version>${solace.cloud-stream-starter.version}</version>
+                <version>${solace.spring.cloud.stream-starter.version}</version>
             </dependency>
 
             <dependency>
                 <groupId>com.solace.spring.cloud</groupId>
                 <artifactId>spring-cloud-stream-binder-solace</artifactId>
-                <version>${solace.cloud-stream-starter.version}</version>
+                <version>${solace.spring.cloud.stream-starter.version}</version>
             </dependency>
 
             <dependency>
                 <groupId>com.solace.cloud.cloudfoundry</groupId>
                 <artifactId>solace-spring-cloud-connector</artifactId>
-                <version>${solace.cloud-connector.version}</version>
+                <version>${solace.spring.cloud.connector.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
