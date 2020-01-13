@@ -30,7 +30,7 @@
 
             <dependency>
                 <groupId>com.solace.spring.cloud</groupId>
-                <artifactId>solace-spring-cloud-stream-starter</artifactId>
+                <artifactId>spring-cloud-starter-stream-solace</artifactId>
                 <version>${solace.spring.cloud.stream-starter.version}</version>
             </dependency>
 
