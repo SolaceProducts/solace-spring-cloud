@@ -15,9 +15,11 @@
 
     <name>Solace Spring Cloud Build</name>
     <description>Build for Solace Spring Cloud support</description>
-    <url>https://github.com/solacedev/solace-spring-cloud</url>
+    <url>https://github.com/${repoName}/solace-spring-cloud</url>
 
     <properties>
+        <repoName>SolaceProducts</repoName>
+
         <!-- This is the version of Spring Cloud we have targeted for this build -->
         <spring.cloud.version>Hoxton.RELEASE</spring.cloud.version>
 
@@ -32,7 +34,7 @@
     <licenses>
         <license>
             <name>Apache License, Version 2.0</name>
-            <url>https://github.com/SolaceDev/solace-spring-cloud/blob/master/LICENSE</url>
+            <url>https://github.com/${repoName}/solace-spring-cloud/blob/master/LICENSE</url>
             <distribution>repo</distribution>
         </license>
     </licenses>
@@ -61,9 +63,9 @@
     </modules>
 
     <scm>
-        <url>https://github.com/SolaceDev/solace-spring-cloud.git</url>
-        <connection>scm:git:git://github.com/SolaceDev/solace-spring-cloud.git</connection>
-        <developerConnection>scm:git:git@github.com:SolaceDev/solace-spring-cloud.git</developerConnection>
+        <url>https://github.com/${repoName}/solace-spring-cloud.git</url>
+        <connection>scm:git:git://github.com/${repoName}/solace-spring-cloud.git</connection>
+        <developerConnection>scm:git:git@github.com:${repoName}/solace-spring-cloud.git</developerConnection>
         <tag>HEAD</tag>
     </scm>
 
