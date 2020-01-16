@@ -15,7 +15,7 @@
 
     <name>Solace Spring Cloud Build</name>
     <description>Build for Solace Spring Cloud support</description>
-    <url>https://github.com/${repoName}/solace-spring-cloud</url>
+    <url>https://github.com/${repoName}/solace-spring-cloud/tree/${project.scm.tag}</url>
 
     <properties>
         <repoName>SolaceProducts</repoName>

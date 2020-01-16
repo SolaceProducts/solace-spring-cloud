@@ -15,7 +15,7 @@
 
     <name>Solace Spring Cloud Stream Binder Core</name>
     <description>Core components for the Solace Spring Cloud Stream Binder</description>
-    <url>https://github.com/${repoName}/spring-cloud-stream-binder-solace</url>
+    <url>https://github.com/${repoName}/solace-spring-cloud/tree/${project.scm.tag}/solace-spring-cloud-stream-binder</url>
 
     <dependencies>
         <dependency>

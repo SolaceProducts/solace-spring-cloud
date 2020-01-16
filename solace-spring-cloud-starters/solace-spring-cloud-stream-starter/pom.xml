@@ -16,6 +16,7 @@
 
     <name>Spring Cloud Starter Stream Solace</name>
     <description>Spring Cloud Starter Stream for the Solace Spring Cloud Stream Binder</description>
+    <url>https://github.com/${repoName}/solace-spring-cloud/tree/${project.scm.tag}/solace-spring-cloud-starters/solace-spring-cloud-stream-starter</url>
 
     <properties>
      <main.basedir>${basedir}/../..</main.basedir>

@@ -32,6 +32,7 @@
 	<version>4.2.0-SNAPSHOT</version>
 	<name>Spring Cloud Connectors for Solace PubSub+ on Cloud Foundry</name>
 	<description>Spring Cloud Connectors for Solace PubSub+ on Cloud Foundry.</description>
+	<url>https://github.com/${repoName}/solace-spring-cloud/tree/${project.scm.tag}/solace-spring-cloud-connector</url>
 
 	<dependencies>
 		<dependency>

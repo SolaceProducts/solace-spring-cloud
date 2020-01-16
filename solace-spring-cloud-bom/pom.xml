@@ -16,6 +16,7 @@
 
     <name>Solace Spring Cloud BOM</name>
     <description>BOM for Solace Spring Cloud</description>
+    <url>https://github.com/${repoName}/solace-spring-cloud/tree/${project.scm.tag}/solace-spring-cloud-bom</url>
 
     <dependencyManagement>
         <dependencies>

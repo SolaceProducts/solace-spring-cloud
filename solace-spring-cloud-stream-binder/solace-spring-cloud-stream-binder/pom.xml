@@ -15,6 +15,7 @@
 
     <name>Solace Spring Cloud Stream Binder</name>
     <description>A Spring Cloud Stream Binder implementation using the Solace Java API (JCSMP)</description>
+    <url>https://github.com/${repoName}/solace-spring-cloud/tree/${project.scm.tag}/solace-spring-cloud-stream-binder</url>
 
     <dependencies>
         <dependency>
