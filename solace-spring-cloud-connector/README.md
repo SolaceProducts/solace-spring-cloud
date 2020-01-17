@@ -1,5 +1,3 @@
-[![Build Status](https://travis-ci.org/SolaceProducts/sl-spring-cloud-connectors.svg?branch=master)](https://travis-ci.org/SolaceProducts/sl-spring-cloud-connectors)
-
 # Solace PubSub+ Spring Cloud Connectors
 
 A Spring Cloud Connector for an instance of Solace PubSub+ in Cloud Foundry. Specifically a ServiceInfo and ServiceInfoCreator implementation for Solace PubSub+ in Cloud Foundry.
@@ -11,6 +9,7 @@ A Spring Cloud Connector for an instance of Solace PubSub+ in Cloud Foundry. Spe
 * [Java Applications](#java-applications)
 * [Spring Applications](#spring-applications)
 * [Using it in your Application](#using-it-in-your-application)
+* [Resource](#resources)
 ---
 
 ## Overview
@@ -90,3 +89,22 @@ compile("com.solace.cloud.cloudfoundry:solace-spring-cloud-connector:4.1.0")
   <version>4.1.0</version>
 </dependency>
 ```
+
+## Resources
+
+For more information about Cloud Foundry and the Solace PubSub+ service these resources:
+- [Solace PubSub+ for Pivotal Cloud Foundry](http://docs.pivotal.io/solace-messaging/)
+- [Cloud Foundry Documentation](http://docs.cloudfoundry.org/)
+- For an introduction to Cloud Foundry: https://www.cloudfoundry.org/
+
+For more information about Spring Cloud try these resources:
+- [Spring Cloud](http://projects.spring.io/spring-cloud/)
+- [Spring Cloud Connectors](http://cloud.spring.io/spring-cloud-connectors/)
+- [Spring Cloud Connectors Docs](http://cloud.spring.io/spring-cloud-connectors/spring-cloud-connectors.html)
+- [Spring Cloud Connectors GitHub](https://github.com/spring-cloud/spring-cloud-connectors)
+
+For more information about Solace technology in general please visit these resources:
+
+- The Solace Developer Portal website at: http://dev.solacesystems.com
+- Understanding [Solace technology.](http://dev.solacesystems.com/tech/)
+- Ask the [Solace community](http://dev.solacesystems.com/community/).

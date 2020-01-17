@@ -9,6 +9,7 @@ An implementation of Spring's Cloud Stream Binder for integrating with Solace Pu
 * [Using it in your Application](#using-it-in-your-application)
 * [Configuration Options](#configuration-options)
 * [Failed Message Error Handling](#failed-message-error-handling)
+* [Resources](#resources)
 ---
 
 ## Overview
@@ -110,7 +111,7 @@ For general binder configuration options and properties, refer to the [Spring Cl
 
 The following properties are available for Solace consumers only and must be prefixed with `spring.cloud.stream.solace.bindings.<channelName>.consumer.`.
 
-See [SolaceConsumerProperties](solace-spring-cloud-stream-binder/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceConsumerProperties.java) for the most updated list.
+See [SolaceConsumerProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceConsumerProperties.java) for the most updated list.
 
 <dl>
     <dt>prefix</dt>
@@ -226,7 +227,7 @@ See [SolaceConsumerProperties](solace-spring-cloud-stream-binder/src/main/java/c
 
 The following properties are available for Solace producers only and must be prefixed with `spring.cloud.stream.solace.bindings.<channelName>.producer.`.
 
-See [SolaceProducerProperties](solace-spring-cloud-stream-binder/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceProducerProperties.java) for the most updated list.
+See [SolaceProducerProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceProducerProperties.java) for the most updated list.
 
 <dl>
     <dt>prefix</dt>
@@ -313,3 +314,17 @@ First, it must be noted that the dead message queue (DMQ) that will be discussed
 A DMQ can be provisioned for a particular consumer group by setting the autoBindDmq consumer property to true. This DMQ is simply another durable queue which, aside from its purpose, is not much from the queue provisioned for consumer groups. These DMQs are named using a period-delimited concatenation of their consumer group name and "dmq". And like the queue used for consumer groups, their endpoint properties can be configured by means of any consumer properties whose names begin with "dmq".
 
 Note that DMQs are not intended to be used with anonymous consumer groups. Since the names of these consumer groups, and in turn the name of their would-be DMQs, are randomly generated at runtime, it would provide little value to create bindings to these DMQs because of their unpredictable naming and temporary existence.
+
+## Resources
+
+For more information about Spring Cloud Streams try these resources:
+
+- [Spring Docs - Spring Cloud Stream Reference Guide](https://docs.spring.io/spring-cloud-stream/docs/current/reference/htmlsingle/)
+- [GitHub Samples - Spring Cloud Stream Sample Applications](https://github.com/spring-cloud/spring-cloud-stream-samples)
+- [Github Source - Spring Cloud Stream Source Code](https://github.com/spring-cloud/spring-cloud-stream)
+
+For more information about Solace technology in general please visit these resources:
+
+- The Solace Developer Portal website at: http://dev.solace.com
+- Understanding [Solace technology](http://dev.solace.com/tech/)
+- Ask the [Solace community](http://dev.solace.com/community/)
