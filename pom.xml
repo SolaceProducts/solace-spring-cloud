@@ -25,7 +25,8 @@
 
         <!-- This is the version of Solace Spring Boot we have targeted for this build -->
         <!-- This also dictates the expected version of Spring Boot -->
-        <solace.spring.boot.bom.version>${project.parent.version}</solace.spring.boot.bom.version>
+        <!-- Must match ${project.parent.version} -->
+        <solace.spring.boot.bom.version>1.0.0-SNAPSHOT</solace.spring.boot.bom.version>
 
         <solace.spring.cloud.connector.version>4.2.0-SNAPSHOT</solace.spring.cloud.connector.version>
         <solace.spring.cloud.stream-starter.version>2.0.0-SNAPSHOT</solace.spring.cloud.stream-starter.version>

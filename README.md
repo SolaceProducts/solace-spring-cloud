@@ -75,6 +75,7 @@ All sub-projects are included as modules of solace-spring-cloud-build. Running `
 
 ## Release Process
 
+1. Update `solace-spring-boot-bom` to latest released version
 1. Release
     ```shell script
     mvn -B release:prepare
