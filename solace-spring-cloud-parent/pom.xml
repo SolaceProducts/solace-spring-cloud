@@ -54,6 +54,17 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+
+            <!--
+            Workaround for spring-cloud-dependencies (spring-cloud-gcp-dependencies in particular) overriding this.
+            Since we use the flatten plugin, this workaround is only applicable to the tests within this repo
+            and does not affect the production build in the end.
+            -->
+            <dependency>
+                <groupId>io.pivotal.cfenv</groupId>
+                <artifactId>java-cfenv</artifactId>
+                <version>${pivotal.cfenv.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 </project>
