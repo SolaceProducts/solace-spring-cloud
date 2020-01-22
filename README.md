@@ -6,6 +6,8 @@
 
 An umbrella project containing all Solace projects for Spring Cloud.
 
+For information about Solace Projects that are only for Spring Boot, please visit the [Solace Spring Boot](//github.com/SolaceProducts/solace-spring-boot) project.
+
 ## Table of contents
 * [Repository Contents](#repository-contents)
 * [Building Locally](#building-locally)
@@ -29,22 +31,6 @@ Please consult the [Spring Cloud Compatibility Table](./solace-spring-cloud-bom/
 These are the projects contained within this repository:
 * [Solace Spring Cloud Stream Starter](./solace-spring-cloud-starters/solace-spring-cloud-stream-starter)
 * [Solace Spring Cloud Connector](./solace-spring-cloud-connector)
-
-### solace-spring-cloud-build
-
-*DO NOT USE THIS IN YOUR APPLICATION.*
-
-This POM defines build-related plugins and profiles that are inherited by the BOM  as well as for each of the sub-projects.
-The version of this POM should match the version of Spring Cloud that the build will target.
-
-Please do not put non-Solace-Spring-Cloud dependencies here - they belong in solace-spring-cloud-parent. The exception to this is naturally the version of Spring Cloud that this build targets.
-If it shouldn't be inherited by the BOM, it doesn't go here.
-
-### solace-spring-cloud-parent
-
-*DO NOT USE THIS IN YOUR APPLICATION.*
-
-This POM defines common properties and dependencies for the Solace Spring Cloud projects.
 
 ## Building Locally
 
@@ -71,7 +57,19 @@ solace-spring-cloud-build (root)
 Where <-- indicates the parent of the project
 ```
 
-All sub-projects are included as modules of solace-spring-cloud-build. Running `mvn package` or `mvn install` at the root of the project will package/install all sub-projects.
+All sub-projects are included as modules of `solace-spring-cloud-build`. Running `mvn package` or `mvn install` at the root of the project will package/install all sub-projects.
+
+#### Build Projects
+
+These projects are used to build the `solace-spring-cloud` repository. They should not be used in your actual application.
+
+- solace-spring-cloud-build  
+This POM defines build-related plugins and profiles that are inherited by the BOM  as well as for each of the sub-projects.
+The version of this POM should match the version of Spring Cloud that the build will target.  
+Please do not put non-Solace-Spring-Cloud dependencies here - they belong in solace-spring-cloud-parent. The exception to this is naturally the version of Spring Cloud that this build targets.
+If it shouldn't be inherited by the BOM, it doesn't go here.
+- solace-spring-cloud-parent  
+This POM defines common properties and dependencies for the Solace Spring Cloud projects.
 
 ## Release Process
 
@@ -100,11 +98,7 @@ Please note that this project is released with a Contributor Code of Conduct. By
 
 ## Support
 
-### Support Email
-support@solace.com
-
-### Solace Developer Community
-https://solace.community
+https://solace.com/support
 
 ## Resources
 
@@ -120,13 +114,21 @@ For more information about Cloud Foundry and the Solace PubSub+ service these re
 
 For more information about Spring Cloud try these resources:
 - [Spring Cloud](http://projects.spring.io/spring-cloud/)
+- [Spring Cloud Stream Reference Guide](https://docs.spring.io/spring-cloud-stream/docs/current/reference/htmlsingle/)
+- [Spring Cloud Stream Sample Applications](https://github.com/spring-cloud/spring-cloud-stream-samples)
+- [Spring Cloud Stream Source Code](https://github.com/spring-cloud/spring-cloud-stream)
 - [Spring Cloud Connectors](http://cloud.spring.io/spring-cloud-connectors/)
 - [Spring Cloud Connectors Docs](http://cloud.spring.io/spring-cloud-connectors/spring-cloud-connectors.html)
 - [Spring Cloud Connectors GitHub](https://github.com/spring-cloud/spring-cloud-connectors)
 
+For more information about Solace technology for Spring Boot please visit these resources:
+- [Solace Spring Boot](//github.com/SolaceProducts/solace-spring-boot)
+
 For more information about Solace technology in general please visit these resources:
 
-- The Solace Developer Portal website at: https://solace.dev
+- The [Solace Developer Portal](//dev.solace.com)
+- Understanding [Solace technology](http://dev.solace.com/tech/)
+- Ask the [Solace community](http://dev.solace.com/community/)
 
 ```
 .......................HELLO FROM THE OTTER SIDE...........
