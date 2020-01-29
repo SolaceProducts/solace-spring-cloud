@@ -1,7 +1,10 @@
 package com.solace.spring.cloud.stream.binder.provisioning;
 
+import com.solace.spring.cloud.stream.binder.properties.SolaceCommonProperties;
 import com.solace.spring.cloud.stream.binder.util.SolaceProvisioningUtil;
+import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.InvalidOperationException;
 import com.solacesystems.jcsmp.JCSMPErrorResponseException;
 import com.solacesystems.jcsmp.JCSMPErrorResponseSubcodeEx;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -56,15 +59,16 @@ public class SolaceQueueProvisioner
 
 		for (String groupName : requiredGroups) {
 			String queueName = SolaceProvisioningUtil.getQueueName(name, groupName, properties.getExtension());
-			EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
 			logger.info(String.format("Creating durable queue %s for required consumer group %s", queueName, groupName));
-			Queue queue = provisionQueue(queueName, true, endpointProperties);
+			EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
+			boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
+			Queue queue = provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning);
 
-			addSubscriptionToQueue(queue, topicName);
+			addSubscriptionToQueue(queue, topicName, properties.getExtension());
 			trackQueueToTopicBinding(queue.getName(), topicName);
 
 			for (String extraTopic : requiredGroupsExtraSubs.getOrDefault(groupName, new String[0])) {
-				addSubscriptionToQueue(queue, extraTopic);
+				addSubscriptionToQueue(queue, extraTopic, properties.getExtension());
 				trackQueueToTopicBinding(queue.getName(), extraTopic);
 			}
 		}
@@ -102,7 +106,8 @@ public class SolaceQueueProvisioner
 				String.format("Creating anonymous (temporary) queue %s", queueName) :
 				String.format("Creating %s queue %s for consumer group %s", isDurableQueue ? "durable" : "temporary", queueName, group));
 		EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
-		Queue queue = provisionQueue(queueName, isDurableQueue, endpointProperties);
+		boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
+		Queue queue = provisionQueue(queueName, isDurableQueue, endpointProperties, doDurableQueueProvisioning);
 		trackQueueToTopicBinding(queue.getName(), topicName);
 
 		for (String additionalSubscription : properties.getExtension().getQueueAdditionalSubscriptions()) {
@@ -116,26 +121,40 @@ public class SolaceQueueProvisioner
 		return new SolaceConsumerDestination(queue.getName());
 	}
 
-	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties) throws ProvisioningException {
+	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties, boolean doDurableProvisioning)
+			throws ProvisioningException {
 		Queue queue;
-		if (isDurable) {
-			try {
+		try {
+			if (isDurable) {
 				queue = JCSMPFactory.onlyInstance().createQueue(name);
-				jcsmpSession.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
-			} catch (JCSMPException e) {
-				String msg = String.format("Failed to provision durable queue %s", name);
-				logger.warn(msg, e);
-				throw new ProvisioningException(msg, e);
-			}
-		} else {
-			try {
+				if (doDurableProvisioning) {
+					jcsmpSession.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+				} else {
+					logger.warn(String.format("Durable queue provisioning is disabled, %s will not be provisioned nor will its configuration be validated", name));
+				}
+			} else {
 				// EndpointProperties will be applied during consumer creation
 				queue = jcsmpSession.createTemporaryQueue(name);
-			} catch (JCSMPException e) {
-				String msg = String.format("Failed to create temporary queue %s", name);
-				logger.warn(msg, e);
-				throw new ProvisioningException(msg, e);
 			}
+		} catch (JCSMPException e) {
+			String action = isDurable ? "provision durable" : "create temporary";
+			String msg = String.format("Failed to %s queue %s", action, name);
+			logger.warn(msg, e);
+			throw new ProvisioningException(msg, e);
+		}
+
+		try {
+			logger.info(String.format("Testing consumer flow connection to queue %s (will not start it)", name));
+			final ConsumerFlowProperties testFlowProperties = new ConsumerFlowProperties().setEndpoint(queue);
+			jcsmpSession.createFlow(null, testFlowProperties, endpointProperties).close();
+			logger.info(String.format("Connected test consumer flow to queue %s, closing it", name));
+		} catch (JCSMPException e) {
+			String msg = String.format("Failed to connect test consumer flow to queue %s", name);
+			if (e instanceof InvalidOperationException && !isDurable) {
+				msg += ". If the Solace client is not capable of creating temporary queues, consider assigning this consumer to a group?";
+			}
+			logger.warn(msg, e);
+			throw new ProvisioningException(msg, e);
 		}
 
 		return queue;
@@ -144,11 +163,18 @@ public class SolaceQueueProvisioner
 	private void provisionDMQ(String queueName, SolaceConsumerProperties properties) {
 		String dmqName = SolaceProvisioningUtil.getDMQName(queueName);
 		logger.info(String.format("Provisioning DMQ %s", dmqName));
-		provisionQueue(dmqName, true, SolaceProvisioningUtil.getDMQEndpointProperties(properties));
+		provisionQueue(dmqName, true, SolaceProvisioningUtil.getDMQEndpointProperties(properties), properties.isProvisionDmq());
 	}
 
-	public void addSubscriptionToQueue(Queue queue, String topicName) {
+	public void addSubscriptionToQueue(Queue queue, String topicName, SolaceCommonProperties properties) {
 		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topicName));
+
+		if (queue.isDurable() && !properties.isAddDurableQueueSubscription()) {
+			logger.warn(String.format("Adding subscriptions to durable queues was disabled, queue %s will not be subscribed to topic %s",
+					queue.getName(), topicName));
+			return;
+		}
+
 		try {
 			Topic topic = JCSMPFactory.onlyInstance().createTopic(topicName);
 			try {

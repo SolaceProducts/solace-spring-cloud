@@ -77,7 +77,7 @@ public class SolaceMessageChannelBinder
 	protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
 													 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(destination, jcsmpSession,
-				getConsumerEndpointProperties(properties), getConsumerPostStart());
+				getConsumerEndpointProperties(properties), getConsumerPostStart(properties));
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
 		if (properties.getMaxAttempts() > 1) {
@@ -96,7 +96,7 @@ public class SolaceMessageChannelBinder
 																	ConsumerDestination destination,
 																	ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties) {
 		EndpointProperties endpointProperties = getConsumerEndpointProperties(consumerProperties);
-		Consumer<Queue> postStart = getConsumerPostStart();
+		Consumer<Queue> postStart = getConsumerPostStart(consumerProperties);
 		JCSMPMessageSource messageSource = new JCSMPMessageSource(destination, jcsmpSession, consumerProperties, endpointProperties, postStart);
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, consumerProperties, true);
 		return new PolledConsumerResources(messageSource, errorInfra);
@@ -178,10 +178,10 @@ public class SolaceMessageChannelBinder
 		Temporary endpoints are only provisioned when the consumer is created.
 		Ideally, these should be done within the provisioningProvider itself.
 	*/
-	private Consumer<Queue> getConsumerPostStart() {
+	private Consumer<Queue> getConsumerPostStart(ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		return (queue) -> {
 			for (String topic : provisioningProvider.getTrackedTopicsForQueue(queue.getName())) {
-				provisioningProvider.addSubscriptionToQueue(queue, topic);
+				provisioningProvider.addSubscriptionToQueue(queue, topic, properties.getExtension());
 			}
 		};
 	}

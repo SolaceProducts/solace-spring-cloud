@@ -4,6 +4,8 @@ import com.solacesystems.jcsmp.EndpointProperties;
 
 public class SolaceCommonProperties {
 	private String prefix = ""; // Naming prefix for all topics and queues
+	private boolean provisionDurableQueue = true;
+	private boolean addDurableQueueSubscription = true;
 
 	// Queue Properties -------
 	private int queueAccessType = EndpointProperties.ACCESSTYPE_NONEXCLUSIVE;
@@ -21,6 +23,22 @@ public class SolaceCommonProperties {
 
 	public void setPrefix(String prefix) {
 		this.prefix = prefix;
+	}
+
+	public boolean isProvisionDurableQueue() {
+		return provisionDurableQueue;
+	}
+
+	public void setProvisionDurableQueue(boolean provisionDurableQueue) {
+		this.provisionDurableQueue = provisionDurableQueue;
+	}
+
+	public boolean isAddDurableQueueSubscription() {
+		return addDurableQueueSubscription;
+	}
+
+	public void setAddDurableQueueSubscription(boolean addDurableQueueSubscription) {
+		this.addDurableQueueSubscription = addDurableQueueSubscription;
 	}
 
 	public int getQueueAccessType() {
