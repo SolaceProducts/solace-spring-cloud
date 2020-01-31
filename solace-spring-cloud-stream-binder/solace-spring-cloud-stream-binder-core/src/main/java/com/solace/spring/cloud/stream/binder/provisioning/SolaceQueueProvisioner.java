@@ -145,7 +145,7 @@ public class SolaceQueueProvisioner
 
 		try {
 			logger.info(String.format("Testing consumer flow connection to queue %s (will not start it)", name));
-			final ConsumerFlowProperties testFlowProperties = new ConsumerFlowProperties().setEndpoint(queue);
+			final ConsumerFlowProperties testFlowProperties = new ConsumerFlowProperties().setEndpoint(queue).setStartState(false);
 			jcsmpSession.createFlow(null, testFlowProperties, endpointProperties).close();
 			logger.info(String.format("Connected test consumer flow to queue %s, closing it", name));
 		} catch (JCSMPException e) {
