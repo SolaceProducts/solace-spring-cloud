@@ -1,4 +1,4 @@
-package com.solace.spring.cloud.stream.binder;
+package com.solace.spring.cloud.stream.binder.test.util;
 
 import com.solacesystems.jcsmp.InvalidPropertiesException;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -9,13 +9,13 @@ import org.apache.commons.logging.LogFactory;
 import org.junit.Assert;
 import org.junit.Assume;
 
-class SolaceExternalResourceHandler {
+public class SolaceExternalResourceHandler {
 
 	private JCSMPException sessionConnectError;
 
 	private static final Log logger = LogFactory.getLog(SolaceExternalResourceHandler.class);
 
-	JCSMPSession assumeAndGetActiveSession(SpringJCSMPFactory springJCSMPFactory, boolean failOnConnectionException)
+	public JCSMPSession assumeAndGetActiveSession(SpringJCSMPFactory springJCSMPFactory, boolean failOnConnectionException)
 			throws InvalidPropertiesException {
 
 		handleConnectionError(failOnConnectionException);
