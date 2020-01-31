@@ -5,11 +5,14 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.JCSMPErrorResponseException;
+import com.solacesystems.jcsmp.JCSMPErrorResponseSubcodeEx;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.PropertyMismatchException;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.SpringJCSMPFactory;
+import com.solacesystems.jcsmp.Topic;
 import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -76,6 +79,7 @@ public class SolaceBinderTest
 	@Override
 	protected SolaceTestBinder getBinder() throws Exception {
 		if (testBinder == null) {
+			logger.info(String.format("Getting new %s instance", SolaceTestBinder.class.getSimpleName()));
 			jcsmpSession = externalResource.assumeAndGetActiveSession(springJCSMPFactory, failOnConnectError);
 			testBinder = new SolaceTestBinder(jcsmpSession);
 		}
@@ -213,9 +217,7 @@ public class SolaceBinderTest
 
 		boolean gotMessage = false;
 		for (int i = 0; !gotMessage && i < 100; i++) {
-			gotMessage = moduleInputChannel.poll(message1 -> {
-				logger.info(String.format("Received message %s", message1));
-			});
+			gotMessage = moduleInputChannel.poll(message1 -> logger.info(String.format("Received message %s", message1)));
 		}
 		assertThat(gotMessage).isTrue();
 
@@ -276,7 +278,7 @@ public class SolaceBinderTest
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
 
-		logger.info(String.format("Provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
+		logger.info(String.format("Pre-provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
 				queue.getName(), endpointProperties.getAccessType(), defaultAccessType));
 		jcsmpSession.provision(queue, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
 
@@ -309,7 +311,7 @@ public class SolaceBinderTest
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
 
-		logger.info(String.format("Provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
+		logger.info(String.format("Pre-provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
 				queue.getName(), endpointProperties.getAccessType(), defaultAccessType));
 		jcsmpSession.provision(queue, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
 
@@ -342,7 +344,7 @@ public class SolaceBinderTest
 		String dmqName = destination0 + getDestinationNameDelimiter() + group0 + getDestinationNameDelimiter() + "dmq";
 		Queue dmq = JCSMPFactory.onlyInstance().createQueue(dmqName);
 
-		logger.info(String.format("Provisioning DMQ %s with AccessType %s to conflict with defaultAccessType %s",
+		logger.info(String.format("Pre-provisioning DMQ %s with AccessType %s to conflict with defaultAccessType %s",
 				dmq.getName(), endpointProperties.getAccessType(), defaultAccessType));
 		jcsmpSession.provision(dmq, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
 
@@ -407,6 +409,7 @@ public class SolaceBinderTest
 		moduleOutputChannel1.send(message);
 
 		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
 		producerBinding0.unbind();
 		producerBinding1.unbind();
 		consumerBinding.unbind();
@@ -458,8 +461,528 @@ public class SolaceBinderTest
 		moduleOutputChannel1.send(message);
 
 		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
 		producerBinding0.unbind();
 		producerBinding1.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testConsumerProvisionDurableQueue() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testConsumerProvisionDurableQueue";
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
+		consumerProperties.getExtension().setProvisionDurableQueue(false);
+
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		EndpointProperties endpointProperties = new EndpointProperties();
+		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
+
+		Binding<MessageChannel> producerBinding = null;
+		Binding<MessageChannel> consumerBinding = null;
+
+		try {
+			logger.info(String.format("Pre-provisioning queue %s with Permission %s", queue.getName(), endpointProperties.getPermission()));
+			jcsmpSession.provision(queue, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
+
+			producerBinding = binder.bindProducer(destination0, moduleOutputChannel, createProducerProperties());
+			consumerBinding = binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
+
+			Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+					.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+					.build();
+
+			binderBindUnbindLatency();
+
+			final CountDownLatch latch = new CountDownLatch(1);
+			moduleInputChannel.subscribe(message1 -> {
+				logger.info(String.format("Received message %s", message1));
+				latch.countDown();
+			});
+
+			moduleOutputChannel.send(message);
+			assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+			TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
+		} finally {
+			if (producerBinding != null) producerBinding.unbind();
+			if (consumerBinding != null) consumerBinding.unbind();
+			jcsmpSession.deprovision(queue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
+		}
+	}
+
+	@Test
+	public void testProducerProvisionDurableQueue() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testProducerProvisionDurableQueue";
+
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties();
+		assertThat(producerProperties.getExtension().isProvisionDurableQueue()).isTrue();
+		producerProperties.getExtension().setProvisionDurableQueue(false);
+		producerProperties.setRequiredGroups(group0);
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.getExtension().setProvisionDurableQueue(false);
+		consumerProperties.getExtension().setAddDurableQueueSubscription(false);
+
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		EndpointProperties endpointProperties = new EndpointProperties();
+		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
+
+		Binding<MessageChannel> producerBinding = null;
+		Binding<MessageChannel> consumerBinding = null;
+
+		try {
+			logger.info(String.format("Pre-provisioning queue %s with Permission %s", queue.getName(), endpointProperties.getPermission()));
+			jcsmpSession.provision(queue, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
+
+			producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProperties);
+			consumerBinding = binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
+
+			Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+					.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+					.build();
+
+			binderBindUnbindLatency();
+
+			final CountDownLatch latch = new CountDownLatch(1);
+			moduleInputChannel.subscribe(message1 -> {
+				logger.info(String.format("Received message %s", message1));
+				latch.countDown();
+			});
+
+			moduleOutputChannel.send(message);
+			assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+			TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
+		} finally {
+			if (producerBinding != null) producerBinding.unbind();
+			if (consumerBinding != null) consumerBinding.unbind();
+			jcsmpSession.deprovision(queue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
+		}
+	}
+
+	@Test
+	public void testPolledConsumerProvisionDurableQueue() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testPolledConsumerProvisionDurableQueue";
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
+		consumerProperties.getExtension().setProvisionDurableQueue(false);
+
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		EndpointProperties endpointProperties = new EndpointProperties();
+		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
+
+		Binding<MessageChannel> producerBinding = null;
+		Binding<PollableSource<MessageHandler>> consumerBinding = null;
+
+		try {
+			logger.info(String.format("Pre-provisioning queue %s with Permission %s", queue.getName(), endpointProperties.getPermission()));
+			jcsmpSession.provision(queue, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
+
+			producerBinding = binder.bindProducer(destination0, moduleOutputChannel, createProducerProperties());
+			consumerBinding = binder.bindPollableConsumer(destination0, group0, moduleInputChannel, consumerProperties);
+
+			Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+					.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+					.build();
+
+			binderBindUnbindLatency();
+
+			logger.info(String.format("Sending message to destination %s: %s", destination0, message));
+			moduleOutputChannel.send(message);
+
+			boolean gotMessage = false;
+			for (int i = 0; !gotMessage && i < 100; i++) {
+				gotMessage = moduleInputChannel.poll(message1 -> logger.info(String.format("Received message %s", message1)));
+			}
+			assertThat(gotMessage).isTrue();
+		} finally {
+			if (producerBinding != null) producerBinding.unbind();
+			if (consumerBinding != null) consumerBinding.unbind();
+			jcsmpSession.deprovision(queue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
+		}
+	}
+
+	@Test
+	public void testAnonConsumerProvisionDurableQueue() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
+		consumerProperties.getExtension().setProvisionDurableQueue(false); // Expect this parameter to do nothing
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, createProducerProperties());
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(destination0, null, moduleInputChannel, consumerProperties);
+
+		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		binderBindUnbindLatency();
+
+		final CountDownLatch latch = new CountDownLatch(1);
+		moduleInputChannel.subscribe(message1 -> {
+			logger.info(String.format("Received message %s", message1));
+			latch.countDown();
+		});
+
+		moduleOutputChannel.send(message);
+		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testFailConsumerProvisioningOnDisablingProvisionDurableQueue() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testFailConsumerProvisioningOnDisablingProvisionDurableQueue";
+
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
+		consumerProperties.getExtension().setProvisionDurableQueue(false);
+
+		try {
+			Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+					destination0, group0, moduleInputChannel, consumerProperties);
+			consumerBinding.unbind();
+			fail("Expected consumer provisioning to fail due to missing queue");
+		} catch (ProvisioningException e) {
+			int expectedSubcodeEx = JCSMPErrorResponseSubcodeEx.UNKNOWN_QUEUE_NAME;
+			assertThat(e).hasCauseInstanceOf(JCSMPErrorResponseException.class);
+			assertThat(((JCSMPErrorResponseException) e.getCause()).getSubcodeEx()).isEqualTo(expectedSubcodeEx);
+			logger.info(String.format("Successfully threw a %s exception with cause %s, subcode: %s",
+					ProvisioningException.class.getSimpleName(), JCSMPErrorResponseException.class.getSimpleName(),
+					JCSMPErrorResponseSubcodeEx.getSubcodeAsString(expectedSubcodeEx)));
+		}
+	}
+
+	@Test
+	public void testFailProducerProvisioningOnDisablingProvisionDurableQueue() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testFailProducerProvisioningOnDisablingProvisionDurableQueue";
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties();
+		assertThat(producerProperties.getExtension().isProvisionDurableQueue()).isTrue();
+		producerProperties.getExtension().setProvisionDurableQueue(false);
+		producerProperties.setRequiredGroups(group0);
+
+		try {
+			Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProperties);
+			producerBinding.unbind();
+			fail("Expected producer provisioning to fail due to missing queue");
+		} catch (ProvisioningException e) {
+			int expectedSubcodeEx = JCSMPErrorResponseSubcodeEx.UNKNOWN_QUEUE_NAME;
+			assertThat(e).hasCauseInstanceOf(JCSMPErrorResponseException.class);
+			assertThat(((JCSMPErrorResponseException) e.getCause()).getSubcodeEx()).isEqualTo(expectedSubcodeEx);
+			logger.info(String.format("Successfully threw a %s exception with cause %s, subcode: %s",
+					ProvisioningException.class.getSimpleName(), JCSMPErrorResponseException.class.getSimpleName(),
+					JCSMPErrorResponseSubcodeEx.getSubcodeAsString(expectedSubcodeEx)));
+		}
+	}
+
+	@Test
+	public void testFailPolledConsumerProvisioningOnDisablingProvisionDurableQueue() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testFailPolledConsumerProvisioningOnDisablingProvisionDurableQueue";
+
+		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
+		consumerProperties.getExtension().setProvisionDurableQueue(false);
+
+		try {
+			Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
+					destination0, group0, moduleInputChannel, consumerProperties);
+			consumerBinding.unbind();
+			fail("Expected polled consumer provisioning to fail due to missing queue");
+		} catch (ProvisioningException e) {
+			int expectedSubcodeEx = JCSMPErrorResponseSubcodeEx.UNKNOWN_QUEUE_NAME;
+			assertThat(e).hasCauseInstanceOf(JCSMPErrorResponseException.class);
+			assertThat(((JCSMPErrorResponseException) e.getCause()).getSubcodeEx()).isEqualTo(expectedSubcodeEx);
+			logger.info(String.format("Successfully threw a %s exception with cause %s, subcode: %s",
+					ProvisioningException.class.getSimpleName(), JCSMPErrorResponseException.class.getSimpleName(),
+					JCSMPErrorResponseSubcodeEx.getSubcodeAsString(expectedSubcodeEx)));
+		}
+	}
+
+	@Test
+	public void testConsumerProvisionDmq() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testConsumerProvisionDmq";
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		assertThat(consumerProperties.getExtension().isProvisionDmq()).isTrue();
+		consumerProperties.getExtension().setProvisionDmq(false);
+		consumerProperties.getExtension().setAutoBindDmq(true);
+
+		String dmqName = destination0 + getDestinationNameDelimiter() + group0 + getDestinationNameDelimiter() + "dmq";
+		Queue dmq = JCSMPFactory.onlyInstance().createQueue(dmqName);
+
+		Binding<MessageChannel> consumerBinding = null;
+
+		try {
+			logger.info(String.format("Pre-provisioning DMQ %s", dmq.getName()));
+			jcsmpSession.provision(dmq, new EndpointProperties(), JCSMPSession.WAIT_FOR_CONFIRM);
+
+			consumerBinding = binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
+			binderBindUnbindLatency();
+		} finally {
+			if (consumerBinding != null) consumerBinding.unbind();
+			jcsmpSession.deprovision(dmq, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
+		}
+	}
+
+	@Test
+	public void testFailConsumerProvisioningOnDisablingProvisionDmq() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testFailConsumerProvisioningOnDisablingProvisionDmq";
+
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		assertThat(consumerProperties.getExtension().isProvisionDmq()).isTrue();
+		consumerProperties.getExtension().setProvisionDmq(false);
+		consumerProperties.getExtension().setAutoBindDmq(true);
+
+		try {
+			Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+					destination0, group0, moduleInputChannel, consumerProperties);
+			consumerBinding.unbind();
+			fail("Expected consumer provisioning to fail due to missing DMQ");
+		} catch (ProvisioningException e) {
+			int expectedSubcodeEx = JCSMPErrorResponseSubcodeEx.UNKNOWN_QUEUE_NAME;
+			assertThat(e).hasCauseInstanceOf(JCSMPErrorResponseException.class);
+			assertThat(((JCSMPErrorResponseException) e.getCause()).getSubcodeEx()).isEqualTo(expectedSubcodeEx);
+			logger.info(String.format("Successfully threw a %s exception with cause %s, subcode: %s",
+					ProvisioningException.class.getSimpleName(), JCSMPErrorResponseException.class.getSimpleName(),
+					JCSMPErrorResponseSubcodeEx.getSubcodeAsString(expectedSubcodeEx)));
+		}
+	}
+
+	@Test
+	public void testConsumerAddDurableQueueSubscription() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testConsumerAddDurableQueueSubscription";
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		assertThat(consumerProperties.getExtension().isAddDurableQueueSubscription()).isTrue();
+		consumerProperties.getExtension().setAddDurableQueueSubscription(false);
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, createProducerProperties());
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
+
+		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		binderBindUnbindLatency();
+
+		final CountDownLatch latch = new CountDownLatch(1);
+		moduleInputChannel.subscribe(message1 -> {
+			logger.info(String.format("Received message %s", message1));
+			latch.countDown();
+		});
+
+		logger.info(String.format("Checking that there is no subscription is on group %s of destination %s", group0, destination0));
+		moduleOutputChannel.send(message);
+		assertThat(latch.await(10, TimeUnit.SECONDS)).isFalse();
+
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		Topic topic = JCSMPFactory.onlyInstance().createTopic(destination0);
+		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topic.getName()));
+		jcsmpSession.addSubscription(queue, topic, JCSMPSession.WAIT_FOR_CONFIRM);
+
+		logger.info(String.format("Sending message to destination %s", destination0));
+		moduleOutputChannel.send(message);
+		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testProducerAddDurableQueueSubscription() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testProducerAddDurableQueueSubscription";
+
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties();
+		assertThat(producerProperties.getExtension().isAddDurableQueueSubscription()).isTrue();
+		producerProperties.getExtension().setAddDurableQueueSubscription(false);
+		producerProperties.setRequiredGroups(group0);
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.getExtension().setProvisionDurableQueue(false);
+		consumerProperties.getExtension().setAddDurableQueueSubscription(false);
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProperties);
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
+
+		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		binderBindUnbindLatency();
+
+		final CountDownLatch latch = new CountDownLatch(1);
+		moduleInputChannel.subscribe(message1 -> {
+			logger.info(String.format("Received message %s", message1));
+			latch.countDown();
+		});
+
+		logger.info(String.format("Checking that there is no subscription is on group %s of destination %s", group0, destination0));
+		moduleOutputChannel.send(message);
+		assertThat(latch.await(10, TimeUnit.SECONDS)).isFalse();
+
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		Topic topic = JCSMPFactory.onlyInstance().createTopic(destination0);
+		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topic.getName()));
+		jcsmpSession.addSubscription(queue, topic, JCSMPSession.WAIT_FOR_CONFIRM);
+
+		logger.info(String.format("Sending message to destination %s", destination0));
+		moduleOutputChannel.send(message);
+		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testPolledConsumerAddDurableQueueSubscription() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testConsumerAddDurableQueueSubscription";
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		assertThat(consumerProperties.getExtension().isAddDurableQueueSubscription()).isTrue();
+		consumerProperties.getExtension().setAddDurableQueueSubscription(false);
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, createProducerProperties());
+		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(destination0, group0,
+				moduleInputChannel, consumerProperties);
+
+		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		binderBindUnbindLatency();
+
+		logger.info(String.format("Checking that there is no subscription is on group %s of destination %s", group0, destination0));
+		moduleOutputChannel.send(message);
+
+		for (int i = 0; i < 10; i++) {
+			TimeUnit.SECONDS.sleep(1);
+			moduleInputChannel.poll(message1 -> fail(String.format("Didn't expect to receive message %s", message1)));
+		}
+
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		Topic topic = JCSMPFactory.onlyInstance().createTopic(destination0);
+		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topic.getName()));
+		jcsmpSession.addSubscription(queue, topic, JCSMPSession.WAIT_FOR_CONFIRM);
+
+		logger.info(String.format("Sending message to destination %s", destination0));
+		moduleOutputChannel.send(message);
+
+		boolean gotMessage = false;
+		for (int i = 0; !gotMessage && i < 100; i++) {
+			gotMessage = moduleInputChannel.poll(message1 -> logger.info(String.format("Received message %s", message1)));
+		}
+		assertThat(gotMessage).isTrue();
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testAnonConsumerAddDurableQueueSubscription() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
+		consumerProperties.getExtension().setAddDurableQueueSubscription(false); // Expect this parameter to do nothing
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, createProducerProperties());
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(destination0, null, moduleInputChannel, consumerProperties);
+
+		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		binderBindUnbindLatency();
+
+		final CountDownLatch latch = new CountDownLatch(1);
+		moduleInputChannel.subscribe(message1 -> {
+			logger.info(String.format("Received message %s", message1));
+			latch.countDown();
+		});
+
+		moduleOutputChannel.send(message);
+		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
+
+		producerBinding.unbind();
 		consumerBinding.unbind();
 	}
 }
