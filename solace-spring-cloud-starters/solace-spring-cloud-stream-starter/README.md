@@ -121,12 +121,12 @@ See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spri
     </dd>
     <dt>provisionDurableQueue</dt>
     <dd>
-        <p>Whether to provision durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-provisioned the required queue on the message broker.</p>
+        <p>Whether to provision durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}`.</p>
         <p>Default: true</p>
     </dd>
     <dt>addDurableQueueSubscription</dt>
     <dd>
-        <p>Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-added the required topic subscriptions on the consumer group's queue on the message broker. This property also applies to topics added by the queueAdditionalSubscriptions property.</p>
+        <p>Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum) on the consumer group's queue on the message broker. This property also applies to topics added by the queueAdditionalSubscriptions property.</p>
         <p>Default: true</p>
     </dd>
     <dt>queueAccessType</dt>
@@ -193,7 +193,7 @@ See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spri
     </dd>
     <dt>provisionDmq</dt>
     <dd>
-        <p>Whether to provision durable queues for DMQs when autoBindDmq is true. This should only be set to false if you have externally pre-provisioned the required queue on the message broker.</p>
+        <p>Whether to provision durable queues for DMQs when autoBindDmq is true. This should only be set to false if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}.dmq`.</p>
         <p>Default: true</p>
     </dd>
     <dt>dmqAccessType</dt>
@@ -252,12 +252,12 @@ See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spri
     </dd>
     <dt>provisionDurableQueue</dt>
     <dd>
-        <p>Whether to provision durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-provisioned the required queue on the message broker.</p>
+        <p>Whether to provision durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}`.</p>
         <p>Default: true</p>
     </dd>
     <dt>addDurableQueueSubscription</dt>
     <dd>
-        <p>Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-added the required topic subscriptions on the consumer group's queue on the message broker. This property also applies to topics added by the queueAdditionalSubscriptions property.</p>
+        <p>Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum) on the consumer group's queue on the message broker. This property also applies to topics added by the queueAdditionalSubscriptions property.</p>
         <p>Default: true</p>
     </dd>
     <dt>queueAccessType</dt>
