@@ -111,7 +111,7 @@ public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase 
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
-		consumerProperties.getExtension().setAddDurableQueueSubscription(false);
+		consumerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(false);
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
 		EndpointProperties endpointProperties = new EndpointProperties();
@@ -379,18 +379,18 @@ public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase 
 	}
 
 	@Test
-	public void testConsumerAddDurableQueueSubscription() throws Exception {
+	public void testConsumerProvisionSubscriptionsToDurableQueue() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testConsumerAddDurableQueueSubscription";
+		String group0 = "testConsumerProvisionSubscriptionsToDurableQueue";
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
-		assertThat(consumerProperties.getExtension().isAddDurableQueueSubscription()).isTrue();
-		consumerProperties.getExtension().setAddDurableQueueSubscription(false);
+		assertThat(consumerProperties.getExtension().isProvisionSubscriptionsToDurableQueue()).isTrue();
+		consumerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(false);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, createProducerProperties());
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
@@ -426,23 +426,23 @@ public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase 
 	}
 
 	@Test
-	public void testProducerAddDurableQueueSubscription() throws Exception {
+	public void testProducerProvisionSubscriptionsToDurableQueue() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testProducerAddDurableQueueSubscription";
+		String group0 = "testProducerProvisionSubscriptionsToDurableQueue";
 
 		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties();
-		assertThat(producerProperties.getExtension().isAddDurableQueueSubscription()).isTrue();
-		producerProperties.getExtension().setAddDurableQueueSubscription(false);
+		assertThat(producerProperties.getExtension().isProvisionSubscriptionsToDurableQueue()).isTrue();
+		producerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(false);
 		producerProperties.setRequiredGroups(group0);
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
-		consumerProperties.getExtension().setAddDurableQueueSubscription(false);
+		consumerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(false);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProperties);
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
@@ -478,18 +478,18 @@ public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase 
 	}
 
 	@Test
-	public void testPolledConsumerAddDurableQueueSubscription() throws Exception {
+	public void testPolledConsumerProvisionSubscriptionsToDurableQueue() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testConsumerAddDurableQueueSubscription";
+		String group0 = "testConsumerProvisionSubscriptionsToDurableQueue";
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
-		assertThat(consumerProperties.getExtension().isAddDurableQueueSubscription()).isTrue();
-		consumerProperties.getExtension().setAddDurableQueueSubscription(false);
+		assertThat(consumerProperties.getExtension().isProvisionSubscriptionsToDurableQueue()).isTrue();
+		consumerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(false);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, createProducerProperties());
 		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(destination0, group0,
@@ -528,7 +528,7 @@ public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase 
 	}
 
 	@Test
-	public void testAnonConsumerAddDurableQueueSubscription() throws Exception {
+	public void testAnonConsumerProvisionSubscriptionsToDurableQueue() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -538,7 +538,7 @@ public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase 
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
-		consumerProperties.getExtension().setAddDurableQueueSubscription(false); // Expect this parameter to do nothing
+		consumerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(false); // Expect this parameter to do nothing
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, createProducerProperties());
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(destination0, null, moduleInputChannel, consumerProperties);

@@ -178,7 +178,7 @@ public class SolaceQueueProvisioner
 	public void addSubscriptionToQueue(Queue queue, String topicName, SolaceCommonProperties properties) {
 		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topicName));
 
-		if (queue.isDurable() && !properties.isAddDurableQueueSubscription()) {
+		if (queue.isDurable() && !properties.isProvisionSubscriptionsToDurableQueue()) {
 			logger.warn(String.format("Adding subscriptions to durable queues was disabled, queue %s will not be subscribed to topic %s",
 					queue.getName(), topicName));
 			return;
