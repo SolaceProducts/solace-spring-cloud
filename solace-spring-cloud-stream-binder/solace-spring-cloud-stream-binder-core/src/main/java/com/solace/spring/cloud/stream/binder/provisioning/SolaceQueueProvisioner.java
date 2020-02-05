@@ -121,7 +121,13 @@ public class SolaceQueueProvisioner
 		return new SolaceConsumerDestination(queue.getName());
 	}
 
-	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties, boolean doDurableProvisioning)
+	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties,
+								 boolean doDurableProvisioning) {
+		return provisionQueue(name, isDurable, endpointProperties, doDurableProvisioning, "Durable queue");
+	}
+
+	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties,
+								 boolean doDurableProvisioning, String durableQueueType)
 			throws ProvisioningException {
 		Queue queue;
 		try {
@@ -130,7 +136,9 @@ public class SolaceQueueProvisioner
 				if (doDurableProvisioning) {
 					jcsmpSession.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
 				} else {
-					logger.warn(String.format("Durable queue provisioning is disabled, %s will not be provisioned nor will its configuration be validated", name));
+					logger.warn(String.format(
+							"%s provisioning is disabled, %s will not be provisioned nor will its configuration be validated",
+							durableQueueType, name));
 				}
 			} else {
 				// EndpointProperties will be applied during consumer creation
@@ -163,7 +171,8 @@ public class SolaceQueueProvisioner
 	private void provisionDMQ(String queueName, SolaceConsumerProperties properties) {
 		String dmqName = SolaceProvisioningUtil.getDMQName(queueName);
 		logger.info(String.format("Provisioning DMQ %s", dmqName));
-		provisionQueue(dmqName, true, SolaceProvisioningUtil.getDMQEndpointProperties(properties), properties.isProvisionDmq());
+		EndpointProperties endpointProperties = SolaceProvisioningUtil.getDMQEndpointProperties(properties);
+		provisionQueue(dmqName, true, endpointProperties, properties.isProvisionDmq(), "DMQ");
 	}
 
 	public void addSubscriptionToQueue(Queue queue, String topicName, SolaceCommonProperties properties) {
