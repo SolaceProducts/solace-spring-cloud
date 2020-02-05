@@ -1,5 +1,6 @@
-package com.solace.spring.cloud.stream.binder;
+package com.solace.spring.cloud.stream.binder.test.util;
 
+import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;

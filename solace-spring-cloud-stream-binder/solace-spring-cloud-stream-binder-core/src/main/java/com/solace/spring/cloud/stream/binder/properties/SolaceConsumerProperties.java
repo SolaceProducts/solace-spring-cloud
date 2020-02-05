@@ -11,6 +11,8 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	// DMQ Properties ---------
 	private boolean autoBindDmq = false;
+	private boolean provisionDmq = true;
+
 	private int dmqAccessType = EndpointProperties.ACCESSTYPE_NONEXCLUSIVE;
 	private int dmqPermission = EndpointProperties.PERMISSION_CONSUME;
 	private Integer dmqDiscardBehaviour = null;
@@ -59,6 +61,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setAutoBindDmq(boolean autoBindDmq) {
 		this.autoBindDmq = autoBindDmq;
+	}
+
+	public boolean isProvisionDmq() {
+		return provisionDmq;
+	}
+
+	public void setProvisionDmq(boolean provisionDmq) {
+		this.provisionDmq = provisionDmq;
 	}
 
 	public int getDmqAccessType() {

@@ -3,25 +3,22 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
+import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.PropertyMismatchException;
 import com.solacesystems.jcsmp.Queue;
-import com.solacesystems.jcsmp.SpringJCSMPFactory;
 import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.binder.PartitionCapableBinderTests;
 import org.springframework.cloud.stream.binder.PollableSource;
-import org.springframework.cloud.stream.binder.Spy;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.cloud.stream.provisioning.ProvisioningException;
 import org.springframework.integration.channel.DirectChannel;
@@ -47,56 +44,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 
+/**
+ * Runs all basic Spring Cloud Stream Binder functionality tests
+ * inherited by {@link PartitionCapableBinderTests PartitionCapableBinderTests}
+ * along with basic tests specific to the Solace Spring Cloud Stream Binder.
+ */
 @RunWith(SpringRunner.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigFileApplicationContextInitializer.class)
-public class SolaceBinderTest
-		extends PartitionCapableBinderTests<SolaceTestBinder, ExtendedConsumerProperties<SolaceConsumerProperties>, ExtendedProducerProperties<SolaceProducerProperties>> {
-
-	@Autowired
-	private SpringJCSMPFactory springJCSMPFactory;
-
-	@Value("${test.fail.on.connection.exception:false}")
-	private Boolean failOnConnectError;
-
-	private JCSMPSession jcsmpSession;
-
-	private static SolaceExternalResourceHandler externalResource = new SolaceExternalResourceHandler();
-
-
-	@Override
-	protected boolean usesExplicitRouting() {
-		return true;
-	}
-
-	@Override
-	protected String getClassUnderTestName() {
-		return this.getClass().getSimpleName();
-	}
-
-	@Override
-	protected SolaceTestBinder getBinder() throws Exception {
-		if (testBinder == null) {
-			jcsmpSession = externalResource.assumeAndGetActiveSession(springJCSMPFactory, failOnConnectError);
-			testBinder = new SolaceTestBinder(jcsmpSession);
-		}
-		return testBinder;
-	}
-
-	@Override
-	protected ExtendedConsumerProperties<SolaceConsumerProperties> createConsumerProperties() {
-		return new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
-	}
-
-	@Override
-	protected ExtendedProducerProperties<SolaceProducerProperties> createProducerProperties() {
-		return new ExtendedProducerProperties<>(new SolaceProducerProperties());
-	}
-
-	@Override
-	public Spy spyOn(String name) {
-		return null;
-	}
-
+public class SolaceBinderBasicTest extends SolaceBinderTestBase {
 	// NOT YET SUPPORTED ---------------------------------
 	@Override
 	public void testPartitionedModuleJava() {
@@ -213,9 +168,7 @@ public class SolaceBinderTest
 
 		boolean gotMessage = false;
 		for (int i = 0; !gotMessage && i < 100; i++) {
-			gotMessage = moduleInputChannel.poll(message1 -> {
-				logger.info(String.format("Received message %s", message1));
-			});
+			gotMessage = moduleInputChannel.poll(message1 -> logger.info(String.format("Received message %s", message1)));
 		}
 		assertThat(gotMessage).isTrue();
 
@@ -276,7 +229,7 @@ public class SolaceBinderTest
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
 
-		logger.info(String.format("Provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
+		logger.info(String.format("Pre-provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
 				queue.getName(), endpointProperties.getAccessType(), defaultAccessType));
 		jcsmpSession.provision(queue, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
 
@@ -309,7 +262,7 @@ public class SolaceBinderTest
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
 
-		logger.info(String.format("Provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
+		logger.info(String.format("Pre-provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
 				queue.getName(), endpointProperties.getAccessType(), defaultAccessType));
 		jcsmpSession.provision(queue, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
 
@@ -342,7 +295,7 @@ public class SolaceBinderTest
 		String dmqName = destination0 + getDestinationNameDelimiter() + group0 + getDestinationNameDelimiter() + "dmq";
 		Queue dmq = JCSMPFactory.onlyInstance().createQueue(dmqName);
 
-		logger.info(String.format("Provisioning DMQ %s with AccessType %s to conflict with defaultAccessType %s",
+		logger.info(String.format("Pre-provisioning DMQ %s with AccessType %s to conflict with defaultAccessType %s",
 				dmq.getName(), endpointProperties.getAccessType(), defaultAccessType));
 		jcsmpSession.provision(dmq, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
 
@@ -407,6 +360,7 @@ public class SolaceBinderTest
 		moduleOutputChannel1.send(message);
 
 		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
 		producerBinding0.unbind();
 		producerBinding1.unbind();
 		consumerBinding.unbind();
@@ -458,6 +412,7 @@ public class SolaceBinderTest
 		moduleOutputChannel1.send(message);
 
 		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
 		producerBinding0.unbind();
 		producerBinding1.unbind();
 		consumerBinding.unbind();

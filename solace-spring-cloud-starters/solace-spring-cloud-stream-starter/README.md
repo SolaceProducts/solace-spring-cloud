@@ -111,13 +111,23 @@ For general binder configuration options and properties, refer to the [Spring Cl
 
 The following properties are available for Solace consumers only and must be prefixed with `spring.cloud.stream.solace.bindings.<channelName>.consumer.`.
 
-See [SolaceConsumerProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceConsumerProperties.java) for the most updated list.
+See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceCommonProperties.java) and [SolaceConsumerProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceConsumerProperties.java) for the most updated list.
 
 <dl>
     <dt>prefix</dt>
     <dd>
         <p>Naming prefix for all topics and queues.</p>
         <p>Default: ""</p>
+    </dd>
+    <dt>provisionDurableQueue</dt>
+    <dd>
+        <p>Whether to provision durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}`.</p>
+        <p>Default: true</p>
+    </dd>
+    <dt>provisionSubscriptionsToDurableQueue</dt>
+    <dd>
+        <p>Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum) on the consumer group's queue on the message broker. This property also applies to topics added by the queueAdditionalSubscriptions property.</p>
+        <p>Default: true</p>
     </dd>
     <dt>queueAccessType</dt>
     <dd>
@@ -181,6 +191,11 @@ See [SolaceConsumerProperties](../../solace-spring-cloud-stream-binder/solace-sp
         <p>Whether to automatically create a durable dead message queue to which messages will be republished when message processing failures are encountered. Only applies once all internal retries have been exhausted.</p>
         <p>Default: false</p>
     </dd>
+    <dt>provisionDmq</dt>
+    <dd>
+        <p>Whether to provision durable queues for DMQs when autoBindDmq is true. This should only be set to false if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}.dmq`.</p>
+        <p>Default: true</p>
+    </dd>
     <dt>dmqAccessType</dt>
     <dd>
         <p>Access type for the DMQ.</p>
@@ -227,13 +242,23 @@ See [SolaceConsumerProperties](../../solace-spring-cloud-stream-binder/solace-sp
 
 The following properties are available for Solace producers only and must be prefixed with `spring.cloud.stream.solace.bindings.<channelName>.producer.`.
 
-See [SolaceProducerProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceProducerProperties.java) for the most updated list.
+See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceCommonProperties.java) and [SolaceProducerProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceProducerProperties.java) for the most updated list.
 
 <dl>
     <dt>prefix</dt>
     <dd>
         <p>Naming prefix for all topics and queues.</p>
         <p>Default: ""</p>
+    </dd>
+    <dt>provisionDurableQueue</dt>
+    <dd>
+        <p>Whether to provision durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}`.</p>
+        <p>Default: true</p>
+    </dd>
+    <dt>provisionSubscriptionsToDurableQueue</dt>
+    <dd>
+        <p>Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to false if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum) on the consumer group's queue on the message broker. This property also applies to topics added by the queueAdditionalSubscriptions property.</p>
+        <p>Default: true</p>
     </dd>
     <dt>queueAccessType</dt>
     <dd>
