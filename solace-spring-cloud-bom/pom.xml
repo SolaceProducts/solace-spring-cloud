@@ -50,10 +50,6 @@
                 <artifactId>flatten-maven-plugin</artifactId>
                 <configuration>
                     <flattenMode>bom</flattenMode>
-                    <pomElements>
-                        <scm>remove</scm>
-                        <dependencies>keep</dependencies>
-                    </pomElements>
                 </configuration>
             </plugin>
         </plugins>
