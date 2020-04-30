@@ -70,22 +70,43 @@ compile("com.solace.spring.cloud:spring-cloud-starter-stream-solace:1.2.+")
 
 ### Creating a Simple Solace Binding
 
-For a quick example of declaring a consumer binding in your application, take a look at [Spring's introductory example](https://docs.spring.io/spring-cloud-stream/docs/current/reference/htmlsingle/#spring-cloud-stream-overview-introducing).
+Starting in Spring Cloud Stream version 3 the recommended way to define binding and binding names is to use the Functional approach, which uses Spring Cloud Functions. You can learn more in the [Spring Cloud Function support](https://cloud.spring.io/spring-cloud-static/spring-cloud-stream/current/reference/html/spring-cloud-stream.html#spring_cloud_function) and [Functional Binding Names](https://cloud.spring.io/spring-cloud-static/spring-cloud-stream/current/reference/html/spring-cloud-stream.html#_functional_binding_names) sections of the reference guide. 
 
-Then for this example, an applicable Solace configuration file may look like:
+Given this example app: 
+```java
+@SpringBootApplication
+public class SampleAppApplication {
+
+	public static void main(String[] args) {
+		SpringApplication.run(SampleAppApplication.class, args);
+	}
+	
+	@Bean
+	public Function<String, String> uppercase() {
+	    return value -> value.toUpperCase();
+	}
+}
+
+```
+
+An applicable Solace configuration file may look like:
 
 ```yaml
 spring:
   cloud:
+    function:
+      definition: uppercase
     stream:
       bindings:
-        input:
+        uppercase-in-0:
           destination: queuename
           group: myconsumergroup
+        uppercase-out-0:
+          destination: uppercase/topic
 
 solace:
   java:
-    host: tcp://192.168.133.64
+    host: tcp://localhost:55555
     msgVpn: default
     clientUsername: default
     clientPassword: default
@@ -109,7 +130,7 @@ For general binder configuration options and properties, refer to the [Spring Cl
 
 #### Solace Consumer Properties
 
-The following properties are available for Solace consumers only and must be prefixed with `spring.cloud.stream.solace.bindings.<channelName>.consumer.`.
+The following properties are available for Solace consumers only and must be prefixed with `spring.cloud.stream.solace.bindings.<bindingName>.consumer.` where `bindingName` looks something like `functionName-in-0` as defined in [Functional Binding Names](https://cloud.spring.io/spring-cloud-static/spring-cloud-stream/current/reference/html/spring-cloud-stream.html#_functional_binding_names)
 
 See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceCommonProperties.java) and [SolaceConsumerProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceConsumerProperties.java) for the most updated list.
 
@@ -240,7 +261,7 @@ See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spri
 
 #### Solace Producer Properties
 
-The following properties are available for Solace producers only and must be prefixed with `spring.cloud.stream.solace.bindings.<channelName>.producer.`.
+The following properties are available for Solace producers only and must be prefixed with `spring.cloud.stream.solace.bindings.<bindingName>.producer.` where `bindingName` looks something like `functionName-out-0` as defined in [Functional Binding Names](https://cloud.spring.io/spring-cloud-static/spring-cloud-stream/current/reference/html/spring-cloud-stream.html#_functional_binding_names)
 
 See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceCommonProperties.java) and [SolaceProducerProperties](../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceProducerProperties.java) for the most updated list.
 
@@ -316,10 +337,7 @@ See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spri
 
 ## Failed Message Error Handling
 
-Spring cloud stream binders already provides a number of application-internal reprocessing strategies for failed messages during message consumption such as:
-
-* Forwarding errors to various [Spring error message channels](https://docs.spring.io/spring-cloud-stream/docs/current/reference/htmlsingle/#_application_error_handling)
-* Internally re-processing the failed messages through the usage of a [retry template](https://docs.spring.io/spring-cloud-stream/docs/current/reference/htmlsingle/#_retry_template)
+The Spring cloud stream framework already provides a number of application-internal reprocessing strategies for failed messages during message consumption such as. You can read more about that [here](https://cloud.spring.io/spring-cloud-static/spring-cloud-stream/current/reference/html/spring-cloud-stream.html#spring-cloud-stream-overview-error-handling):
 
 However, after all internal error handling strategies have been exhausted, the Solace implementation of the binder would by default reject messages that consumer bindings fail to process. Though it may be desirable for these failed messages be preserved and externally re-processed, in which case this binder also provides 2 error handling strategies that consumer bindings can be configured to use:
 
@@ -350,6 +368,5 @@ For more information about Spring Cloud Streams try these resources:
 
 For more information about Solace technology in general please visit these resources:
 
-- The Solace Developer Portal website at: http://dev.solace.com
-- Understanding [Solace technology](http://dev.solace.com/tech/)
-- Ask the [Solace community](http://dev.solace.com/community/)
+- The Solace Developer Portal website at: https://solace.dev
+- Ask the [Solace community](https://solace.community)
