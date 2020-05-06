@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
+import com.solace.spring.cloud.stream.binder.util.JCSMPKeepAlive;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
@@ -42,6 +43,7 @@ public class SolaceMessageChannelBinder
 
 	private final JCSMPSession jcsmpSession;
 	private final JCSMPSessionProducerManager sessionProducerManager;
+	private final JCSMPKeepAlive keepAlive = new JCSMPKeepAlive();
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
 	private SolaceExtendedBindingProperties extendedBindingProperties = new SolaceExtendedBindingProperties();
 
@@ -76,7 +78,7 @@ public class SolaceMessageChannelBinder
 	@Override
 	protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
 													 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
-		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(destination, jcsmpSession,
+		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(destination, jcsmpSession, keepAlive,
 				getConsumerEndpointProperties(properties), getConsumerPostStart(properties));
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
