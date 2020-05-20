@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.util.JCSMPKeepAlive;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.FlowReceiver;
@@ -30,6 +31,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final JCSMPSession jcsmpSession;
 	private final EndpointProperties endpointProperties;
 	private final Consumer<Queue> postStart;
+	private final JCSMPKeepAlive keepAlive;
 	private RetryTemplate retryTemplate;
 	private RecoveryCallback<?> recoveryCallback;
 	private FlowReceiver consumerFlowReceiver;
@@ -38,9 +40,11 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private static final ThreadLocal<AttributeAccessor> attributesHolder = new ThreadLocal<>();
 
 	public JCSMPInboundChannelAdapter(ConsumerDestination consumerDestination, JCSMPSession jcsmpSession,
-							   @Nullable EndpointProperties endpointProperties, @Nullable Consumer<Queue> postStart) {
+									  JCSMPKeepAlive keepAlive, @Nullable EndpointProperties endpointProperties,
+									  @Nullable Consumer<Queue> postStart) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
+		this.keepAlive = keepAlive;
 		this.endpointProperties = endpointProperties;
 		this.postStart = postStart;
 	}
@@ -72,6 +76,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		if (postStart != null) {
 			postStart.accept(queue);
 		}
+
+		keepAlive.create(getClass(), id);
 	}
 
 	@Override
@@ -80,6 +86,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		final String queueName = consumerDestination.getName();
 		logger.info(String.format("Stopping consumer flow from queue %s <inbound adapter ID: %s>", queueName, id));
 		consumerFlowReceiver.close();
+		keepAlive.stop(getClass(), id);
 	}
 
 	@Override
