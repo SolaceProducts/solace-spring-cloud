@@ -126,9 +126,8 @@ For more information about Solace technology for Spring Boot please visit these 
 
 For more information about Solace technology in general please visit these resources:
 
-- The [Solace Developer Portal](//dev.solace.com)
-- Understanding [Solace technology](http://dev.solace.com/tech/)
-- Ask the [Solace community](http://dev.solace.com/community/)
+- The [Solace Developer Portal](https://solace.dev)
+- Ask the [Solace community](https://solace.community/)
 
 ```
 .......................HELLO FROM THE OTTER SIDE...........
