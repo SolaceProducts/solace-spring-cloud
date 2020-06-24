@@ -30,6 +30,8 @@
 
         <solace.spring.cloud.connector.version>4.2.2-SNAPSHOT</solace.spring.cloud.connector.version>
         <solace.spring.cloud.stream-starter.version>2.0.2-SNAPSHOT</solace.spring.cloud.stream-starter.version>
+
+        <solace.integration.test.support.version>0.1.0-SNAPSHOT</solace.integration.test.support.version>
     </properties>
 
     <licenses>

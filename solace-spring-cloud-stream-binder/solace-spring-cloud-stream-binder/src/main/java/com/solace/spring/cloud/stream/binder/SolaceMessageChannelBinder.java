@@ -79,7 +79,7 @@ public class SolaceMessageChannelBinder
 	protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
 													 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(destination, jcsmpSession, keepAlive,
-				getConsumerEndpointProperties(properties), getConsumerPostStart(properties));
+				properties.getConcurrency(), getConsumerEndpointProperties(properties), getConsumerPostStart(properties));
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
 		if (properties.getMaxAttempts() > 1) {
@@ -97,6 +97,10 @@ public class SolaceMessageChannelBinder
 	protected PolledConsumerResources createPolledConsumerResources(String name, String group,
 																	ConsumerDestination destination,
 																	ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties) {
+		if (consumerProperties.getConcurrency() > 1) {
+			logger.warn("Polled consumers do not support concurrency > 1, it will be ignored...");
+		}
+
 		EndpointProperties endpointProperties = getConsumerEndpointProperties(consumerProperties);
 		Consumer<Queue> postStart = getConsumerPostStart(consumerProperties);
 		JCSMPMessageSource messageSource = new JCSMPMessageSource(destination, jcsmpSession, consumerProperties, endpointProperties, postStart);

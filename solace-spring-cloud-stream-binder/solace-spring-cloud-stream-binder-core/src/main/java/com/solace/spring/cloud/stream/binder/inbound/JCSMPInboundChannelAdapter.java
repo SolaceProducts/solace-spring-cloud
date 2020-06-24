@@ -22,6 +22,8 @@ import org.springframework.retry.RecoveryCallback;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
@@ -32,31 +34,52 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final EndpointProperties endpointProperties;
 	private final Consumer<Queue> postStart;
 	private final JCSMPKeepAlive keepAlive;
+	private final int concurrency;
+	private final Set<FlowReceiver> consumerFlowReceivers;
 	private RetryTemplate retryTemplate;
 	private RecoveryCallback<?> recoveryCallback;
-	private FlowReceiver consumerFlowReceiver;
 
 	private static final Log logger = LogFactory.getLog(JCSMPInboundChannelAdapter.class);
 	private static final ThreadLocal<AttributeAccessor> attributesHolder = new ThreadLocal<>();
 
-	public JCSMPInboundChannelAdapter(ConsumerDestination consumerDestination, JCSMPSession jcsmpSession,
-									  JCSMPKeepAlive keepAlive, @Nullable EndpointProperties endpointProperties,
+	public JCSMPInboundChannelAdapter(ConsumerDestination consumerDestination,
+									  JCSMPSession jcsmpSession,
+									  JCSMPKeepAlive keepAlive,
+									  int concurrency,
+									  @Nullable EndpointProperties endpointProperties,
 									  @Nullable Consumer<Queue> postStart) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
 		this.keepAlive = keepAlive;
+		this.concurrency = concurrency;
 		this.endpointProperties = endpointProperties;
 		this.postStart = postStart;
+		this.consumerFlowReceivers = new HashSet<>(this.concurrency);
 	}
 
 	@Override
 	protected void doStart() {
 		final String queueName = consumerDestination.getName();
-		logger.info(String.format("Creating consumer flow for queue %s <inbound adapter %s>", queueName, id));
+		logger.info(String.format("Creating %s consumer flows for queue %s <inbound adapter %s>",
+				concurrency, queueName, id));
 
 		if (isRunning()) {
 			logger.warn(String.format("Nothing to do. Inbound message channel adapter %s is already running", id));
 			return;
+		}
+
+		if (concurrency < 1) {
+			String msg = String.format("Concurrency must be greater than 0, was %s <inbound adapter %s>",
+					concurrency, id);
+			logger.warn(msg);
+			throw new MessagingException(msg);
+		}
+
+		if (!consumerFlowReceivers.isEmpty()) {
+			logger.warn(String.format("Unexpectedly found %s consumer flows while starting inbound adapter %s, " +
+					"closing them...", concurrency, id));
+			consumerFlowReceivers.forEach(FlowReceiver::close);
+			consumerFlowReceivers.clear();
 		}
 
 		XMLMessageListener listener = buildListener();
@@ -65,8 +88,11 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			final ConsumerFlowProperties flowProperties = new ConsumerFlowProperties();
 			flowProperties.setEndpoint(queue);
 			flowProperties.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
-			consumerFlowReceiver = jcsmpSession.createFlow(listener, flowProperties, endpointProperties);
-			consumerFlowReceiver.start();
+			for (int i = 0; i < concurrency; i++) {
+				FlowReceiver flowReceiver = jcsmpSession.createFlow(listener, flowProperties, endpointProperties);
+				flowReceiver.start();
+				consumerFlowReceivers.add(flowReceiver);
+			}
 		} catch (JCSMPException e) {
 			String msg = "Failed to get message consumer from session";
 			logger.warn(msg, e);
@@ -85,7 +111,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		if (!isRunning()) return;
 		final String queueName = consumerDestination.getName();
 		logger.info(String.format("Stopping consumer flow from queue %s <inbound adapter ID: %s>", queueName, id));
-		consumerFlowReceiver.close();
+		consumerFlowReceivers.forEach(FlowReceiver::close);
+		consumerFlowReceivers.clear();
 		keepAlive.stop(getClass(), id);
 	}
 
