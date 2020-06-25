@@ -38,14 +38,6 @@
             </dependency>
 
             <dependency>
-                <groupId>com.solace.test.integration</groupId>
-                <artifactId>solace-integration-test-support-bom</artifactId>
-                <version>${solace.integration.test.support.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-
-            <dependency>
                 <!-- Import Spring Cloud dependency management -->
                 <groupId>org.springframework.cloud</groupId>
                 <artifactId>spring-cloud-dependencies</artifactId>

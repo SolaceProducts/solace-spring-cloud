@@ -61,6 +61,7 @@
         <dependency>
             <groupId>com.solace.test.integration</groupId>
             <artifactId>solace-semp-v2-client</artifactId>
+            <version>${solace.integration.test.support.version}</version>
             <scope>test</scope>
         </dependency>
 
