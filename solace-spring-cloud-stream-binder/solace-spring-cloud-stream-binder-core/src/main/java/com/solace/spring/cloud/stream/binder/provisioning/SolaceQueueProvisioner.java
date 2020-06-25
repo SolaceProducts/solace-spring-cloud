@@ -22,6 +22,7 @@ import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
 import org.springframework.cloud.stream.provisioning.ProvisioningException;
 import org.springframework.cloud.stream.provisioning.ProvisioningProvider;
+import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -102,11 +103,26 @@ public class SolaceQueueProvisioner
 		boolean isDurableQueue = SolaceProvisioningUtil.isDurableQueue(group);
 		String queueName = SolaceProvisioningUtil.getQueueName(name, group, properties.getExtension(), isAnonQueue);
 
+		EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
+		boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
+
+		if (properties.getConcurrency() > 1) {
+			if (endpointProperties.getAccessType().equals(EndpointProperties.ACCESSTYPE_EXCLUSIVE)) {
+				String msg = "Concurrency > 1 is not supported when using exclusive queues, " +
+						"either configure a concurrency of 1 or use a non-exclusive queue";
+				logger.warn(msg);
+				throw new ProvisioningException(msg);
+			} else if (!StringUtils.hasText(group)) {
+				String msg = "Concurrency > 1 is not supported when using anonymous consumer groups, " +
+						"either configure a concurrency of 1 or define a consumer group";
+				logger.warn(msg);
+				throw new ProvisioningException(msg);
+			}
+		}
+
 		logger.info(isAnonQueue ?
 				String.format("Creating anonymous (temporary) queue %s", queueName) :
 				String.format("Creating %s queue %s for consumer group %s", isDurableQueue ? "durable" : "temporary", queueName, group));
-		EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
-		boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
 		Queue queue = provisionQueue(queueName, isDurableQueue, endpointProperties, doDurableQueueProvisioning);
 		trackQueueToTopicBinding(queue.getName(), topicName);
 

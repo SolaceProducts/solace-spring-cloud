@@ -6,16 +6,19 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties
 import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
 import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredSpringRunner;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueTxFlow;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPErrorResponseException;
 import com.solacesystems.jcsmp.JCSMPErrorResponseSubcodeEx;
 import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.Topic;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
+import org.springframework.cloud.stream.binder.BinderException;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
@@ -28,9 +31,15 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessageHeaders;
+import org.springframework.messaging.MessagingException;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.util.MimeTypeUtils;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -561,5 +570,264 @@ public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase 
 
 		producerBinding.unbind();
 		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testConsumerConcurrency() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testConsumerConcurrency";
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties());
+
+		int consumerConcurrency = 2;
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setConcurrency(consumerConcurrency);
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+				destination0, group0, moduleInputChannel, consumerProperties);
+
+		int numMsgsPerFlow = 2;
+		Set<Message<?>> messages = new HashSet<>();
+		Map<String, Boolean> foundPayloads = new HashMap<>();
+		for (int i = 0; i < numMsgsPerFlow * consumerConcurrency; i++) {
+			String payload = "foo-" + i;
+			foundPayloads.put(payload, false);
+			messages.add(MessageBuilder.withPayload(payload.getBytes())
+					.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+					.build());
+		}
+
+		binderBindUnbindLatency();
+
+		final CountDownLatch latch = new CountDownLatch(numMsgsPerFlow * consumerConcurrency);
+		moduleInputChannel.subscribe(message1 -> {
+			String payload = new String((byte[]) message1.getPayload());
+			logger.info(String.format("Received message %s", payload));
+			synchronized (foundPayloads) {
+				if (foundPayloads.containsKey(payload)) {
+					foundPayloads.put(payload, true);
+				} else {
+					logger.error(String.format("Received unexpected message %s", payload));
+				}
+			}
+			latch.countDown();
+		});
+
+		messages.forEach(moduleOutputChannel::send);
+
+		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		foundPayloads.forEach((key, value) ->
+				assertThat(value).as("Did not receive message %s", key).isTrue());
+
+		List<MonitorMsgVpnQueueTxFlow> txFlows = sempV2Api.monitor().getMsgVpnQueueTxFlows(
+				(String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
+				destination0 + getDestinationNameDelimiter() + group0,
+				Integer.MAX_VALUE, null, null, null).getData();
+
+		assertThat(txFlows).hasSize(consumerConcurrency);
+		for (MonitorMsgVpnQueueTxFlow txFlow : txFlows) {
+			assertThat(txFlow.getAckedMsgCount())
+					.as("Flow %s did not receive expected number of messages", txFlow.getFlowId())
+					.isEqualTo(numMsgsPerFlow);
+		}
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testPolledConsumerConcurrency() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testPolledConsumerConcurrency";
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties());
+
+		int consumerConcurrency = 2;
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setConcurrency(consumerConcurrency);
+		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
+				destination0, group0, moduleInputChannel, consumerProperties);
+
+		int numMsgsPerFlow = 2;
+		Set<Message<?>> messages = new HashSet<>();
+		Map<String, Boolean> foundPayloads = new HashMap<>();
+		for (int i = 0; i < numMsgsPerFlow * consumerConcurrency; i++) {
+			String payload = "foo-" + i;
+			foundPayloads.put(payload, false);
+			messages.add(MessageBuilder.withPayload(payload.getBytes())
+					.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+					.build());
+		}
+
+		binderBindUnbindLatency();
+
+		messages.forEach(moduleOutputChannel::send);
+
+		for (int i = 0; i < 100; i++) {
+			moduleInputChannel.poll(message1 -> {
+				String payload = new String((byte[]) message1.getPayload());
+				logger.info(String.format("Received message %s", payload));
+				synchronized (foundPayloads) {
+					if (foundPayloads.containsKey(payload)) {
+						foundPayloads.put(payload, true);
+					} else {
+						logger.error(String.format("Received unexpected message %s", payload));
+					}
+				}
+			});
+		}
+
+		foundPayloads.forEach((key, value) ->
+				assertThat(value).as("Did not receive message %s", key).isTrue());
+
+		List<MonitorMsgVpnQueueTxFlow> txFlows = sempV2Api.monitor().getMsgVpnQueueTxFlows(
+				(String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
+				destination0 + getDestinationNameDelimiter() + group0,
+				Integer.MAX_VALUE, null, null, null).getData();
+
+		assertThat(txFlows).as("polled consumers don't support concurrency, expected it to be ignored")
+				.hasSize(1);
+
+		MonitorMsgVpnQueueTxFlow txFlow = txFlows.iterator().next();
+		assertThat(txFlow.getAckedMsgCount())
+				.as("Flow %s did not receive expected number of messages", txFlow.getFlowId())
+				.isEqualTo(numMsgsPerFlow * consumerConcurrency);
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testFailConsumerConcurrencyWithExclusiveQueue() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testFailConsumerConcurrencyWithExclusiveQueue";
+
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setConcurrency(2);
+		consumerProperties.getExtension().setQueueAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+
+		try {
+			Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+					destination0, group0, moduleInputChannel, consumerProperties);
+			consumerBinding.unbind();
+			fail("Expected consumer provisioning to fail");
+		} catch (ProvisioningException e) {
+			assertThat(e).hasNoCause();
+			assertThat(e.getMessage()).containsIgnoringCase("not supported");
+			assertThat(e.getMessage()).containsIgnoringCase("concurrency > 1");
+			assertThat(e.getMessage()).containsIgnoringCase("exclusive queue");
+		}
+	}
+
+	@Test
+	public void testFailPolledConsumerConcurrencyWithExclusiveQueue() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testFailConsumerConcurrencyWithExclusiveQueue";
+
+		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setConcurrency(2);
+		consumerProperties.getExtension().setQueueAccessType(EndpointProperties.ACCESSTYPE_EXCLUSIVE);
+
+		try {
+			Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
+					destination0, group0, moduleInputChannel, consumerProperties);
+			consumerBinding.unbind();
+			fail("Expected consumer provisioning to fail");
+		} catch (ProvisioningException e) {
+			assertThat(e).hasNoCause();
+			assertThat(e.getMessage()).containsIgnoringCase("not supported");
+			assertThat(e.getMessage()).containsIgnoringCase("concurrency > 1");
+			assertThat(e.getMessage()).containsIgnoringCase("exclusive queue");
+		}
+	}
+
+	@Test
+	public void testFailConsumerConcurrencyWithAnonConsumerGroup() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setConcurrency(2);
+
+		try {
+			Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+					destination0, null, moduleInputChannel, consumerProperties);
+			consumerBinding.unbind();
+			fail("Expected consumer provisioning to fail");
+		} catch (ProvisioningException e) {
+			assertThat(e).hasNoCause();
+			assertThat(e.getMessage()).containsIgnoringCase("not supported");
+			assertThat(e.getMessage()).containsIgnoringCase("concurrency > 1");
+			assertThat(e.getMessage()).containsIgnoringCase("anonymous consumer groups");
+		}
+	}
+
+	@Test
+	public void testFailPolledConsumerConcurrencyWithAnonConsumerGroup() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+
+		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setConcurrency(2);
+
+		try {
+			Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
+					destination0, null, moduleInputChannel, consumerProperties);
+			consumerBinding.unbind();
+			fail("Expected consumer provisioning to fail");
+		} catch (ProvisioningException e) {
+			assertThat(e).hasNoCause();
+			assertThat(e.getMessage()).containsIgnoringCase("not supported");
+			assertThat(e.getMessage()).containsIgnoringCase("concurrency > 1");
+			assertThat(e.getMessage()).containsIgnoringCase("anonymous consumer groups");
+		}
+	}
+
+	@Test
+	public void testFailConsumerWithConcurrencyLessThan1() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testFailConsumerWithConcurrencyLessThan1";
+
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setConcurrency(0);
+
+		try {
+			Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+					destination0, group0, moduleInputChannel, consumerProperties);
+			consumerBinding.unbind();
+			fail("Expected consumer provisioning to fail");
+		} catch (BinderException e) {
+			assertThat(e).hasCauseInstanceOf(MessagingException.class);
+			assertThat(e.getCause().getMessage()).containsIgnoringCase("concurrency must be greater than 0");
+		}
 	}
 }
