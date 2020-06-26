@@ -42,9 +42,12 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
+import static com.solace.spring.cloud.stream.binder.test.util.ValuePoller.poll;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
+import static org.hamcrest.Matchers.is;
 
 /**
  * All tests which modify the default provisioning lifecycle.
@@ -581,6 +584,7 @@ public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase 
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
 		String group0 = "testConsumerConcurrency";
+		String queue0 = destination0 + getDestinationNameDelimiter() + group0;
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -624,15 +628,25 @@ public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase 
 		foundPayloads.forEach((key, value) ->
 				assertThat(value).as("Did not receive message %s", key).isTrue());
 
-		List<MonitorMsgVpnQueueTxFlow> txFlows = sempV2Api.monitor().getMsgVpnQueueTxFlows(
-				(String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
-				destination0 + getDestinationNameDelimiter() + group0,
-				Integer.MAX_VALUE, null, null, null).getData();
+		String msgVpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		List<String> txFlowsIds = sempV2Api.monitor().getMsgVpnQueueTxFlows(
+				msgVpnName,
+				queue0,
+				Integer.MAX_VALUE, null, null, null)
+				.getData()
+				.stream()
+				.map(MonitorMsgVpnQueueTxFlow::getFlowId)
+				.map(String::valueOf)
+				.collect(Collectors.toList());
 
-		assertThat(txFlows).hasSize(consumerConcurrency);
-		for (MonitorMsgVpnQueueTxFlow txFlow : txFlows) {
-			assertThat(txFlow.getAckedMsgCount())
-					.as("Flow %s did not receive expected number of messages", txFlow.getFlowId())
+		assertThat(txFlowsIds).hasSize(consumerConcurrency);
+
+		for (String flowId : txFlowsIds) {
+			assertThat(poll(() -> sempV2Api.monitor().getMsgVpnQueueTxFlow(msgVpnName, queue0, flowId, null).getData().getAckedMsgCount())
+							.until(is((long) numMsgsPerFlow))
+							.execute()
+							.get())
+					.as("Flow %s did not receive expected number of messages", flowId)
 					.isEqualTo(numMsgsPerFlow);
 		}
 
@@ -649,6 +663,7 @@ public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase 
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
 		String group0 = "testPolledConsumerConcurrency";
+		String queue0 = destination0 + getDestinationNameDelimiter() + group0;
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -691,17 +706,21 @@ public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase 
 		foundPayloads.forEach((key, value) ->
 				assertThat(value).as("Did not receive message %s", key).isTrue());
 
+		String msgVpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 		List<MonitorMsgVpnQueueTxFlow> txFlows = sempV2Api.monitor().getMsgVpnQueueTxFlows(
-				(String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
-				destination0 + getDestinationNameDelimiter() + group0,
+				msgVpnName,
+				queue0,
 				Integer.MAX_VALUE, null, null, null).getData();
 
 		assertThat(txFlows).as("polled consumers don't support concurrency, expected it to be ignored")
 				.hasSize(1);
 
-		MonitorMsgVpnQueueTxFlow txFlow = txFlows.iterator().next();
-		assertThat(txFlow.getAckedMsgCount())
-				.as("Flow %s did not receive expected number of messages", txFlow.getFlowId())
+		String flowId = String.valueOf(txFlows.iterator().next().getFlowId());
+		assertThat(poll(() -> sempV2Api.monitor().getMsgVpnQueueTxFlow(msgVpnName, queue0, flowId, null).getData().getAckedMsgCount())
+						.until(is((long) numMsgsPerFlow * consumerConcurrency))
+						.execute()
+						.get())
+				.as("Flow %s did not receive expected number of messages", flowId)
 				.isEqualTo(numMsgsPerFlow * consumerConcurrency);
 
 		producerBinding.unbind();
