@@ -19,6 +19,7 @@ Consult the table below to determine which version of the BOM you need to use:
 | Spring Cloud         |Solace Spring Cloud BOM|Spring Boot        |
 |----------------------|-----------------------|-------------------|
 |Hoxton.SR1            |1.0.0                  | 2.2.x             |
+|Hoxton.SR6            |1.1.0                  | 2.3.x             |
 
 ## Including the BOM
 
