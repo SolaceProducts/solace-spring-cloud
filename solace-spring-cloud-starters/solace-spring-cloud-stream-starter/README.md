@@ -8,6 +8,7 @@ An implementation of Spring's Cloud Stream Binder for integrating with Solace Pu
 * [Spring Cloud Stream Binder](#spring-cloud-stream-binder)
 * [Using it in your Application](#using-it-in-your-application)
 * [Configuration Options](#configuration-options)
+* [Message Target Destination](#message-target-destination)
 * [Failed Message Error Handling](#failed-message-error-handling)
 * [Resources](#resources)
 ---
