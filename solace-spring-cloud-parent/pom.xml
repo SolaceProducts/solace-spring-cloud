@@ -55,6 +55,12 @@
                 <scope>import</scope>
             </dependency>
 
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-starter-cloud-connectors</artifactId>
+                <version>${spring.cloud.connectors.version}</version>
+            </dependency>
+
             <!--
             Workaround for spring-cloud-dependencies (spring-cloud-gcp-dependencies in particular) overriding this.
             Since we use the flatten plugin, this workaround is only applicable to the tests within this repo

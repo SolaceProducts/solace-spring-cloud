@@ -22,6 +22,7 @@ import org.junit.Test;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
+import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.support.DefaultMessageBuilderFactory;
@@ -369,11 +370,13 @@ public class XMLMessageMapperTest {
 		SerializableFoo value = new SerializableFoo("abc123", "HOOPLA!");
 		Map<String,Object> headers = new HashMap<>();
 		headers.put(key, value);
+		headers.put(BinderHeaders.TARGET_DESTINATION, "redirected-target");
 
 		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers));
 
 		Assert.assertThat(sdtMap.keySet(), CoreMatchers.hasItem(key));
 		Assert.assertThat(sdtMap.keySet(), CoreMatchers.hasItem(xmlMessageMapper.getIsHeaderSerializedMetadataKey(key)));
+		Assert.assertThat(sdtMap.keySet(), CoreMatchers.not(CoreMatchers.hasItem(BinderHeaders.TARGET_DESTINATION)));
 		Assert.assertEquals(value, SerializationUtils.deserialize(sdtMap.getBytes(key)));
 		Assert.assertEquals(true, sdtMap.getBoolean(xmlMessageMapper.getIsHeaderSerializedMetadataKey(key)));
 	}

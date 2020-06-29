@@ -8,6 +8,7 @@ An implementation of Spring's Cloud Stream Binder for integrating with Solace Pu
 * [Spring Cloud Stream Binder](#spring-cloud-stream-binder)
 * [Using it in your Application](#using-it-in-your-application)
 * [Configuration Options](#configuration-options)
+* [Message Target Destination](#message-target-destination)
 * [Failed Message Error Handling](#failed-message-error-handling)
 * [Resources](#resources)
 ---
@@ -334,6 +335,27 @@ See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spri
         <p>Default: false</p>
     </dd>
 </dl>
+
+## Message Target Destination
+
+Spring Cloud Stream has a reserved message header called `scst_targetDestination` (retrievable via `BinderHeaders.TARGET_DESTINATION`), which allows for messages to be redirected from their bindings' configured destination to the target destination specified by this header.
+
+For this binder's implementation of this header, the target destination defines the *exact* Solace topic to which a message will be sent. i.e. No post-processing is done for this header (e.g. `prefix` is not applied).
+
+If you want to apply a destination post-processing step – lets say `prefix` for example, you will need to directly apply that to the header itself:
+
+```java
+@Value("${spring.cloud.stream.solace.bindings.<bindingName>.producer.prefix}")
+String prefix;
+
+public Message<String> buildMeAMessage() {
+    return MessageBuilder.withPayload("payload")
+        .setHeader(BinderHeaders.TARGET_DESTINATION, prefix + "new-target-destination")
+        .build();
+}
+```
+
+Also, this header is cleared by the message's producer before it is sent off to the message broker. So you should attach the target destination to your message payload if you want to get that information on the consumer-side.
 
 ## Failed Message Error Handling
 

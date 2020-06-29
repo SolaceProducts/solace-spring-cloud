@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.solace.spring.boot</groupId>
         <artifactId>solace-spring-boot-bom</artifactId>
-        <version>1.0.0</version>
+        <version>1.1.0</version>
     </parent>
 
     <groupId>com.solace.spring.cloud</groupId>
@@ -21,12 +21,15 @@
         <repoName>SolaceProducts</repoName>
 
         <!-- This is the version of Spring Cloud we have targeted for this build -->
-        <spring.cloud.version>Hoxton.SR1</spring.cloud.version>
+        <spring.cloud.version>Hoxton.SR6</spring.cloud.version>
+
+        <!-- Legacy Support for the Spring Cloud Connectors project -->
+        <spring.cloud.connectors.version>2.2.8.RELEASE</spring.cloud.connectors.version>
 
         <!-- This is the version of Solace Spring Boot we have targeted for this build -->
         <!-- This also dictates the expected version of Spring Boot -->
         <!-- Must match ${project.parent.version} -->
-        <solace.spring.boot.bom.version>1.0.0</solace.spring.boot.bom.version>
+        <solace.spring.boot.bom.version>1.1.0</solace.spring.boot.bom.version>
 
         <solace.spring.cloud.connector.version>4.2.2-SNAPSHOT</solace.spring.cloud.connector.version>
         <solace.spring.cloud.stream-starter.version>2.0.2-SNAPSHOT</solace.spring.cloud.stream-starter.version>

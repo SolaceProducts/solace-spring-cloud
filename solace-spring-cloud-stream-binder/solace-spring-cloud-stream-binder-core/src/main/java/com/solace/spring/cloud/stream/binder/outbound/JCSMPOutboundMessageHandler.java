@@ -12,6 +12,7 @@ import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
 import org.springframework.context.Lifecycle;
@@ -20,6 +21,7 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
+import org.springframework.util.StringUtils;
 
 import java.util.UUID;
 
@@ -57,13 +59,25 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 			throw handleMessagingException(msg0, message, new ClosedChannelBindingException(msg1));
 		}
 
+		Topic targetTopic = topic;
+
+		try {
+			String targetDestinationHeader = message.getHeaders().get(BinderHeaders.TARGET_DESTINATION, String.class);
+			if (StringUtils.hasText(targetDestinationHeader)) {
+				targetTopic = JCSMPFactory.onlyInstance().createTopic(targetDestinationHeader);
+			}
+		} catch (IllegalArgumentException e) {
+			throw handleMessagingException(
+					String.format("Unable to parse header %s", BinderHeaders.TARGET_DESTINATION), message, e);
+		}
+
 		XMLMessage xmlMessage = xmlMessageMapper.map(message, producerProperties.getExtension());
 
 		try {
-			producer.send(xmlMessage, topic);
+			producer.send(xmlMessage, targetTopic);
 		} catch (JCSMPException e) {
 			throw handleMessagingException(
-					String.format("Unable to send message to topic %s", topic.getName()), message, e);
+					String.format("Unable to send message to topic %s", targetTopic.getName()), message, e);
 		}
 	}
 
