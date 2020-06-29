@@ -15,6 +15,7 @@ import com.solacesystems.jcsmp.XMLContentMessage;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.support.DefaultMessageBuilderFactory;
@@ -178,7 +179,10 @@ public class XMLMessageMapper {
 	SDTMap map(MessageHeaders headers) {
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
 		for (Map.Entry<String,Object> header : headers.entrySet()) {
-			if (header.getKey().equalsIgnoreCase(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK)) continue;
+			if (header.getKey().equalsIgnoreCase(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK) ||
+					header.getKey().equalsIgnoreCase(BinderHeaders.TARGET_DESTINATION)) {
+				continue;
+			}
 
 			Object value = header.getValue();
 
