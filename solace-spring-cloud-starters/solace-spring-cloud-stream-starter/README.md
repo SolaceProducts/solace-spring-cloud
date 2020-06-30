@@ -102,17 +102,22 @@ spring:
         uppercase-in-0:
           destination: queuename
           group: myconsumergroup
+          binder: solace-broker
         uppercase-out-0:
           destination: uppercase/topic
-
-solace:
-  java:
-    host: tcp://localhost:55555
-    msgVpn: default
-    clientUsername: default
-    clientPassword: default
-    connectRetries: -1
-    reconnectRetries: -1
+          binder: solace-broker
+      binders:
+        solace-broker:
+          type: solace
+          environment:
+            solace:
+              java:
+                host: tcp://localhost:55555
+                msgVpn: default
+                clientUsername: default
+                clientPassword: default
+                connectRetries: -1
+                reconnectRetries: -1
 ```
 
 Notice that the latter half of this configuration actually originates from the [JCSMP Spring Boot Auto-Configuration project](https://github.com/SolaceProducts/solace-java-spring-boot#updating-your-application-properties).
