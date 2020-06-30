@@ -55,7 +55,7 @@ Here is how to include the spring cloud stream starter in your project using Gra
 
 ```groovy
 // Solace Spring Cloud Stream Binder
-compile("com.solace.spring.cloud:spring-cloud-starter-stream-solace:1.2.+")
+compile("com.solace.spring.cloud:spring-cloud-starter-stream-solace:2.1.0")
 ```
 
 #### Using it with Maven
@@ -65,7 +65,7 @@ compile("com.solace.spring.cloud:spring-cloud-starter-stream-solace:1.2.+")
 <dependency>
   <groupId>com.solace.spring.cloud</groupId>
   <artifactId>spring-cloud-starter-stream-solace</artifactId>
-  <version>1.2.+</version>
+  <version>2.1.0</version>
 </dependency>
 ```
 
