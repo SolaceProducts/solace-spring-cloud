@@ -4,12 +4,17 @@ import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
+import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueue;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.JCSMPInterruptedException;
+import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.PropertyMismatchException;
 import com.solacesystems.jcsmp.Queue;
+import org.assertj.core.api.SoftAssertions;
 import org.junit.Assume;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -36,13 +41,21 @@ import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.util.MimeTypeUtils;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.solace.spring.cloud.stream.binder.test.util.ValuePoller.poll;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
+import static org.hamcrest.Matchers.is;
 
 /**
  * Runs all basic Spring Cloud Stream Binder functionality tests
@@ -415,6 +428,194 @@ public class SolaceBinderBasicTest extends SolaceBinderTestBase {
 		TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
 		producerBinding0.unbind();
 		producerBinding1.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testConsumerReconnect() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testConsumerReconnect";
+		String queue0 = destination0 + getDestinationNameDelimiter() + group0;
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties());
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+				destination0, group0, moduleInputChannel, createConsumerProperties());
+
+		binderBindUnbindLatency();
+
+		final AtomicInteger numMsgsConsumed = new AtomicInteger(0);
+		final Set<String> uniquePayloadsReceived = new HashSet<>();
+		moduleInputChannel.subscribe(message1 -> {
+			numMsgsConsumed.incrementAndGet();
+			String payload = new String((byte[]) message1.getPayload());
+			logger.info(String.format("Received message %s", payload));
+			uniquePayloadsReceived.add(payload);
+		});
+
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		Future<Integer> future = executor.submit(() -> {
+			int numMsgsSent = 0;
+			while (!Thread.currentThread().isInterrupted()) {
+				String payload = "foo-" + numMsgsSent;
+				Message<?> message = MessageBuilder.withPayload(payload.getBytes())
+						.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+						.build();
+				logger.info(String.format("Sending message %s", payload));
+				try {
+					moduleOutputChannel.send(message);
+					numMsgsSent += 1;
+				} catch (MessagingException e) {
+					if (e.getCause() instanceof JCSMPInterruptedException) {
+						logger.warn("Received interrupt exception during message produce");
+						break;
+					} else {
+						throw e;
+					}
+				}
+			}
+			return numMsgsSent;
+		});
+		executor.shutdown();
+
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		logger.info(String.format("Disabling egress to queue %s", queue0));
+		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue().egressEnabled(false), null);
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		logger.info(String.format("Enabling egress to queue %s", queue0));
+		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue().egressEnabled(true), null);
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		logger.info("Stopping producer");
+		executor.shutdownNow();
+		executor.awaitTermination(20, TimeUnit.SECONDS);
+		int numMsgsSent = future.get(5, TimeUnit.SECONDS);
+
+		assertThat(poll(() -> sempV2Api.monitor().getMsgVpnQueueMsgs(vpnName, queue0, Integer.MAX_VALUE,
+				null, null, null).getData().size())
+				.until(is(0))
+				.execute()
+				.get())
+				.as("Expected queue %s to be empty after rebind", queue0)
+				.isEqualTo(0);
+
+		MonitorMsgVpnQueue queueState = sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue0, null)
+				.getData();
+
+		SoftAssertions softly = new SoftAssertions();
+		softly.assertThat(queueState.getDisabledBindFailureCount()).isGreaterThan(0);
+		softly.assertThat(uniquePayloadsReceived.size()).isEqualTo(numMsgsSent);
+		// -1 margin of error. A redelivered message might be untracked if it's consumer was shutdown before it could
+		// be added to the consumed msg count.
+		softly.assertThat(numMsgsConsumed.get() - queueState.getRedeliveredMsgCount())
+				.isBetween((long)numMsgsSent-1, (long)numMsgsSent);
+		softly.assertAll();
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testConsumerRebind() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testConsumerUnbind";
+		String queue0 = destination0 + getDestinationNameDelimiter() + group0;
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties());
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+				destination0, group0, moduleInputChannel, createConsumerProperties());
+
+		binderBindUnbindLatency();
+
+		final AtomicInteger numMsgsConsumed = new AtomicInteger(0);
+		final Set<String> uniquePayloadsReceived = new HashSet<>();
+		moduleInputChannel.subscribe(message1 -> {
+			numMsgsConsumed.incrementAndGet();
+			String payload = new String((byte[]) message1.getPayload());
+			logger.info(String.format("Received message %s", payload));
+			uniquePayloadsReceived.add(payload);
+		});
+
+		ExecutorService executor = Executors.newSingleThreadExecutor();
+		Future<Integer> future = executor.submit(() -> {
+			int numMsgsSent = 0;
+			while (!Thread.currentThread().isInterrupted()) {
+				String payload = "foo-" + numMsgsSent;
+				Message<?> message = MessageBuilder.withPayload(payload.getBytes())
+						.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+						.build();
+				logger.info(String.format("Sending message %s", payload));
+				try {
+					moduleOutputChannel.send(message);
+					numMsgsSent += 1;
+				} catch (MessagingException e) {
+					if (e.getCause() instanceof JCSMPInterruptedException) {
+						logger.warn("Received interrupt exception during message produce");
+						break;
+					} else {
+						throw e;
+					}
+				}
+			}
+			return numMsgsSent;
+		});
+		executor.shutdown();
+
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		logger.info("Unbinding consumer");
+		consumerBinding.unbind();
+
+		logger.info("Stopping producer");
+		executor.shutdownNow();
+		executor.awaitTermination(20, TimeUnit.SECONDS);
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		logger.info("Rebinding consumer");
+		consumerBinding = binder.bindConsumer(destination0, group0, moduleInputChannel, createConsumerProperties());
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		int numMsgsSent = future.get(5, TimeUnit.SECONDS);
+
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		assertThat(poll(() -> sempV2Api.monitor().getMsgVpnQueueMsgs(vpnName, queue0, Integer.MAX_VALUE,
+								null, null, null).getData().size())
+						.until(is(0))
+						.execute()
+						.get())
+				.as("Expected queue %s to be empty after rebind", queue0)
+				.isEqualTo(0);
+
+		long redeliveredMsgs = sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue0, null)
+				.getData()
+				.getRedeliveredMsgCount();
+
+		SoftAssertions softly = new SoftAssertions();
+		softly.assertThat(uniquePayloadsReceived.size()).isEqualTo(numMsgsSent);
+		// -1 margin of error. A redelivered message might be untracked if it's consumer was shutdown before it could
+		// be added to the consumed msg count.
+		softly.assertThat(numMsgsConsumed.get() - redeliveredMsgs).isBetween((long)numMsgsSent-1, (long)numMsgsSent);
+		softly.assertAll();
+
+		producerBinding.unbind();
 		consumerBinding.unbind();
 	}
 }

@@ -4,9 +4,11 @@ import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionExcepti
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.XMLMessage;
-import com.solacesystems.jcsmp.XMLMessageListener;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
@@ -18,7 +20,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-class InboundXMLMessageListener implements XMLMessageListener {
+class InboundXMLMessageListener implements Runnable {
+	final FlowReceiver flowReceiver;
 	final ConsumerDestination consumerDestination;
 	final ThreadLocal<AttributeAccessor> attributesHolder;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
@@ -27,20 +30,25 @@ class InboundXMLMessageListener implements XMLMessageListener {
 	private final boolean needHolder;
 	private final boolean needAttributes;
 
-	InboundXMLMessageListener(ConsumerDestination consumerDestination,
+	private static final Log logger = LogFactory.getLog(InboundXMLMessageListener.class);
+
+	InboundXMLMessageListener(FlowReceiver flowReceiver,
+							  ConsumerDestination consumerDestination,
 							  Consumer<Message<?>> messageConsumer,
 							  Function<RuntimeException,Boolean> errorHandlerFunction,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
 							  boolean needHolderAndAttributes) {
-		this(consumerDestination, messageConsumer, errorHandlerFunction, attributesHolder, needHolderAndAttributes, needHolderAndAttributes);
+		this(flowReceiver, consumerDestination, messageConsumer, errorHandlerFunction, attributesHolder, needHolderAndAttributes, needHolderAndAttributes);
 	}
 
-	InboundXMLMessageListener(ConsumerDestination consumerDestination,
+	InboundXMLMessageListener(FlowReceiver flowReceiver,
+							  ConsumerDestination consumerDestination,
 							  Consumer<Message<?>> messageConsumer,
 							  Function<RuntimeException,Boolean> errorHandlerFunction,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
 							  boolean needHolder,
 							  boolean needAttributes) {
+		this.flowReceiver = flowReceiver;
 		this.consumerDestination = consumerDestination;
 		this.messageConsumer = messageConsumer;
 		this.errorHandlerFunction = errorHandlerFunction;
@@ -50,10 +58,33 @@ class InboundXMLMessageListener implements XMLMessageListener {
 	}
 
 	@Override
-	public void onReceive(BytesXMLMessage bytesXMLMessage) {
-		final Message<?> message;
+	public void run() {
 		try {
-			message = xmlMessageMapper.map(bytesXMLMessage);
+			while (!Thread.currentThread().isInterrupted()) {
+				receive();
+			}
+		} finally {
+			flowReceiver.close();
+		}
+	}
+
+	public void receive() {
+		BytesXMLMessage bytesXMLMessage;
+
+		try {
+			bytesXMLMessage = flowReceiver.receiveNoWait();
+		} catch (JCSMPException e) {
+			logger.warn(String.format("Received error while trying to read message from endpoint %s",
+					flowReceiver.getEndpoint().getName()), e);
+			return;
+		}
+
+		if (bytesXMLMessage == null) {
+			return;
+		}
+
+		try {
+			final Message<?> message = xmlMessageMapper.map(bytesXMLMessage);
 			handleMessage(message, bytesXMLMessage);
 		} catch (SolaceMessageConversionException e) {
 			handleError(e, bytesXMLMessage, bytesXMLMessage::ackMessage);
@@ -80,11 +111,6 @@ class InboundXMLMessageListener implements XMLMessageListener {
 			deliveryAttempt.incrementAndGet();
 		}
 		messageConsumer.accept(message);
-	}
-
-	@Override
-	public void onException(JCSMPException e) { //TODO Do we need anything here?
-//		logger.warn("An unrecoverable error was received while listening for messages", e);
 	}
 
 	void setAttributesIfNecessary(XMLMessage xmlMessage, org.springframework.messaging.Message<?> message) {
