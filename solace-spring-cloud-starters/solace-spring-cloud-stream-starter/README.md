@@ -341,6 +341,17 @@ See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spri
     </dd>
 </dl>
 
+## Consumer Concurrency
+
+Configure Spring Cloud Stream's [concurrency consumer property](https://cloud.spring.io/spring-cloud-static/spring-cloud-stream/current/reference/html/spring-cloud-stream.html#_consumer_properties) to enable concurrent message consumption for a particular consumer binding.
+
+Though note that there are few limitations:
+
+1. `concurrency` > 1 is not supported for exclusive queues.
+1. `concurrency` > 1 is not supported for consumer bindings which are a part of anonymous consumer groups.
+1. `concurrency` > 1 is ignored for polled consumers.
+1. Setting `provisionDurableQueue` to `false` disables endpoint configuration validation. Meaning that point 1 cannot validated. In this scenario, it is the developer's responsibility to ensure that `concurrency` is properly configured.
+
 ## Message Target Destination
 
 Spring Cloud Stream has a reserved message header called `scst_targetDestination` (retrievable via `BinderHeaders.TARGET_DESTINATION`), which allows for messages to be redirected from their bindings' configured destination to the target destination specified by this header.
