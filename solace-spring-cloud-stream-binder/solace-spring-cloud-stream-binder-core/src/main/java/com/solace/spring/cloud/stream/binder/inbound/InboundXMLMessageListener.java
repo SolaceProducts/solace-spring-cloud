@@ -61,7 +61,14 @@ class InboundXMLMessageListener implements Runnable {
 	public void run() {
 		try {
 			while (!Thread.currentThread().isInterrupted()) {
-				receive();
+				try {
+					receive();
+				} catch (RuntimeException e) {
+					// Shouldn't ever come in here.
+					// Doing this just in case since the message consumers shouldn't ever stop unless interrupted.
+					logger.warn(String.format("Exception received while consuming messages from destination %s",
+							consumerDestination.getName()), e);
+				}
 			}
 		} finally {
 			flowReceiver.close();
