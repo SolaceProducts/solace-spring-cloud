@@ -34,7 +34,8 @@
         <solace.spring.cloud.connector.version>4.3.0-SNAPSHOT</solace.spring.cloud.connector.version>
         <solace.spring.cloud.stream-starter.version>2.1.0-SNAPSHOT</solace.spring.cloud.stream-starter.version>
 
-        <solace.integration.test.support.version>0.1.0</solace.integration.test.support.version>
+        <solace.integration.test.support.version>0.2.0</solace.integration.test.support.version>
+        <solace.integration.test.support.fetch_checkout.skip>false</solace.integration.test.support.fetch_checkout.skip>
         <solace.integration.test.support.install.skip>true</solace.integration.test.support.install.skip>
     </properties>
 
@@ -303,6 +304,7 @@
                             <goal>exec</goal>
                         </goals>
                         <configuration>
+                            <skip>${solace.integration.test.support.fetch_checkout.skip}</skip>
                             <executable>git</executable>
                             <arguments>
                                 <argument>-C</argument>
@@ -322,6 +324,7 @@
                             <goal>exec</goal>
                         </goals>
                         <configuration>
+                            <skip>${solace.integration.test.support.fetch_checkout.skip}</skip>
                             <executable>git</executable>
                             <arguments>
                                 <argument>-C</argument>
