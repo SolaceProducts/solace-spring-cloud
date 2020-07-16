@@ -515,10 +515,10 @@ public class SolaceBinderBasicTest extends SolaceBinderTestBase {
 		SoftAssertions softly = new SoftAssertions();
 		softly.assertThat(queueState.getDisabledBindFailureCount()).isGreaterThan(0);
 		softly.assertThat(uniquePayloadsReceived.size()).isEqualTo(numMsgsSent);
-		// -1 margin of error. A redelivered message might be untracked if it's consumer was shutdown before it could
+		// -2 margin of error. Redelivered messages might be untracked if it's consumer was shutdown before it could
 		// be added to the consumed msg count.
 		softly.assertThat(numMsgsConsumed.get() - queueState.getRedeliveredMsgCount())
-				.isBetween((long)numMsgsSent-1, (long)numMsgsSent);
+				.isBetween((long)numMsgsSent-2, (long)numMsgsSent);
 		softly.assertAll();
 
 		producerBinding.unbind();
@@ -610,9 +610,9 @@ public class SolaceBinderBasicTest extends SolaceBinderTestBase {
 
 		SoftAssertions softly = new SoftAssertions();
 		softly.assertThat(uniquePayloadsReceived.size()).isEqualTo(numMsgsSent);
-		// -1 margin of error. A redelivered message might be untracked if it's consumer was shutdown before it could
+		// -2 margin of error. Redelivered messages might be untracked if it's consumer was shutdown before it could
 		// be added to the consumed msg count.
-		softly.assertThat(numMsgsConsumed.get() - redeliveredMsgs).isBetween((long)numMsgsSent-1, (long)numMsgsSent);
+		softly.assertThat(numMsgsConsumed.get() - redeliveredMsgs).isBetween((long)numMsgsSent-2, (long)numMsgsSent);
 		softly.assertAll();
 
 		producerBinding.unbind();
