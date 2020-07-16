@@ -8,6 +8,8 @@ An implementation of Spring's Cloud Stream Binder for integrating with Solace Pu
 * [Spring Cloud Stream Binder](#spring-cloud-stream-binder)
 * [Using it in your Application](#using-it-in-your-application)
 * [Configuration Options](#configuration-options)
+* [Consumer Concurrency](#consumer-concurrency)
+* [Message Target Destination](#message-target-destination)
 * [Failed Message Error Handling](#failed-message-error-handling)
 * [Resources](#resources)
 ---
@@ -54,7 +56,7 @@ Here is how to include the spring cloud stream starter in your project using Gra
 
 ```groovy
 // Solace Spring Cloud Stream Binder
-compile("com.solace.spring.cloud:spring-cloud-starter-stream-solace:1.2.+")
+compile("com.solace.spring.cloud:spring-cloud-starter-stream-solace:2.1.0")
 ```
 
 #### Using it with Maven
@@ -64,7 +66,7 @@ compile("com.solace.spring.cloud:spring-cloud-starter-stream-solace:1.2.+")
 <dependency>
   <groupId>com.solace.spring.cloud</groupId>
   <artifactId>spring-cloud-starter-stream-solace</artifactId>
-  <version>1.2.+</version>
+  <version>2.1.0</version>
 </dependency>
 ```
 
@@ -101,17 +103,22 @@ spring:
         uppercase-in-0:
           destination: queuename
           group: myconsumergroup
+          binder: solace-broker
         uppercase-out-0:
           destination: uppercase/topic
-
-solace:
-  java:
-    host: tcp://localhost:55555
-    msgVpn: default
-    clientUsername: default
-    clientPassword: default
-    connectRetries: -1
-    reconnectRetries: -1
+          binder: solace-broker
+      binders:
+        solace-broker:
+          type: solace
+          environment:
+            solace:
+              java:
+                host: tcp://localhost:55555
+                msgVpn: default
+                clientUsername: default
+                clientPassword: default
+                connectRetries: -1
+                reconnectRetries: -1
 ```
 
 Notice that the latter half of this configuration actually originates from the [JCSMP Spring Boot Auto-Configuration project](https://github.com/SolaceProducts/solace-java-spring-boot#updating-your-application-properties).
@@ -334,6 +341,38 @@ See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spri
         <p>Default: false</p>
     </dd>
 </dl>
+
+## Consumer Concurrency
+
+Configure Spring Cloud Stream's [concurrency consumer property](https://cloud.spring.io/spring-cloud-static/spring-cloud-stream/current/reference/html/spring-cloud-stream.html#_consumer_properties) to enable concurrent message consumption for a particular consumer binding.
+
+Though note that there are few limitations:
+
+1. `concurrency` > 1 is not supported for exclusive queues.
+1. `concurrency` > 1 is not supported for consumer bindings which are a part of anonymous consumer groups.
+1. `concurrency` > 1 is ignored for polled consumers.
+1. Setting `provisionDurableQueue` to `false` disables endpoint configuration validation. Meaning that point 1 cannot validated. In this scenario, it is the developer's responsibility to ensure that `concurrency` is properly configured.
+
+## Message Target Destination
+
+Spring Cloud Stream has a reserved message header called `scst_targetDestination` (retrievable via `BinderHeaders.TARGET_DESTINATION`), which allows for messages to be redirected from their bindings' configured destination to the target destination specified by this header.
+
+For this binder's implementation of this header, the target destination defines the *exact* Solace topic to which a message will be sent. i.e. No post-processing is done for this header (e.g. `prefix` is not applied).
+
+If you want to apply a destination post-processing step – lets say `prefix` for example, you will need to directly apply that to the header itself:
+
+```java
+@Value("${spring.cloud.stream.solace.bindings.<bindingName>.producer.prefix}")
+String prefix;
+
+public Message<String> buildMeAMessage() {
+    return MessageBuilder.withPayload("payload")
+        .setHeader(BinderHeaders.TARGET_DESTINATION, prefix + "new-target-destination")
+        .build();
+}
+```
+
+Also, this header is cleared by the message's producer before it is sent off to the message broker. So you should attach the target destination to your message payload if you want to get that information on the consumer-side.
 
 ## Failed Message Error Handling
 

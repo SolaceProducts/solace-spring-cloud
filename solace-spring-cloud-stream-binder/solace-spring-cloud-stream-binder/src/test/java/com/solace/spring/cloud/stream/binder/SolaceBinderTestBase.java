@@ -6,14 +6,19 @@ import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
 import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredSpringRunner;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceExternalResourceHandler;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.SpringJCSMPFactory;
+import org.junit.Before;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.binder.PartitionCapableBinderTests;
 import org.springframework.cloud.stream.binder.Spy;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assumptions.assumeThat;
 
 /**
  * <p>Base class for all Solace Spring Cloud Stream Binder test classes.
@@ -32,9 +37,33 @@ public abstract class SolaceBinderTestBase
 	@Value("${test.fail.on.connection.exception:false}")
 	private Boolean failOnConnectError;
 
+	@Value("${test.solace.mgmt.host:#{null}}")
+	private String solaceMgmtHost;
+
+	@Value("${test.solace.mgmt.username:#{null}}")
+	private String solaceMgmtUsername;
+
+	@Value("${test.solace.mgmt.password:#{null}}")
+	private String solaceMgmtPassword;
+
 	JCSMPSession jcsmpSession;
+	SempV2Api sempV2Api;
 
 	static SolaceExternalResourceHandler externalResource = new SolaceExternalResourceHandler();
+
+	@Before
+	public void setupSempV2Api() {
+		if (failOnConnectError) {
+			assertThat(solaceMgmtHost).as("test.solace.mgmt.host cannot be blank").isNotBlank();
+			assertThat(solaceMgmtUsername).as("test.solace.mgmt.username cannot be blank").isNotBlank();
+			assertThat(solaceMgmtPassword).as("test.solace.mgmt.password cannot be blank").isNotBlank();
+		} else {
+			assumeThat(solaceMgmtHost).as("test.solace.mgmt.host cannot be blank. Skipping test...").isNotBlank();
+			assumeThat(solaceMgmtUsername).as("test.solace.mgmt.username cannot be blank. Skipping test...").isNotBlank();
+			assumeThat(solaceMgmtPassword).as("test.solace.mgmt.password cannot be blank. Skipping test...").isNotBlank();
+		}
+		sempV2Api = new SempV2Api(solaceMgmtHost, solaceMgmtUsername, solaceMgmtPassword);
+	}
 
 
 	@Override

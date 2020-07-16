@@ -3,7 +3,6 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
-import com.solace.spring.cloud.stream.binder.util.JCSMPKeepAlive;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
@@ -43,7 +42,6 @@ public class SolaceMessageChannelBinder
 
 	private final JCSMPSession jcsmpSession;
 	private final JCSMPSessionProducerManager sessionProducerManager;
-	private final JCSMPKeepAlive keepAlive = new JCSMPKeepAlive();
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
 	private SolaceExtendedBindingProperties extendedBindingProperties = new SolaceExtendedBindingProperties();
 
@@ -78,8 +76,8 @@ public class SolaceMessageChannelBinder
 	@Override
 	protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
 													 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
-		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(destination, jcsmpSession, keepAlive,
-				getConsumerEndpointProperties(properties), getConsumerPostStart(properties));
+		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(destination, jcsmpSession,
+				properties.getConcurrency(), getConsumerEndpointProperties(properties), getConsumerPostStart(properties));
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
 		if (properties.getMaxAttempts() > 1) {
@@ -97,6 +95,10 @@ public class SolaceMessageChannelBinder
 	protected PolledConsumerResources createPolledConsumerResources(String name, String group,
 																	ConsumerDestination destination,
 																	ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties) {
+		if (consumerProperties.getConcurrency() > 1) {
+			logger.warn("Polled consumers do not support concurrency > 1, it will be ignored...");
+		}
+
 		EndpointProperties endpointProperties = getConsumerEndpointProperties(consumerProperties);
 		Consumer<Queue> postStart = getConsumerPostStart(consumerProperties);
 		JCSMPMessageSource messageSource = new JCSMPMessageSource(destination, jcsmpSession, consumerProperties, endpointProperties, postStart);
