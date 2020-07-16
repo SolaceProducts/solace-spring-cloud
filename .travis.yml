@@ -1,7 +1,9 @@
 language: java
 dist: trusty
 sudo: false
-script: mvn clean package
+script:
+  - mvn clean package
+  - ./solace-integration-test-support/scripts/validate_submodule_not_changed.sh
 jdk:
   - oraclejdk8
 
