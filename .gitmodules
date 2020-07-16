@@ -1,3 +1,3 @@
 [submodule "solace-integration-test-support"]
 	path = solace-integration-test-support
-	url = git@github.com:SolaceDev/solace-integration-test-support.git
+	url = ../../SolaceDev/solace-integration-test-support.git
