@@ -21,11 +21,14 @@ import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public class JCSMPInboundChannelAdapter extends MessageProducerSupport implements OrderlyShutdownCapable {
@@ -35,6 +38,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final EndpointProperties endpointProperties;
 	private final Consumer<Queue> postStart;
 	private final int concurrency;
+	private final Set<AtomicBoolean> consumerStopFlags;
 	private ExecutorService executorService;
 	private RetryTemplate retryTemplate;
 	private RecoveryCallback<?> recoveryCallback;
@@ -52,6 +56,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		this.concurrency = concurrency;
 		this.endpointProperties = endpointProperties;
 		this.postStart = postStart;
+		this.consumerStopFlags = new HashSet<>(this.concurrency);
 	}
 
 	@Override
@@ -102,7 +107,10 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		executorService = Executors.newFixedThreadPool(this.concurrency);
 		flowReceivers.stream()
 				.map(this::buildListener)
-				.forEach(executorService::submit);
+				.forEach(listener -> {
+					consumerStopFlags.add(listener.getStopFlag());
+					executorService.submit(listener);
+				});
 		executorService.shutdown(); // All tasks have been submitted
 
 		if (postStart != null) {
@@ -118,10 +126,15 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 	private void stopAllConsumers() {
 		final String queueName = consumerDestination.getName();
-		logger.info(String.format("Stopping consumer flow from queue %s <inbound adapter ID: %s>", queueName, id));
-		executorService.shutdownNow();
+		logger.info(String.format("Stopping all %s consumer flows to queue %s <inbound adapter ID: %s>",
+				concurrency, queueName, id));
+		consumerStopFlags.forEach(flag -> flag.set(true)); // Mark threads for shutdown
+		executorService.shutdownNow(); // Interrupt any blocked threads
 		try {
-			if (!executorService.awaitTermination(1, TimeUnit.MINUTES)) {
+			if (executorService.awaitTermination(1, TimeUnit.MINUTES)) {
+				// cleanup
+				consumerStopFlags.clear();
+			} else {
 				String msg = String.format("executor service shutdown for inbound adapter %s timed out", id);
 				logger.warn(msg);
 				throw new MessagingException(msg);

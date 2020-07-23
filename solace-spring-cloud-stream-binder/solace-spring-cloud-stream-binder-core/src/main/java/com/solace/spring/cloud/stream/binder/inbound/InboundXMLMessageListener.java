@@ -16,6 +16,7 @@ import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.support.ErrorMessageUtils;
 import org.springframework.messaging.Message;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -29,6 +30,7 @@ class InboundXMLMessageListener implements Runnable {
 	private final Function<RuntimeException,Boolean> errorHandlerFunction;
 	private final boolean needHolder;
 	private final boolean needAttributes;
+	private final AtomicBoolean stopFlag = new AtomicBoolean(false);
 
 	private static final Log logger = LogFactory.getLog(InboundXMLMessageListener.class);
 
@@ -60,7 +62,7 @@ class InboundXMLMessageListener implements Runnable {
 	@Override
 	public void run() {
 		try {
-			while (!Thread.currentThread().isInterrupted()) {
+			while (!stopFlag.get() && !Thread.currentThread().isInterrupted()) {
 				try {
 					receive();
 				} catch (RuntimeException e) {
@@ -139,5 +141,9 @@ class InboundXMLMessageListener implements Runnable {
 		boolean wasProcessedByErrorHandler = errorHandlerFunction != null && errorHandlerFunction.apply(e);
 		acknowledgement.run();
 		if (!wasProcessedByErrorHandler) throw e;
+	}
+
+	public AtomicBoolean getStopFlag() {
+		return stopFlag;
 	}
 }
