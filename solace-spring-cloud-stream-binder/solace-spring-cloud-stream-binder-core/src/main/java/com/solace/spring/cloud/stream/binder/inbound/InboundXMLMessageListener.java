@@ -79,7 +79,7 @@ class InboundXMLMessageListener implements Runnable {
 		BytesXMLMessage bytesXMLMessage;
 
 		try {
-			bytesXMLMessage = flowReceiver.receiveNoWait();
+			bytesXMLMessage = flowReceiver.receive();
 		} catch (JCSMPException e) {
 			logger.warn(String.format("Received error while trying to read message from endpoint %s",
 					flowReceiver.getEndpoint().getName()), e);
