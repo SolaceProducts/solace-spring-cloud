@@ -4,8 +4,10 @@ import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionExcepti
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPException;
+import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -14,12 +16,14 @@ import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.support.ErrorMessageUtils;
+import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 class InboundXMLMessageListener implements Runnable {
 	final FlowReceiver flowReceiver;
@@ -31,6 +35,7 @@ class InboundXMLMessageListener implements Runnable {
 	private final boolean needHolder;
 	private final boolean needAttributes;
 	private final AtomicBoolean stopFlag = new AtomicBoolean(false);
+	private final Supplier<Boolean> remoteStopFlag;
 
 	private static final Log logger = LogFactory.getLog(InboundXMLMessageListener.class);
 
@@ -38,15 +43,17 @@ class InboundXMLMessageListener implements Runnable {
 							  ConsumerDestination consumerDestination,
 							  Consumer<Message<?>> messageConsumer,
 							  Function<RuntimeException,Boolean> errorHandlerFunction,
+							  @Nullable AtomicBoolean remoteStopFlag,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
 							  boolean needHolderAndAttributes) {
-		this(flowReceiver, consumerDestination, messageConsumer, errorHandlerFunction, attributesHolder, needHolderAndAttributes, needHolderAndAttributes);
+		this(flowReceiver, consumerDestination, messageConsumer, errorHandlerFunction, remoteStopFlag, attributesHolder, needHolderAndAttributes, needHolderAndAttributes);
 	}
 
 	InboundXMLMessageListener(FlowReceiver flowReceiver,
 							  ConsumerDestination consumerDestination,
 							  Consumer<Message<?>> messageConsumer,
 							  Function<RuntimeException,Boolean> errorHandlerFunction,
+							  @Nullable AtomicBoolean remoteStopFlag,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
 							  boolean needHolder,
 							  boolean needAttributes) {
@@ -54,6 +61,7 @@ class InboundXMLMessageListener implements Runnable {
 		this.consumerDestination = consumerDestination;
 		this.messageConsumer = messageConsumer;
 		this.errorHandlerFunction = errorHandlerFunction;
+		this.remoteStopFlag = () -> remoteStopFlag != null && remoteStopFlag.get();
 		this.attributesHolder = attributesHolder;
 		this.needHolder = needHolder;
 		this.needAttributes = needAttributes;
@@ -62,7 +70,7 @@ class InboundXMLMessageListener implements Runnable {
 	@Override
 	public void run() {
 		try {
-			while (!stopFlag.get() && !Thread.currentThread().isInterrupted()) {
+			while (keepPolling()) {
 				try {
 					receive();
 				} catch (RuntimeException e) {
@@ -77,14 +85,23 @@ class InboundXMLMessageListener implements Runnable {
 		}
 	}
 
+	private boolean keepPolling() {
+		return !stopFlag.get() && !remoteStopFlag.get();
+	}
+
 	public void receive() {
 		BytesXMLMessage bytesXMLMessage;
 
 		try {
 			bytesXMLMessage = flowReceiver.receive();
 		} catch (JCSMPException e) {
-			logger.warn(String.format("Received error while trying to read message from endpoint %s",
-					flowReceiver.getEndpoint().getName()), e);
+			String msg = String.format("Received error while trying to read message from endpoint %s",
+					flowReceiver.getEndpoint().getName());
+			if ((e instanceof JCSMPTransportException || e instanceof ClosedFacilityException) && !keepPolling()) {
+				logger.debug(msg, e);
+			} else {
+				logger.warn(msg, e);
+			}
 			return;
 		}
 

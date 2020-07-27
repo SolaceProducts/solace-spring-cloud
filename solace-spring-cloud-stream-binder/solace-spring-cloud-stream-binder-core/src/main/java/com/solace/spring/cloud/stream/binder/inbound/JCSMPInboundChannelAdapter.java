@@ -38,6 +38,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final EndpointProperties endpointProperties;
 	private final Consumer<Queue> postStart;
 	private final int concurrency;
+	private final AtomicBoolean remoteStopFlag;
 	private final Set<AtomicBoolean> consumerStopFlags;
 	private ExecutorService executorService;
 	private RetryTemplate retryTemplate;
@@ -50,12 +51,14 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 									  JCSMPSession jcsmpSession,
 									  int concurrency,
 									  @Nullable EndpointProperties endpointProperties,
-									  @Nullable Consumer<Queue> postStart) {
+									  @Nullable Consumer<Queue> postStart,
+									  @Nullable AtomicBoolean remoteStopFlag) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
 		this.concurrency = concurrency;
 		this.endpointProperties = endpointProperties;
 		this.postStart = postStart;
+		this.remoteStopFlag = remoteStopFlag;
 		this.consumerStopFlags = new HashSet<>(this.concurrency);
 	}
 
@@ -185,6 +188,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					(exception) -> sendErrorMessageIfNecessary(null, exception),
 					retryTemplate,
 					recoveryCallback,
+					remoteStopFlag,
 					attributesHolder
 			);
 			retryTemplate.registerListener(retryableMessageListener);
@@ -195,6 +199,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					consumerDestination,
 					this::sendMessage,
 					(exception) -> sendErrorMessageIfNecessary(null, exception),
+					remoteStopFlag,
 					attributesHolder,
 					this.getErrorChannel() != null
 			);

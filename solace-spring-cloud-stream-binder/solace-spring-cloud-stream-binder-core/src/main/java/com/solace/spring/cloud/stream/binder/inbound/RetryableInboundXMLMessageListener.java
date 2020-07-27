@@ -8,6 +8,7 @@ import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AckUtils;
+import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.retry.RecoveryCallback;
 import org.springframework.retry.RetryCallback;
@@ -15,6 +16,7 @@ import org.springframework.retry.RetryContext;
 import org.springframework.retry.RetryListener;
 import org.springframework.retry.support.RetryTemplate;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -30,8 +32,9 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener imple
 									   Function<RuntimeException,Boolean> errorHandlerFunction,
 									   RetryTemplate retryTemplate,
 									   RecoveryCallback<?> recoveryCallback,
+									   @Nullable AtomicBoolean remoteStopFlag,
 									   ThreadLocal<AttributeAccessor> attributesHolder) {
-		super(flowReceiver, consumerDestination, messageConsumer, errorHandlerFunction, attributesHolder, false, true);
+		super(flowReceiver, consumerDestination, messageConsumer, errorHandlerFunction, remoteStopFlag, attributesHolder, false, true);
 		this.retryTemplate = retryTemplate;
 		this.recoveryCallback = recoveryCallback;
 	}

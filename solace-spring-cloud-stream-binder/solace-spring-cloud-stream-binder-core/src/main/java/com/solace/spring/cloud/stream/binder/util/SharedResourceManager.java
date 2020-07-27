@@ -21,6 +21,13 @@ abstract class SharedResourceManager<T> {
 	abstract T create() throws Exception;
 	abstract void close();
 
+	/**
+	 * Register {@code key} to the shared resource.
+	 * <p>If this is the first key to claim this shared resource, {@link #create()} the resource.
+	 * @param key the registration key of the caller that wants to use this resource
+	 * @return the shared resource
+	 * @throws Exception whatever exception that may be thrown by {@link #create()}
+	 */
 	public T get(String key) throws Exception {
 		synchronized (lock) {
 			if (registeredIds.isEmpty()) {
@@ -36,6 +43,11 @@ abstract class SharedResourceManager<T> {
 		return sharedResource;
 	}
 
+	/**
+	 * De-register {@code key} from the shared resource.
+	 * <p>If this is the last {@code key} associated to the shared resource, {@link #close()} the resource.
+	 * @param key the registration key of the caller that is using the resource
+	 */
 	public void release(String key) {
 		synchronized (lock) {
 			if (!registeredIds.contains(key)) return;

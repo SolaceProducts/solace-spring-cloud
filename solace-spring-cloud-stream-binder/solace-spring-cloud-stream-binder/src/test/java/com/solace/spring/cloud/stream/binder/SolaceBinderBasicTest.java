@@ -618,4 +618,33 @@ public class SolaceBinderBasicTest extends SolaceBinderTestBase {
 		producerBinding.unbind();
 		consumerBinding.unbind();
 	}
+
+	@Test
+	public void testBinderDestroy() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testBinderDestroy";
+
+		binder.bindConsumer(destination0, group0, moduleInputChannel, createConsumerProperties());
+
+		binderBindUnbindLatency();
+
+		try {
+			logger.info("Destroy binder");
+			binder.getBinder().destroy();
+			Thread.sleep(3000);
+
+			//TODO Implement Test: Intercept InboundXMLMessageListener to check for any error
+
+		} finally {
+			binder = getBinder(); // Refresh binder instance if successfully destroyed
+			logger.info("Rebinding consumer so that we can properly clean it up");
+			Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+					destination0, group0, moduleInputChannel, createConsumerProperties());
+			consumerBinding.unbind();
+		}
+	}
 }
