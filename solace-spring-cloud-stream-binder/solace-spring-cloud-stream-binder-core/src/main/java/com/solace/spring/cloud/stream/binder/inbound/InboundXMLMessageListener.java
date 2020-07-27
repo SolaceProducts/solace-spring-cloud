@@ -81,6 +81,7 @@ class InboundXMLMessageListener implements Runnable {
 				}
 			}
 		} finally {
+			logger.warn(String.format("Closing flow receiver to destination %s", consumerDestination.getName()));
 			flowReceiver.close();
 		}
 	}

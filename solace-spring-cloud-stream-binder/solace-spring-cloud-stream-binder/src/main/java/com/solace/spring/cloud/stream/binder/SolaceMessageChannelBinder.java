@@ -57,7 +57,7 @@ public class SolaceMessageChannelBinder
 
 	@Override
 	public void destroy() {
-		logger.info("Closing JCSMP session");
+		logger.info(String.format("Closing JCSMP session %s", jcsmpSession.getSessionName()));
 		sessionProducerManager.release(errorHandlerProducerKey);
 		consumersRemoteStopFlag.set(true);
 		jcsmpSession.closeSession();
