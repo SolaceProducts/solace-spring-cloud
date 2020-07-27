@@ -38,7 +38,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final EndpointProperties endpointProperties;
 	private final Consumer<Queue> postStart;
 	private final int concurrency;
-	private final long shutdownDelayInMillis = 500; //TODO Make this configurable
+	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
 	private final AtomicBoolean remoteStopFlag;
 	private final Set<AtomicBoolean> consumerStopFlags;
 	private ExecutorService executorService;
@@ -134,7 +134,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 				concurrency, queueName, id));
 		consumerStopFlags.forEach(flag -> flag.set(true)); // Mark threads for shutdown
 		try {
-			if (!executorService.awaitTermination(shutdownDelayInMillis, TimeUnit.MILLISECONDS)) {
+			if (!executorService.awaitTermination(shutdownInterruptThresholdInMillis, TimeUnit.MILLISECONDS)) {
 				logger.info(String.format("Interrupting all workers for inbound adapter %s", id));
 				executorService.shutdownNow();
 				if (!executorService.awaitTermination(1, TimeUnit.MINUTES)) {
