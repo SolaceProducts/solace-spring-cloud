@@ -38,6 +38,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final EndpointProperties endpointProperties;
 	private final Consumer<Queue> postStart;
 	private final int concurrency;
+	private final long shutdownDelayInMillis = 500; //TODO Make this configurable
 	private final AtomicBoolean remoteStopFlag;
 	private final Set<AtomicBoolean> consumerStopFlags;
 	private ExecutorService executorService;
@@ -132,16 +133,19 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		logger.info(String.format("Stopping all %s consumer flows to queue %s <inbound adapter ID: %s>",
 				concurrency, queueName, id));
 		consumerStopFlags.forEach(flag -> flag.set(true)); // Mark threads for shutdown
-		executorService.shutdownNow(); // Interrupt any blocked threads
 		try {
-			if (executorService.awaitTermination(1, TimeUnit.MINUTES)) {
-				// cleanup
-				consumerStopFlags.clear();
-			} else {
-				String msg = String.format("executor service shutdown for inbound adapter %s timed out", id);
-				logger.warn(msg);
-				throw new MessagingException(msg);
+			if (!executorService.awaitTermination(shutdownDelayInMillis, TimeUnit.MILLISECONDS)) {
+				logger.info(String.format("Interrupting all workers for inbound adapter %s", id));
+				executorService.shutdownNow();
+				if (!executorService.awaitTermination(1, TimeUnit.MINUTES)) {
+					String msg = String.format("executor service shutdown for inbound adapter %s timed out", id);
+					logger.warn(msg);
+					throw new MessagingException(msg);
+				}
 			}
+
+			// cleanup
+			consumerStopFlags.clear();
 		} catch (InterruptedException e) {
 			String msg = String.format("executor service shutdown for inbound adapter %s was interrupted", id);
 			logger.warn(msg);
