@@ -30,6 +30,7 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public class SolaceMessageChannelBinder
@@ -42,6 +43,7 @@ public class SolaceMessageChannelBinder
 
 	private final JCSMPSession jcsmpSession;
 	private final JCSMPSessionProducerManager sessionProducerManager;
+	private final AtomicBoolean consumersRemoteStopFlag = new AtomicBoolean(false);
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
 	private SolaceExtendedBindingProperties extendedBindingProperties = new SolaceExtendedBindingProperties();
 
@@ -55,7 +57,9 @@ public class SolaceMessageChannelBinder
 
 	@Override
 	public void destroy() {
+		logger.info(String.format("Closing JCSMP session %s", jcsmpSession.getSessionName()));
 		sessionProducerManager.release(errorHandlerProducerKey);
+		consumersRemoteStopFlag.set(true);
 		jcsmpSession.closeSession();
 	}
 
@@ -77,7 +81,8 @@ public class SolaceMessageChannelBinder
 	protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
 													 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(destination, jcsmpSession,
-				properties.getConcurrency(), getConsumerEndpointProperties(properties), getConsumerPostStart(properties));
+				properties.getConcurrency(), getConsumerEndpointProperties(properties),
+				getConsumerPostStart(properties), consumersRemoteStopFlag);
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
 		if (properties.getMaxAttempts() > 1) {

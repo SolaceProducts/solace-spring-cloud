@@ -21,11 +21,14 @@ import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 public class JCSMPInboundChannelAdapter extends MessageProducerSupport implements OrderlyShutdownCapable {
@@ -35,6 +38,9 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final EndpointProperties endpointProperties;
 	private final Consumer<Queue> postStart;
 	private final int concurrency;
+	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
+	private final AtomicBoolean remoteStopFlag;
+	private final Set<AtomicBoolean> consumerStopFlags;
 	private ExecutorService executorService;
 	private RetryTemplate retryTemplate;
 	private RecoveryCallback<?> recoveryCallback;
@@ -46,12 +52,15 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 									  JCSMPSession jcsmpSession,
 									  int concurrency,
 									  @Nullable EndpointProperties endpointProperties,
-									  @Nullable Consumer<Queue> postStart) {
+									  @Nullable Consumer<Queue> postStart,
+									  @Nullable AtomicBoolean remoteStopFlag) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
 		this.concurrency = concurrency;
 		this.endpointProperties = endpointProperties;
 		this.postStart = postStart;
+		this.remoteStopFlag = remoteStopFlag;
+		this.consumerStopFlags = new HashSet<>(this.concurrency);
 	}
 
 	@Override
@@ -102,7 +111,10 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		executorService = Executors.newFixedThreadPool(this.concurrency);
 		flowReceivers.stream()
 				.map(this::buildListener)
-				.forEach(executorService::submit);
+				.forEach(listener -> {
+					consumerStopFlags.add(listener.getStopFlag());
+					executorService.submit(listener);
+				});
 		executorService.shutdown(); // All tasks have been submitted
 
 		if (postStart != null) {
@@ -118,14 +130,22 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 	private void stopAllConsumers() {
 		final String queueName = consumerDestination.getName();
-		logger.info(String.format("Stopping consumer flow from queue %s <inbound adapter ID: %s>", queueName, id));
-		executorService.shutdownNow();
+		logger.info(String.format("Stopping all %s consumer flows to queue %s <inbound adapter ID: %s>",
+				concurrency, queueName, id));
+		consumerStopFlags.forEach(flag -> flag.set(true)); // Mark threads for shutdown
 		try {
-			if (!executorService.awaitTermination(1, TimeUnit.MINUTES)) {
-				String msg = String.format("executor service shutdown for inbound adapter %s timed out", id);
-				logger.warn(msg);
-				throw new MessagingException(msg);
+			if (!executorService.awaitTermination(shutdownInterruptThresholdInMillis, TimeUnit.MILLISECONDS)) {
+				logger.info(String.format("Interrupting all workers for inbound adapter %s", id));
+				executorService.shutdownNow();
+				if (!executorService.awaitTermination(1, TimeUnit.MINUTES)) {
+					String msg = String.format("executor service shutdown for inbound adapter %s timed out", id);
+					logger.warn(msg);
+					throw new MessagingException(msg);
+				}
 			}
+
+			// cleanup
+			consumerStopFlags.clear();
 		} catch (InterruptedException e) {
 			String msg = String.format("executor service shutdown for inbound adapter %s was interrupted", id);
 			logger.warn(msg);
@@ -172,6 +192,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					(exception) -> sendErrorMessageIfNecessary(null, exception),
 					retryTemplate,
 					recoveryCallback,
+					remoteStopFlag,
 					attributesHolder
 			);
 			retryTemplate.registerListener(retryableMessageListener);
@@ -182,6 +203,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					consumerDestination,
 					this::sendMessage,
 					(exception) -> sendErrorMessageIfNecessary(null, exception),
+					remoteStopFlag,
 					attributesHolder,
 					this.getErrorChannel() != null
 			);

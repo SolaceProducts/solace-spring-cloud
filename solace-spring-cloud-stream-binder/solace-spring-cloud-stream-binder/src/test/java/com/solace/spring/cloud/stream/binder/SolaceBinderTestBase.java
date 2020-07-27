@@ -78,7 +78,14 @@ public abstract class SolaceBinderTestBase
 
 	@Override
 	protected SolaceTestBinder getBinder() throws Exception {
-		if (testBinder == null) {
+		if (testBinder == null || jcsmpSession.isClosed()) {
+			if (testBinder != null) {
+				logger.info(String.format("Will recreate %s since %s is closed",
+						testBinder.getClass().getSimpleName(), jcsmpSession.getClass().getSimpleName()));
+				testBinder.getBinder().destroy();
+				testBinder = null;
+			}
+
 			logger.info(String.format("Getting new %s instance", SolaceTestBinder.class.getSimpleName()));
 			jcsmpSession = externalResource.assumeAndGetActiveSession(springJCSMPFactory, failOnConnectError);
 			testBinder = new SolaceTestBinder(jcsmpSession);
