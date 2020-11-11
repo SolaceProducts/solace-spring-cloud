@@ -64,7 +64,7 @@ import static org.hamcrest.Matchers.is;
  */
 @RunWith(SpringRunner.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigFileApplicationContextInitializer.class)
-public class SolaceBinderBasicTest extends SolaceBinderTestBase {
+public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	// NOT YET SUPPORTED ---------------------------------
 	@Override
 	public void testPartitionedModuleJava() {
