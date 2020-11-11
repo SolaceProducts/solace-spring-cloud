@@ -63,7 +63,7 @@ import static org.hamcrest.Matchers.is;
 @RunWith(InheritedTestsFilteredSpringRunner.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigFileApplicationContextInitializer.class)
 @IgnoreInheritedTests
-public class SolaceBinderProvisioningLifecycleTest extends SolaceBinderTestBase {
+public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 	@Test
 	public void testConsumerProvisionDurableQueue() throws Exception {
 		SolaceTestBinder binder = getBinder();

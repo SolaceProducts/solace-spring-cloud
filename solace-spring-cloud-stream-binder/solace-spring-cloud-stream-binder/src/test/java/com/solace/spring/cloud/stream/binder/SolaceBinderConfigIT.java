@@ -26,9 +26,9 @@ import java.util.regex.Pattern;
  */
 @RunWith(InheritedTestsFilteredSpringRunner.class)
 @ContextConfiguration(classes = {SolaceServiceAutoConfiguration.class},
-		initializers = {ConfigFileApplicationContextInitializer.class, SolaceBinderConfigTest.Initializer.class})
+		initializers = {ConfigFileApplicationContextInitializer.class, SolaceBinderConfigIT.Initializer.class})
 @IgnoreInheritedTests
-public class SolaceBinderConfigTest extends SolaceBinderTestBase {
+public class SolaceBinderConfigIT extends SolaceBinderITBase {
 	@Autowired
 	private JCSMPProperties jcsmpProperties;
 
@@ -54,7 +54,7 @@ public class SolaceBinderConfigTest extends SolaceBinderTestBase {
 	static class Initializer implements ApplicationContextInitializer<ConfigurableApplicationContext> {
 		@Override
 		public void initialize(ConfigurableApplicationContext configurableApplicationContext) {
-			String clientName = SolaceBinderConfigTest.class.getName() + UUID.randomUUID().toString();
+			String clientName = SolaceBinderConfigIT.class.getName() + UUID.randomUUID().toString();
 			TestPropertyValues.of(
 						String.format("solace.java.apiProperties.%s=%s", JCSMPProperties.CLIENT_NAME, clientName))
 					.applyTo(configurableApplicationContext.getEnvironment());

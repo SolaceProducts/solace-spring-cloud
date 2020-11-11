@@ -18,7 +18,6 @@ import org.springframework.cloud.stream.binder.PartitionCapableBinderTests;
 import org.springframework.cloud.stream.binder.Spy;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assumptions.assumeThat;
 
 /**
  * <p>Base class for all Solace Spring Cloud Stream Binder test classes.
@@ -29,13 +28,10 @@ import static org.assertj.core.api.Assumptions.assumeThat;
  * {@link InheritedTestsFilteredSpringRunner InheritedTestsFilteredSpringRunner} runner
  * along with the {@link IgnoreInheritedTests @IgnoreInheritedTests} annotation.
  */
-public abstract class SolaceBinderTestBase
+public abstract class SolaceBinderITBase
 		extends PartitionCapableBinderTests<SolaceTestBinder, ExtendedConsumerProperties<SolaceConsumerProperties>, ExtendedProducerProperties<SolaceProducerProperties>> {
 	@Autowired
 	private SpringJCSMPFactory springJCSMPFactory;
-
-	@Value("${test.fail.on.connection.exception:false}")
-	private Boolean failOnConnectError;
 
 	@Value("${test.solace.mgmt.host:#{null}}")
 	private String solaceMgmtHost;
@@ -53,15 +49,9 @@ public abstract class SolaceBinderTestBase
 
 	@Before
 	public void setupSempV2Api() {
-		if (failOnConnectError) {
-			assertThat(solaceMgmtHost).as("test.solace.mgmt.host cannot be blank").isNotBlank();
-			assertThat(solaceMgmtUsername).as("test.solace.mgmt.username cannot be blank").isNotBlank();
-			assertThat(solaceMgmtPassword).as("test.solace.mgmt.password cannot be blank").isNotBlank();
-		} else {
-			assumeThat(solaceMgmtHost).as("test.solace.mgmt.host cannot be blank. Skipping test...").isNotBlank();
-			assumeThat(solaceMgmtUsername).as("test.solace.mgmt.username cannot be blank. Skipping test...").isNotBlank();
-			assumeThat(solaceMgmtPassword).as("test.solace.mgmt.password cannot be blank. Skipping test...").isNotBlank();
-		}
+		assertThat(solaceMgmtHost).as("test.solace.mgmt.host cannot be blank").isNotBlank();
+		assertThat(solaceMgmtUsername).as("test.solace.mgmt.username cannot be blank").isNotBlank();
+		assertThat(solaceMgmtPassword).as("test.solace.mgmt.password cannot be blank").isNotBlank();
 		sempV2Api = new SempV2Api(solaceMgmtHost, solaceMgmtUsername, solaceMgmtPassword);
 	}
 
@@ -87,7 +77,7 @@ public abstract class SolaceBinderTestBase
 			}
 
 			logger.info(String.format("Getting new %s instance", SolaceTestBinder.class.getSimpleName()));
-			jcsmpSession = externalResource.assumeAndGetActiveSession(springJCSMPFactory, failOnConnectError);
+			jcsmpSession = externalResource.assumeAndGetActiveSession(springJCSMPFactory);
 			testBinder = new SolaceTestBinder(jcsmpSession);
 		}
 		return testBinder;
