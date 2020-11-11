@@ -10,7 +10,7 @@ public class SolaceExternalResourceHandler {
 
 	private JCSMPException sessionConnectError;
 
-	public JCSMPSession assumeAndGetActiveSession(SpringJCSMPFactory springJCSMPFactory)
+	public JCSMPSession getActiveSession(SpringJCSMPFactory springJCSMPFactory)
 			throws InvalidPropertiesException {
 
 		handleConnectionError();

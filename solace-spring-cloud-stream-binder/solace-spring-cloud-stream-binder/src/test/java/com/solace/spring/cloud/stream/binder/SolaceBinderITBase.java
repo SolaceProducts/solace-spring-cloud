@@ -77,7 +77,7 @@ public abstract class SolaceBinderITBase
 			}
 
 			logger.info(String.format("Getting new %s instance", SolaceTestBinder.class.getSimpleName()));
-			jcsmpSession = externalResource.assumeAndGetActiveSession(springJCSMPFactory);
+			jcsmpSession = externalResource.getActiveSession(springJCSMPFactory);
 			testBinder = new SolaceTestBinder(jcsmpSession);
 		}
 		return testBinder;
