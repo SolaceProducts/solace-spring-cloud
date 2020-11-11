@@ -47,7 +47,7 @@ public class SolaceBinderConfigIT extends SolaceBinderITBase {
 		softly.assertThat(client.getSoftwareVersion())
 				.matches(String.format("%s(?:-SNAPSHOT)? \\(%s\\)", versionPattern, versionPattern));
 		softly.assertThat(client.getSoftwareDate()).matches(String.format("%s \\(%s\\)", datePattern, datePattern));
-		softly.assertThat(client.getPlatform()).contains("Solace Spring Cloud Stream Binder (JCSMP SDK)");
+		softly.assertThat(client.getPlatform()).endsWith("Solace Spring Cloud Stream Binder (JCSMP SDK)");
 		softly.assertAll();
 	}
 
