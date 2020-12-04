@@ -34,8 +34,9 @@ import java.util.stream.Collectors;
 public class SolaceQueueProvisioner
 		implements ProvisioningProvider<ExtendedConsumerProperties<SolaceConsumerProperties>,ExtendedProducerProperties<SolaceProducerProperties>> {
 
-	private JCSMPSession jcsmpSession;
-	private Map<String, Set<String>> queueToTopicBindings = new HashMap<>();
+	private final JCSMPSession jcsmpSession;
+	private final Map<String, Set<String>> queueToTopicBindings = new HashMap<>();
+	private final Set<String> temporaryQueues = new HashSet<>();
 
 	private static final Log logger = LogFactory.getLog(SolaceQueueProvisioner.class);
 
@@ -159,6 +160,7 @@ public class SolaceQueueProvisioner
 			} else {
 				// EndpointProperties will be applied during consumer creation
 				queue = jcsmpSession.createTemporaryQueue(name);
+				temporaryQueues.add(queue.getName());
 			}
 		} catch (JCSMPException e) {
 			String action = isDurable ? "provision durable" : "create temporary";
@@ -229,5 +231,9 @@ public class SolaceQueueProvisioner
 			queueToTopicBindings.put(queueName, new HashSet<>());
 		}
 		queueToTopicBindings.get(queueName).add(topicName);
+	}
+
+	public boolean hasTemporaryQueue(ConsumerDestination consumerDestination) {
+		return temporaryQueues.contains(consumerDestination.getName());
 	}
 }

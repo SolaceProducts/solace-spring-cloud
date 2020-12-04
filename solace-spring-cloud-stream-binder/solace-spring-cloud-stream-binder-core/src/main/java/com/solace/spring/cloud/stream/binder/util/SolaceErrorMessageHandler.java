@@ -20,8 +20,8 @@ import org.springframework.messaging.support.ErrorMessage;
 import java.util.UUID;
 
 public class SolaceErrorMessageHandler implements MessageHandler {
-	private String consumerQueueName;
-	private ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
+	private final String consumerQueueName;
+	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
 	private final String producerKey;
 	private final JCSMPSessionProducerManager producerManager;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
@@ -79,27 +79,23 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 
 		if (consumerProperties.getExtension().isAutoBindDmq()) {
 			republishToDMQ(rawMessage);
+			AckUtils.autoAck(acknowledgmentCallback);
 		} else if (consumerProperties.getExtension().isRequeueRejected()) {
-			requeue(rawMessage);
+			logger.info(String.format("Raw %s %s: Will be re-queued onto queue %s",
+					XMLMessage.class.getSimpleName(), rawMessage.getMessageId(), consumerQueueName));
+			AckUtils.requeue(acknowledgmentCallback);
 		} else {
 			logger.info(String.format("Raw %s %s: Will be rejected",
 					XMLMessage.class.getSimpleName(), rawMessage.getMessageId()));
+			AckUtils.autoNack(acknowledgmentCallback);
 		}
-
-		AckUtils.autoNack(acknowledgmentCallback);
 	}
 
 	private void republishToDMQ(XMLMessage rawMessage) {
 		String dmqName = SolaceProvisioningUtil.getDMQName(consumerQueueName);
 		logger.info(String.format("Raw %s %s: Will be republished to DMQ %s",
 				XMLMessage.class.getSimpleName(), rawMessage.getMessageId(), dmqName));
-		sendOneMessage(dmqName, xmlMessageMapper.map(rawMessage));
-	}
-
-	private void requeue(XMLMessage rawMessage) {
-		logger.info(String.format("Raw %s %s: Will be re-queued onto queue %s",
-				XMLMessage.class.getSimpleName(), rawMessage.getMessageId(), consumerQueueName));
-		sendOneMessage(consumerQueueName, xmlMessageMapper.map(rawMessage));
+		sendOneMessage(dmqName, xmlMessageMapper.map(rawMessage, null));
 	}
 
 	private void sendOneMessage(String queueName, Message<?> message) {

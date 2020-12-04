@@ -426,8 +426,9 @@ public class XMLMessageMapperTest {
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE);
 		xmlMessage.setProperties(metadata);
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
 		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(byte[].class));
 		assertArrayEquals(xmlMessage.getData(), (byte[]) springMessage.getPayload());
@@ -444,8 +445,9 @@ public class XMLMessageMapperTest {
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 		xmlMessage.setProperties(metadata);
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
 		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(String.class));
 		assertEquals(xmlMessage.getText(), springMessage.getPayload());
@@ -464,8 +466,9 @@ public class XMLMessageMapperTest {
 		metadata.putBoolean(SolaceBinderHeaders.SERIALIZED_PAYLOAD, true);
 		xmlMessage.setProperties(metadata);
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
 		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(SerializableFoo.class));
 		assertEquals(expectedPayload, springMessage.getPayload());
@@ -487,8 +490,9 @@ public class XMLMessageMapperTest {
 		metadata.putString(MessageHeaders.CONTENT_TYPE, "application/x-java-serialized-object");
 		xmlMessage.setProperties(metadata);
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
 		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(SDTStream.class));
 		assertEquals(expectedPayload, springMessage.getPayload());
@@ -510,8 +514,9 @@ public class XMLMessageMapperTest {
 		metadata.putString(MessageHeaders.CONTENT_TYPE, "application/x-java-serialized-object");
 		xmlMessage.setProperties(metadata);
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
 		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(SDTMap.class));
 		assertEquals(expectedPayload, springMessage.getPayload());
@@ -528,8 +533,9 @@ public class XMLMessageMapperTest {
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_XML_VALUE);
 		xmlMessage.setProperties(metadata);
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
 		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(String.class));
 		assertEquals(xmlMessage.getXMLContent(), springMessage.getPayload());
@@ -548,7 +554,8 @@ public class XMLMessageMapperTest {
 		metadata.putBoolean(SolaceBinderHeaders.SERIALIZED_PAYLOAD, true);
 		xmlMessage.setProperties(metadata);
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, true);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback, true);
 
 		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(SerializableFoo.class));
 		assertEquals(expectedPayload, springMessage.getPayload());
@@ -567,8 +574,9 @@ public class XMLMessageMapperTest {
 		xmlMessage.setProperties(metadata);
 		xmlMessage.setHTTPContentType(MimeTypeUtils.TEXT_HTML_VALUE);
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
 		assertEquals(metadata.getString(MessageHeaders.CONTENT_TYPE),
 				Objects.requireNonNull(StaticMessageHeaderAccessor.getContentType(springMessage)).toString());
@@ -657,8 +665,9 @@ public class XMLMessageMapperTest {
 		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : readableHeaders) {
 			Object actualValue = springMessage.getHeaders().get(header.getKey());
@@ -755,8 +764,9 @@ public class XMLMessageMapperTest {
 		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : nonReadableHeaders) {
 			assertThat(springMessage.getHeaders(), not(hasKey(header)));
@@ -787,7 +797,8 @@ public class XMLMessageMapperTest {
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 		xmlMessage.setProperties(metadata);
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
 
 		assertEquals(undefinedSolaceHeader1, springMessage.getHeaders().get("solace_foo1", String.class));
 		assertEquals(undefinedSolaceHeader2, springMessage.getHeaders().get("solace_foo2", SerializableFoo.class));
@@ -797,7 +808,8 @@ public class XMLMessageMapperTest {
 	@Test(expected = SolaceMessageConversionException.class)
 	public void testFailMapXMLMessageToSpringMessage_WithNullPayload() {
 		BytesMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
-		xmlMessageMapper.map(xmlMessage);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
 	}
 
 	@Test
@@ -867,7 +879,8 @@ public class XMLMessageMapperTest {
 			validateXMLMessage(xmlMessage, expectedSpringMessage, springHeaders);
 
 			logger.info(String.format("Iteration %s - XMLMessage to Message<?>:\n%s", i, xmlMessage));
-			springMessage = xmlMessageMapper.map(xmlMessage);
+			AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+			springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
 			validateSpringMessage(springMessage, expectedXmlMessage);
 			assertTrue("Stream should be rewinded after being processed by the mapper",
 					xmlMessage.getProperties().getStream(SolaceBinderHeaders.SERIALIZED_HEADERS).hasRemaining());

@@ -81,7 +81,8 @@ public class SolaceMessageChannelBinder
 	protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
 													 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(destination, jcsmpSession,
-				properties.getConcurrency(), getConsumerEndpointProperties(properties),
+				properties.getConcurrency(), provisioningProvider.hasTemporaryQueue(destination),
+				getConsumerEndpointProperties(properties),
 				getConsumerPostStart(properties), consumersRemoteStopFlag);
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
@@ -106,7 +107,8 @@ public class SolaceMessageChannelBinder
 
 		EndpointProperties endpointProperties = getConsumerEndpointProperties(consumerProperties);
 		Consumer<Queue> postStart = getConsumerPostStart(consumerProperties);
-		JCSMPMessageSource messageSource = new JCSMPMessageSource(destination, jcsmpSession, consumerProperties, endpointProperties, postStart);
+		JCSMPMessageSource messageSource = new JCSMPMessageSource(destination, jcsmpSession, consumerProperties,
+				endpointProperties, provisioningProvider.hasTemporaryQueue(destination), postStart);
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, consumerProperties, true);
 		return new PolledConsumerResources(messageSource, errorInfra);
 	}

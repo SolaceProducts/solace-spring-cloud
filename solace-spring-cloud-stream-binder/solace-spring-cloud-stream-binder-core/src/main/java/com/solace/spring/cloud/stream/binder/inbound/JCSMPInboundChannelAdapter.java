@@ -1,11 +1,9 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
-import com.solacesystems.jcsmp.ConsumerFlowProperties;
+import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solacesystems.jcsmp.EndpointProperties;
-import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
-import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
 import org.apache.commons.logging.Log;
@@ -38,6 +36,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final EndpointProperties endpointProperties;
 	private final Consumer<Queue> postStart;
 	private final int concurrency;
+	private final boolean hasTemporaryQueue;
 	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
 	private final AtomicBoolean remoteStopFlag;
 	private final Set<AtomicBoolean> consumerStopFlags;
@@ -51,12 +50,14 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	public JCSMPInboundChannelAdapter(ConsumerDestination consumerDestination,
 									  JCSMPSession jcsmpSession,
 									  int concurrency,
+									  boolean hasTemporaryQueue,
 									  @Nullable EndpointProperties endpointProperties,
 									  @Nullable Consumer<Queue> postStart,
 									  @Nullable AtomicBoolean remoteStopFlag) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
 		this.concurrency = concurrency;
+		this.hasTemporaryQueue = hasTemporaryQueue;
 		this.endpointProperties = endpointProperties;
 		this.postStart = postStart;
 		this.remoteStopFlag = remoteStopFlag;
@@ -88,23 +89,20 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		}
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName);
-		final ConsumerFlowProperties flowProperties = new ConsumerFlowProperties();
-		flowProperties.setEndpoint(queue);
-		flowProperties.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
 
-		final List<FlowReceiver> flowReceivers = new ArrayList<>(concurrency);
+		final List<FlowReceiverContainer> flowReceivers = new ArrayList<>(concurrency);
 
 		try {
 			for (int i = 0; i < concurrency; i++) {
 				logger.info(String.format("Creating consumer %s of %s for inbound adapter %s", i + 1, concurrency, id));
-				FlowReceiver flowReceiver = jcsmpSession.createFlow(null, flowProperties, endpointProperties);
-				flowReceiver.start();
-				flowReceivers.add(flowReceiver);
+				FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
+				flowReceiverContainer.bind();
+				flowReceivers.add(flowReceiverContainer);
 			}
 		} catch (JCSMPException e) {
 			String msg = String.format("Failed to get message consumer for inbound adapter %s", id);
 			logger.warn(msg, e);
-			flowReceivers.forEach(com.solacesystems.jcsmp.Consumer::close);
+			flowReceivers.forEach(FlowReceiverContainer::unbind);
 			throw new MessagingException(msg, e);
 		}
 
@@ -178,7 +176,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		return attributes == null ? super.getErrorMessageAttributes(message) : attributes;
 	}
 
-	private InboundXMLMessageListener buildListener(FlowReceiver flowReceiver) {
+	private InboundXMLMessageListener buildListener(FlowReceiverContainer flowReceiverContainer) {
 		InboundXMLMessageListener listener;
 		if (retryTemplate != null) {
 			Assert.state(getErrorChannel() == null,
@@ -186,10 +184,11 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 							"use an 'ErrorMessageSendingRecoverer' in the 'recoveryCallback' property to send " +
 							"an error message when retries are exhausted");
 			RetryableInboundXMLMessageListener retryableMessageListener = new RetryableInboundXMLMessageListener(
-					flowReceiver,
+					flowReceiverContainer,
 					consumerDestination,
 					this::sendMessage,
 					(exception) -> sendErrorMessageIfNecessary(null, exception),
+					hasTemporaryQueue,
 					retryTemplate,
 					recoveryCallback,
 					remoteStopFlag,
@@ -199,10 +198,11 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			listener = retryableMessageListener;
 		} else {
 			listener = new InboundXMLMessageListener(
-					flowReceiver,
+					flowReceiverContainer,
 					consumerDestination,
 					this::sendMessage,
 					(exception) -> sendErrorMessageIfNecessary(null, exception),
+					hasTemporaryQueue,
 					remoteStopFlag,
 					attributesHolder,
 					this.getErrorChannel() != null

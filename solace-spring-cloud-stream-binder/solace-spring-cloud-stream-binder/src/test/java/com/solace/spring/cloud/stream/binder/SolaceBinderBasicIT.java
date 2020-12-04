@@ -6,8 +6,11 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueue;
+import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueMsg;
 import com.solacesystems.jcsmp.ClosedFacilityException;
+import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPInterruptedException;
 import com.solacesystems.jcsmp.JCSMPProperties;
@@ -42,6 +45,7 @@ import org.springframework.util.MimeTypeUtils;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -154,6 +158,110 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		assertThat(errorMessage.get().getPayload()).isInstanceOf(MessagingException.class);
 		assertThat((MessagingException) errorMessage.get().getPayload()).hasCauseInstanceOf(ClosedFacilityException.class);
 		producerBinding.unbind();
+	}
+
+	@Test
+	public void testConsumerRequeue() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.getExtension().setRequeueRejected(true);
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+				destination0, "testConsumerRequeue", moduleInputChannel, consumerProperties);
+
+		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		binderBindUnbindLatency();
+
+		final AtomicInteger numRetriesRemaining = new AtomicInteger(consumerProperties.getMaxAttempts());
+		final CountDownLatch latch = new CountDownLatch(1);
+		moduleInputChannel.subscribe(message1 -> {
+			if (numRetriesRemaining.getAndDecrement() > 0) {
+				throw new RuntimeException("Throwing expected exception!");
+			} else {
+				logger.info("Received message");
+				latch.countDown();
+			}
+		});
+
+		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
+		moduleOutputChannel.send(message);
+
+		assertThat(latch.await(2, TimeUnit.MINUTES)).isTrue();
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testConsumerDmqRepublish() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = "testConsumerDmqRepublish";
+
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		String queueName = destination0 + getDestinationNameDelimiter() + group0;
+		String dmqName = queueName + getDestinationNameDelimiter() + "dmq";
+		Queue dmq = JCSMPFactory.onlyInstance().createQueue(dmqName);
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.getExtension().setAutoBindDmq(true);
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+				destination0, group0, moduleInputChannel, consumerProperties);
+
+		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		binderBindUnbindLatency();
+
+		moduleInputChannel.subscribe(message1 -> {
+			throw new RuntimeException("Throwing expected exception!");
+		});
+
+		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
+		moduleOutputChannel.send(message);
+
+		final ConsumerFlowProperties dmqFlowProperties = new ConsumerFlowProperties();
+		dmqFlowProperties.setEndpoint(dmq);
+		dmqFlowProperties.setStartState(true);
+		FlowReceiver flowReceiver = null;
+		try {
+			flowReceiver = jcsmpSession.createFlow(null, dmqFlowProperties);
+			assertThat(flowReceiver.receive((int) TimeUnit.SECONDS.toMillis(10))).isNotNull();
+		} finally {
+			if (flowReceiver != null) {
+				flowReceiver.close();
+			}
+		}
+
+		// Give some time for the message to actually ack off the original queue
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		List<MonitorMsgVpnQueueMsg> dmqMessages = sempV2Api.monitor()
+				.getMsgVpnQueueMsgs(vpnName, queueName, 2, null, null, null)
+				.getData();
+		assertThat(dmqMessages).hasSize(0);
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
 	}
 
 	@Test
