@@ -43,8 +43,8 @@ public class XMLMessageMapper {
 
 	public XMLMessage map(Message<?> message, SolaceConsumerProperties consumerProperties) {
 		XMLMessage xmlMessage = map(message);
-		if (consumerProperties.getRepublishedMsgTtl() != null) {
-			xmlMessage.setTimeToLive(consumerProperties.getRepublishedMsgTtl());
+		if (consumerProperties.getErrorMsgTtl() != null) {
+			xmlMessage.setTimeToLive(consumerProperties.getErrorMsgTtl());
 		}
 		return xmlMessage;
 	}

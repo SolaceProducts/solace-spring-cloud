@@ -204,25 +204,25 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testConsumerDmqRepublish() throws Exception {
+	public void testConsumerErrorQueueRepublish() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testConsumerDmqRepublish";
+		String group0 = "testConsumerErrorQueueRepublish";
 
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 		String queueName = destination0 + getDestinationNameDelimiter() + group0;
-		String dmqName = queueName + getDestinationNameDelimiter() + "dmq";
-		Queue dmq = JCSMPFactory.onlyInstance().createQueue(dmqName);
+		String errorQueueName = queueName + getDestinationNameDelimiter() + "error";
+		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
-		consumerProperties.getExtension().setAutoBindDmq(true);
+		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
 				destination0, group0, moduleInputChannel, consumerProperties);
 
@@ -239,12 +239,12 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
 		moduleOutputChannel.send(message);
 
-		final ConsumerFlowProperties dmqFlowProperties = new ConsumerFlowProperties();
-		dmqFlowProperties.setEndpoint(dmq);
-		dmqFlowProperties.setStartState(true);
+		final ConsumerFlowProperties errorQueueFlowProperties = new ConsumerFlowProperties();
+		errorQueueFlowProperties.setEndpoint(errorQueue);
+		errorQueueFlowProperties.setStartState(true);
 		FlowReceiver flowReceiver = null;
 		try {
-			flowReceiver = jcsmpSession.createFlow(null, dmqFlowProperties);
+			flowReceiver = jcsmpSession.createFlow(null, errorQueueFlowProperties);
 			assertThat(flowReceiver.receive((int) TimeUnit.SECONDS.toMillis(10))).isNotNull();
 		} finally {
 			if (flowReceiver != null) {
@@ -255,10 +255,10 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		// Give some time for the message to actually ack off the original queue
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
-		List<MonitorMsgVpnQueueMsg> dmqMessages = sempV2Api.monitor()
+		List<MonitorMsgVpnQueueMsg> enqueuedMessages = sempV2Api.monitor()
 				.getMsgVpnQueueMsgs(vpnName, queueName, 2, null, null, null)
 				.getData();
-		assertThat(dmqMessages).hasSize(0);
+		assertThat(enqueuedMessages).hasSize(0);
 
 		producerBinding.unbind();
 		consumerBinding.unbind();
@@ -404,37 +404,37 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testFailConsumerProvisioningOnDmqPropertyChange() throws Exception {
+	public void testFailConsumerProvisioningOnErrorQueuePropertyChange() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testFailConsumerProvisioningOnDmqPropertyChange";
+		String group0 = "testFailConsumerProvisioningOnErrorQueuePropertyChange";
 
 		int defaultAccessType = createConsumerProperties().getExtension().getQueueAccessType();
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
-		String dmqName = destination0 + getDestinationNameDelimiter() + group0 + getDestinationNameDelimiter() + "dmq";
-		Queue dmq = JCSMPFactory.onlyInstance().createQueue(dmqName);
+		String errorQueueName = destination0 + getDestinationNameDelimiter() + group0 + getDestinationNameDelimiter() + "error";
+		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
 
-		logger.info(String.format("Pre-provisioning DMQ %s with AccessType %s to conflict with defaultAccessType %s",
-				dmq.getName(), endpointProperties.getAccessType(), defaultAccessType));
-		jcsmpSession.provision(dmq, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
+		logger.info(String.format("Pre-provisioning error queue %s with AccessType %s to conflict with defaultAccessType %s",
+				errorQueue.getName(), endpointProperties.getAccessType(), defaultAccessType));
+		jcsmpSession.provision(errorQueue, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
 
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 		Binding<MessageChannel> consumerBinding;
 		try {
 			ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
-			consumerProperties.getExtension().setAutoBindDmq(true);
+			consumerProperties.getExtension().setAutoBindErrorQueue(true);
 			consumerBinding = binder.bindConsumer(
 					destination0, group0, moduleInputChannel, consumerProperties);
 			consumerBinding.unbind();
-			fail("Expected consumer provisioning to fail due to DMQ property change");
+			fail("Expected consumer provisioning to fail due to error queue property change");
 		} catch (ProvisioningException e) {
 			assertThat(e).hasCauseInstanceOf(PropertyMismatchException.class);
 			logger.info(String.format("Successfully threw a %s exception with cause %s",
 					ProvisioningException.class.getSimpleName(), PropertyMismatchException.class.getSimpleName()));
 		} finally {
-			jcsmpSession.deprovision(dmq, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
+			jcsmpSession.deprovision(errorQueue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
 		}
 	}
 

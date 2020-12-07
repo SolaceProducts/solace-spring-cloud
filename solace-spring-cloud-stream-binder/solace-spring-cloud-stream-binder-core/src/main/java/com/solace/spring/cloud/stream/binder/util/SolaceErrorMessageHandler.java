@@ -77,8 +77,8 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 			return;
 		}
 
-		if (consumerProperties.getExtension().isAutoBindDmq()) {
-			republishToDMQ(rawMessage);
+		if (consumerProperties.getExtension().isAutoBindErrorQueue()) {
+			republishToErrorQueue(rawMessage);
 			AckUtils.autoAck(acknowledgmentCallback);
 		} else if (consumerProperties.getExtension().isRequeueRejected()) {
 			logger.info(String.format("Raw %s %s: Will be re-queued onto queue %s",
@@ -91,11 +91,11 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 		}
 	}
 
-	private void republishToDMQ(XMLMessage rawMessage) {
-		String dmqName = SolaceProvisioningUtil.getDMQName(consumerQueueName);
-		logger.info(String.format("Raw %s %s: Will be republished to DMQ %s",
-				XMLMessage.class.getSimpleName(), rawMessage.getMessageId(), dmqName));
-		sendOneMessage(dmqName, xmlMessageMapper.map(rawMessage, null));
+	private void republishToErrorQueue(XMLMessage rawMessage) {
+		String errorQueueName = SolaceProvisioningUtil.getErrorQueueName(consumerQueueName);
+		logger.info(String.format("Raw %s %s: Will be republished onto error queue %s",
+				XMLMessage.class.getSimpleName(), rawMessage.getMessageId(), errorQueueName));
+		sendOneMessage(errorQueueName, xmlMessageMapper.map(rawMessage, null));
 	}
 
 	private void sendOneMessage(String queueName, Message<?> message) {

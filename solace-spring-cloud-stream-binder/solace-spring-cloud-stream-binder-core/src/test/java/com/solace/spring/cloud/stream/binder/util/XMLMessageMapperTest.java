@@ -408,12 +408,12 @@ public class XMLMessageMapperTest {
 		String testPayload = "testPayload";
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload).build();
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
-		consumerProperties.setRepublishedMsgTtl(100L);
+		consumerProperties.setErrorMsgTtl(100L);
 
 		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, consumerProperties);
 		Mockito.verify(xmlMessageMapper).map(testSpringMessage);
 
-		assertEquals(consumerProperties.getRepublishedMsgTtl().longValue(), xmlMessage.getTimeToLive());
+		assertEquals(consumerProperties.getErrorMsgTtl().longValue(), xmlMessage.getTimeToLive());
 	}
 
 	@Test

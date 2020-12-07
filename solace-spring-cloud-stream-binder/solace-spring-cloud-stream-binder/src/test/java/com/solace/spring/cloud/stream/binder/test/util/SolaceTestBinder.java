@@ -81,8 +81,8 @@ public class SolaceTestBinder
 			queues.add(queueName);
 		}
 
-		if (consumerProperties.isAutoBindDmq()) {
-			queues.add(SolaceProvisioningUtil.getDMQName(queueName));
+		if (consumerProperties.isAutoBindErrorQueue()) {
+			queues.add(SolaceProvisioningUtil.getErrorQueueName(queueName));
 		}
 	}
 

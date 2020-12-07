@@ -131,8 +131,8 @@ public class SolaceQueueProvisioner
 			trackQueueToTopicBinding(queue.getName(), additionalSubscription);
 		}
 
-		if (properties.getExtension().isAutoBindDmq()) {
-			provisionDMQ(queueName, properties.getExtension());
+		if (properties.getExtension().isAutoBindErrorQueue()) {
+			provisionErrorQueue(queueName, properties.getExtension());
 		}
 
 		return new SolaceConsumerDestination(queue.getName());
@@ -186,11 +186,11 @@ public class SolaceQueueProvisioner
 		return queue;
 	}
 
-	private void provisionDMQ(String queueName, SolaceConsumerProperties properties) {
-		String dmqName = SolaceProvisioningUtil.getDMQName(queueName);
-		logger.info(String.format("Provisioning DMQ %s", dmqName));
-		EndpointProperties endpointProperties = SolaceProvisioningUtil.getDMQEndpointProperties(properties);
-		provisionQueue(dmqName, true, endpointProperties, properties.isProvisionDmq(), "DMQ");
+	private void provisionErrorQueue(String queueName, SolaceConsumerProperties properties) {
+		String errorQueueName = SolaceProvisioningUtil.getErrorQueueName(queueName);
+		logger.info(String.format("Provisioning error queue %s", errorQueueName));
+		EndpointProperties endpointProperties = SolaceProvisioningUtil.getErrorQueueEndpointProperties(properties);
+		provisionQueue(errorQueueName, true, endpointProperties, properties.isProvisionErrorQueue(), "Error Queue");
 	}
 
 	public void addSubscriptionToQueue(Queue queue, String topicName, SolaceCommonProperties properties) {

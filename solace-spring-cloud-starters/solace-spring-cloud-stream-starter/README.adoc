@@ -218,57 +218,57 @@ Rate at which polled consumers will receive messages from their consumer group q
 Default: `100`
 
 requeueRejected::
-Whether message processing failures should be re-queued when `autoBindDmq` is `false` and after all binder-internal retries have been exhausted.
+Whether message processing failures should be re-queued when `autoBindErrorQueue` is `false` and after all binder-internal retries have been exhausted.
 +
 Default: `false`
 
-autoBindDmq::
-Whether to automatically create a durable dead message queue to which messages will be republished when message processing failures are encountered. Only applies once all internal retries have been exhausted.
+autoBindErrorQueue::
+Whether to automatically create a durable error queue to which messages will be republished when message processing failures are encountered. Only applies once all internal retries have been exhausted.
 +
 Default: `false`
 
-provisionDmq::
-Whether to provision durable queues for DMQs when `autoBindDmq` is `true`. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}.dmq`.
+provisionErrorQueue::
+Whether to provision durable queues for error queues when `autoBindErrorQueue` is `true`. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}.error`.
 +
 Default: `true`
 
-dmqAccessType::
-Access type for the DMQ.
+errorQueueAccessType::
+Access type for the error queue.
 +
 Default: `EndpointProperties.ACCESSTYPE_NONEXCLUSIVE`
 
-dmqPermission::
-Permissions for the DMQ.
+errorQueuePermission::
+Permissions for the error queue.
 +
 Default: `EndpointProperties.PERMISSION_CONSUME`
 
-dmqDiscardBehaviour::
-If specified, whether to notify sender if a message fails to be enqueued to the DMQ.
+errorQueueDiscardBehaviour::
+If specified, whether to notify sender if a message fails to be enqueued to the error queue.
 +
 Default: `null`
 
-dmqMaxMsgRedelivery::
-Sets the maximum message redelivery count on the DMQ. (Zero means retry forever).
+errorQueueMaxMsgRedelivery::
+Sets the maximum message redelivery count on the error queue. (Zero means retry forever).
 +
 Default: `null`
 
-dmqMaxMsgSize::
-Maximum message size for the DMQ.
+errorQueueMaxMsgSize::
+Maximum message size for the error queue.
 +
 Default: `null`
 
-dmqQuota::
-Message spool quota for the DMQ.
+errorQueueQuota::
+Message spool quota for the error queue.
 +
 Default: `null`
 
-dmqRespectsMsgTtl::
-Whether the DMQ respects Message TTL.
+errorQueueRespectsMsgTtl::
+Whether the error queue respects Message TTL.
 +
 Default: `null`
 
-republishedMsgTtl::
-The number of milliseconds before republished messages are discarded or moved to a Solace-internal Dead Message Queue.
+errorMsgTtl::
+The number of milliseconds before republished messages are discarded or moved to a Dead Message Queue.
 +
 Default: `null`
 
@@ -534,21 +534,21 @@ The Spring cloud stream framework already provides a number of application-inter
 However, after all internal error handling strategies have been exhausted, the Solace implementation of the binder would by default reject messages that consumer bindings fail to process. Though it may be desirable for these failed messages be preserved and externally re-processed, in which case this binder also provides 2 error handling strategies that consumer bindings can be configured to use:
 
 * Re-queuing the message onto that consumer group's queue
-* Re-publishing the message to another queue (a dead-message queue) for some external application/binding to process
+* Re-publishing the message to another queue (an error queue) for some external application/binding to process
 
-Note that both strategies cannot be used at the same time, and that enabling both of them would result in the binder treating it as if message re-queuing was disabled. That is to say, re-publishing failed messages to a dead-message queues supersedes message re-queuing.
+Note that both strategies cannot be used at the same time, and that enabling both of them would result in the binder treating it as if message re-queuing was disabled. That is to say, re-publishing failed messages to an error queues supersedes message re-queuing.
 
 === Message Re-Queuing
 
 A simple error handling strategy in which failed messages are simply re-queued onto the consumer group's queue. This is very similar to simply enabling the retry template (setting maxAttempts to a value greater than 1), but allows for the failed messages to be re-processed by the message broker.
 
-=== Dead-Message Queue Processing
+=== Error Queue Processing
 
-First, it must be noted that the dead message queue (DMQ) that will be discussed in this section is different from the regular https://docs.solace.com/Configuring-and-Managing/Setting-Dead-Msg-Queues.htm[Solace DMQ]. In particular, the standard Solace DMQ is used for re-routing failed messages as a consequence of Solace PubSub+ messaging features such as TTL expiration or exceeding a message's max redelivery count. Whereas the purpose of a Solace binder DMQ is for re-routing messages which had been successfully consumed from the message broker, yet cannot be processed by the binder. For simplicity, in this document all mentions of the "DMQ" refers to the Solace binder DMQ.
+First, it must be noted that an Error Queue is different from a https://docs.solace.com/Configuring-and-Managing/Setting-Dead-Msg-Queues.htm[Dead Message Queue (DMQ)]. In particular, a DMQ is used to capture re-routed failed messages as a consequence of Solace PubSub+ messaging features such as TTL expiration or exceeding a message's max redelivery count. Whereas the purpose of an Error Queue is to capture re-routed messages which have been successfully consumed from the message broker, yet cannot be processed by this binder.
 
-A DMQ can be provisioned for a particular consumer group by setting the autoBindDmq consumer property to true. This DMQ is simply another durable queue which, aside from its purpose, is not much from the queue provisioned for consumer groups. These DMQs are named using a period-delimited concatenation of their consumer group name and "dmq". And like the queue used for consumer groups, their endpoint properties can be configured by means of any consumer properties whose names begin with "dmq".
+An Error Queue can be provisioned for a particular consumer group by setting the `autoBindErrorQueue` consumer property to `true`. This Error Queue is simply another durable queue which, aside from its purpose, is not much from the queue provisioned for consumer groups. These queues are named using a period-delimited concatenation of their consumer group name and `error`. And like the queue used for consumer groups, their endpoint properties can be configured by means of any consumer properties whose names begin with "errorQueue".
 
-Note that DMQs are not intended to be used with anonymous consumer groups. Since the names of these consumer groups, and in turn the name of their would-be DMQs, are randomly generated at runtime, it would provide little value to create bindings to these DMQs because of their unpredictable naming and temporary existence.
+Note that Error Queues are not intended to be used with anonymous consumer groups. Since the names of these consumer groups, and in turn the name of their would-be Error Queues, are randomly generated at runtime, it would provide little value to create bindings to these Error Queues because of their unpredictable naming and temporary existence.
 
 == Resources
 
