@@ -173,7 +173,6 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 				destination0, moduleOutputChannel, createProducerProperties());
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
-		consumerProperties.getExtension().setRequeueRejected(true);
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
 				destination0, "testConsumerRequeue", moduleInputChannel, consumerProperties);
 
@@ -265,6 +264,119 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
+	public void testAnonConsumerRequeue() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+				destination0, null, moduleInputChannel, consumerProperties);
+
+		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		binderBindUnbindLatency();
+
+		final CountDownLatch latch = new CountDownLatch(consumerProperties.getMaxAttempts());
+		moduleInputChannel.subscribe(message1 -> {
+			assertThat(latch.getCount()).isNotEqualTo(0);
+			latch.countDown();
+			throw new RuntimeException("Throwing expected exception!");
+		});
+
+		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
+		moduleOutputChannel.send(message);
+
+		assertThat(latch.await(2, TimeUnit.MINUTES)).isTrue();
+
+		// Give some time for failed message to ack
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		String queueName = extractBindingDestination(consumerBinding);
+		assertThat(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queueName, null)
+				.getData()
+				.getSpooledMsgCount())
+				.isEqualTo(1);
+		assertThat(sempV2Api.monitor()
+				.getMsgVpnQueueMsgs(vpnName, queueName, 2, null, null, null)
+				.getData())
+				.hasSize(0); // i.e. message was discarded
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testAnonConsumerErrorQueueRepublish() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.getExtension().setAutoBindErrorQueue(true);
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+				destination0, null, moduleInputChannel, consumerProperties);
+
+		String queueName = extractBindingDestination(consumerBinding);
+		String errorQueueName = queueName + getDestinationNameDelimiter() + "error";
+		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
+
+		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		binderBindUnbindLatency();
+
+		moduleInputChannel.subscribe(message1 -> {
+			throw new RuntimeException("Throwing expected exception!");
+		});
+
+		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
+		moduleOutputChannel.send(message);
+
+		final ConsumerFlowProperties errorQueueFlowProperties = new ConsumerFlowProperties();
+		errorQueueFlowProperties.setEndpoint(errorQueue);
+		errorQueueFlowProperties.setStartState(true);
+		FlowReceiver flowReceiver = null;
+		try {
+			flowReceiver = jcsmpSession.createFlow(null, errorQueueFlowProperties);
+			assertThat(flowReceiver.receive((int) TimeUnit.SECONDS.toMillis(10))).isNotNull();
+		} finally {
+			if (flowReceiver != null) {
+				flowReceiver.close();
+			}
+		}
+
+		// Give some time for the message to actually ack off the original queue
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		List<MonitorMsgVpnQueueMsg> enqueuedMessages = sempV2Api.monitor()
+				.getMsgVpnQueueMsgs((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
+						queueName, 2, null, null, null)
+				.getData();
+		assertThat(enqueuedMessages).hasSize(0);
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
 	public void testPolledConsumer() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
@@ -310,7 +422,6 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 				destination0, moduleOutputChannel, createProducerProperties());
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
-		consumerProperties.getExtension().setRequeueRejected(true);
 		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
 				destination0, "testPolledConsumerRequeue", moduleInputChannel, consumerProperties);
 

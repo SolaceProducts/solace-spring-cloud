@@ -12,10 +12,15 @@ import com.solacesystems.jcsmp.SpringJCSMPFactory;
 import org.junit.Before;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.binder.PartitionCapableBinderTests;
 import org.springframework.cloud.stream.binder.Spy;
+import org.springframework.messaging.MessageChannel;
+
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -96,5 +101,13 @@ public abstract class SolaceBinderITBase
 	@Override
 	public Spy spyOn(String name) {
 		return null;
+	}
+
+	public String extractBindingDestination(Binding<MessageChannel> binding) {
+		String destination = (String) binding.getExtendedInfo().getOrDefault("bindingDestination", "");
+		assertThat(destination).startsWith("SolaceConsumerDestination");
+		Matcher matcher = Pattern.compile("queueName='(.*?)'").matcher(destination);
+		assertThat(matcher.find()).isTrue();
+		return matcher.group(1);
 	}
 }

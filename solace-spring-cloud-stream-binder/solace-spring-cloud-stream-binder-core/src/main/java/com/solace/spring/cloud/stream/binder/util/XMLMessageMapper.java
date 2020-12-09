@@ -41,7 +41,7 @@ public class XMLMessageMapper {
 	private static final Log logger = LogFactory.getLog(XMLMessageMapper.class);
 	static final int MESSAGE_VERSION = 1;
 
-	public XMLMessage map(Message<?> message, SolaceConsumerProperties consumerProperties) {
+	public XMLMessage mapError(Message<?> message, SolaceConsumerProperties consumerProperties) {
 		XMLMessage xmlMessage = map(message);
 		if (consumerProperties.getErrorMsgTtl() != null) {
 			xmlMessage.setTimeToLive(consumerProperties.getErrorMsgTtl());

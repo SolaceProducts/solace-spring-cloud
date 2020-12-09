@@ -393,24 +393,24 @@ public class XMLMessageMapperTest {
 	}
 
 	@Test
-	public void testMapConsumerSpringMessageToXMLMessage() {
+	public void testMapConsumerErrorSpringMessageToXMLMessage() {
 		String testPayload = "testPayload";
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload).build();
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, new SolaceConsumerProperties());
+		XMLMessage xmlMessage = xmlMessageMapper.mapError(testSpringMessage, new SolaceConsumerProperties());
 		Mockito.verify(xmlMessageMapper).map(testSpringMessage);
 
 		assertEquals(0, xmlMessage.getTimeToLive());
 	}
 
 	@Test
-	public void testMapConsumerSpringMessageToXMLMessage_WithProperties() {
+	public void testMapConsumerErrorSpringMessageToXMLMessage_WithProperties() {
 		String testPayload = "testPayload";
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload).build();
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
 		consumerProperties.setErrorMsgTtl(100L);
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, consumerProperties);
+		XMLMessage xmlMessage = xmlMessageMapper.mapError(testSpringMessage, consumerProperties);
 		Mockito.verify(xmlMessageMapper).map(testSpringMessage);
 
 		assertEquals(consumerProperties.getErrorMsgTtl().longValue(), xmlMessage.getTimeToLive());

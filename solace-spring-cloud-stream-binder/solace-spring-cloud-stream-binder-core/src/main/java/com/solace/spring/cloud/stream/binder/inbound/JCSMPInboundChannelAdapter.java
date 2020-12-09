@@ -1,6 +1,8 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
+import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -34,15 +36,16 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final ConsumerDestination consumerDestination;
 	private final JCSMPSession jcsmpSession;
 	private final EndpointProperties endpointProperties;
-	private final Consumer<Queue> postStart;
 	private final int concurrency;
 	private final boolean hasTemporaryQueue;
 	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
-	private final AtomicBoolean remoteStopFlag;
 	private final Set<AtomicBoolean> consumerStopFlags;
+	private Consumer<Queue> postStart;
 	private ExecutorService executorService;
+	private AtomicBoolean remoteStopFlag;
 	private RetryTemplate retryTemplate;
 	private RecoveryCallback<?> recoveryCallback;
+	private ErrorQueueInfrastructure errorQueueInfrastructure;
 
 	private static final Log logger = LogFactory.getLog(JCSMPInboundChannelAdapter.class);
 	private static final ThreadLocal<AttributeAccessor> attributesHolder = new ThreadLocal<>();
@@ -51,16 +54,12 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 									  JCSMPSession jcsmpSession,
 									  int concurrency,
 									  boolean hasTemporaryQueue,
-									  @Nullable EndpointProperties endpointProperties,
-									  @Nullable Consumer<Queue> postStart,
-									  @Nullable AtomicBoolean remoteStopFlag) {
+									  @Nullable EndpointProperties endpointProperties) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
 		this.concurrency = concurrency;
 		this.hasTemporaryQueue = hasTemporaryQueue;
 		this.endpointProperties = endpointProperties;
-		this.postStart = postStart;
-		this.remoteStopFlag = remoteStopFlag;
 		this.consumerStopFlags = new HashSet<>(this.concurrency);
 	}
 
@@ -162,12 +161,24 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		return 0;
 	}
 
+	public void setPostStart(Consumer<Queue> postStart) {
+		this.postStart = postStart;
+	}
+
 	public void setRetryTemplate(RetryTemplate retryTemplate) {
 		this.retryTemplate = retryTemplate;
 	}
 
 	public void setRecoveryCallback(RecoveryCallback<?> recoveryCallback) {
 		this.recoveryCallback = recoveryCallback;
+	}
+
+	public void setErrorQueueInfrastructure(ErrorQueueInfrastructure errorQueueInfrastructure) {
+		this.errorQueueInfrastructure = errorQueueInfrastructure;
+	}
+
+	public void setRemoteStopFlag(AtomicBoolean remoteStopFlag) {
+		this.remoteStopFlag = remoteStopFlag;
 	}
 
 	@Override
@@ -177,6 +188,10 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	}
 
 	private InboundXMLMessageListener buildListener(FlowReceiverContainer flowReceiverContainer) {
+		JCSMPAcknowledgementCallbackFactory ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
+				flowReceiverContainer, hasTemporaryQueue);
+		ackCallbackFactory.setErrorQueueInfrastructure(errorQueueInfrastructure);
+
 		InboundXMLMessageListener listener;
 		if (retryTemplate != null) {
 			Assert.state(getErrorChannel() == null,
@@ -187,8 +202,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					flowReceiverContainer,
 					consumerDestination,
 					this::sendMessage,
+					ackCallbackFactory,
 					(exception) -> sendErrorMessageIfNecessary(null, exception),
-					hasTemporaryQueue,
 					retryTemplate,
 					recoveryCallback,
 					remoteStopFlag,
@@ -201,8 +216,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					flowReceiverContainer,
 					consumerDestination,
 					this::sendMessage,
+					ackCallbackFactory,
 					(exception) -> sendErrorMessageIfNecessary(null, exception),
-					hasTemporaryQueue,
 					remoteStopFlag,
 					attributesHolder,
 					this.getErrorChannel() != null

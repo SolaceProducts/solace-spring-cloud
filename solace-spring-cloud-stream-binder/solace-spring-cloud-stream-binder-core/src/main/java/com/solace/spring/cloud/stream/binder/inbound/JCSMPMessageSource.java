@@ -2,6 +2,7 @@ package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
+import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
@@ -28,26 +29,24 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private final JCSMPSession jcsmpSession;
 	private final EndpointProperties endpointProperties;
 	private final boolean hasTemporaryQueue;
-	private final Consumer<Queue> postStart;
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
 	private FlowReceiverContainer flowReceiverContainer;
+	private JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private boolean isRunning = false;
-
-	private static final JCSMPAcknowledgementCallbackFactory ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory();
+	private ErrorQueueInfrastructure errorQueueInfrastructure;
+	private Consumer<Queue> postStart;
 
 	public JCSMPMessageSource(ConsumerDestination destination,
 							  JCSMPSession jcsmpSession,
 							  ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
 							  EndpointProperties endpointProperties,
-							  boolean hasTemporaryQueue,
-							  Consumer<Queue> postStart) {
+							  boolean hasTemporaryQueue) {
 		this.queueName = destination.getName();
 		this.jcsmpSession = jcsmpSession;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
 		this.hasTemporaryQueue = hasTemporaryQueue;
-		this.postStart = postStart;
 	}
 
 	@Override
@@ -76,8 +75,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			}
 		}
 
-		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createCallback(messageContainer,
-				flowReceiverContainer, hasTemporaryQueue);
+		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createCallback(messageContainer);
 
 		BytesXMLMessage xmlMessage = messageContainer != null ? messageContainer.getMessage() : null;
 		return xmlMessage != null ? xmlMessageMapper.map(xmlMessage, acknowledgmentCallback, true) : null;
@@ -109,6 +107,9 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			postStart.accept(JCSMPFactory.onlyInstance().createQueue(queueName));
 		}
 
+		ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer, hasTemporaryQueue);
+		ackCallbackFactory.setErrorQueueInfrastructure(errorQueueInfrastructure);
+
 		isRunning = true;
 	}
 
@@ -123,5 +124,13 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	@Override
 	public boolean isRunning() {
 		return isRunning;
+	}
+
+	public void setErrorQueueInfrastructure(ErrorQueueInfrastructure errorQueueInfrastructure) {
+		this.errorQueueInfrastructure = errorQueueInfrastructure;
+	}
+
+	public void setPostStart(Consumer<Queue> postStart) {
+		this.postStart = postStart;
 	}
 }

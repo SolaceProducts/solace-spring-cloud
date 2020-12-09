@@ -34,32 +34,32 @@ class InboundXMLMessageListener implements Runnable {
 	final ThreadLocal<AttributeAccessor> attributesHolder;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private final Consumer<Message<?>> messageConsumer;
+	private final JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
 	private final Function<RuntimeException,Boolean> errorHandlerFunction;
-	private final boolean hasTemporaryQueue;
 	private final boolean needHolder;
 	private final boolean needAttributes;
 	private final AtomicBoolean stopFlag = new AtomicBoolean(false);
 	private final Supplier<Boolean> remoteStopFlag;
 
 	private static final Log logger = LogFactory.getLog(InboundXMLMessageListener.class);
-	private static final JCSMPAcknowledgementCallbackFactory ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory();
 
 	InboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 							  ConsumerDestination consumerDestination,
 							  Consumer<Message<?>> messageConsumer,
+							  JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
 							  Function<RuntimeException,Boolean> errorHandlerFunction,
-							  boolean hasTemporaryQueue,
 							  @Nullable AtomicBoolean remoteStopFlag,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
 							  boolean needHolderAndAttributes) {
-		this(flowReceiverContainer, consumerDestination, messageConsumer, errorHandlerFunction, hasTemporaryQueue, remoteStopFlag, attributesHolder, needHolderAndAttributes, needHolderAndAttributes);
+		this(flowReceiverContainer, consumerDestination, messageConsumer, ackCallbackFactory, errorHandlerFunction,
+				remoteStopFlag, attributesHolder, needHolderAndAttributes, needHolderAndAttributes);
 	}
 
 	InboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 							  ConsumerDestination consumerDestination,
 							  Consumer<Message<?>> messageConsumer,
+							  JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
 							  Function<RuntimeException,Boolean> errorHandlerFunction,
-							  boolean hasTemporaryQueue,
 							  @Nullable AtomicBoolean remoteStopFlag,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
 							  boolean needHolder,
@@ -67,8 +67,8 @@ class InboundXMLMessageListener implements Runnable {
 		this.flowReceiverContainer = flowReceiverContainer;
 		this.consumerDestination = consumerDestination;
 		this.messageConsumer = messageConsumer;
+		this.ackCallbackFactory = ackCallbackFactory;
 		this.errorHandlerFunction = errorHandlerFunction;
-		this.hasTemporaryQueue = hasTemporaryQueue;
 		this.remoteStopFlag = () -> remoteStopFlag != null && remoteStopFlag.get();
 		this.attributesHolder = attributesHolder;
 		this.needHolder = needHolder;
@@ -118,8 +118,7 @@ class InboundXMLMessageListener implements Runnable {
 			return;
 		}
 
-		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createCallback(messageContainer,
-				flowReceiverContainer, hasTemporaryQueue);
+		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createCallback(messageContainer);
 
 		BytesXMLMessage bytesXMLMessage = messageContainer.getMessage();
 		try {

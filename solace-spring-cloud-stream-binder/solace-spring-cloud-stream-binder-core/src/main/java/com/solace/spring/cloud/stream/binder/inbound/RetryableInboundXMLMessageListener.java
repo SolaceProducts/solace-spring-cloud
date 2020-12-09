@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
+import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -29,13 +30,13 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener imple
 	RetryableInboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 									   ConsumerDestination consumerDestination,
 									   Consumer<Message<?>> messageConsumer,
+									   JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
 									   Function<RuntimeException,Boolean> errorHandlerFunction,
-									   boolean hasTemporaryQueue,
 									   RetryTemplate retryTemplate,
 									   RecoveryCallback<?> recoveryCallback,
 									   @Nullable AtomicBoolean remoteStopFlag,
 									   ThreadLocal<AttributeAccessor> attributesHolder) {
-		super(flowReceiverContainer, consumerDestination, messageConsumer, errorHandlerFunction, hasTemporaryQueue, remoteStopFlag, attributesHolder, false, true);
+		super(flowReceiverContainer, consumerDestination, messageConsumer, ackCallbackFactory, errorHandlerFunction, remoteStopFlag, attributesHolder, false, true);
 		this.retryTemplate = retryTemplate;
 		this.recoveryCallback = recoveryCallback;
 	}

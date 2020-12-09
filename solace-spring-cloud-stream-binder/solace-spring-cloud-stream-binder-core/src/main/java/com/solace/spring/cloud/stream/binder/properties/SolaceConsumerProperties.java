@@ -5,7 +5,6 @@ import com.solacesystems.jcsmp.EndpointProperties;
 public class SolaceConsumerProperties extends SolaceCommonProperties {
 	private String anonymousGroupPostfix = "anon";
 	private int polledConsumerWaitTimeInMillis = 100;
-	private boolean requeueRejected = false;
 
 	private String[] queueAdditionalSubscriptions = new String[0];
 
@@ -38,14 +37,6 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setPolledConsumerWaitTimeInMillis(int polledConsumerWaitTimeInMillis) {
 		this.polledConsumerWaitTimeInMillis = polledConsumerWaitTimeInMillis;
-	}
-
-	public boolean isRequeueRejected() {
-		return requeueRejected;
-	}
-
-	public void setRequeueRejected(boolean requeueRejected) {
-		this.requeueRejected = requeueRejected;
 	}
 
 	public String[] getQueueAdditionalSubscriptions() {
