@@ -15,6 +15,7 @@ import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
@@ -27,6 +28,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -43,6 +45,7 @@ import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -73,6 +76,9 @@ import static org.junit.Assert.assertTrue;
 public class FlowReceiverContainerIT extends ITBase {
 	@Rule
 	public Timeout globalTimeout = new Timeout(1, TimeUnit.MINUTES);
+
+	@Rule
+	public ExpectedException thrown = ExpectedException.none();
 
 	@Parameterized.Parameter
 	public String parameterSetName; // Only used for parameter set naming
@@ -230,6 +236,29 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
+	public void testBindWhileReceiving() throws Exception {
+		long flowId = flowReceiverContainer.bind();
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<MessageContainer> receiveFuture = executorService.submit(() -> flowReceiverContainer.receive());
+
+			// To make sure the flow receive is actually blocked
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(receiveFuture.isDone());
+
+			long newFlowId = flowReceiverContainer.bind();
+			assertNotNull(flowReceiverContainer.get());
+			assertEquals(flowId, newFlowId);
+			assertThat(getTxFlows(2, null), hasSize(1));
+
+			producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+			assertNotNull(receiveFuture.get(1, TimeUnit.MINUTES));
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
 	public void testConcurrentBind() throws Exception {
 		CyclicBarrier barrier = new CyclicBarrier(30);
 		ExecutorService executorService = Executors.newFixedThreadPool(barrier.getParties());
@@ -344,6 +373,30 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
+	public void testUnbindWhileReceiving() throws Exception {
+		flowReceiverContainer.bind();
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<MessageContainer> receiveFuture = executorService.submit(() -> flowReceiverContainer.receive());
+
+			// To make sure the flow receive is actually blocked
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(receiveFuture.isDone());
+
+			flowReceiverContainer.unbind();
+			assertNull(flowReceiverContainer.get());
+			assertThat(getTxFlows(1, null), hasSize(0));
+
+			thrown.expect(ExecutionException.class);
+			thrown.expectCause(instanceOf(JCSMPTransportException.class));
+			thrown.expectMessage("Consumer was closed while in receive");
+			receiveFuture.get(1, TimeUnit.MINUTES);
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
 	public void testConcurrentUnbind() throws Exception {
 		flowReceiverContainer.bind();
 
@@ -434,6 +487,31 @@ public class FlowReceiverContainerIT extends ITBase {
 		Long reboundFlowId = flowReceiverContainer.rebind(receivedMessage.getFlowId());
 		assertNotEquals((Long) receivedMessage.getFlowId(), reboundFlowId);
 		assertEquals(reboundFlowId, flowReceiverContainer.rebind(receivedMessage.getFlowId()));
+	}
+
+	@Test
+	public void testRebindWhileReceiving() throws Exception {
+		long flowId = flowReceiverContainer.bind();
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<MessageContainer> receiveFuture = executorService.submit(() -> flowReceiverContainer.receive());
+
+			// To make sure the flow receive is actually blocked
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(receiveFuture.isDone());
+
+			long newFlowId = flowReceiverContainer.rebind(flowId);
+			assertNotNull(flowReceiverContainer.get());
+			assertNotEquals(flowId, newFlowId);
+			assertThat(getTxFlows(2, null), hasSize(1));
+
+			thrown.expect(ExecutionException.class);
+			thrown.expectCause(instanceOf(JCSMPTransportException.class));
+			thrown.expectMessage("Consumer was closed while in receive");
+			receiveFuture.get(1, TimeUnit.MINUTES);
+		} finally {
+			executorService.shutdownNow();
+		}
 	}
 
 	@Test
@@ -592,7 +670,18 @@ public class FlowReceiverContainerIT extends ITBase {
 				(Callable<?>) () -> flowReceiverContainer.bind(),
 				(Callable<?>) () -> {flowReceiverContainer.unbind(); return null;},
 				(Callable<?>) () -> flowReceiverContainer.rebind(flowId),
-				(Callable<?>) () -> flowReceiverContainer.receive()
+				(Callable<?>) () -> {
+					try {
+						return flowReceiverContainer.receive();
+					} catch (JCSMPTransportException e) {
+						if (e.getMessage().contains("Consumer was closed while in receive")) {
+							logger.info("Received expected exception due to interrupt from flow shutdown", e);
+							return null;
+						} else {
+							throw e;
+						}
+					}
+				}
 		};
 
 		CyclicBarrier barrier = new CyclicBarrier(actions.length * 25);

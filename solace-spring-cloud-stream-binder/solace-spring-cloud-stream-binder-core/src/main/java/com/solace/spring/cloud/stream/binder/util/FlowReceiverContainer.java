@@ -156,22 +156,28 @@ public class FlowReceiverContainer {
 	 * @see FlowReceiver#receive(int)
 	 */
 	public MessageContainer receive(Integer timeoutInMillis) throws JCSMPException {
+		FlowReceiver flowReceiver;
+		long flowId;
+
 		Lock readLock = readWriteLock.readLock();
 		readLock.lock();
 		try {
-			FlowReceiver flowReceiver = flowReceiverReference.get();
+			flowReceiver = flowReceiverReference.get();
 			if (flowReceiver == null) {
 				// flowReceiver == null & we are not rebinding means that now flow is bound yet...
 				return null; //TODO Should we block?
 			}
 
-			long flowId = ((FlowHandle) flowReceiver).getFlowId();
-			BytesXMLMessage xmlMessage =  timeoutInMillis != null ? flowReceiver.receive(timeoutInMillis) :
-					flowReceiver.receive();
-			return xmlMessage != null ? new MessageContainer(xmlMessage, flowId) : null;
+			flowId = ((FlowHandle) flowReceiver).getFlowId();
 		} finally {
 			readLock.unlock();
 		}
+
+		// The flow's receive shouldn't be locked behind the read lock.
+		// This lets it be interrupt-able if the flow were to be shutdown mid-receive.
+		BytesXMLMessage xmlMessage =  timeoutInMillis != null ? flowReceiver.receive(timeoutInMillis) :
+				flowReceiver.receive();
+		return xmlMessage != null ? new MessageContainer(xmlMessage, flowId) : null;
 	}
 
 	/**
