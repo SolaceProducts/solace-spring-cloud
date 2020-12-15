@@ -217,11 +217,6 @@ Rate at which polled consumers will receive messages from their consumer group q
 +
 Default: `100`
 
-requeueRejected::
-Whether message processing failures should be re-queued when `autoBindErrorQueue` is `false` and after all binder-internal retries have been exhausted.
-+
-Default: `false`
-
 autoBindErrorQueue::
 Whether to automatically create a durable error queue to which messages will be republished when message processing failures are encountered. Only applies once all internal retries have been exhausted.
 +
@@ -531,9 +526,9 @@ Also, this header is cleared by the message's producer before it is sent off to 
 
 The Spring cloud stream framework already provides a number of application-internal reprocessing strategies for failed messages during message consumption such as. You can read more about that https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#spring-cloud-stream-overview-error-handling[here]:
 
-However, after all internal error handling strategies have been exhausted, the Solace implementation of the binder would by default reject messages that consumer bindings fail to process. Though it may be desirable for these failed messages be preserved and externally re-processed, in which case this binder also provides 2 error handling strategies that consumer bindings can be configured to use:
+However, after all internal error handling strategies have been exhausted, the Solace implementation of the binder would either:
 
-* Re-queuing the message onto that consumer group's queue
+* Re-queue the message onto that consumer group's queue
 * Re-publishing the message to another queue (an error queue) for some external application/binding to process
 
 Note that both strategies cannot be used at the same time, and that enabling both of them would result in the binder treating it as if message re-queuing was disabled. That is to say, re-publishing failed messages to an error queues supersedes message re-queuing.
