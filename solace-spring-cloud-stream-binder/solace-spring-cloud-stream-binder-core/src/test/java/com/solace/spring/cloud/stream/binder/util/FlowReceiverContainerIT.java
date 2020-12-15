@@ -7,6 +7,7 @@ import com.solace.test.integration.semp.v2.monitor.ApiException;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueTxFlow;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorSempMetaOnlyResponse;
+import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.Consumer;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.FlowReceiver;
@@ -34,6 +35,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
+import org.springframework.test.annotation.Repeat;
 import org.springframework.test.context.ContextConfiguration;
 
 import java.util.Arrays;
@@ -52,10 +54,12 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.Matchers.allOf;
@@ -484,7 +488,7 @@ public class FlowReceiverContainerIT extends ITBase {
 		MessageContainer receivedMessage = flowReceiverContainer.receive();
 		assertNotNull(receivedMessage);
 
-		Long reboundFlowId = flowReceiverContainer.rebind(receivedMessage.getFlowId());
+		Long reboundFlowId = flowReceiverContainer.acknowledgeRebind(receivedMessage);
 		assertNotEquals((Long) receivedMessage.getFlowId(), reboundFlowId);
 		assertEquals(reboundFlowId, flowReceiverContainer.rebind(receivedMessage.getFlowId()));
 	}
@@ -512,6 +516,83 @@ public class FlowReceiverContainerIT extends ITBase {
 		} finally {
 			executorService.shutdownNow();
 		}
+	}
+
+	@Test
+	public void testRebindWithUnacknowledgedMessage() throws Exception {
+		long flowId = flowReceiverContainer.bind();
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+			producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+			MessageContainer receivedMessage1 = flowReceiverContainer.receive();
+			MessageContainer receivedMessage2 = flowReceiverContainer.receive();
+			assertNotNull(receivedMessage1);
+			assertNotNull(receivedMessage2);
+
+			Future<Long> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowId));
+
+			// To make sure the flow rebind is actually blocked
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(rebindFuture.isDone());
+
+			// To make sure the flow rebind is still blocked after acking 1 message
+			flowReceiverContainer.acknowledge(receivedMessage1);
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(rebindFuture.isDone());
+
+			flowReceiverContainer.acknowledge(receivedMessage2);
+			rebindFuture.get(1, TimeUnit.MINUTES);
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
+	public void testRebindInterrupt() throws Exception {
+		long flowId = flowReceiverContainer.bind();
+
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+
+		MessageContainer receivedMessage = flowReceiverContainer.receive();
+		assertNotNull(receivedMessage);
+
+		MessageContainer receivedMessage1 = flowReceiverContainer.receive();
+		assertNotNull(receivedMessage1);
+
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<Long> rebindFuture = executorService.submit(() -> flowReceiverContainer.acknowledgeRebind(receivedMessage));
+			executorService.shutdown();
+
+			// To make sure the flow rebind is actually blocked
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(rebindFuture.isDone());
+
+			executorService.shutdownNow();
+			executorService.awaitTermination(1, TimeUnit.MINUTES);
+		} finally {
+			executorService.shutdownNow();
+		}
+
+		FlowReceiver flowReceiver =flowReceiverContainer.get();
+		assertNotNull(flowReceiver);
+		assertEquals(flowId, ((FlowHandle) flowReceiver).getFlowId());
+
+		assertEquals(2, flowReceiverContainer.getNumUnacknowledgedMessages());
+
+		flowReceiverContainer.acknowledge(receivedMessage);
+		flowReceiverContainer.acknowledge(receivedMessage1);
+		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
+
+		// Give some time for the messages to be acknowledged off the broker
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
+		assertThat(txFlows, hasSize(1));
+		assertEquals((Long) 2L, txFlows.get(0).getAckedMsgCount());
+		assertEquals((Long) 0L, txFlows.get(0).getUnackedMsgCount());
 	}
 
 	@Test
@@ -649,7 +730,7 @@ public class FlowReceiverContainerIT extends ITBase {
 		assertThat(messageReceived.getMessage(), instanceOf(TextMessage.class));
 		assertEquals(flowId1, messageReceived.getFlowId());
 
-		Long flowId2 = flowReceiverContainer.rebind(flowId1);
+		Long flowId2 = flowReceiverContainer.acknowledgeRebind(messageReceived);
 		assertNotNull(flowId2);
 
 		producer.send(message, queue);
@@ -661,9 +742,13 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
-	public void testConcurrentAll() throws Exception {
-		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+	public void testAcknowledgeNull() {
+		flowReceiverContainer.acknowledge(null);
+	}
 
+	@Test
+	@Repeat(10) // should run a few times to make sure its stable
+	public void testConcurrentAll() throws Exception {
 		long flowId = flowReceiverContainer.bind();
 
 		Callable<?>[] actions = new Callable[]{
@@ -671,9 +756,12 @@ public class FlowReceiverContainerIT extends ITBase {
 				(Callable<?>) () -> {flowReceiverContainer.unbind(); return null;},
 				(Callable<?>) () -> flowReceiverContainer.rebind(flowId),
 				(Callable<?>) () -> {
+					MessageContainer messageContainer;
 					try {
-						return flowReceiverContainer.receive();
-					} catch (JCSMPTransportException e) {
+						logger.info(String.format("Receiving message from %s %s",
+								FlowReceiverContainer.class.getSimpleName(), flowReceiverContainer.getId()));
+						messageContainer = flowReceiverContainer.receive();
+					} catch (JCSMPTransportException | ClosedFacilityException e) {
 						if (e.getMessage().contains("Consumer was closed while in receive")) {
 							logger.info("Received expected exception due to interrupt from flow shutdown", e);
 							return null;
@@ -681,15 +769,35 @@ public class FlowReceiverContainerIT extends ITBase {
 							throw e;
 						}
 					}
+
+					if (messageContainer == null) {
+						return null;
+					}
+
+					try {
+						logger.info(String.format("Acknowledging message %s %s",
+								((TextMessage) messageContainer.getMessage()).getText(), messageContainer));
+						flowReceiverContainer.acknowledge(messageContainer);
+					} catch (IllegalStateException e) {
+						assertThat(e.getMessage(),
+								containsString("Attempted an operation on a closed message consumer"));
+					}
+
+					return null;
 				}
 		};
 
-		CyclicBarrier barrier = new CyclicBarrier(actions.length * 25);
+		CyclicBarrier barrier = new CyclicBarrier(actions.length * 50);
 		ScheduledExecutorService executorService = Executors.newScheduledThreadPool(barrier.getParties());
+		AtomicInteger counter = new AtomicInteger();
 		try {
 			executorService.scheduleAtFixedRate(() -> {
 				try {
+					TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+					int cnt = counter.getAndIncrement();
+					message.setText("Message " + cnt);
 					producer.send(message, queue);
+					logger.info("Sent message " + cnt);
 				} catch (JCSMPException e) {
 					throw new RuntimeException(e);
 				}

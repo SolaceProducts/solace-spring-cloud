@@ -34,7 +34,6 @@ public class JCSMPAcknowledgementCallbackFactory {
 		private final boolean hasTemporaryQueue;
 		private final ErrorQueueInfrastructure errorQueueInfrastructure;
 		private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
-		private boolean acknowledged = false;
 		private boolean autoAckEnabled = true;
 
 		private static final Log logger = LogFactory.getLog(JCSMPAcknowledgementCallback.class);
@@ -50,7 +49,7 @@ public class JCSMPAcknowledgementCallbackFactory {
 
 		@Override
 		public void acknowledge(Status status) {
-			if (acknowledged) {
+			if (messageContainer.isAcknowledged()) {
 				logger.info(String.format("%s %s is already acknowledged", XMLMessage.class.getSimpleName(),
 						messageContainer.getMessage().getMessageId()));
 				return;
@@ -59,7 +58,7 @@ public class JCSMPAcknowledgementCallbackFactory {
 			try {
 				switch (status) {
 					case ACCEPT:
-						messageContainer.getMessage().ackMessage();
+						flowReceiverContainer.acknowledge(messageContainer);
 						break;
 					case REJECT:
 						if (republishToErrorQueue()) {
@@ -72,7 +71,7 @@ public class JCSMPAcknowledgementCallbackFactory {
 											"will be discarded",
 									Status.REQUEUE, XMLMessage.class.getSimpleName(),
 									messageContainer.getMessage().getMessageId()));
-							messageContainer.getMessage().ackMessage();
+							flowReceiverContainer.acknowledge(messageContainer);
 						}
 						break;
 					case REQUEUE:
@@ -84,11 +83,9 @@ public class JCSMPAcknowledgementCallbackFactory {
 							logger.info(String.format("%s %s: Will be re-queued onto queue %s",
 									XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
 									flowReceiverContainer.getQueueName()));
-							flowReceiverContainer.rebind(messageContainer.getFlowId());
+							flowReceiverContainer.acknowledgeRebind(messageContainer);
 						}
 				}
-
-				acknowledged = true;
 			} catch (Exception e) {
 				if (!(e instanceof SolaceAcknowledgmentException)) {
 					throw new SolaceAcknowledgmentException(String.format("Failed to acknowledge XMLMessage %s",
@@ -125,13 +122,13 @@ public class JCSMPAcknowledgementCallbackFactory {
 
 			Message<?> springMessage = xmlMessageMapper.map(messageContainer.getMessage(), null);
 			errorQueueInfrastructure.send(errorQueueName, springMessage);
-			messageContainer.getMessage().ackMessage();
+			flowReceiverContainer.acknowledge(messageContainer);
 			return true;
 		}
 
 		@Override
 		public boolean isAcknowledged() {
-			return acknowledged;
+			return messageContainer.isAcknowledged();
 		}
 
 		@Override

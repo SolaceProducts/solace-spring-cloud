@@ -25,11 +25,20 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * by the rebind.</p>
  */
 public class FlowReceiverContainer {
-	private final String id = UUID.randomUUID().toString();
+	private final UUID id = UUID.randomUUID();
 	private final JCSMPSession session;
 	private final String queueName;
 	private final EndpointProperties endpointProperties;
 	private final AtomicReference<FlowReceiver> flowReceiverReference = new AtomicReference<>();
+
+	/* Ideally we would cache the outgoing message IDs and remove them as they get acknowledged,
+	 * but that has way too much overhead at scale (millions or billions of unacknowledged messages).
+	 *
+	 * Using a counter has more risks (e.g. if another object were to create a MessageContainer then send it here for
+	 * acknowledgment) but is an reasonable compromise.
+	 */
+	// Also assuming we won't ever exceed the limit of an unsigned long...
+	private final UnsignedCounterBarrier unacknowledgedMessageTracker = new UnsignedCounterBarrier();
 
 	/**
 	 * {@link #rebind(long)} can be invoked while this {@link FlowReceiverContainer} is "active"
@@ -62,12 +71,12 @@ public class FlowReceiverContainer {
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
-			logger.info(String.format("Binding %s %s", this.getClass().getSimpleName(), id));
+			logger.info(String.format("Binding %s %s", FlowReceiverContainer.class.getSimpleName(), id));
 			FlowReceiver existingFlowReceiver = flowReceiverReference.get();
 			if (existingFlowReceiver != null) {
 				long existingFlowId = ((FlowHandle) existingFlowReceiver).getFlowId();
 				logger.info(String.format("%s %s is already bound to %s",
-						this.getClass().getSimpleName(), id, existingFlowId));
+						FlowReceiverContainer.class.getSimpleName(), id, existingFlowId));
 				return existingFlowId;
 			} else {
 				final ConsumerFlowProperties flowProperties = new ConsumerFlowProperties()
@@ -87,14 +96,12 @@ public class FlowReceiverContainer {
 	 * Closes the bound {@link FlowReceiver}.
 	 */
 	public void unbind() {
-		// Ideally, we'd fully rely on flowReceiverReference's AtomicReference methods for handling concurrency.
-		// But because bind() is forced to use a write lock, we must use a writeLock here as well.
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
 			FlowReceiver flowReceiver = flowReceiverReference.getAndSet(null);
 			if (flowReceiver != null) {
-				logger.info(String.format("Unbinding %s %s", this.getClass().getSimpleName(), id));
+				logger.info(String.format("Unbinding %s %s", FlowReceiverContainer.class.getSimpleName(), id));
 				flowReceiver.close();
 			}
 		} finally {
@@ -108,24 +115,36 @@ public class FlowReceiverContainer {
 	 * @param flowId The flow ID to match.
 	 * @return The new flow ID or {@code null} if no flow was bound.
 	 * @throws JCSMPException a JCSMP exception
+	 * @throws InterruptedException was interrupted while waiting for the remaining messages to be acknowledged
 	 */
-	public Long rebind(long flowId) throws JCSMPException {
+	public Long rebind(long flowId) throws JCSMPException, InterruptedException {
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
-			logger.info(String.format("Rebinding %s %s", this.getClass().getSimpleName(), id));
+			logger.info(String.format("Rebinding %s %s", FlowReceiverContainer.class.getSimpleName(), id));
 			FlowReceiver flowReceiver = flowReceiverReference.get();
 			if (flowReceiver == null) {
 				logger.info(String.format("%s %s does not have a bound flow receiver",
-						this.getClass().getSimpleName(), id));
+						FlowReceiverContainer.class.getSimpleName(), id));
 				return null; //TODO Throw an exception?
 			}
 
 			long existingFlowId = ((FlowHandle) flowReceiver).getFlowId();
 			if (flowId != existingFlowId) {
 				logger.info(String.format("Skipping rebind of %s %s, flow ID %s does not match existing flow ID %s",
-						this.getClass().getSimpleName(), id, flowId, existingFlowId));
+						FlowReceiverContainer.class.getSimpleName(), id, flowId, existingFlowId));
 				return existingFlowId;
+			}
+
+			logger.info(String.format("Stopping %s %s", FlowReceiverContainer.class.getSimpleName(), id));
+			flowReceiver.stop();
+			try {
+				unacknowledgedMessageTracker.awaitEmpty();
+			} catch (InterruptedException e) {
+				logger.info(String.format("%s %s was interrupted while waiting for the remaining messages to be " +
+						"acknowledged. Starting flow.", FlowReceiverContainer.class.getSimpleName(), id));
+				flowReceiver.start();
+				throw e;
 			}
 
 			unbind();
@@ -177,7 +196,60 @@ public class FlowReceiverContainer {
 		// This lets it be interrupt-able if the flow were to be shutdown mid-receive.
 		BytesXMLMessage xmlMessage =  timeoutInMillis != null ? flowReceiver.receive(timeoutInMillis) :
 				flowReceiver.receive();
-		return xmlMessage != null ? new MessageContainer(xmlMessage, flowId) : null;
+		if (xmlMessage == null) {
+			return null;
+		}
+
+		MessageContainer messageContainer = new MessageContainer(xmlMessage, flowId);
+		unacknowledgedMessageTracker.increment();
+		return messageContainer;
+	}
+
+	/**
+	 * <p>Acknowledge the message off the broker and mark the provided message container as acknowledged.</p>
+	 * <p><b>WARNING:</b> Only messages created by this {@link FlowReceiverContainer} instance's {@link #receive()}
+	 * may be passed as a parameter to this function. Failure to do so will misalign the timing for when rebinds
+	 * will occur, causing rebinds to unintentionally trigger early/late.</p>
+	 * @param messageContainer The message
+	 */
+	public void acknowledge(MessageContainer messageContainer) {
+		if (messageContainer == null || messageContainer.isAcknowledged()) {
+			return;
+		}
+
+		messageContainer.getMessage().ackMessage();
+		unacknowledgedMessageTracker.decrement();
+		messageContainer.setAcknowledged(true);
+	}
+
+	/**
+	 * <p>Mark the provided message container as acknowledged and initiate a {@link #rebind}.</p>
+	 * <p><b>WARNING:</b> Only messages created by this {@link FlowReceiverContainer} instance's {@link #receive()}
+	 * may be passed as a parameter to this function. Failure to do so will misalign the timing for when rebinds
+	 * will occur, causing rebinds to unintentionally trigger early/late.</p>
+	 * @param messageContainer The message.
+	 * @return The new flow ID or {@code null} if no flow was bound or the message was already acknowledged.
+	 * @throws JCSMPException a JCSMP exception
+	 * @throws InterruptedException was interrupted while waiting for the remaining messages to be acknowledged
+	 */
+	public Long acknowledgeRebind(MessageContainer messageContainer) throws JCSMPException, InterruptedException {
+		if (messageContainer == null || messageContainer.isAcknowledged()) {
+			return null;
+		}
+
+		unacknowledgedMessageTracker.decrement();
+
+		Long flowId;
+		try {
+			flowId = rebind(messageContainer.getFlowId());
+		} catch (Exception e) {
+			logger.debug("Failed to rebind, re-incrementing unacknowledged-messages counter", e);
+			unacknowledgedMessageTracker.increment();
+			throw e;
+		}
+
+		messageContainer.setAcknowledged(true);
+		return flowId;
 	}
 
 	/**
@@ -189,6 +261,18 @@ public class FlowReceiverContainer {
 	@Nullable
 	FlowReceiver get() {
 		return flowReceiverReference.get();
+	}
+
+	/**
+	 * Gets the number of unacknowledged messages. This value is an unsigned.
+	 * @return the number of unacknowledged messages.
+	 */
+	long getNumUnacknowledgedMessages() {
+		return unacknowledgedMessageTracker.getCount();
+	}
+
+	public UUID getId() {
+		return id;
 	}
 
 	public String getQueueName() {
