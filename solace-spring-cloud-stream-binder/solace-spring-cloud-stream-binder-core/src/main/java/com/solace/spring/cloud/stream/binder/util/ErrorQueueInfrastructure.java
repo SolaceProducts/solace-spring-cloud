@@ -12,27 +12,34 @@ import org.springframework.messaging.MessagingException;
 public class ErrorQueueInfrastructure {
 	private final JCSMPSessionProducerManager producerManager;
 	private final String producerKey;
+	private final String errorQueueName;
 	private final SolaceConsumerProperties consumerProperties;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 
 	private static final Log logger = LogFactory.getLog(ErrorQueueInfrastructure.class);
 
 	public ErrorQueueInfrastructure(JCSMPSessionProducerManager producerManager, String producerKey,
-									SolaceConsumerProperties consumerProperties) {
+									String errorQueueName, SolaceConsumerProperties consumerProperties) {
 		this.producerManager = producerManager;
 		this.producerKey = producerKey;
+		this.errorQueueName = errorQueueName;
 		this.consumerProperties = consumerProperties;
 	}
 
-	public void send(String queueName, Message<?> message) {
+	public void send(Message<?> message) {
 		XMLMessage xmlMessage = xmlMessageMapper.mapError(message, consumerProperties);
 		try {
-			Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName);
+			Queue queue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
 			producerManager.get(producerKey).send(xmlMessage, queue);
 		} catch (Exception e) {
-			String msg = String.format("Failed to send message %s to queue %s", xmlMessage.getMessageId(), queueName);
+			String msg = String.format("Failed to send message %s to queue %s", xmlMessage.getMessageId(),
+					errorQueueName);
 			logger.warn(msg, e);
 			throw new MessagingException(msg, e);
 		}
+	}
+
+	public String getErrorQueueName() {
+		return errorQueueName;
 	}
 }

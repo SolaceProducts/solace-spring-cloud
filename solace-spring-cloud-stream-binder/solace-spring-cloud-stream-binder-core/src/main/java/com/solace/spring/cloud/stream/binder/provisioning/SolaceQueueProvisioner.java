@@ -37,6 +37,7 @@ public class SolaceQueueProvisioner
 	private final JCSMPSession jcsmpSession;
 	private final Map<String, Set<String>> queueToTopicBindings = new HashMap<>();
 	private final Set<String> temporaryQueues = new HashSet<>();
+	private final Map<String, String> destinationToErrorQueue = new HashMap<>();
 
 	private static final Log logger = LogFactory.getLog(SolaceQueueProvisioner.class);
 
@@ -131,11 +132,14 @@ public class SolaceQueueProvisioner
 			trackQueueToTopicBinding(queue.getName(), additionalSubscription);
 		}
 
+		SolaceConsumerDestination destination = new SolaceConsumerDestination(queue.getName());
+
 		if (properties.getExtension().isAutoBindErrorQueue()) {
-			provisionErrorQueue(queueName, properties.getExtension());
+			Queue errorQueue = provisionErrorQueue(queueName, properties.getExtension());
+			destinationToErrorQueue.put(destination.getName(), errorQueue.getName());
 		}
 
-		return new SolaceConsumerDestination(queue.getName());
+		return destination;
 	}
 
 	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties,
@@ -186,11 +190,11 @@ public class SolaceQueueProvisioner
 		return queue;
 	}
 
-	private void provisionErrorQueue(String queueName, SolaceConsumerProperties properties) {
+	private Queue provisionErrorQueue(String queueName, SolaceConsumerProperties properties) {
 		String errorQueueName = SolaceProvisioningUtil.getErrorQueueName(queueName);
 		logger.info(String.format("Provisioning error queue %s", errorQueueName));
 		EndpointProperties endpointProperties = SolaceProvisioningUtil.getErrorQueueEndpointProperties(properties);
-		provisionQueue(errorQueueName, true, endpointProperties, properties.isProvisionErrorQueue(), "Error Queue");
+		return provisionQueue(errorQueueName, true, endpointProperties, properties.isProvisionErrorQueue(), "Error Queue");
 	}
 
 	public void addSubscriptionToQueue(Queue queue, String topicName, SolaceCommonProperties properties) {
@@ -235,5 +239,9 @@ public class SolaceQueueProvisioner
 
 	public boolean hasTemporaryQueue(ConsumerDestination consumerDestination) {
 		return temporaryQueues.contains(consumerDestination.getName());
+	}
+
+	public String getErrorQueueName(ConsumerDestination consumerDestination) {
+		return destinationToErrorQueue.get(consumerDestination.getName());
 	}
 }

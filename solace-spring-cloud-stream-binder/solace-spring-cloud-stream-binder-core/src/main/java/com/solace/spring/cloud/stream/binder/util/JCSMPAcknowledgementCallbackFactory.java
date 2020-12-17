@@ -103,12 +103,9 @@ public class JCSMPAcknowledgementCallbackFactory {
 				return false;
 			}
 
-			String queueName = flowReceiverContainer.getQueueName();
-			String errorQueueName = SolaceProvisioningUtil.getErrorQueueName(queueName);
-
 			logger.info(String.format("%s %s: Will be republished onto error queue %s",
 					XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
-					errorQueueName));
+					errorQueueInfrastructure.getErrorQueueName()));
 
 			FlowReceiver flowReceiver = flowReceiverContainer.get();
 			long expectedFlowId = messageContainer.getFlowId();
@@ -117,11 +114,11 @@ public class JCSMPAcknowledgementCallbackFactory {
 				throw new IllegalStateException(String.format("Cannot republish failed %s %s to error queue %s , " +
 								"flow %s is closed (active flow: %s), message will be redelivered",
 						XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
-						errorQueueName, expectedFlowId, actualFlowId));
+						errorQueueInfrastructure.getErrorQueueName(), expectedFlowId, actualFlowId));
 			}
 
 			Message<?> springMessage = xmlMessageMapper.map(messageContainer.getMessage(), null);
-			errorQueueInfrastructure.send(errorQueueName, springMessage);
+			errorQueueInfrastructure.send(springMessage); //TODO block on the publish acknowledgment
 			flowReceiverContainer.acknowledge(messageContainer);
 			return true;
 		}

@@ -89,8 +89,11 @@ public class SolaceMessageChannelBinder
 		adapter.setPostStart(getConsumerPostStart(properties));
 
 		if (properties.getExtension().isAutoBindErrorQueue()) {
-			adapter.setErrorQueueInfrastructure(new ErrorQueueInfrastructure(sessionProducerManager,
-					errorHandlerProducerKey, properties.getExtension()));
+			adapter.setErrorQueueInfrastructure(new ErrorQueueInfrastructure(
+					sessionProducerManager,
+					errorHandlerProducerKey,
+					provisioningProvider.getErrorQueueName(destination),
+					properties.getExtension()));
 		}
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
@@ -121,7 +124,9 @@ public class SolaceMessageChannelBinder
 
 		if (consumerProperties.getExtension().isAutoBindErrorQueue()) {
 			messageSource.setErrorQueueInfrastructure(new ErrorQueueInfrastructure(sessionProducerManager,
-					errorHandlerProducerKey, consumerProperties.getExtension()));
+					errorHandlerProducerKey,
+					provisioningProvider.getErrorQueueName(destination),
+					consumerProperties.getExtension()));
 		}
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, consumerProperties, true);
