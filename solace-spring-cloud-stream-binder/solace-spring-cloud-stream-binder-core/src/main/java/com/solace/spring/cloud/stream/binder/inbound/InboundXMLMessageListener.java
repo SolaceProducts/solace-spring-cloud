@@ -15,7 +15,6 @@ import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
-import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.support.ErrorMessageUtils;
 import org.springframework.lang.Nullable;
@@ -23,18 +22,16 @@ import org.springframework.messaging.Message;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-class InboundXMLMessageListener implements Runnable {
+abstract class InboundXMLMessageListener implements Runnable {
 	final FlowReceiverContainer flowReceiverContainer;
 	final ConsumerDestination consumerDestination;
 	final ThreadLocal<AttributeAccessor> attributesHolder;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private final Consumer<Message<?>> messageConsumer;
 	private final JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
-	private final BiFunction<Message<?>, RuntimeException, Boolean> errorHandlerFunction;
 	private final boolean needHolder;
 	private final boolean needAttributes;
 	private final AtomicBoolean stopFlag = new AtomicBoolean(false);
@@ -46,19 +43,6 @@ class InboundXMLMessageListener implements Runnable {
 							  ConsumerDestination consumerDestination,
 							  Consumer<Message<?>> messageConsumer,
 							  JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
-							  BiFunction<Message<?>, RuntimeException, Boolean> errorHandlerFunction,
-							  @Nullable AtomicBoolean remoteStopFlag,
-							  ThreadLocal<AttributeAccessor> attributesHolder,
-							  boolean needHolderAndAttributes) {
-		this(flowReceiverContainer, consumerDestination, messageConsumer, ackCallbackFactory, errorHandlerFunction,
-				remoteStopFlag, attributesHolder, needHolderAndAttributes, needHolderAndAttributes);
-	}
-
-	InboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
-							  ConsumerDestination consumerDestination,
-							  Consumer<Message<?>> messageConsumer,
-							  JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
-							  BiFunction<Message<?>, RuntimeException, Boolean> errorHandlerFunction,
 							  @Nullable AtomicBoolean remoteStopFlag,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
 							  boolean needHolder,
@@ -67,12 +51,13 @@ class InboundXMLMessageListener implements Runnable {
 		this.consumerDestination = consumerDestination;
 		this.messageConsumer = messageConsumer;
 		this.ackCallbackFactory = ackCallbackFactory;
-		this.errorHandlerFunction = errorHandlerFunction;
 		this.remoteStopFlag = () -> remoteStopFlag != null && remoteStopFlag.get();
 		this.attributesHolder = attributesHolder;
 		this.needHolder = needHolder;
 		this.needAttributes = needAttributes;
 	}
+
+	abstract void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback);
 
 	@Override
 	public void run() {
@@ -132,26 +117,6 @@ class InboundXMLMessageListener implements Runnable {
 	Message<?> createMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
 		setAttributesIfNecessary(bytesXMLMessage, null);
 		return xmlMessageMapper.map(bytesXMLMessage, acknowledgmentCallback);
-	}
-
-	void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
-		Message<?> message;
-		try {
-			message = createMessage(bytesXMLMessage, acknowledgmentCallback);
-		} catch (RuntimeException e) {
-			boolean processedByErrorHandler = errorHandlerFunction != null && errorHandlerFunction.apply(null, e);
-			if (processedByErrorHandler) {
-				AckUtils.autoAck(acknowledgmentCallback);
-			} else {
-				logger.warn(String.format("Failed to map XMLMessage %s to a Spring Message and no error channel " +
-						"was configured. Message will be rejected.", bytesXMLMessage.getMessageId()), e);
-				AckUtils.autoNack(acknowledgmentCallback);
-			}
-			return;
-		}
-
-		sendToConsumer(message, bytesXMLMessage);
-		AckUtils.autoAck(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message));
 	}
 
 	void sendToConsumer(final Message<?> message, final BytesXMLMessage bytesXMLMessage) throws RuntimeException {

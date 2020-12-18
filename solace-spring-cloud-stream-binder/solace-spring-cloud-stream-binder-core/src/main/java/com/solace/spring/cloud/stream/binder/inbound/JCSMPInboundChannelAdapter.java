@@ -203,7 +203,6 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					consumerDestination,
 					this::sendMessage,
 					ackCallbackFactory,
-					this::sendErrorMessageIfNecessary,
 					retryTemplate,
 					recoveryCallback,
 					remoteStopFlag,
@@ -212,7 +211,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			retryTemplate.registerListener(retryableMessageListener);
 			listener = retryableMessageListener;
 		} else {
-			listener = new InboundXMLMessageListener(
+			listener = new BasicInboundXMLMessageListener(
 					flowReceiverContainer,
 					consumerDestination,
 					this::sendMessage,

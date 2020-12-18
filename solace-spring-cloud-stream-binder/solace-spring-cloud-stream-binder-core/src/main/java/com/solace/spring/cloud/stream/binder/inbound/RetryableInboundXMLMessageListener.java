@@ -18,7 +18,6 @@ import org.springframework.retry.RetryListener;
 import org.springframework.retry.support.RetryTemplate;
 
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 class RetryableInboundXMLMessageListener extends InboundXMLMessageListener implements RetryListener {
@@ -31,13 +30,12 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener imple
 									   ConsumerDestination consumerDestination,
 									   Consumer<Message<?>> messageConsumer,
 									   JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
-									   BiFunction<Message<?>, RuntimeException, Boolean> errorHandlerFunction,
 									   RetryTemplate retryTemplate,
 									   RecoveryCallback<?> recoveryCallback,
 									   @Nullable AtomicBoolean remoteStopFlag,
 									   ThreadLocal<AttributeAccessor> attributesHolder) {
-		super(flowReceiverContainer, consumerDestination, messageConsumer, ackCallbackFactory, errorHandlerFunction,
-				remoteStopFlag, attributesHolder, false, true);
+		super(flowReceiverContainer, consumerDestination, messageConsumer, ackCallbackFactory, remoteStopFlag,
+				attributesHolder, false, true);
 		this.retryTemplate = retryTemplate;
 		this.recoveryCallback = recoveryCallback;
 	}
