@@ -203,7 +203,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					consumerDestination,
 					this::sendMessage,
 					ackCallbackFactory,
-					(exception) -> sendErrorMessageIfNecessary(null, exception),
+					this::sendErrorMessageIfNecessary,
 					retryTemplate,
 					recoveryCallback,
 					remoteStopFlag,
@@ -217,7 +217,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					consumerDestination,
 					this::sendMessage,
 					ackCallbackFactory,
-					(exception) -> sendErrorMessageIfNecessary(null, exception),
+					this::sendErrorMessageIfNecessary,
 					remoteStopFlag,
 					attributesHolder,
 					this.getErrorChannel() != null

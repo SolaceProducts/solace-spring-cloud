@@ -7,8 +7,8 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
-import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AckUtils;
+import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.retry.RecoveryCallback;
@@ -18,8 +18,8 @@ import org.springframework.retry.RetryListener;
 import org.springframework.retry.support.RetryTemplate;
 
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 class RetryableInboundXMLMessageListener extends InboundXMLMessageListener implements RetryListener {
 	private final RetryTemplate retryTemplate;
@@ -31,26 +31,26 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener imple
 									   ConsumerDestination consumerDestination,
 									   Consumer<Message<?>> messageConsumer,
 									   JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
-									   Function<RuntimeException,Boolean> errorHandlerFunction,
+									   BiFunction<Message<?>, RuntimeException, Boolean> errorHandlerFunction,
 									   RetryTemplate retryTemplate,
 									   RecoveryCallback<?> recoveryCallback,
 									   @Nullable AtomicBoolean remoteStopFlag,
 									   ThreadLocal<AttributeAccessor> attributesHolder) {
-		super(flowReceiverContainer, consumerDestination, messageConsumer, ackCallbackFactory, errorHandlerFunction, remoteStopFlag, attributesHolder, false, true);
+		super(flowReceiverContainer, consumerDestination, messageConsumer, ackCallbackFactory, errorHandlerFunction,
+				remoteStopFlag, attributesHolder, false, true);
 		this.retryTemplate = retryTemplate;
 		this.recoveryCallback = recoveryCallback;
 	}
 
 	@Override
-	void handleMessage(final Message<?> message, final BytesXMLMessage bytesXMLMessage) {
+	void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
 		retryTemplate.execute((context) -> {
-			sendToConsumer(message, bytesXMLMessage);
-			AckUtils.autoAck(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message));
+			sendToConsumer(createMessage(bytesXMLMessage, acknowledgmentCallback), bytesXMLMessage);
+			AckUtils.autoAck(acknowledgmentCallback);
 			return null;
 		}, (context) -> {
-			setAttributesIfNecessary(bytesXMLMessage, null);
 			Object toReturn = recoveryCallback.recover(context);
-			AckUtils.autoNack(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message));
+			AckUtils.autoAck(acknowledgmentCallback);
 			return toReturn;
 		});
 	}

@@ -16,6 +16,10 @@ import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.binder.PartitionCapableBinderTests;
 import org.springframework.cloud.stream.binder.Spy;
+import org.springframework.cloud.stream.binder.TestUtils;
+import org.springframework.context.support.GenericApplicationContext;
+import org.springframework.integration.channel.AbstractSubscribableChannel;
+import org.springframework.messaging.MessageHandler;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -96,5 +100,15 @@ public abstract class SolaceBinderITBase
 	@Override
 	public Spy spyOn(String name) {
 		return null;
+	}
+
+	<T extends AbstractSubscribableChannel> T createChannel(String channelName, Class<T> type,
+															MessageHandler messageHandler)
+			throws IllegalAccessException, InstantiationException {
+		T channel = type.newInstance();
+		channel.setComponentName(channelName);
+		testBinder.getApplicationContext().registerBean(channelName, type, () -> channel);
+		channel.subscribe(messageHandler);
+		return channel;
 	}
 }

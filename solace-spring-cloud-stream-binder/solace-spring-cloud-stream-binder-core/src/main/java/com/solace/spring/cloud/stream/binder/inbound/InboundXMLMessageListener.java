@@ -3,7 +3,6 @@ package com.solace.spring.cloud.stream.binder.inbound;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
-import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.BytesXMLMessage;
@@ -24,8 +23,8 @@ import org.springframework.messaging.Message;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 class InboundXMLMessageListener implements Runnable {
@@ -35,7 +34,7 @@ class InboundXMLMessageListener implements Runnable {
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private final Consumer<Message<?>> messageConsumer;
 	private final JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
-	private final Function<RuntimeException,Boolean> errorHandlerFunction;
+	private final BiFunction<Message<?>, RuntimeException, Boolean> errorHandlerFunction;
 	private final boolean needHolder;
 	private final boolean needAttributes;
 	private final AtomicBoolean stopFlag = new AtomicBoolean(false);
@@ -47,7 +46,7 @@ class InboundXMLMessageListener implements Runnable {
 							  ConsumerDestination consumerDestination,
 							  Consumer<Message<?>> messageConsumer,
 							  JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
-							  Function<RuntimeException,Boolean> errorHandlerFunction,
+							  BiFunction<Message<?>, RuntimeException, Boolean> errorHandlerFunction,
 							  @Nullable AtomicBoolean remoteStopFlag,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
 							  boolean needHolderAndAttributes) {
@@ -59,7 +58,7 @@ class InboundXMLMessageListener implements Runnable {
 							  ConsumerDestination consumerDestination,
 							  Consumer<Message<?>> messageConsumer,
 							  JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
-							  Function<RuntimeException,Boolean> errorHandlerFunction,
+							  BiFunction<Message<?>, RuntimeException, Boolean> errorHandlerFunction,
 							  @Nullable AtomicBoolean remoteStopFlag,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
 							  boolean needHolder,
@@ -118,14 +117,11 @@ class InboundXMLMessageListener implements Runnable {
 			return;
 		}
 
+		BytesXMLMessage bytesXMLMessage = messageContainer.getMessage();
 		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createCallback(messageContainer);
 
-		BytesXMLMessage bytesXMLMessage = messageContainer.getMessage();
 		try {
-			final Message<?> message = xmlMessageMapper.map(bytesXMLMessage, acknowledgmentCallback);
-			handleMessage(message, bytesXMLMessage);
-		} catch (SolaceMessageConversionException e) {
-			handleError(e, bytesXMLMessage, bytesXMLMessage::ackMessage);
+			handleMessage(bytesXMLMessage, acknowledgmentCallback);
 		} finally {
 			if (needHolder) {
 				attributesHolder.remove();
@@ -133,13 +129,29 @@ class InboundXMLMessageListener implements Runnable {
 		}
 	}
 
-	void handleMessage(final Message<?> message, BytesXMLMessage bytesXMLMessage) {
+	Message<?> createMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
+		setAttributesIfNecessary(bytesXMLMessage, null);
+		return xmlMessageMapper.map(bytesXMLMessage, acknowledgmentCallback);
+	}
+
+	void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
+		Message<?> message;
 		try {
-			sendToConsumer(message, bytesXMLMessage);
-			AckUtils.autoAck(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message));
+			message = createMessage(bytesXMLMessage, acknowledgmentCallback);
 		} catch (RuntimeException e) {
-			handleError(e, bytesXMLMessage, () -> AckUtils.autoNack(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message)));
+			boolean processedByErrorHandler = errorHandlerFunction != null && errorHandlerFunction.apply(null, e);
+			if (processedByErrorHandler) {
+				AckUtils.autoAck(acknowledgmentCallback);
+			} else {
+				logger.warn(String.format("Failed to map XMLMessage %s to a Spring Message and no error channel " +
+						"was configured. Message will be rejected.", bytesXMLMessage.getMessageId()), e);
+				AckUtils.autoNack(acknowledgmentCallback);
+			}
+			return;
 		}
+
+		sendToConsumer(message, bytesXMLMessage);
+		AckUtils.autoAck(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message));
 	}
 
 	void sendToConsumer(final Message<?> message, final BytesXMLMessage bytesXMLMessage) throws RuntimeException {
@@ -163,13 +175,6 @@ class InboundXMLMessageListener implements Runnable {
 				attributes.setAttribute(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE, xmlMessage);
 			}
 		}
-	}
-
-	private void handleError(RuntimeException e, BytesXMLMessage bytesXMLMessage, Runnable acknowledgement) {
-		setAttributesIfNecessary(bytesXMLMessage, null);
-		boolean wasProcessedByErrorHandler = errorHandlerFunction != null && errorHandlerFunction.apply(e);
-		acknowledgement.run();
-		if (!wasProcessedByErrorHandler) throw e;
 	}
 
 	public AtomicBoolean getStopFlag() {
