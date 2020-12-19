@@ -2,16 +2,27 @@ package com.solace.spring.cloud.stream.binder.provisioning;
 
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 
-class SolaceConsumerDestination implements ConsumerDestination {
-	private String queueName;
+import java.util.Collections;
+import java.util.List;
 
-	SolaceConsumerDestination(String queueName) {
+public class SolaceConsumerDestination implements ConsumerDestination {
+	private String queueName;
+	private List<SolaceTopicMatcher> topicMatcher;
+
+	SolaceConsumerDestination(String queueName, List<SolaceTopicMatcher> topicMatcher) {
 		this.queueName = queueName;
+
+		Collections.sort(topicMatcher);
+		this.topicMatcher = topicMatcher;
 	}
 
 	@Override
 	public String getName() {
 		return queueName;
+	}
+
+	public List<SolaceTopicMatcher> getTopicMatcher() {
+		return topicMatcher;
 	}
 
 	@Override

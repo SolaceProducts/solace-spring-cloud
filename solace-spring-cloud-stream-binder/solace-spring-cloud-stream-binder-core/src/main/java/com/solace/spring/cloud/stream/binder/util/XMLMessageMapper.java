@@ -8,6 +8,7 @@ import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceTopicMatcher;
 import com.solacesystems.common.util.ByteArray;
 import com.solacesystems.jcsmp.BytesMessage;
 import com.solacesystems.jcsmp.BytesXMLMessage;
@@ -154,10 +155,14 @@ public class XMLMessageMapper {
 	}
 
 	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback) throws SolaceMessageConversionException {
-		return map(xmlMessage, acknowledgmentCallback, false);
+		return map(xmlMessage, acknowledgmentCallback, Collections.emptyList(), false);
 	}
 
-	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback, boolean setRawMessageHeader) throws SolaceMessageConversionException {
+	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback, Collection<SolaceTopicMatcher> topicMatchers) throws SolaceMessageConversionException {
+		return map(xmlMessage, acknowledgmentCallback, topicMatchers, false);
+	}
+
+	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback, Collection<SolaceTopicMatcher> topicMatchers, boolean setRawMessageHeader) throws SolaceMessageConversionException {
 		SDTMap metadata = xmlMessage.getProperties();
 
 		Object payload;
@@ -215,7 +220,24 @@ public class XMLMessageMapper {
 			builder.setHeader(IntegrationMessageHeaderAccessor.SOURCE_DATA, xmlMessage);
 		}
 
+		if (xmlMessage.getDestination() != null) {
+			builder.setHeader(
+					SolaceMessageHeaders.DESTINATION_VARIABLES,
+					extractTopicVariables(xmlMessage.getDestination().getName(), topicMatchers)
+			);
+		}
+
 		return builder.build();
+	}
+
+	private Map<String, String> extractTopicVariables(String topicName, Collection<SolaceTopicMatcher> topicMatchers) {
+		for (SolaceTopicMatcher topicMatcher : topicMatchers) {
+			Map<String, String> hits = topicMatcher.match(topicName);
+			if (hits != null) {
+				return hits;
+			}
+		}
+		return Collections.emptyMap();
 	}
 
 	SDTMap map(MessageHeaders headers, Collection<String> excludedHeaders, boolean convertNonSerializableHeadersToString) {

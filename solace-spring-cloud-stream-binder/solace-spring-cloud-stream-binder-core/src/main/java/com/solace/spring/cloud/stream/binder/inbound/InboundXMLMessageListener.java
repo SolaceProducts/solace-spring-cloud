@@ -7,6 +7,7 @@ import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -30,7 +31,7 @@ import java.util.function.Supplier;
 
 abstract class InboundXMLMessageListener implements Runnable {
 	final FlowReceiverContainer flowReceiverContainer;
-	final ConsumerDestination consumerDestination;
+	final SolaceConsumerDestination consumerDestination;
 	final ThreadLocal<AttributeAccessor> attributesHolder;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private final Consumer<Message<?>> messageConsumer;
@@ -51,7 +52,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 							  boolean needHolder,
 							  boolean needAttributes) {
 		this.flowReceiverContainer = flowReceiverContainer;
-		this.consumerDestination = consumerDestination;
+		this.consumerDestination = (SolaceConsumerDestination) consumerDestination;
 		this.messageConsumer = messageConsumer;
 		this.ackCallbackFactory = ackCallbackFactory;
 		this.remoteStopFlag = () -> remoteStopFlag != null && remoteStopFlag.get();
@@ -125,7 +126,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 
 	Message<?> createMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
 		setAttributesIfNecessary(bytesXMLMessage, acknowledgmentCallback);
-		return xmlMessageMapper.map(bytesXMLMessage, acknowledgmentCallback);
+		return xmlMessageMapper.map(bytesXMLMessage, acknowledgmentCallback, consumerDestination.getTopicMatcher());
 	}
 
 	void sendToConsumer(final Message<?> message, final BytesXMLMessage bytesXMLMessage) throws RuntimeException {

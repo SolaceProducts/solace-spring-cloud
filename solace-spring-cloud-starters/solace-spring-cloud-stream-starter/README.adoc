@@ -677,6 +677,13 @@ Error Queues should not be used with anonymous consumer groups.
 Since the names of anonymous consumer groups, and in turn the name of their would-be Error Queues, are randomly generated at runtime, it would provide little value to create bindings to these Error Queues because of their unpredictable naming and temporary existence. Also, your environment will be polluted with orphaned Error Queues whenever these consumers rebind.
 ====
 
+== Topic wildcards
+
+All topics in consumer `spring.cloud.stream.bindings.<bindingName>.destination` and `spring.cloud.stream.solace.bindings.<bindingName>.consumer.queueAdditionalSubscriptions`
+can contain the [standard (* and >) solace wildcards](https://docs.solace.com/PubSub-Basics/Wildcard-Charaters-Topic-Subs.htm).
+It is also possible to use wildcards like `sensor/temperature/<station>/>`. In this case `<station>` will be translated to `*` for the broker.
+The inbound messages will have a header `destinationVariables` what is a Map<String, String> containing the key `station` the value of this part of the destination.
+
 == Resources
 
 For more information about Spring Cloud Streams try these resources:
