@@ -66,12 +66,18 @@ public class SolaceProvisioningUtil {
 								boolean isAnonymous, String anonGroupPostfix) {
 		String queueName;
 		if (isAnonymous) {
-			queueName = topicName + QUEUE_NAME_DELIM + JCSMPFactory.onlyInstance().createUniqueName(anonGroupPostfix);
+			queueName = replaceTopicWildCards(topicName, "_") + QUEUE_NAME_DELIM + JCSMPFactory.onlyInstance().createUniqueName(anonGroupPostfix);
 		} else {
-			queueName = topicName + QUEUE_NAME_DELIM + groupName;
+			queueName = replaceTopicWildCards(topicName, "_") + QUEUE_NAME_DELIM + groupName;
 		}
 
 		return properties.getPrefix() + queueName;
+	}
+
+	private static String replaceTopicWildCards(String topicName, CharSequence replacement) {
+		return topicName
+				.replace("*", replacement)
+				.replace(">", replacement);
 	}
 
 	public static String getDMQName(String queueName) {
