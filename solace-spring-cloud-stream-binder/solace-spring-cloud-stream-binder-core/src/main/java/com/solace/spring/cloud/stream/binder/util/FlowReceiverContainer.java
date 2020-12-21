@@ -71,12 +71,11 @@ public class FlowReceiverContainer {
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
-			logger.info(String.format("Binding %s %s", FlowReceiverContainer.class.getSimpleName(), id));
+			logger.info(String.format("Binding flow receiver container %s", id));
 			FlowReceiver existingFlowReceiver = flowReceiverReference.get();
 			if (existingFlowReceiver != null) {
 				long existingFlowId = ((FlowHandle) existingFlowReceiver).getFlowId();
-				logger.info(String.format("%s %s is already bound to %s",
-						FlowReceiverContainer.class.getSimpleName(), id, existingFlowId));
+				logger.info(String.format("Flow receiver container %s is already bound to %s", id, existingFlowId));
 				return existingFlowId;
 			} else {
 				final ConsumerFlowProperties flowProperties = new ConsumerFlowProperties()
@@ -101,7 +100,7 @@ public class FlowReceiverContainer {
 		try {
 			FlowReceiver flowReceiver = flowReceiverReference.getAndSet(null);
 			if (flowReceiver != null) {
-				logger.info(String.format("Unbinding %s %s", FlowReceiverContainer.class.getSimpleName(), id));
+				logger.info(String.format("Unbinding flow receiver container %s", id));
 				flowReceiver.close();
 			}
 		} finally {
@@ -121,28 +120,28 @@ public class FlowReceiverContainer {
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
-			logger.info(String.format("Rebinding %s %s", FlowReceiverContainer.class.getSimpleName(), id));
+			logger.info(String.format("Rebinding flow receiver container %s", id));
 			FlowReceiver flowReceiver = flowReceiverReference.get();
 			if (flowReceiver == null) {
-				logger.info(String.format("%s %s does not have a bound flow receiver",
-						FlowReceiverContainer.class.getSimpleName(), id));
+				logger.info(String.format("Flow receiver container %s does not have a bound flow receiver", id));
 				return null; //TODO Throw an exception?
 			}
 
 			long existingFlowId = ((FlowHandle) flowReceiver).getFlowId();
 			if (flowId != existingFlowId) {
-				logger.info(String.format("Skipping rebind of %s %s, flow ID %s does not match existing flow ID %s",
-						FlowReceiverContainer.class.getSimpleName(), id, flowId, existingFlowId));
+				logger.info(String.format(
+						"Skipping rebind of flow receiver container %s, flow ID %s does not match existing flow ID %s",
+						id, flowId, existingFlowId));
 				return existingFlowId;
 			}
 
-			logger.info(String.format("Stopping %s %s", FlowReceiverContainer.class.getSimpleName(), id));
+			logger.info(String.format("Stopping flow receiver container %s", id));
 			flowReceiver.stop();
 			try {
 				unacknowledgedMessageTracker.awaitEmpty();
 			} catch (InterruptedException e) {
-				logger.info(String.format("%s %s was interrupted while waiting for the remaining messages to be " +
-						"acknowledged. Starting flow.", FlowReceiverContainer.class.getSimpleName(), id));
+				logger.info(String.format("Flow receiver container %s was interrupted while waiting for the " +
+						"remaining messages to be acknowledged. Starting flow.", id));
 				flowReceiver.start();
 				throw e;
 			}
