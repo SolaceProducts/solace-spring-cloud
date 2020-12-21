@@ -115,6 +115,7 @@ public class FlowReceiverContainer {
 	 * @return The new flow ID or {@code null} if no flow was bound.
 	 * @throws JCSMPException a JCSMP exception
 	 * @throws InterruptedException was interrupted while waiting for the remaining messages to be acknowledged
+	 * @throws IllegalStateException flow receiver container is not bound
 	 */
 	public Long rebind(long flowId) throws JCSMPException, InterruptedException {
 		Lock writeLock = readWriteLock.writeLock();
@@ -123,8 +124,7 @@ public class FlowReceiverContainer {
 			logger.info(String.format("Rebinding flow receiver container %s", id));
 			FlowReceiver flowReceiver = flowReceiverReference.get();
 			if (flowReceiver == null) {
-				logger.info(String.format("Flow receiver container %s does not have a bound flow receiver", id));
-				return null; //TODO Throw an exception?
+				throw new IllegalStateException(String.format("Flow receiver container %s is not bound", id));
 			}
 
 			long existingFlowId = ((FlowHandle) flowReceiver).getFlowId();
@@ -171,6 +171,7 @@ public class FlowReceiverContainer {
 	 * @param timeoutInMillis The timeout in milliseconds.
 	 * @return The next available message or null if the timeout expires, is interrupted, or no flow is bound.
 	 * @throws JCSMPException a JCSMP exception
+	 * @throws IllegalStateException flow receiver container is not bound
 	 * @see FlowReceiver#receive(int)
 	 */
 	public MessageContainer receive(Integer timeoutInMillis) throws JCSMPException {
@@ -182,8 +183,8 @@ public class FlowReceiverContainer {
 		try {
 			flowReceiver = flowReceiverReference.get();
 			if (flowReceiver == null) {
-				// flowReceiver == null & we are not rebinding means that now flow is bound yet...
-				return null; //TODO Should we block?
+				// since we have the read lock, this cannot occur due to a rebind
+				throw new IllegalStateException(String.format("Flow receiver container %s is not bound", id));
 			}
 
 			flowId = ((FlowHandle) flowReceiver).getFlowId();

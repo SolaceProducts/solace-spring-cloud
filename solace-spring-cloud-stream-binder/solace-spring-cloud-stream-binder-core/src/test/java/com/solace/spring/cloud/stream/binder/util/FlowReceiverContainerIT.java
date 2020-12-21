@@ -469,13 +469,19 @@ public class FlowReceiverContainerIT extends ITBase {
 
 	@Test
 	public void testRebindANonBoundFlow() throws Exception {
-		assertNull(flowReceiverContainer.rebind(123));
-		if (isDurable) {
-			MonitorMsgVpnQueue queueInfo = getQueueInfo();
-			assertNotNull(queueInfo);
-			assertEquals((Long) 0L, queueInfo.getBindRequestCount());
-		} else {
-			assertNull(getQueueInfo());
+		thrown.expect(IllegalStateException.class);
+		thrown.expectMessage("is not bound");
+		try {
+			flowReceiverContainer.rebind(123);
+		} catch (IllegalStateException e) {
+			if (isDurable) {
+				MonitorMsgVpnQueue queueInfo = getQueueInfo();
+				assertNotNull(queueInfo);
+				assertEquals((Long) 0L, queueInfo.getBindRequestCount());
+			} else {
+				assertNull(getQueueInfo());
+			}
+			throw e;
 		}
 	}
 
@@ -639,7 +645,9 @@ public class FlowReceiverContainerIT extends ITBase {
 
 	@Test
 	public void testReceiveOnANonBoundFlow() throws Exception {
-		assertNull(flowReceiverContainer.receive());
+		thrown.expect(IllegalStateException.class);
+		thrown.expectMessage("is not bound");
+		flowReceiverContainer.receive();
 	}
 
 	@Test
@@ -754,7 +762,18 @@ public class FlowReceiverContainerIT extends ITBase {
 		Callable<?>[] actions = new Callable[]{
 				(Callable<?>) () -> flowReceiverContainer.bind(),
 				(Callable<?>) () -> {flowReceiverContainer.unbind(); return null;},
-				(Callable<?>) () -> flowReceiverContainer.rebind(flowId),
+				(Callable<?>) () -> {
+					try {
+						return flowReceiverContainer.rebind(flowId);
+					} catch (IllegalStateException e) {
+						if (e.getMessage().contains("is not bound")) {
+							logger.info("Received expected exception due to no bound flow", e);
+							return null;
+						} else {
+							throw e;
+						}
+					}
+				},
 				(Callable<?>) () -> {
 					MessageContainer messageContainer;
 					try {
@@ -764,6 +783,13 @@ public class FlowReceiverContainerIT extends ITBase {
 					} catch (JCSMPTransportException | ClosedFacilityException e) {
 						if (e.getMessage().contains("Consumer was closed while in receive")) {
 							logger.info("Received expected exception due to interrupt from flow shutdown", e);
+							return null;
+						} else {
+							throw e;
+						}
+					} catch (IllegalStateException e) {
+						if (e.getMessage().contains("is not bound")) {
+							logger.info("Received expected exception due to no bound flow", e);
 							return null;
 						} else {
 							throw e;
