@@ -5,6 +5,7 @@ import java.util.Map;
 
 public class SolaceProducerProperties extends SolaceCommonProperties {
 	private Long msgTtl = null;
+	private Integer msgPriority = null;
 	private boolean msgInternalDmqEligible = false;
 	private Map<String,String[]> queueAdditionalSubscriptions = new HashMap<>();
 
@@ -14,6 +15,14 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 
 	public void setMsgTtl(Long msgTtl) {
 		this.msgTtl = msgTtl;
+	}
+
+	public Integer getMsgPriority() {
+		return msgPriority;
+	}
+
+	public void setMsgPriority(Integer msgPriority) {
+		this.msgPriority = msgPriority;
 	}
 
 	public boolean isMsgInternalDmqEligible() {

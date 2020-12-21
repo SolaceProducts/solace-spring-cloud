@@ -340,6 +340,11 @@ See [SolaceCommonProperties](../../solace-spring-cloud-stream-binder/solace-spri
         <p>The DMQ here is not those which the binder creates when autoBindDmq is enabled, but instead, refers to the <a href="https://docs.solace.com/Configuring-and-Managing/Setting-Dead-Msg-Queues.htm">DMQ defined by the Solace message broker itself</a>.</p>
         <p>Default: false</p>
     </dd>
+    <dt>msgPriority</dt>
+    <dd>
+        <p>The priority of the message. Messages will be delivered in order of priority over message send time. To use this feature, you have to enable the "Respect Message Priority" feature of the related queue. This can possible be done using the queue template. <a href="https://docs.solace.com/PubSub-Basics/Message-Priority.htm">Explanation of solace message priority</a>.</p>
+        <p>Default: null</p>
+    </dd>
 </dl>
 
 ## Consumer Concurrency

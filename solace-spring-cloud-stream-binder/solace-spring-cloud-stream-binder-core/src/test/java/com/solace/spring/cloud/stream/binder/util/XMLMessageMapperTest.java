@@ -142,6 +142,22 @@ public class XMLMessageMapperTest {
 		validateXMLMessage(xmlMessage, testSpringMessage);
 	}
 
+	@Test
+	public void testMapSpringMessageToXMLMessage_MessageOptionsViaHeader() throws Exception {
+		Message<?> testSpringMessage = new DefaultMessageBuilderFactory()
+				.withPayload("Not of interest")
+				.setHeader(SolaceMessageHeaders.INTERNAL_DMQ_ELIGIBLE, true)
+				.setHeader(SolaceMessageHeaders.PRIORITY, 6)
+				.setHeader(SolaceMessageHeaders.TTL, 598563)
+				.build();
+
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage);
+
+		Assert.assertTrue(xmlMessage.isDMQEligible());
+		Assert.assertEquals(6, xmlMessage.getPriority());
+		Assert.assertEquals(598563, xmlMessage.getTimeToLive());
+	}
+
 	@Test(expected = SolaceMessageConversionException.class)
 	public void testFailMapSpringMessageToXMLMessage_InvalidPayload() {
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(new Object()).build();

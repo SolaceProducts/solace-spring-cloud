@@ -57,6 +57,9 @@ public class XMLMessageMapper {
 		if (producerProperties.getMsgTtl() != null) {
 			xmlMessage.setTimeToLive(producerProperties.getMsgTtl());
 		}
+		if (producerProperties.getMsgPriority() != null) {
+			xmlMessage.setPriority(producerProperties.getMsgPriority());
+		}
 		return xmlMessage;
 	}
 
@@ -117,6 +120,22 @@ public class XMLMessageMapper {
 
 		xmlMessage.setProperties(metadata);
 		xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+
+		Object internalDmqEligible = message.getHeaders().get(SolaceMessageHeaders.INTERNAL_DMQ_ELIGIBLE);
+		if (internalDmqEligible != null) {
+			xmlMessage.setDMQEligible(Boolean.TRUE.equals(internalDmqEligible));
+		}
+
+		Long ttl = toLong(message.getHeaders().get(SolaceMessageHeaders.TTL));
+		if (ttl != null) {
+			xmlMessage.setTimeToLive(ttl);
+		}
+
+		Integer priority = toInt(message.getHeaders().get(SolaceMessageHeaders.PRIORITY));
+		if (priority != null) {
+			xmlMessage.setPriority(priority);
+		}
+
 		return xmlMessage;
 	}
 
@@ -180,7 +199,11 @@ public class XMLMessageMapper {
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
 		for (Map.Entry<String,Object> header : headers.entrySet()) {
 			if (header.getKey().equalsIgnoreCase(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK) ||
-					header.getKey().equalsIgnoreCase(BinderHeaders.TARGET_DESTINATION)) {
+					header.getKey().equalsIgnoreCase(BinderHeaders.TARGET_DESTINATION) ||
+					header.getKey().equals(SolaceMessageHeaders.INTERNAL_DMQ_ELIGIBLE) ||
+					header.getKey().equals(SolaceMessageHeaders.TTL) ||
+					header.getKey().equals(SolaceMessageHeaders.PRIORITY)
+			) {
 				continue;
 			}
 
@@ -253,6 +276,29 @@ public class XMLMessageMapper {
 
 	private <T,U> void rethrowableCall(ThrowingBiConsumer<T,U> consumer, T var0, U var1) {
 		consumer.accept(var0, var1);
+	}
+
+	private static Long toLong(Object in) {
+		if (in != null && in instanceof String) {
+			return Long.parseLong((String)in);
+		}
+		if (in != null && in instanceof Long) {
+			return (Long)in;
+		}
+		if (in != null && in instanceof Integer) {
+			return Long.valueOf((Integer)in);
+		}
+		return null;
+	}
+
+	private static Integer toInt(Object in) {
+		if (in != null && in instanceof String) {
+			return Integer.parseInt((String)in);
+		}
+		if (in != null && in instanceof Integer) {
+			return (Integer) in;
+		}
+		return null;
 	}
 
 	@FunctionalInterface
