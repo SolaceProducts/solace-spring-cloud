@@ -1,5 +1,5 @@
 = Spring Cloud Stream Binder for Solace PubSub+
-:revnumber: 2.1.1
+:revnumber: 3.0.0
 :toc: preamble
 :icons: font
 :scst-version: 3.0.10.RELEASE
