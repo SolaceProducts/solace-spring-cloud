@@ -30,6 +30,7 @@ import org.springframework.cloud.stream.binder.PartitionCapableBinderTests;
 import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.cloud.stream.provisioning.ProvisioningException;
+import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.context.IntegrationContextUtils;
 import org.springframework.integration.support.MessageBuilder;
@@ -93,8 +94,9 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, "testSendAndReceiveBad", moduleInputChannel, createConsumerProperties());
+				destination0, "testSendAndReceiveBad", moduleInputChannel, consumerProperties);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -102,14 +104,20 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 
 		binderBindUnbindLatency();
 
-		final CountDownLatch latch = new CountDownLatch(3);
-		moduleInputChannel.subscribe(message1 -> {
+		SoftAssertions softly = new SoftAssertions();
+		final CountDownLatch latch = new CountDownLatch(consumerProperties.getMaxAttempts());
+		moduleInputChannel.subscribe(msg -> {
+			long expectedDeliveryAttempt = consumerProperties.getMaxAttempts() - latch.getCount() + 1;
+			AtomicInteger deliveryAttempt = StaticMessageHeaderAccessor.getDeliveryAttempt(msg);
+			softly.assertThat(deliveryAttempt).isNotNull();
+			softly.assertThat(deliveryAttempt.get()).isEqualTo(expectedDeliveryAttempt);
 			latch.countDown();
 			throw new RuntimeException("bad");
 		});
 
 		moduleOutputChannel.send(message);
 		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		softly.assertAll();
 		producerBinding.unbind();
 		consumerBinding.unbind();
 	}

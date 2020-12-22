@@ -42,8 +42,19 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener imple
 
 	@Override
 	void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
+		Message<?> message = retryTemplate.execute((context) -> createMessage(bytesXMLMessage, acknowledgmentCallback),
+				(context) -> {
+			recoveryCallback.recover(context);
+			AckUtils.autoAck(acknowledgmentCallback);
+			return null;
+		});
+
+		if (message == null) {
+			return;
+		}
+
 		retryTemplate.execute((context) -> {
-			sendToConsumer(createMessage(bytesXMLMessage, acknowledgmentCallback), bytesXMLMessage);
+			sendToConsumer(message, bytesXMLMessage);
 			AckUtils.autoAck(acknowledgmentCallback);
 			return null;
 		}, (context) -> {
