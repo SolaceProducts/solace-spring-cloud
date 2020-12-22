@@ -45,7 +45,7 @@ public class BasicInboundXMLMessageListener extends InboundXMLMessageListener {
 			} else {
 				logger.warn(String.format("Failed to map XMLMessage %s to a Spring Message and no error channel " +
 						"was configured. Message will be rejected.", bytesXMLMessage.getMessageId()), e);
-				AckUtils.autoNack(acknowledgmentCallback);
+				AckUtils.reject(acknowledgmentCallback);
 			}
 			return;
 		}

@@ -57,6 +57,6 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 			return;
 		}
 
-		AckUtils.autoNack(acknowledgmentCallback);
+		AckUtils.reject(acknowledgmentCallback);
 	}
 }
