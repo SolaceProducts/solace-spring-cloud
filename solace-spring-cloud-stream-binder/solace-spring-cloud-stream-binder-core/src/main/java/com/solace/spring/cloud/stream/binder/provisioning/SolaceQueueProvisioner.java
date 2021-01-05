@@ -152,7 +152,7 @@ public class SolaceQueueProvisioner
 				if (doDurableProvisioning) {
 					jcsmpSession.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
 				} else {
-					logger.warn(String.format(
+					logger.info(String.format(
 							"%s provisioning is disabled, %s will not be provisioned nor will its configuration be validated",
 							durableQueueType, name));
 				}
@@ -174,6 +174,11 @@ public class SolaceQueueProvisioner
 			logger.info(String.format("Connected test consumer flow to queue %s, closing it", name));
 		} catch (JCSMPException e) {
 			String msg = String.format("Failed to connect test consumer flow to queue %s", name);
+
+			if (isDurable && !doDurableProvisioning) {
+				msg += ". Provisioning is disabled, queue was not provisioned nor was its configuration validated.";
+			}
+
 			if (e instanceof InvalidOperationException && !isDurable) {
 				msg += ". If the Solace client is not capable of creating temporary queues, consider assigning this consumer to a group?";
 			}
@@ -206,7 +211,7 @@ public class SolaceQueueProvisioner
 				jcsmpSession.addSubscription(queue, topic, JCSMPSession.WAIT_FOR_CONFIRM);
 			} catch (JCSMPErrorResponseException e) {
 				if (e.getSubcodeEx() == JCSMPErrorResponseSubcodeEx.SUBSCRIPTION_ALREADY_PRESENT) {
-					logger.warn(String.format(
+					logger.info(String.format(
 							"Queue %s is already subscribed to topic %s, SUBSCRIPTION_ALREADY_PRESENT error will be ignored...",
 							queue.getName(), topicName));
 				} else {
