@@ -3,13 +3,30 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
+import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties;
+import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
+import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solace.spring.cloud.stream.binder.util.SolaceProvisioningUtil;
+import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
+import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.DeliveryMode;
 import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.JCSMPException;
+import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.JCSMPRequestTimeoutException;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
+import com.solacesystems.jcsmp.Requestor;
+import com.solacesystems.jcsmp.Topic;
+import com.solacesystems.jcsmp.XMLMessage;
+import com.solacesystems.jcsmp.XMLMessageConsumer;
+import com.solacesystems.jcsmp.XMLMessageListener;
+import com.solacesystems.jcsmp.impl.JCSMPBasicSession;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.cloud.stream.binder.AbstractMessageChannelBinder;
 import org.springframework.cloud.stream.binder.BinderSpecificPropertiesProvider;
@@ -17,17 +34,15 @@ import org.springframework.cloud.stream.binder.DefaultPollableMessageSource;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.binder.ExtendedPropertiesBinder;
-import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
-import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties;
-import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
-import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
 import org.springframework.integration.core.MessageProducer;
 import org.springframework.integration.support.DefaultErrorMessageStrategy;
 import org.springframework.integration.support.ErrorMessageStrategy;
+import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
+import org.springframework.messaging.MessagingException;
 
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -46,6 +61,7 @@ public class SolaceMessageChannelBinder
 	private final AtomicBoolean consumersRemoteStopFlag = new AtomicBoolean(false);
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
 	private SolaceExtendedBindingProperties extendedBindingProperties = new SolaceExtendedBindingProperties();
+	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 
 	private static final SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
 
@@ -193,5 +209,53 @@ public class SolaceMessageChannelBinder
 				provisioningProvider.addSubscriptionToQueue(queue, topic, properties.getExtension());
 			}
 		};
+	}
+
+	public Message<?> sendRequest(String topic, Message<?> message) throws MessagingException {
+		return sendRequest(topic, message, 30_000);
+	}
+
+	public Message<?> sendRequest(String topic, Message<?> requestMsg, int timeout) throws MessagingException {
+		createEmptyConsumerIfNonExists();
+
+		BytesXMLMessage responseBytesXMLMessage;
+		Topic targetTopic = JCSMPFactory.onlyInstance().createTopic(topic);
+		try {
+			XMLMessage xmlMessage = xmlMessageMapper.map(requestMsg, new SolaceConsumerProperties());
+			xmlMessage.setDeliveryMode(DeliveryMode.DIRECT);
+
+			final Requestor requestor = jcsmpSession.createRequestor();
+			responseBytesXMLMessage = requestor.request(xmlMessage, timeout, targetTopic);
+
+		} catch (JCSMPRequestTimeoutException e) {
+			throw new MessagingException(
+					requestMsg,
+					String.format("Timeout of request reply message to topic %s", targetTopic.getName()),
+					e);
+		} catch (JCSMPException e) {
+			throw new MessagingException(
+					requestMsg,
+					String.format("Unable to send request message to topic %s", targetTopic.getName()),
+					e);
+		}
+
+		try {
+			return xmlMessageMapper.map(responseBytesXMLMessage);
+		} catch (SolaceMessageConversionException e) {
+			throw new MessagingException(requestMsg, "Response can not be mapped", e);
+		}
+	}
+
+	private void createEmptyConsumerIfNonExists() {
+		if (jcsmpSession instanceof JCSMPBasicSession && ((JCSMPBasicSession)jcsmpSession).getConsumer() != null) {
+			return;
+		}
+
+		try {
+			final XMLMessageConsumer consumer = jcsmpSession.getMessageConsumer((XMLMessageListener) null);
+			consumer.start();
+		} catch (JCSMPException e) {
+			throw new MessagingException("Unable to start anonymous consumer", e);
+		}
 	}
 }

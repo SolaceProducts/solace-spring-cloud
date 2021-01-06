@@ -2,13 +2,9 @@ package com.solace.spring.cloud.stream.binder.outbound;
 
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
+import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
-import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPFactory;
-import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.Topic;
-import com.solacesystems.jcsmp.XMLMessage;
-import com.solacesystems.jcsmp.XMLMessageProducer;
+import com.solacesystems.jcsmp.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.binder.BinderHeaders;
@@ -54,12 +50,16 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 			throw handleMessagingException(msg0, message, new ClosedChannelBindingException(msg1));
 		}
 
-		Topic targetTopic = topic;
+		Destination targetTopic = topic;
 
 		try {
-			String targetDestinationHeader = message.getHeaders().get(BinderHeaders.TARGET_DESTINATION, String.class);
-			if (StringUtils.hasText(targetDestinationHeader)) {
-				targetTopic = JCSMPFactory.onlyInstance().createTopic(targetDestinationHeader);
+			Object targetDestinationHeader = message.getHeaders().get(BinderHeaders.TARGET_DESTINATION);
+			if (targetDestinationHeader instanceof String && StringUtils.hasText((String)targetDestinationHeader)) {
+				targetTopic = JCSMPFactory.onlyInstance().createTopic((String)targetDestinationHeader);
+			} else if (targetDestinationHeader instanceof Destination) {
+				targetTopic = (Destination) targetDestinationHeader;
+			} else if (targetDestinationHeader != null) {
+				throw new IllegalArgumentException("Incorrect type specified for header '" + BinderHeaders.TARGET_DESTINATION + "'. Expected [String or Destination] but actual type is [" + targetDestinationHeader.getClass() + "]");
 			}
 		} catch (IllegalArgumentException e) {
 			throw handleMessagingException(

@@ -117,6 +117,14 @@ public final class SolaceHeaders {
 	public static final String REPLY_TO = PREFIX + "replyTo";
 
 	/**
+	 * <p><b>Acceptable Value Type:</b> {@link Boolean}</p>
+	 * <p><b>Access:</b> Read/Write</p>
+	 * <br>
+	 * <p>Whether the message is a reply message of a request/reply.</p>
+	 */
+	public static final String REPLY_MESSAGE = PREFIX + "replyMessage";
+
+	/**
 	 * <p><b>Acceptable Value Type:</b> {@link String}</p>
 	 * <p><b>Access:</b> Read/Write</p>
 	 * <br>

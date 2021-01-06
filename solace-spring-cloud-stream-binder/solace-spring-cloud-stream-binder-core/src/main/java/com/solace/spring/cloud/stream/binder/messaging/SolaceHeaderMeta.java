@@ -23,6 +23,7 @@ public class SolaceHeaderMeta<T> implements HeaderMeta<T> {
 			{SolaceHeaders.RECEIVE_TIMESTAMP, new SolaceHeaderMeta<>(Long.class, XMLMessage::getReceiveTimestamp, null)},
 			{SolaceHeaders.REDELIVERED, new SolaceHeaderMeta<>(Boolean.class, XMLMessage::getRedelivered, null)},
 			{SolaceHeaders.REPLY_TO, new SolaceHeaderMeta<>(Destination.class, XMLMessage::getReplyTo, XMLMessage::setReplyTo)},
+			{SolaceHeaders.REPLY_MESSAGE, new SolaceHeaderMeta<>(Boolean.class, XMLMessage::isReplyMessage, XMLMessage::setAsReplyMessage)},
 			{SolaceHeaders.SENDER_ID, new SolaceHeaderMeta<>(String.class, XMLMessage::getSenderId, XMLMessage::setSenderId)},
 			{SolaceHeaders.SENDER_TIMESTAMP, new SolaceHeaderMeta<>(Long.class, XMLMessage::getSenderTimestamp, XMLMessage::setSenderTimestamp)},
 			{SolaceHeaders.SEQUENCE_NUMBER, new SolaceHeaderMeta<>(Long.class, XMLMessage::getSequenceNumber, XMLMessage::setSequenceNumber)},
