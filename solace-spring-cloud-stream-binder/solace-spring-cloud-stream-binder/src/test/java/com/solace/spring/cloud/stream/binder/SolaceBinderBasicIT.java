@@ -21,7 +21,6 @@ import com.solacesystems.jcsmp.Queue;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.Assume;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
@@ -68,7 +67,6 @@ import static org.hamcrest.Matchers.is;
  * inherited by {@link PartitionCapableBinderTests PartitionCapableBinderTests}
  * along with basic tests specific to the Solace Spring Cloud Stream Binder.
  */
-@RunWith(SpringRunner.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigFileApplicationContextInitializer.class)
 public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	// NOT YET SUPPORTED ---------------------------------
@@ -261,7 +259,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		}
 
 		// Give some time for the message to actually ack off the original queue
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		List<MonitorMsgVpnQueueMsg> enqueuedMessages = sempV2Api.monitor()
 				.getMsgVpnQueueMsgs(vpnName, queueName, 2, null, null, null)
@@ -316,7 +314,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		assertThat(latch.await(2, TimeUnit.MINUTES)).isTrue();
 
 		// Give some time for failed message to ack
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		List<MonitorMsgVpnQueueTxFlow> txFlows = sempV2Api.monitor()
 				.getMsgVpnQueueTxFlows(vpnName, queueName, 2, null, null, null)
@@ -385,7 +383,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		}
 
 		// Give some time for the message to actually ack off the original queue
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		List<MonitorMsgVpnQueueMsg> enqueuedMessages = sempV2Api.monitor()
 				.getMsgVpnQueueMsgs((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
@@ -524,7 +522,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		}
 
 		// Give some time for the message to actually ack off the original queue
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		List<MonitorMsgVpnQueueMsg> enqueuedMessages = sempV2Api.monitor()
 				.getMsgVpnQueueMsgs(vpnName, queueName, 2, null, null, null)
@@ -578,7 +576,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		assertThat(gotMessage).isTrue();
 
 		// Give some time for failed message to ack
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		List<MonitorMsgVpnQueueTxFlow> txFlows = sempV2Api.monitor()
 				.getMsgVpnQueueTxFlows(vpnName, queueName, 2, null, null, null)
@@ -651,7 +649,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		}
 
 		// Give some time for the message to actually ack off the original queue
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		List<MonitorMsgVpnQueueMsg> enqueuedMessages = sempV2Api.monitor()
 				.getMsgVpnQueueMsgs((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),

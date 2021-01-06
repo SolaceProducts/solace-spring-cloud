@@ -3,7 +3,7 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
-import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredSpringRunner;
+import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.Test;
@@ -33,7 +33,7 @@ import static org.junit.Assert.fail;
 /**
  * All tests regarding messaging which use a dynamic configuration on a message-by-message basis.
  */
-@RunWith(InheritedTestsFilteredSpringRunner.class)
+@RunWith(InheritedTestsFilteredRunner.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigFileApplicationContextInitializer.class)
 @IgnoreInheritedTests
 public class SolaceBinderDynamicMessagingIT extends SolaceBinderITBase {

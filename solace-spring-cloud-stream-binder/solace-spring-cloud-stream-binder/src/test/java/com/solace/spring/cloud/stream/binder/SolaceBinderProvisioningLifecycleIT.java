@@ -4,7 +4,7 @@ import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
-import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredSpringRunner;
+import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.spring.cloud.stream.binder.test.util.ThrowingFunction;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
@@ -60,7 +60,7 @@ import static org.hamcrest.Matchers.is;
 /**
  * All tests which modify the default provisioning lifecycle.
  */
-@RunWith(InheritedTestsFilteredSpringRunner.class)
+@RunWith(InheritedTestsFilteredRunner.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigFileApplicationContextInitializer.class)
 @IgnoreInheritedTests
 public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {

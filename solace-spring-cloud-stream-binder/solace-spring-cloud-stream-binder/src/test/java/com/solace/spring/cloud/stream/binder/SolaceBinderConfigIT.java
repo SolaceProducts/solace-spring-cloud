@@ -2,7 +2,7 @@ package com.solace.spring.cloud.stream.binder;
 
 import com.solace.spring.cloud.stream.binder.config.SolaceServiceAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
-import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredSpringRunner;
+import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnClient;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import org.assertj.core.api.SoftAssertions;
@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
  *
  * These are <b>NOT</b> tests regarding {@link SolaceMessageChannelBinder}.
  */
-@RunWith(InheritedTestsFilteredSpringRunner.class)
+@RunWith(InheritedTestsFilteredRunner.class)
 @ContextConfiguration(classes = {SolaceServiceAutoConfiguration.class},
 		initializers = {ConfigFileApplicationContextInitializer.class, SolaceBinderConfigIT.Initializer.class})
 @IgnoreInheritedTests

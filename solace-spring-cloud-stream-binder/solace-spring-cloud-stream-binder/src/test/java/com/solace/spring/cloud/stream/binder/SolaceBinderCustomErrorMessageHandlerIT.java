@@ -3,7 +3,7 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
-import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredSpringRunner;
+import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * All tests regarding custom channel-specific error message handlers
  * (i.e. overriding {@link SolaceErrorMessageHandler}).
  */
-@RunWith(InheritedTestsFilteredSpringRunner.class)
+@RunWith(InheritedTestsFilteredRunner.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class,
 		initializers = ConfigFileApplicationContextInitializer.class)
 @IgnoreInheritedTests
@@ -91,7 +91,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		softly.assertAll();
 
 		// Give some time for the message to actually ack off the original queue
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		assertThat(sempV2Api.monitor()
 				.getMsgVpnQueueMsgs(vpnName, queueName, 1, null, null, null)
@@ -157,7 +157,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		softly.assertAll();
 
 		// Give some time for the message to actually ack off the original queue
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		assertThat(sempV2Api.monitor()
 				.getMsgVpnQueueMsgs(vpnName, queueName, 1, null, null, null)
@@ -222,7 +222,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		softly.assertAll();
 
 		// Give some time for the message to actually ack off the original queue
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		assertThat(sempV2Api.monitor()
 				.getMsgVpnQueueMsgs(vpnName, queueName, 1, null, null, null)

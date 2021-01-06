@@ -1,6 +1,5 @@
 package com.solace.spring.cloud.stream.binder;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.SpringJCSMPFactory;
@@ -36,7 +35,6 @@ public abstract class ITBase {
 
 	protected JCSMPSession jcsmpSession;
 	protected SempV2Api sempV2Api;
-	protected ObjectMapper jsonMapper;
 
 	@Before
 	public void setupSempV2Api() {

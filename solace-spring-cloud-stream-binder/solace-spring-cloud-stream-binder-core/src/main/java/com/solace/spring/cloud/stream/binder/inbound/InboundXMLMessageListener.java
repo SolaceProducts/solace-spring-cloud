@@ -90,7 +90,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		} catch (JCSMPException e) {
 			String msg = String.format("Received error while trying to read message from endpoint %s",
 					flowReceiverContainer.getQueueName());
-			if ((e instanceof JCSMPTransportException || e instanceof ClosedFacilityException) && !keepPolling()) {
+			if ((e instanceof JCSMPTransportException || e instanceof ClosedFacilityException) && !keepPolling()) { // TODO Maybe we should absorb it completely?
 				logger.debug(msg, e);
 			} else {
 				logger.warn(msg, e);

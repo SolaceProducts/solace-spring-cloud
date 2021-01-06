@@ -593,7 +593,7 @@ public class FlowReceiverContainerIT extends ITBase {
 		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
 
 		// Give some time for the messages to be acknowledged off the broker
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
 		assertThat(txFlows, hasSize(1));
