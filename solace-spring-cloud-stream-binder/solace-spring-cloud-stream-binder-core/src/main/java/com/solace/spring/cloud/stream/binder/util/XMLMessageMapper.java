@@ -1,7 +1,9 @@
 package com.solace.spring.cloud.stream.binder.util;
 
+import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
-import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solacesystems.common.util.ByteArray;
 import com.solacesystems.jcsmp.BytesMessage;
 import com.solacesystems.jcsmp.DeliveryMode;
@@ -28,37 +30,16 @@ import org.springframework.util.SerializationUtils;
 import java.io.Serializable;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class XMLMessageMapper {
 	private static final Log logger = LogFactory.getLog(XMLMessageMapper.class);
 	private static final JCSMPAcknowledgementCallbackFactory ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory();
-	static final Set<String> BINDER_INTERNAL_HEADERS;
-	static final String JAVA_SERIALIZED_OBJECT_HEADER = "isJavaSerializedObject";
-	private static final String HEADER_JAVA_SERIALIZED_OBJECT_HEADER = "_" + JAVA_SERIALIZED_OBJECT_HEADER + "-";
-	static final String BINDER_VERSION_HEADER = "solaceSpringCloudStreamBinderVersion";
-	static final String BINDER_VERSION = "0.1.0"; //TODO Determine this dynamically
-
-	static {
-		BINDER_INTERNAL_HEADERS = new HashSet<>();
-		BINDER_INTERNAL_HEADERS.add(JAVA_SERIALIZED_OBJECT_HEADER);
-		BINDER_INTERNAL_HEADERS.add(BINDER_VERSION_HEADER);
-	}
-
-	public XMLMessage map(Message<?> message, SolaceProducerProperties producerProperties) {
-		XMLMessage xmlMessage = map(message);
-		xmlMessage.setDMQEligible(producerProperties.isMsgInternalDmqEligible());
-		if (producerProperties.getMsgTtl() != null) {
-			xmlMessage.setTimeToLive(producerProperties.getMsgTtl());
-		}
-		return xmlMessage;
-	}
+	static final int MESSAGE_VERSION = 1;
 
 	public XMLMessage map(Message<?> message, SolaceConsumerProperties consumerProperties) {
 		XMLMessage xmlMessage = map(message);
@@ -68,11 +49,11 @@ public class XMLMessageMapper {
 		return xmlMessage;
 	}
 
-	XMLMessage map(Message<?> message) {
+	public XMLMessage map(Message<?> message) {
 		XMLMessage xmlMessage;
 		Object payload = message.getPayload();
 		SDTMap metadata = map(message.getHeaders());
-		rethrowableCall(metadata::putString, BINDER_VERSION_HEADER, BINDER_VERSION);
+		rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
 
 		if (payload instanceof byte[]) {
 			BytesMessage bytesMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
@@ -93,7 +74,7 @@ public class XMLMessageMapper {
 		} else if (payload instanceof Serializable) {
 			BytesMessage bytesMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
 			bytesMessage.setData(rethrowableCall(SerializationUtils::serialize, payload));
-			rethrowableCall(metadata::putBoolean, JAVA_SERIALIZED_OBJECT_HEADER, true);
+			rethrowableCall(metadata::putBoolean, SolaceBinderHeaders.SERIALIZED_PAYLOAD, true);
 			xmlMessage = bytesMessage;
 		} else {
 			String msg = String.format(
@@ -115,6 +96,36 @@ public class XMLMessageMapper {
 			xmlMessage.setHTTPContentType(contentType.toString());
 		}
 
+		// Copy Solace properties from Spring Message to JCSMP XMLMessage
+		for (Map.Entry<String, SolaceHeaderMeta<?>> header : SolaceHeaderMeta.META.entrySet()) {
+			if (!header.getValue().isWritable()) {
+				continue;
+			}
+
+			Object value = message.getHeaders().get(header.getKey());
+			if (value != null) {
+				if (!header.getValue().getType().isInstance(value)) {
+					String msg = String.format(
+							"Message %s has an invalid value type for header %s. Expected %s but received %s.",
+							message.getHeaders().getId(), header.getKey(), header.getValue().getType(),
+							value.getClass());
+					SolaceMessageConversionException exception = new SolaceMessageConversionException(msg);
+					logger.warn(msg, exception);
+					throw exception;
+				}
+
+				try {
+					header.getValue().getWriteAction().accept(xmlMessage, value);
+				} catch (Exception e) {
+					String msg = String.format("Could not set %s property from header %s of message %s",
+							XMLMessage.class.getSimpleName(), header.getKey(), message.getHeaders().getId());
+					SolaceMessageConversionException exception = new SolaceMessageConversionException(msg, e);
+					logger.warn(msg, exception);
+					throw exception;
+				}
+			}
+		}
+
 		xmlMessage.setProperties(metadata);
 		xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
 		return xmlMessage;
@@ -131,8 +142,8 @@ public class XMLMessageMapper {
 		if (xmlMessage instanceof BytesMessage) {
 			payload = ((BytesMessage) xmlMessage).getData();
 			if (metadata != null &&
-					metadata.containsKey(JAVA_SERIALIZED_OBJECT_HEADER) &&
-					rethrowableCall(metadata::getBoolean, JAVA_SERIALIZED_OBJECT_HEADER)) {
+					metadata.containsKey(SolaceBinderHeaders.SERIALIZED_PAYLOAD) &&
+					rethrowableCall(metadata::getBoolean, SolaceBinderHeaders.SERIALIZED_PAYLOAD)) {
 				payload = rethrowableCall(SerializationUtils::deserialize, (byte[]) payload);
 			}
 		} else if (xmlMessage instanceof TextMessage) {
@@ -171,7 +182,16 @@ public class XMLMessageMapper {
 				.setHeaderIfAbsent(MessageHeaders.CONTENT_TYPE, xmlMessage.getHTTPContentType())
 				.setHeaderIfAbsent(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, new AtomicInteger(0));
 
-		if (setRawMessageHeader) builder.setHeader(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE, xmlMessage);
+		for (Map.Entry<String, SolaceHeaderMeta<?>> header : SolaceHeaderMeta.META.entrySet()) {
+			if (!header.getValue().isReadable()) {
+				continue;
+			}
+			builder.setHeaderIfAbsent(header.getKey(), header.getValue().getReadAction().apply(xmlMessage));
+		}
+
+		if (setRawMessageHeader) {
+			builder.setHeader(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE, xmlMessage);
+		}
 
 		return builder.build();
 	}
@@ -180,18 +200,13 @@ public class XMLMessageMapper {
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
 		for (Map.Entry<String,Object> header : headers.entrySet()) {
 			if (header.getKey().equalsIgnoreCase(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK) ||
-					header.getKey().equalsIgnoreCase(BinderHeaders.TARGET_DESTINATION)) {
+					header.getKey().equalsIgnoreCase(BinderHeaders.TARGET_DESTINATION) ||
+					SolaceHeaderMeta.META.containsKey(header.getKey()) ||
+					SolaceBinderHeaderMeta.META.containsKey(header.getKey())) {
 				continue;
 			}
 
-			Object value = header.getValue();
-
-			if (value instanceof UUID) {
-				value = SerializationUtils.serialize(value);
-				rethrowableCall(metadata::putBoolean, getIsHeaderSerializedMetadataKey(header.getKey()), true);
-			}
-
-			addSDTMapObject(metadata, header.getKey(), value);
+			addSDTMapObject(metadata, header.getKey(), header.getValue());
 		}
 		return metadata;
 	}
@@ -202,32 +217,40 @@ public class XMLMessageMapper {
 		}
 
 		Map<String,Object> headers = new HashMap<>();
+
+		// Deserialize headers
+		if (metadata.containsKey(SolaceBinderHeaders.SERIALIZED_HEADERS)) {
+			SDTStream serializedHeaders = rethrowableCall(metadata::getStream, SolaceBinderHeaders.SERIALIZED_HEADERS);
+			while (serializedHeaders.hasRemaining()) {
+				String headerName = rethrowableCall(serializedHeaders::readString);
+				Object value = SerializationUtils.deserialize(rethrowableCall(metadata::getBytes, headerName));
+				if (value instanceof ByteArray) { // Just in case...
+					value = ((ByteArray) value).getBuffer();
+				}
+				headers.put(headerName, value);
+			}
+			serializedHeaders.rewind();
+		}
+
 		metadata.keySet().stream()
-				.filter(h -> !BINDER_INTERNAL_HEADERS.contains(h))
-				.filter(h -> !h.startsWith(HEADER_JAVA_SERIALIZED_OBJECT_HEADER))
+				.filter(h -> !headers.containsKey(h))
+				.filter(h -> !SolaceBinderHeaderMeta.META.containsKey(h))
+				.filter(h -> !SolaceHeaderMeta.META.containsKey(h))
 				.forEach(h -> {
 					Object value = rethrowableCall(metadata::get, h);
-
-					String isSerializedMetadataKey = getIsHeaderSerializedMetadataKey(h);
-					if (metadata.containsKey(isSerializedMetadataKey) &&
-							rethrowableCall(metadata::getBoolean, isSerializedMetadataKey)) {
-						value = SerializationUtils.deserialize(rethrowableCall(metadata::getBytes, h));
-					}
-
 					if (value instanceof ByteArray) {
 						value = ((ByteArray) value).getBuffer();
 					}
-
 					headers.put(h, value);
 				});
 
+		if (metadata.containsKey(SolaceBinderHeaders.MESSAGE_VERSION)) {
+			int messageVersion = rethrowableCall(metadata::getInteger, SolaceBinderHeaders.MESSAGE_VERSION);
+			headers.put(SolaceBinderHeaders.MESSAGE_VERSION, messageVersion);
+		}
+
 		return new MessageHeaders(headers);
 	}
-
-	String getIsHeaderSerializedMetadataKey(String headerName) {
-		return String.format("%s%s", HEADER_JAVA_SERIALIZED_OBJECT_HEADER, headerName);
-	}
-
 
 	/**
 	 * Wrapper function which converts Serializable objects to byte[] if they aren't naturally supported by the SDTMap
@@ -238,8 +261,13 @@ public class XMLMessageMapper {
 				sdtMap.putObject(k, o);
 			} catch (IllegalArgumentException e) {
 				if (o instanceof Serializable) {
-					rethrowableCall(sdtMap::putBoolean, getIsHeaderSerializedMetadataKey(k), true);
 					rethrowableCall(sdtMap::putBytes, k, rethrowableCall(SerializationUtils::serialize, o));
+
+					if (!sdtMap.containsKey(SolaceBinderHeaders.SERIALIZED_HEADERS)) {
+						sdtMap.putStream(SolaceBinderHeaders.SERIALIZED_HEADERS,
+								JCSMPFactory.onlyInstance().createStream());
+					}
+					sdtMap.getStream(SolaceBinderHeaders.SERIALIZED_HEADERS).writeString(k);
 				} else {
 					throw e;
 				}
@@ -247,12 +275,16 @@ public class XMLMessageMapper {
 		}, key, object);
 	}
 
-	private <T,R> R rethrowableCall(ThrowingFunction<T,R> consumer, T var) {
-		return consumer.apply(var);
+	private <T,R> R rethrowableCall(ThrowingFunction<T,R> function, T var) {
+		return function.apply(var);
 	}
 
 	private <T,U> void rethrowableCall(ThrowingBiConsumer<T,U> consumer, T var0, U var1) {
 		consumer.accept(var0, var1);
+	}
+
+	private <R> R rethrowableCall(ThrowingSupplier<R> supplier) {
+		return supplier.get();
 	}
 
 	@FunctionalInterface
@@ -287,5 +319,22 @@ public class XMLMessageMapper {
 		}
 
 		void applyThrows(T t, U u) throws Exception;
+	}
+
+	@FunctionalInterface
+	private interface ThrowingSupplier<T> extends Supplier<T> {
+
+		@Override
+		default T get() {
+			try {
+				return applyThrows();
+			} catch (Exception e) {
+				SolaceMessageConversionException wrappedException = new SolaceMessageConversionException(e);
+				logger.warn(wrappedException);
+				throw wrappedException;
+			}
+		}
+
+		T applyThrows() throws Exception;
 	}
 }

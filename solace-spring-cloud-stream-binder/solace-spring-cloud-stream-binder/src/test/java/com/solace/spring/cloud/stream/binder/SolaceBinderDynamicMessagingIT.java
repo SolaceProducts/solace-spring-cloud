@@ -36,7 +36,7 @@ import static org.junit.Assert.fail;
 @RunWith(InheritedTestsFilteredSpringRunner.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigFileApplicationContextInitializer.class)
 @IgnoreInheritedTests
-public class SolaceBinderDynamicMessagingTest extends SolaceBinderTestBase {
+public class SolaceBinderDynamicMessagingIT extends SolaceBinderITBase {
 	@Test
 	public void testTargetDestination() throws Exception {
 		SolaceTestBinder binder = getBinder();
