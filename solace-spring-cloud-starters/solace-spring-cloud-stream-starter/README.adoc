@@ -496,6 +496,57 @@ Though note that there are few limitations:
 . `concurrency` &gt; 1 is ignored for polled consumers.
 . Setting `provisionDurableQueue` to `false` disables endpoint configuration validation. Meaning that point 1 cannot validated. In this scenario, it is the developer's responsibility to ensure that `concurrency` is properly configured.
 
+== Manual Message Acknowledgment
+
+Message handlers can disable auto-acknowledgement and manually invoke the acknowledgement callback as follows:
+
+[source,java]
+----
+public void consume(Message<?> message) {
+    AcknowledgmentCallback acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(message); // <1>
+    acknowledgmentCallback.noAutoAck(); // <2>
+    AckUtils.accept(acknowledgmentCallback); // <3>
+}
+----
+<1> Get the message's acknowledgement callback header
+<2> Disable auto-acknowledgement
+<3> Acknowledge the message with the `ACCEPT` status
+
+Refer to the https://docs.spring.io/spring-integration/api/org/springframework/integration/acks/AckUtils.html[AckUtils documentation] and https://javadoc.io/doc/org.springframework.integration/spring-integration-core/latest/org/springframework/integration/acks/AcknowledgmentCallback.html[AcknowledgmentCallback documentation] for more info on these objects.
+
+TIP: If manual acknowledgement is to be done outside of the message handler's thread, then make sure auto-acknowledgement is disabled within the message handler's thread and not an external one. Otherwise, the binder will auto-acknowledge the message when the message handler returns.
+
+For each acknowledgement status, the binder will perform the following actions:
+
+[cols="1,3", options="header"]
+|===
+| Status
+| Action
+
+| ACCEPT
+| Acknowledge the message.
+
+| REJECT
+| If `autoBindErrorQueue` is `true`, then republish the message onto the error queue and `ACCEPT` it. Otherwise, if the consumer is in a defined consumer group, invoke `REQUEUE`. Otherwise, the consumer is in an anonymous group, and the message will be discarded.
+
+Refer to <<Failed Message Error Handling>> for more info.
+
+| REQUEUE
+| If the consumer is in a defined consumer group, rebind the consumer flow. Otherwise, a `SolaceAcknowledgmentException` will be thrown.
+
+Refer to <<Message Redelivery>> for more info.
+|===
+
+
+NOTE: Manual acknowledgements do not support any application-internal error handling strategies (i.e. retry template, error channel forwarding, etc). Also, throwing an exception in the message handler will always acknowledge the message in some way regardless if auto-acknowledgment is disabled.
+
+[TIP]
+====
+If asynchronously acknowledging messages, then if these messages aren’t acknowledged in a timely manner, it is likely for the message consumption rate to stall due to the consumer queue’s configured "Maximum Delivered Unacknowledged Messages per Flow".
+
+This property can be configured for dynamically created queues by using https://docs.solace.com/Configuring-and-Managing/Configuring-Endpoint-Templates.htm#Configur[queue templates]. However note that as per https://docs.solace.com/PubSub-Basics/Endpoints.htm#Which[our documentation], anonymous consumer group queues (i.e. temporary queues) will not match a queue template’s name filter. Only the queue template defined in the client profile’s "Copy Settings From Queue Template" setting will apply to those.
+====
+
 == Message Target Destination
 
 Spring Cloud Stream has a reserved message header called `scst_targetDestination` (retrievable via `BinderHeaders.TARGET_DESTINATION`), which allows for messages to be redirected from their bindings' configured destination to the target destination specified by this header.
@@ -528,22 +579,38 @@ The Spring cloud stream framework already provides a number of application-inter
 
 However, after all internal error handling strategies have been exhausted, the Solace implementation of the binder would either:
 
-* Re-queue the message onto that consumer group's queue
-* Re-publishing the message to another queue (an error queue) for some external application/binding to process
+* Redeliver the failed message (default)
+* Republish the message to another queue (an error queue) for an external application/binding to process
 
-Note that both strategies cannot be used at the same time, and that enabling both of them would result in the binder treating it as if message re-queuing was disabled. That is to say, re-publishing failed messages to an error queues supersedes message re-queuing.
+=== Message Redelivery
 
-=== Message Re-Queuing
+A simple error handling strategy in which failed messages are redelivered from the consumer group's queue. This is very similar to simply enabling the retry template (setting `maxAttempts` to a value greater than `1`), but allows for the failed messages to be re-processed by the message broker.
 
-A simple error handling strategy in which failed messages are simply re-queued onto the consumer group's queue. This is very similar to simply enabling the retry template (setting maxAttempts to a value greater than 1), but allows for the failed messages to be re-processed by the message broker.
+[IMPORTANT]
+====
+The Solace API used in this binder implementation does not support individual message redelivery.
 
-=== Error Queue Processing
+Here is what happens under the hood when this is triggered:
 
-First, it must be noted that an Error Queue is different from a https://docs.solace.com/Configuring-and-Managing/Setting-Dead-Msg-Queues.htm[Dead Message Queue (DMQ)]. In particular, a DMQ is used to capture re-routed failed messages as a consequence of Solace PubSub+ messaging features such as TTL expiration or exceeding a message's max redelivery count. Whereas the purpose of an Error Queue is to capture re-routed messages which have been successfully consumed from the message broker, yet cannot be processed by this binder.
+1. The Solace flow receiver is stopped.
+2. Wait until all unacknowledged messages have been acknowledged.
+3. Rebind the flow.
 
-An Error Queue can be provisioned for a particular consumer group by setting the `autoBindErrorQueue` consumer property to `true`. This Error Queue is simply another durable queue which, aside from its purpose, is not much from the queue provisioned for consumer groups. These queues are named using a period-delimited concatenation of their consumer group name and `error`. And like the queue used for consumer groups, their endpoint properties can be configured by means of any consumer properties whose names begin with "errorQueue".
+Meaning if unacknowledged messages are not processed in a timely manner, this operation will stall.
+====
 
-Note that Error Queues are not intended to be used with anonymous consumer groups. Since the names of these consumer groups, and in turn the name of their would-be Error Queues, are randomly generated at runtime, it would provide little value to create bindings to these Error Queues because of their unpredictable naming and temporary existence.
+=== Error Queue Republishing
+
+First, it must be noted that an Error Queue is different from a https://docs.solace.com/Configuring-and-Managing/Setting-Dead-Msg-Queues.htm[Dead Message Queue (DMQ)]. In particular, a DMQ is used to capture re-routed failed messages as a consequence of Solace PubSub+ messaging features such as TTL expiration or exceeding a message's max redelivery count. Whereas the purpose of an Error Queue is to capture re-routed messages which have been successfully consumed from the message broker, yet cannot be processed by the application.
+
+An Error Queue can be provisioned for a particular consumer group by setting the `autoBindErrorQueue` consumer config option to `true`. This Error Queue is simply another durable queue which is named using a period-delimited concatenation of their consumer group name and `error`. And like the queues used for consumer groups, its endpoint properties can be configured by means of any consumer properties whose names begin with "errorQueue".
+
+[NOTE]
+====
+Error Queues should not be used with anonymous consumer groups.
+
+Since the names of anonymous consumer groups, and in turn the name of their would-be Error Queues, are randomly generated at runtime, it would provide little value to create bindings to these Error Queues because of their unpredictable naming and temporary existence. Also, your environment will be polluted with orphaned Error Queues whenever these consumers rebind.
+====
 
 == Resources
 
