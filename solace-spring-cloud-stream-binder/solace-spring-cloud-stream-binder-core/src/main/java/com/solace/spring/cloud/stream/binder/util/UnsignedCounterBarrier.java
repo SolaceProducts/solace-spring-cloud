@@ -41,6 +41,17 @@ class UnsignedCounterBarrier {
 		}
 	}
 
+	public void reset() {
+		if (Long.compareUnsigned(counter.getAndSet(0), 0) != 0) {
+			awaitLock.lock();
+			try {
+				isZero.signalAll();
+			} finally {
+				awaitLock.unlock();
+			}
+		}
+	}
+
 	public void awaitEmpty() throws InterruptedException {
 		awaitLock.lock();
 		try {

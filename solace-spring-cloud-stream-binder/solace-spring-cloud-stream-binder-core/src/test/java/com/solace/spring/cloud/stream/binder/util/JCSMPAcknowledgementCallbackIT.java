@@ -118,7 +118,9 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		}
 
 		if (flowReceiverContainer != null) {
-			Optional.ofNullable(flowReceiverContainer.get()).ifPresent(Consumer::close);
+			Optional.ofNullable(flowReceiverContainer.getFlowReceiverReference())
+					.map(FlowReceiverContainer.FlowReceiverReference::get)
+					.ifPresent(Consumer::close);
 		}
 
 		if (closeErrorQueueInfrastructureCallback != null) {

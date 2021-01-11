@@ -1,13 +1,13 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.XMLMessage;
-import com.solacesystems.jcsmp.impl.flow.FlowHandle;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
+
+import java.util.UUID;
 
 public class JCSMPAcknowledgementCallbackFactory {
 	private final FlowReceiverContainer flowReceiverContainer;
@@ -107,10 +107,11 @@ public class JCSMPAcknowledgementCallbackFactory {
 					XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
 					errorQueueInfrastructure.getErrorQueueName()));
 
-			FlowReceiver flowReceiver = flowReceiverContainer.get();
-			long expectedFlowId = messageContainer.getFlowId();
-			Long actualFlowId = flowReceiver != null ? ((FlowHandle) flowReceiver).getFlowId() : null;
-			if (flowReceiver == null || expectedFlowId != actualFlowId) {
+			FlowReceiverContainer.FlowReceiverReference flowReceiverReference =
+					flowReceiverContainer.getFlowReceiverReference();
+			UUID expectedFlowId = messageContainer.getFlowReceiverReferenceId();
+			UUID actualFlowId = flowReceiverReference != null ? flowReceiverReference.getId() : null;
+			if (flowReceiverReference == null || !expectedFlowId.equals(actualFlowId)) {
 				throw new IllegalStateException(String.format("Cannot republish failed %s %s to error queue %s , " +
 								"flow %s is closed (active flow: %s), message will be redelivered",
 						XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),

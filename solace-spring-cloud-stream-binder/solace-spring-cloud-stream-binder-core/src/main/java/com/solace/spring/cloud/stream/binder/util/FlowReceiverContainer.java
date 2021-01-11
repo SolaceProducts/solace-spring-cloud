@@ -8,11 +8,11 @@ import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.impl.flow.FlowHandle;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.lang.Nullable;
 
+import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
@@ -29,7 +29,7 @@ public class FlowReceiverContainer {
 	private final JCSMPSession session;
 	private final String queueName;
 	private final EndpointProperties endpointProperties;
-	private final AtomicReference<FlowReceiver> flowReceiverReference = new AtomicReference<>();
+	private final AtomicReference<FlowReceiverReference> flowReceiverAtomicReference = new AtomicReference<>();
 
 	/* Ideally we would cache the outgoing message IDs and remove them as they get acknowledged,
 	 * but that has way too much overhead at scale (millions or billions of unacknowledged messages).
@@ -41,7 +41,7 @@ public class FlowReceiverContainer {
 	private final UnsignedCounterBarrier unacknowledgedMessageTracker = new UnsignedCounterBarrier();
 
 	/**
-	 * {@link #rebind(long)} can be invoked while this {@link FlowReceiverContainer} is "active"
+	 * {@link #rebind(UUID)} can be invoked while this {@link FlowReceiverContainer} is "active"
 	 * (i.e. after a {@link #bind()} and before a {@link #unbind()}).
 	 * Operations which normally expect an active flow to function should use this lock's read lock to seamlessly
 	 * operate as if the flow <b>was not</b> rebinding.
@@ -61,10 +61,10 @@ public class FlowReceiverContainer {
 	/**
 	 * <p>Create the {@link FlowReceiver} and {@link FlowReceiver#start() starts} it.</p>
 	 * <p>Does nothing if this container is already bound to a {@link FlowReceiver}.</p>
-	 * @return If no flow is bound, return the new flow ID. Otherwise return the existing flow ID.
+	 * @return If no flow is bound, return the new flow reference ID. Otherwise return the existing flow reference ID.
 	 * @throws JCSMPException a JCSMP exception
 	 */
-	public long bind() throws JCSMPException {
+	public UUID bind() throws JCSMPException {
 		// Ideally would just use flowReceiverReference.compareAndSet(null, newFlowReceiver),
 		// but we can't initialize a FlowReceiver object without actually provisioning it.
 		// Explicitly using a lock here is our only option.
@@ -72,19 +72,20 @@ public class FlowReceiverContainer {
 		writeLock.lock();
 		try {
 			logger.info(String.format("Binding flow receiver container %s", id));
-			FlowReceiver existingFlowReceiver = flowReceiverReference.get();
-			if (existingFlowReceiver != null) {
-				long existingFlowId = ((FlowHandle) existingFlowReceiver).getFlowId();
-				logger.info(String.format("Flow receiver container %s is already bound to %s", id, existingFlowId));
-				return existingFlowId;
+			FlowReceiverReference existingFlowReceiverReference = flowReceiverAtomicReference.get();
+			if (existingFlowReceiverReference != null) {
+				UUID existingFlowRefId = existingFlowReceiverReference.getId();
+				logger.info(String.format("Flow receiver container %s is already bound to %s", id, existingFlowRefId));
+				return existingFlowRefId;
 			} else {
 				final ConsumerFlowProperties flowProperties = new ConsumerFlowProperties()
 						.setEndpoint(JCSMPFactory.onlyInstance().createQueue(queueName))
 						.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT)
 						.setStartState(true);
 				FlowReceiver flowReceiver = session.createFlow(null, flowProperties, endpointProperties);
-				flowReceiverReference.set(flowReceiver);
-				return ((FlowHandle) flowReceiver).getFlowId();
+				FlowReceiverReference newFlowReceiverReference = new FlowReceiverReference(flowReceiver);
+				flowReceiverAtomicReference.set(newFlowReceiverReference);
+				return newFlowReceiverReference.getId();
 			}
 		} finally {
 			writeLock.unlock();
@@ -98,10 +99,11 @@ public class FlowReceiverContainer {
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
-			FlowReceiver flowReceiver = flowReceiverReference.getAndSet(null);
-			if (flowReceiver != null) {
+			FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.getAndSet(null);
+			if (flowReceiverReference != null) {
 				logger.info(String.format("Unbinding flow receiver container %s", id));
-				flowReceiver.close();
+				flowReceiverReference.get().close();
+				unacknowledgedMessageTracker.reset();
 			}
 		} finally {
 			writeLock.unlock();
@@ -109,40 +111,42 @@ public class FlowReceiverContainer {
 	}
 
 	/**
-	 * <p>Rebinds the flow if {@code flowId} matches this container's existing flow's ID.</p>
+	 * <p>Rebinds the flow if {@code flowReceiverReferenceId} matches this container's existing flow reference's ID.
+	 * </p>
 	 * <p><b>Note:</b> If the flow is bound to a temporary queue, it may lose all of its messages when rebound.</p>
-	 * @param flowId The flow ID to match.
-	 * @return The new flow ID or {@code null} if no flow was bound.
+	 * @param flowReceiverReferenceId The flow receiver reference ID to match.
+	 * @return The new flow reference ID or the existing flow reference ID if it the flow reference IDs do not match.
 	 * @throws JCSMPException a JCSMP exception
 	 * @throws InterruptedException was interrupted while waiting for the remaining messages to be acknowledged
 	 * @throws IllegalStateException flow receiver container is not bound
 	 */
-	public Long rebind(long flowId) throws JCSMPException, InterruptedException {
+	public UUID rebind(UUID flowReceiverReferenceId) throws JCSMPException, InterruptedException {
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
 			logger.info(String.format("Rebinding flow receiver container %s", id));
-			FlowReceiver flowReceiver = flowReceiverReference.get();
-			if (flowReceiver == null) {
+			FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+			if (flowReceiverReference == null) {
 				throw new IllegalStateException(String.format("Flow receiver container %s is not bound", id));
 			}
 
-			long existingFlowId = ((FlowHandle) flowReceiver).getFlowId();
-			if (flowId != existingFlowId) {
+			UUID existingFlowReceiverReferenceId = flowReceiverReference.getId();
+			if (!flowReceiverReferenceId.equals(existingFlowReceiverReferenceId)) {
 				logger.info(String.format(
-						"Skipping rebind of flow receiver container %s, flow ID %s does not match existing flow ID %s",
-						id, flowId, existingFlowId));
-				return existingFlowId;
+						"Skipping rebind of flow receiver container %s, flow receiver reference ID %s " +
+								" does not match existing flow receiver reference ID %s",
+						id, flowReceiverReferenceId, existingFlowReceiverReferenceId));
+				return existingFlowReceiverReferenceId;
 			}
 
 			logger.info(String.format("Stopping flow receiver container %s", id));
-			flowReceiver.stop();
+			flowReceiverReference.get().stop();
 			try {
 				unacknowledgedMessageTracker.awaitEmpty();
 			} catch (InterruptedException e) {
 				logger.info(String.format("Flow receiver container %s was interrupted while waiting for the " +
 						"remaining messages to be acknowledged. Starting flow.", id));
-				flowReceiver.start();
+				flowReceiverReference.get().start();
 				throw e;
 			}
 
@@ -175,32 +179,29 @@ public class FlowReceiverContainer {
 	 * @see FlowReceiver#receive(int)
 	 */
 	public MessageContainer receive(Integer timeoutInMillis) throws JCSMPException {
-		FlowReceiver flowReceiver;
-		long flowId;
+		FlowReceiverReference flowReceiverReference;
 
 		Lock readLock = readWriteLock.readLock();
 		readLock.lock();
 		try {
-			flowReceiver = flowReceiverReference.get();
-			if (flowReceiver == null) {
+			flowReceiverReference = flowReceiverAtomicReference.get();
+			if (flowReceiverReference == null) {
 				// since we have the read lock, this cannot occur due to a rebind
 				throw new IllegalStateException(String.format("Flow receiver container %s is not bound", id));
 			}
-
-			flowId = ((FlowHandle) flowReceiver).getFlowId();
 		} finally {
 			readLock.unlock();
 		}
 
 		// The flow's receive shouldn't be locked behind the read lock.
 		// This lets it be interrupt-able if the flow were to be shutdown mid-receive.
-		BytesXMLMessage xmlMessage =  timeoutInMillis != null ? flowReceiver.receive(timeoutInMillis) :
-				flowReceiver.receive();
+		BytesXMLMessage xmlMessage =  timeoutInMillis != null ? flowReceiverReference.get().receive(timeoutInMillis) :
+				flowReceiverReference.get().receive();
 		if (xmlMessage == null) {
 			return null;
 		}
 
-		MessageContainer messageContainer = new MessageContainer(xmlMessage, flowId);
+		MessageContainer messageContainer = new MessageContainer(xmlMessage, flowReceiverReference.getId());
 		unacknowledgedMessageTracker.increment();
 		return messageContainer;
 	}
@@ -228,20 +229,20 @@ public class FlowReceiverContainer {
 	 * may be passed as a parameter to this function. Failure to do so will misalign the timing for when rebinds
 	 * will occur, causing rebinds to unintentionally trigger early/late.</p>
 	 * @param messageContainer The message.
-	 * @return The new flow ID or {@code null} if no flow was bound or the message was already acknowledged.
+	 * @return The new flow reference ID or {@code null} if no flow was bound or the message was already acknowledged.
 	 * @throws JCSMPException a JCSMP exception
 	 * @throws InterruptedException was interrupted while waiting for the remaining messages to be acknowledged
 	 */
-	public Long acknowledgeRebind(MessageContainer messageContainer) throws JCSMPException, InterruptedException {
+	public UUID acknowledgeRebind(MessageContainer messageContainer) throws JCSMPException, InterruptedException {
 		if (messageContainer == null || messageContainer.isAcknowledged()) {
 			return null;
 		}
 
 		unacknowledgedMessageTracker.decrement();
 
-		Long flowId;
+		UUID flowReceiverReferenceId;
 		try {
-			flowId = rebind(messageContainer.getFlowId());
+			flowReceiverReferenceId = rebind(messageContainer.getFlowReceiverReferenceId());
 		} catch (Exception e) {
 			logger.debug("Failed to rebind, re-incrementing unacknowledged-messages counter", e);
 			unacknowledgedMessageTracker.increment();
@@ -249,7 +250,7 @@ public class FlowReceiverContainer {
 		}
 
 		messageContainer.setAcknowledged(true);
-		return flowId;
+		return flowReceiverReferenceId;
 	}
 
 	/**
@@ -259,8 +260,8 @@ public class FlowReceiverContainer {
 	 * @return The nested flow receiver.
 	 */
 	@Nullable
-	FlowReceiver get() {
-		return flowReceiverReference.get();
+	FlowReceiverReference getFlowReceiverReference() {
+		return flowReceiverAtomicReference.get();
 	}
 
 	/**
@@ -277,5 +278,43 @@ public class FlowReceiverContainer {
 
 	public String getQueueName() {
 		return queueName;
+	}
+
+	static class FlowReceiverReference {
+		private final UUID id = UUID.randomUUID();
+		private final FlowReceiver flowReceiver;
+
+		public FlowReceiverReference(FlowReceiver flowReceiver) {
+			this.flowReceiver = flowReceiver;
+		}
+
+		/**
+		 * Get the flow receiver reference ID.
+		 * This is <b>NOT</b> the actual flow ID, but just a reference ID used by this binder to identify a
+		 * particular {@link FlowReceiver} instance.
+		 * We can't use the actual flow ID for this since that can transparently change by itself due to
+		 * events such as reconnection.
+		 * @return the flow receiver reference ID.
+		 */
+		public UUID getId() {
+			return id;
+		}
+
+		public FlowReceiver get() {
+			return flowReceiver;
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+			FlowReceiverReference that = (FlowReceiverReference) o;
+			return id.equals(that.id) && flowReceiver.equals(that.flowReceiver);
+		}
+
+		@Override
+		public int hashCode() {
+			return Objects.hash(id, flowReceiver);
+		}
 	}
 }

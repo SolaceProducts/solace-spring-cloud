@@ -3,6 +3,9 @@ package com.solace.spring.cloud.stream.binder.util;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.ITBase;
+import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer.FlowReceiverReference;
+import com.solace.test.integration.semp.v2.action.model.ActionMsgVpnClientDisconnect;
+import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.ApiException;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueTxFlow;
@@ -10,7 +13,6 @@ import com.solace.test.integration.semp.v2.monitor.model.MonitorSempMetaOnlyResp
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.Consumer;
 import com.solacesystems.jcsmp.EndpointProperties;
-import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
@@ -44,6 +46,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -147,7 +150,9 @@ public class FlowReceiverContainerIT extends ITBase {
 		}
 
 		if (flowReceiverContainer != null) {
-			Optional.ofNullable(flowReceiverContainer.get()).ifPresent(Consumer::close);
+			Optional.ofNullable(flowReceiverContainer.getFlowReceiverReference())
+					.map(FlowReceiverReference::get)
+					.ifPresent(Consumer::close);
 		}
 
 		if (isDurable && jcsmpSession != null && !jcsmpSession.isClosed()) {
@@ -157,18 +162,24 @@ public class FlowReceiverContainerIT extends ITBase {
 
 	@Test
 	public void testBind() throws Exception {
-		assertNull(flowReceiverContainer.get());
-		flowReceiverContainer.bind();
+		assertNull(flowReceiverContainer.getFlowReceiverReference());
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		assertNotNull(flowReferenceId);
 
-		FlowReceiver flowReceiver1 = flowReceiverContainer.get();
-		assertNotNull(flowReceiver1);
-		assertEquals(queue, flowReceiver1.getEndpoint());
+		FlowReceiverReference flowReference1 = flowReceiverContainer.getFlowReceiverReference();
+		assertNotNull(flowReference1);
+		assertEquals(flowReferenceId, flowReference1.getId());
+		assertEquals(queue, flowReference1.get().getEndpoint());
+		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
 	}
 
 	@Test
 	public void testBindABoundFlow() throws Exception {
-		long flowId = flowReceiverContainer.bind();
-		assertEquals(flowId, flowReceiverContainer.bind());
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		assertEquals(flowReferenceId, flowReceiverContainer.bind());
+
+		FlowReceiverReference flowReference = flowReceiverContainer.getFlowReceiverReference();
+		assertNotNull(flowReference);
 
 		MonitorMsgVpnQueue queueInfo = getQueueInfo();
 		assertNotNull(queueInfo);
@@ -177,24 +188,28 @@ public class FlowReceiverContainerIT extends ITBase {
 
 		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
 		assertThat(txFlows, hasSize(1));
-		assertEquals((Long) flowId, txFlows.get(0).getFlowId());
+		assertEquals((Long) ((FlowHandle) flowReference.get()).getFlowId(), txFlows.get(0).getFlowId());
 	}
 
 	@Test
 	public void testBindAnUnboundFlow() throws Exception {
-		long flowId = flowReceiverContainer.bind();
+		UUID flowReferenceId = flowReceiverContainer.bind();
 		flowReceiverContainer.unbind();
-		long reboundFlowId = flowReceiverContainer.bind();
 
-		assertNotEquals(flowId, reboundFlowId);
+		UUID reboundFlowReferenceId = flowReceiverContainer.bind();
+		assertNotEquals(flowReferenceId, reboundFlowReferenceId);
+
+		FlowReceiverReference flowReference = flowReceiverContainer.getFlowReceiverReference();
+		assertNotNull(flowReference);
+
 		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
 		assertThat(txFlows, hasSize(1));
-		assertEquals((Long) reboundFlowId, txFlows.get(0).getFlowId());
+		assertEquals((Long) ((FlowHandle) flowReference.get()).getFlowId(), txFlows.get(0).getFlowId());
 	}
 
 	@Test
 	public void testBindWhileRebinding() throws Exception {
-		long flowId = flowReceiverContainer.bind();
+		UUID flowReferenceId = flowReceiverContainer.bind();
 
 		CountDownLatch midRebindLatch = new CountDownLatch(1);
 		CountDownLatch finishRebindLatch = new CountDownLatch(1);
@@ -207,24 +222,25 @@ public class FlowReceiverContainerIT extends ITBase {
 
 		ExecutorService executorService = Executors.newFixedThreadPool(2);
 		try {
-			Future<Long> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowId));
+			Future<UUID> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowReferenceId));
 			assertTrue(midRebindLatch.await(1, TimeUnit.MINUTES));
-			Future<Long> bindFuture = executorService.submit(() -> flowReceiverContainer.bind());
+			Future<UUID> bindFuture = executorService.submit(() -> flowReceiverContainer.bind());
 			executorService.shutdown();
 
 			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 			assertFalse(bindFuture.isDone());
 
 			finishRebindLatch.countDown();
-			Long rebindFlowId = rebindFuture.get(1, TimeUnit.MINUTES);
-			assertThat(rebindFlowId, allOf(notNullValue(), not(equalTo(flowId))));
+			UUID rebindFlowReferenceId = rebindFuture.get(1, TimeUnit.MINUTES);
+			assertThat(rebindFlowReferenceId, allOf(notNullValue(), not(equalTo(flowReferenceId))));
 
-			Long bindFlowId = bindFuture.get(1, TimeUnit.MINUTES);
-			assertThat(bindFlowId, allOf(notNullValue(), not(equalTo(flowId)), equalTo(rebindFlowId)));
+			UUID bindFlowReferenceId = bindFuture.get(1, TimeUnit.MINUTES);
+			assertThat(bindFlowReferenceId, allOf(notNullValue(),
+					not(equalTo(flowReferenceId)), equalTo(rebindFlowReferenceId)));
 
-			FlowReceiver flowReceiver = flowReceiverContainer.get();
-			assertNotNull(flowReceiver);
-			long currentFlowId = ((FlowHandle) flowReceiver).getFlowId();
+			FlowReceiverReference flowReference = flowReceiverContainer.getFlowReceiverReference();
+			assertNotNull(flowReference);
+			long currentFlowId = ((FlowHandle) flowReference.get()).getFlowId();
 
 			MonitorMsgVpnQueue queueInfo = getQueueInfo();
 			assertNotNull(queueInfo);
@@ -233,7 +249,7 @@ public class FlowReceiverContainerIT extends ITBase {
 
 			List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
 			assertThat(txFlows, hasSize(1));
-			assertThat(txFlows.get(0).getFlowId(), allOf(notNullValue(), equalTo(bindFlowId), equalTo(currentFlowId)));
+			assertThat(txFlows.get(0).getFlowId(), allOf(notNullValue(), equalTo(currentFlowId)));
 		} finally {
 			executorService.shutdownNow();
 		}
@@ -241,7 +257,7 @@ public class FlowReceiverContainerIT extends ITBase {
 
 	@Test
 	public void testBindWhileReceiving() throws Exception {
-		long flowId = flowReceiverContainer.bind();
+		UUID flowReferenceId = flowReceiverContainer.bind();
 		ExecutorService executorService = Executors.newSingleThreadExecutor();
 		try {
 			Future<MessageContainer> receiveFuture = executorService.submit(() -> flowReceiverContainer.receive());
@@ -250,9 +266,9 @@ public class FlowReceiverContainerIT extends ITBase {
 			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 			assertFalse(receiveFuture.isDone());
 
-			long newFlowId = flowReceiverContainer.bind();
-			assertNotNull(flowReceiverContainer.get());
-			assertEquals(flowId, newFlowId);
+			UUID newFlowReferenceId = flowReceiverContainer.bind();
+			assertNotNull(flowReceiverContainer.getFlowReceiverReference());
+			assertEquals(flowReferenceId, newFlowReferenceId);
 			assertThat(getTxFlows(2, null), hasSize(1));
 
 			producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
@@ -267,8 +283,8 @@ public class FlowReceiverContainerIT extends ITBase {
 		CyclicBarrier barrier = new CyclicBarrier(30);
 		ExecutorService executorService = Executors.newFixedThreadPool(barrier.getParties());
 		try {
-			Set<Future<Long>> futures = IntStream.range(0, barrier.getParties())
-					.mapToObj(i -> (Callable<Long>) () -> {
+			Set<Future<UUID>> futures = IntStream.range(0, barrier.getParties())
+					.mapToObj(i -> (Callable<UUID>) () -> {
 						barrier.await();
 						return flowReceiverContainer.bind();
 					})
@@ -276,13 +292,19 @@ public class FlowReceiverContainerIT extends ITBase {
 					.collect(Collectors.toSet());
 			executorService.shutdown();
 
-			List<Long> newFlowIds = futures.stream()
-					.map((ThrowingFunction<Future<Long>, Long>) f -> f.get(1, TimeUnit.MINUTES))
+			List<UUID> newFlowReferenceIds = futures.stream()
+					.map((ThrowingFunction<Future<UUID>, UUID>) f -> f.get(1, TimeUnit.MINUTES))
 					.collect(Collectors.toList());
-			assertThat(newFlowIds.stream().distinct().collect(Collectors.toList()), hasSize(1));
+			assertThat(newFlowReferenceIds.stream().distinct().collect(Collectors.toList()), hasSize(1));
 
-			Long newFlowId = newFlowIds.stream().filter(Objects::nonNull).findAny().orElse(null);
-			assertNotNull(newFlowId);
+			UUID newFlowReferenceId = newFlowReferenceIds.stream()
+					.filter(Objects::nonNull)
+					.findAny()
+					.orElse(null);
+			assertNotNull(newFlowReferenceId);
+
+			FlowReceiverReference flowReference = flowReceiverContainer.getFlowReceiverReference();
+			assertNotNull(flowReference);
 
 			MonitorMsgVpnQueue queueInfo = getQueueInfo();
 			assertNotNull(queueInfo);
@@ -291,7 +313,7 @@ public class FlowReceiverContainerIT extends ITBase {
 
 			List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
 			assertThat(txFlows, hasSize(1));
-			assertEquals(newFlowId, txFlows.get(0).getFlowId());
+			assertEquals((Long) ((FlowHandle) flowReference.get()).getFlowId(), txFlows.get(0).getFlowId());
 		} finally {
 			executorService.shutdownNow();
 		}
@@ -301,7 +323,7 @@ public class FlowReceiverContainerIT extends ITBase {
 	public void testUnbind() throws Exception {
 		flowReceiverContainer.bind();
 		flowReceiverContainer.unbind();
-		assertNull(flowReceiverContainer.get());
+		assertNull(flowReceiverContainer.getFlowReceiverReference());
 		assertThat(getTxFlows(1, null), hasSize(0));
 	}
 
@@ -334,7 +356,7 @@ public class FlowReceiverContainerIT extends ITBase {
 
 	@Test
 	public void testUnbindWhileRebinding() throws Exception {
-		long flowId = flowReceiverContainer.bind();
+		UUID flowReferenceId = flowReceiverContainer.bind();
 
 		CountDownLatch midRebindLatch = new CountDownLatch(1);
 		CountDownLatch finishRebindLatch = new CountDownLatch(1);
@@ -346,7 +368,7 @@ public class FlowReceiverContainerIT extends ITBase {
 
 		ExecutorService executorService = Executors.newFixedThreadPool(2);
 		try {
-			Future<Long> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowId));
+			Future<UUID> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowReferenceId));
 			assertTrue(midRebindLatch.await(1, TimeUnit.MINUTES));
 			Future<?> unbindFuture = executorService.submit(() -> flowReceiverContainer.unbind());
 			executorService.shutdown();
@@ -355,9 +377,10 @@ public class FlowReceiverContainerIT extends ITBase {
 			assertFalse(unbindFuture.isDone());
 
 			finishRebindLatch.countDown();
-			assertThat(rebindFuture.get(1, TimeUnit.MINUTES), allOf(notNullValue(), not(equalTo(flowId))));
+			assertThat(rebindFuture.get(1, TimeUnit.MINUTES),
+					allOf(notNullValue(), not(equalTo(flowReferenceId))));
 
-			assertNull(flowReceiverContainer.get());
+			assertNull(flowReceiverContainer.getFlowReceiverReference());
 
 			MonitorMsgVpnQueue queueInfo = getQueueInfo();
 			if (isDurable) {
@@ -388,7 +411,7 @@ public class FlowReceiverContainerIT extends ITBase {
 			assertFalse(receiveFuture.isDone());
 
 			flowReceiverContainer.unbind();
-			assertNull(flowReceiverContainer.get());
+			assertNull(flowReceiverContainer.getFlowReceiverReference());
 			assertThat(getTxFlows(1, null), hasSize(0));
 
 			thrown.expect(ExecutionException.class);
@@ -398,6 +421,20 @@ public class FlowReceiverContainerIT extends ITBase {
 		} finally {
 			executorService.shutdownNow();
 		}
+	}
+
+	@Test
+	public void testUnbindWithUnacknowledgedMessage() throws Exception {
+		flowReceiverContainer.bind();
+
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		assertNotNull(flowReceiverContainer.receive());
+		assertNotNull(flowReceiverContainer.receive());
+		assertEquals(2, flowReceiverContainer.getNumUnacknowledgedMessages());
+
+		flowReceiverContainer.unbind();
+		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
 	}
 
 	@Test
@@ -439,32 +476,35 @@ public class FlowReceiverContainerIT extends ITBase {
 
 	@Test
 	public void testRebind() throws Exception {
-		long flowId1 = flowReceiverContainer.bind();
+		UUID flowReferenceId1 = flowReceiverContainer.bind();
 
-		FlowReceiver flowReceiver1 = flowReceiverContainer.get();
-		assertNotNull(flowReceiver1);
+		FlowReceiverReference flowReference1 = flowReceiverContainer.getFlowReceiverReference();
+		assertNotNull(flowReference1);
 
 		List<MonitorMsgVpnQueueTxFlow> txFlows1 = getTxFlows(2, null);
 		assertThat(txFlows1, hasSize(1));
-		assertEquals((Long) flowId1, txFlows1.get(0).getFlowId());
+		assertEquals((Long) ((FlowHandle) flowReference1.get()).getFlowId(), txFlows1.get(0).getFlowId());
 
-		Long flowId2 = flowReceiverContainer.rebind(flowId1);
-		assertNotNull(flowId2);
-		assertNotEquals((Long) flowId1, flowId2);
+		UUID flowReferenceId2 = flowReceiverContainer.rebind(flowReferenceId1);
+		assertNotNull(flowReferenceId2);
+		assertNotEquals(flowReferenceId1, flowReferenceId2);
 
-		FlowReceiver flowReceiver2 = flowReceiverContainer.get();
-		assertNotNull(flowReceiver2);
-		assertEquals(queue, flowReceiver2.getEndpoint());
-		assertEquals(flowReceiver1.getEndpoint(), flowReceiver2.getEndpoint());
+		FlowReceiverReference flowReference2 = flowReceiverContainer.getFlowReceiverReference();
+		assertNotNull(flowReference2);
+		assertEquals(queue, flowReference2.get().getEndpoint());
+		assertEquals(flowReference1.get().getEndpoint(), flowReference2.get().getEndpoint());
 
-		assertNotEquals(flowReceiver1, flowReceiver2);
-		assertNotEquals(((FlowHandle) flowReceiver1).getFlowId(), ((FlowHandle) flowReceiver2).getFlowId());
-		assertEquals(flowReceiver1.getDestination(), flowReceiver2.getDestination());
-		assertEquals(flowReceiver1.getEndpoint(), flowReceiver2.getEndpoint());
+		assertNotEquals(flowReference1, flowReference2);
+		assertNotEquals(flowReference1.getId(), flowReference2.getId());
+		assertNotEquals(flowReference1.get(), flowReference2.get());
+		assertNotEquals(((FlowHandle) flowReference1.get()).getFlowId(),
+				((FlowHandle) flowReference2.get()).getFlowId());
+		assertEquals(flowReference1.get().getDestination(), flowReference2.get().getDestination());
+		assertEquals(flowReference1.get().getEndpoint(), flowReference2.get().getEndpoint());
 
 		List<MonitorMsgVpnQueueTxFlow> txFlows2 = getTxFlows(2, null);
 		assertThat(txFlows2, hasSize(1));
-		assertEquals(flowId2, txFlows2.get(0).getFlowId());
+		assertEquals((Long) ((FlowHandle) flowReference2.get()).getFlowId(), txFlows2.get(0).getFlowId());
 	}
 
 	@Test
@@ -472,7 +512,7 @@ public class FlowReceiverContainerIT extends ITBase {
 		thrown.expect(IllegalStateException.class);
 		thrown.expectMessage("is not bound");
 		try {
-			flowReceiverContainer.rebind(123);
+			flowReceiverContainer.rebind(UUID.randomUUID());
 		} catch (IllegalStateException e) {
 			if (isDurable) {
 				MonitorMsgVpnQueue queueInfo = getQueueInfo();
@@ -493,15 +533,19 @@ public class FlowReceiverContainerIT extends ITBase {
 		producer.send(message, queue);
 		MessageContainer receivedMessage = flowReceiverContainer.receive();
 		assertNotNull(receivedMessage);
+		assertEquals(1L, flowReceiverContainer.getNumUnacknowledgedMessages());
 
-		Long reboundFlowId = flowReceiverContainer.acknowledgeRebind(receivedMessage);
-		assertNotEquals((Long) receivedMessage.getFlowId(), reboundFlowId);
-		assertEquals(reboundFlowId, flowReceiverContainer.rebind(receivedMessage.getFlowId()));
+		UUID reboundFlowReferenceId = flowReceiverContainer.acknowledgeRebind(receivedMessage);
+		assertNotEquals(receivedMessage.getFlowReceiverReferenceId(), reboundFlowReferenceId);
+		assertEquals(0L, flowReceiverContainer.getNumUnacknowledgedMessages());
+
+		assertEquals(reboundFlowReferenceId,
+				flowReceiverContainer.rebind(receivedMessage.getFlowReceiverReferenceId()));
 	}
 
 	@Test
 	public void testRebindWhileReceiving() throws Exception {
-		long flowId = flowReceiverContainer.bind();
+		UUID flowReferenceId = flowReceiverContainer.bind();
 		ExecutorService executorService = Executors.newSingleThreadExecutor();
 		try {
 			Future<MessageContainer> receiveFuture = executorService.submit(() -> flowReceiverContainer.receive());
@@ -510,9 +554,9 @@ public class FlowReceiverContainerIT extends ITBase {
 			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 			assertFalse(receiveFuture.isDone());
 
-			long newFlowId = flowReceiverContainer.rebind(flowId);
-			assertNotNull(flowReceiverContainer.get());
-			assertNotEquals(flowId, newFlowId);
+			UUID newFlowReferenceId = flowReceiverContainer.rebind(flowReferenceId);
+			assertNotNull(flowReceiverContainer.getFlowReceiverReference());
+			assertNotEquals(flowReferenceId, newFlowReferenceId);
 			assertThat(getTxFlows(2, null), hasSize(1));
 
 			thrown.expect(ExecutionException.class);
@@ -526,7 +570,7 @@ public class FlowReceiverContainerIT extends ITBase {
 
 	@Test
 	public void testRebindWithUnacknowledgedMessage() throws Exception {
-		long flowId = flowReceiverContainer.bind();
+		UUID flowReferenceId = flowReceiverContainer.bind();
 		ExecutorService executorService = Executors.newSingleThreadExecutor();
 		try {
 			producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
@@ -535,8 +579,9 @@ public class FlowReceiverContainerIT extends ITBase {
 			MessageContainer receivedMessage2 = flowReceiverContainer.receive();
 			assertNotNull(receivedMessage1);
 			assertNotNull(receivedMessage2);
+			assertEquals(2L, flowReceiverContainer.getNumUnacknowledgedMessages());
 
-			Future<Long> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowId));
+			Future<UUID> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowReferenceId));
 
 			// To make sure the flow rebind is actually blocked
 			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
@@ -548,7 +593,9 @@ public class FlowReceiverContainerIT extends ITBase {
 			assertFalse(rebindFuture.isDone());
 
 			flowReceiverContainer.acknowledge(receivedMessage2);
-			rebindFuture.get(1, TimeUnit.MINUTES);
+			assertThat(rebindFuture.get(1, TimeUnit.MINUTES),
+					allOf(notNullValue(), not(equalTo(flowReferenceId))));
+			assertEquals(0L, flowReceiverContainer.getNumUnacknowledgedMessages());
 		} finally {
 			executorService.shutdownNow();
 		}
@@ -556,7 +603,10 @@ public class FlowReceiverContainerIT extends ITBase {
 
 	@Test
 	public void testRebindInterrupt() throws Exception {
-		long flowId = flowReceiverContainer.bind();
+		UUID flowReferenceId = flowReceiverContainer.bind();
+
+		FlowReceiverReference flowReference = flowReceiverContainer.getFlowReceiverReference();
+		assertNotNull(flowReference);
 
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
@@ -569,7 +619,8 @@ public class FlowReceiverContainerIT extends ITBase {
 
 		ExecutorService executorService = Executors.newSingleThreadExecutor();
 		try {
-			Future<Long> rebindFuture = executorService.submit(() -> flowReceiverContainer.acknowledgeRebind(receivedMessage));
+			Future<UUID> rebindFuture = executorService.submit(() ->
+					flowReceiverContainer.acknowledgeRebind(receivedMessage));
 			executorService.shutdown();
 
 			// To make sure the flow rebind is actually blocked
@@ -577,14 +628,16 @@ public class FlowReceiverContainerIT extends ITBase {
 			assertFalse(rebindFuture.isDone());
 
 			executorService.shutdownNow();
-			executorService.awaitTermination(1, TimeUnit.MINUTES);
+			assertTrue(executorService.awaitTermination(1, TimeUnit.MINUTES));
 		} finally {
 			executorService.shutdownNow();
 		}
 
-		FlowReceiver flowReceiver =flowReceiverContainer.get();
-		assertNotNull(flowReceiver);
-		assertEquals(flowId, ((FlowHandle) flowReceiver).getFlowId());
+		FlowReceiverReference reboundFlowReference = flowReceiverContainer.getFlowReceiverReference();
+		assertNotNull(reboundFlowReference);
+		assertEquals(flowReferenceId, reboundFlowReference.getId());
+		assertEquals(((FlowHandle) flowReference.get()).getFlowId(),
+				((FlowHandle) reboundFlowReference.get()).getFlowId());
 
 		assertEquals(2, flowReceiverContainer.getNumUnacknowledgedMessages());
 
@@ -602,29 +655,114 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
+	public void testRebindAfterFlowReconnect() throws Exception {
+		if (!isDurable) {
+			logger.info("Test does not apply for non-durable queues");
+			return;
+		}
+
+		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+
+		UUID flowReferenceId = flowReceiverContainer.bind();
+
+		producer.send(message, queue);
+		MessageContainer receivedMessage = flowReceiverContainer.receive();
+		assertNotNull(receivedMessage);
+
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		logger.info(String.format("Disabling egress to queue %s", queue.getName()));
+		sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false),
+				null);
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		logger.info(String.format("Enabling egress to queue %s", queue.getName()));
+		sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true),
+				null);
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
+		logger.info(String.format("Initiating rebind with message container %s", receivedMessage.getId()));
+		UUID flowReferenceId2 = flowReceiverContainer.acknowledgeRebind(receivedMessage);
+		assertThat(flowReferenceId2, allOf(notNullValue(), not(equalTo(flowReferenceId))));
+		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
+
+		Mockito.verify(flowReceiverContainer, Mockito.times(1)).unbind();
+		Mockito.verify(flowReceiverContainer, Mockito.times(2)).bind(); // +1 for init bind
+
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
+		assertThat(txFlows, hasSize(1));
+		assertEquals((Long) 0L, txFlows.get(0).getAckedMsgCount());
+		assertEquals((Long) 1L, txFlows.get(0).getUnackedMsgCount());
+		assertEquals((Long) 1L, txFlows.get(0).getRedeliveredMsgCount());
+	}
+
+	@Test
+	public void testRebindAfterSessionReconnect() throws Exception {
+		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+
+		UUID flowReferenceId = flowReceiverContainer.bind();
+
+		producer.send(message, queue);
+		MessageContainer receivedMessage = flowReceiverContainer.receive();
+		assertNotNull(receivedMessage);
+
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		String clientName = (String) jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME);
+
+		logger.info(String.format("Remotely disconnecting session %s", jcsmpSession.getSessionName()));
+		sempV2Api.action().doMsgVpnClientDisconnect(vpnName, clientName, new ActionMsgVpnClientDisconnect());
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
+		logger.info(String.format("Initiating rebind with message container %s", receivedMessage.getId()));
+		UUID flowReferenceId2 = flowReceiverContainer.acknowledgeRebind(receivedMessage);
+		assertThat(flowReferenceId2, allOf(notNullValue(), not(equalTo(flowReferenceId))));
+		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
+
+		Mockito.verify(flowReceiverContainer, Mockito.times(1)).unbind();
+		Mockito.verify(flowReceiverContainer, Mockito.times(2)).bind(); // +1 for init bind
+
+		if (!isDurable) {
+			// Re-sending message since rebind deletes the temporary queue
+			producer.send(message, queue);
+		}
+
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
+		assertThat(txFlows, hasSize(1));
+		assertEquals((Long) 0L, txFlows.get(0).getAckedMsgCount());
+		assertEquals((Long) 1L, txFlows.get(0).getUnackedMsgCount());
+		assertEquals(isDurable ? (Long) 1L : (Long) 0L, txFlows.get(0).getRedeliveredMsgCount());
+	}
+
+	@Test
 	public void testConcurrentRebind() throws Exception {
 		CyclicBarrier barrier = new CyclicBarrier(30);
 
-		long flowId = flowReceiverContainer.bind();
+		UUID flowReferenceId = flowReceiverContainer.bind();
 
 		ScheduledExecutorService executorService = Executors.newScheduledThreadPool(barrier.getParties());
 		try {
-			Set<Future<Long>> futures = IntStream.range(0, barrier.getParties())
-					.mapToObj(i -> (Callable<Long>) () -> {
+			Set<Future<UUID>> futures = IntStream.range(0, barrier.getParties())
+					.mapToObj(i -> (Callable<UUID>) () -> {
 						barrier.await();
-						return flowReceiverContainer.rebind(flowId);
+						return flowReceiverContainer.rebind(flowReferenceId);
 					})
 					.map(c -> executorService.schedule(c, RandomUtils.nextInt(100), TimeUnit.MILLISECONDS))
 					.collect(Collectors.toSet());
 			executorService.shutdown();
 
-			Set<Long> newFlowIds = futures.stream()
-					.map((ThrowingFunction<Future<Long>, Long>) f -> f.get(1, TimeUnit.MINUTES))
+			Set<UUID> newFlowReferenceIds = futures.stream()
+					.map((ThrowingFunction<Future<UUID>, UUID>) f -> f.get(1, TimeUnit.MINUTES))
 					.collect(Collectors.toSet());
 			Mockito.verify(flowReceiverContainer, Mockito.times(1)).unbind();
 			Mockito.verify(flowReceiverContainer, Mockito.times(2)).bind(); // +1 for init bind
-			assertThat(newFlowIds, hasSize(1));
-			assertNotEquals((Long) flowId, newFlowIds.iterator().next());
+			assertThat(newFlowReferenceIds, hasSize(1));
+			assertNotEquals(flowReferenceId, newFlowReferenceIds.iterator().next());
 		} finally {
 			executorService.shutdownNow();
 		}
@@ -634,13 +772,14 @@ public class FlowReceiverContainerIT extends ITBase {
 	public void testReceive() throws Exception {
 		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 
-		long flowId1 = flowReceiverContainer.bind();
+		UUID flowReferenceId1 = flowReceiverContainer.bind();
 		producer.send(message, queue);
 		MessageContainer messageReceived = flowReceiverContainer.receive();
 
 		assertNotNull(messageReceived);
 		assertThat(messageReceived.getMessage(), instanceOf(TextMessage.class));
-		assertEquals(flowId1, messageReceived.getFlowId());
+		assertEquals(flowReferenceId1, messageReceived.getFlowReceiverReferenceId());
+		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
 	}
 
 	@Test
@@ -653,7 +792,7 @@ public class FlowReceiverContainerIT extends ITBase {
 	@Test
 	public void testReceiveWhileRebinding() throws Exception {
 		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-		long flowId = flowReceiverContainer.bind();
+		UUID flowReferenceId = flowReceiverContainer.bind();
 		producer.send(message, queue);
 
 		CountDownLatch midRebindLatch = new CountDownLatch(1);
@@ -666,7 +805,7 @@ public class FlowReceiverContainerIT extends ITBase {
 
 		ExecutorService executorService = Executors.newFixedThreadPool(2);
 		try {
-			Future<Long> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowId));
+			Future<UUID> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowReferenceId));
 			assertTrue(midRebindLatch.await(1, TimeUnit.MINUTES));
 			Future<MessageContainer> receiveFuture = executorService.submit(() -> flowReceiverContainer.receive());
 			executorService.shutdown();
@@ -675,7 +814,8 @@ public class FlowReceiverContainerIT extends ITBase {
 			assertFalse(receiveFuture.isDone());
 
 			finishRebindLatch.countDown();
-			assertThat(rebindFuture.get(1, TimeUnit.MINUTES), allOf(notNullValue(), not(equalTo(flowId))));
+			assertThat(rebindFuture.get(1, TimeUnit.MINUTES),
+					allOf(notNullValue(), not(equalTo(flowReferenceId))));
 
 			if (!isDurable) {
 				// Re-sending message since rebind deletes the temporary queue
@@ -691,14 +831,14 @@ public class FlowReceiverContainerIT extends ITBase {
 	public void testReceiveWithTimeout() throws Exception {
 		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 
-		long flowId1 = flowReceiverContainer.bind();
+		UUID flowReferenceId = flowReceiverContainer.bind();
 		producer.send(message, queue);
 		MessageContainer messageReceived =
 				flowReceiverContainer.receive((int) TimeUnit.MINUTES.toMillis(5));
 
 		assertNotNull(messageReceived);
 		assertThat(messageReceived.getMessage(), instanceOf(TextMessage.class));
-		assertEquals(flowId1, messageReceived.getFlowId());
+		assertEquals(flowReferenceId, messageReceived.getFlowReceiverReferenceId());
 	}
 
 	@Test
@@ -726,27 +866,96 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
+	public void testReceiveInterruptedByFlowReconnect() throws Exception {
+		if (!isDurable) {
+			logger.info("Test does not apply for non-durable queues");
+			return;
+		}
+
+		flowReceiverContainer.bind();
+
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<MessageContainer> receiveFuture = executorService.submit(() -> flowReceiverContainer.receive());
+			executorService.shutdown();
+
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(receiveFuture.isDone());
+
+			logger.info(String.format("Disabling egress to queue %s", queue.getName()));
+			sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false),
+					null);
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+			logger.info(String.format("Sending message to queue %s", queue.getName()));
+			producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+
+			logger.info(String.format("Enabling egress to queue %s", queue.getName()));
+			sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true),
+					null);
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+			assertNotNull(receiveFuture.get(1, TimeUnit.MINUTES));
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
+	public void testReceiveInterruptedBySessionReconnect() throws Exception {
+		flowReceiverContainer.bind();
+
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		String clientName = (String) jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME);
+
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<MessageContainer> receiveFuture = executorService.submit(() -> flowReceiverContainer.receive());
+			executorService.shutdown();
+
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(receiveFuture.isDone());
+
+			logger.info(String.format("Remotely disconnecting session %s", jcsmpSession.getSessionName()));
+			sempV2Api.action().doMsgVpnClientDisconnect(vpnName, clientName, new ActionMsgVpnClientDisconnect());
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+			logger.info(String.format("Sending message to queue %s", queue.getName()));
+			producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+
+			assertNotNull(receiveFuture.get(1, TimeUnit.MINUTES));
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
 	public void testReceiveAfterRebind() throws Exception {
 		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 
-		long flowId1 = flowReceiverContainer.bind();
+		UUID flowReferenceId1 = flowReceiverContainer.bind();
 
 		producer.send(message, queue);
 
 		MessageContainer messageReceived = flowReceiverContainer.receive();
 		assertNotNull(messageReceived);
 		assertThat(messageReceived.getMessage(), instanceOf(TextMessage.class));
-		assertEquals(flowId1, messageReceived.getFlowId());
+		assertEquals(flowReferenceId1, messageReceived.getFlowReceiverReferenceId());
+		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
 
-		Long flowId2 = flowReceiverContainer.acknowledgeRebind(messageReceived);
-		assertNotNull(flowId2);
+		UUID flowReferenceId2 = flowReceiverContainer.acknowledgeRebind(messageReceived);
+		assertNotNull(flowReferenceId2);
+		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
 
 		producer.send(message, queue);
 
 		messageReceived = flowReceiverContainer.receive();
 		assertNotNull(messageReceived);
 		assertThat(messageReceived.getMessage(), instanceOf(TextMessage.class));
-		assertEquals(flowId2, (Long) messageReceived.getFlowId());
+		assertEquals(flowReferenceId2, messageReceived.getFlowReceiverReferenceId());
+		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
 	}
 
 	@Test
@@ -755,16 +964,103 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
+	public void testAcknowledgeAfterUnbind() throws Exception {
+		flowReceiverContainer.bind();
+
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer messageReceived = flowReceiverContainer.receive();
+		assertNotNull(messageReceived);
+
+		flowReceiverContainer.unbind();
+
+		thrown.expect(IllegalStateException.class);
+		thrown.expectMessage("Attempted an operation on a closed message consumer");
+		flowReceiverContainer.acknowledge(messageReceived);
+	}
+
+	@Test
+	public void testAcknowledgeAfterFlowReconnect() throws Exception {
+		if (!isDurable) {
+			logger.info("Test does not apply for non-durable queues");
+			return;
+		}
+
+		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+
+		flowReceiverContainer.bind();
+
+		producer.send(message, queue);
+		MessageContainer receivedMessage = flowReceiverContainer.receive();
+		assertNotNull(receivedMessage);
+
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		logger.info(String.format("Disabling egress to queue %s", queue.getName()));
+		sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false),
+				null);
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		logger.info(String.format("Enabling egress to queue %s", queue.getName()));
+		sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true),
+				null);
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
+		logger.info(String.format("Acknowledging message %s", receivedMessage.getMessage().getMessageId()));
+		flowReceiverContainer.acknowledge(receivedMessage);
+		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
+
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
+		assertThat(txFlows, hasSize(1));
+		assertEquals((Long) 1L, txFlows.get(0).getAckedMsgCount());
+		assertEquals((Long) 0L, txFlows.get(0).getUnackedMsgCount());
+		assertEquals((Long) 1L, txFlows.get(0).getRedeliveredMsgCount());
+	}
+
+	@Test
+	public void testAcknowledgeAfterSessionReconnect() throws Exception {
+		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+
+		flowReceiverContainer.bind();
+
+		producer.send(message, queue);
+		MessageContainer receivedMessage = flowReceiverContainer.receive();
+		assertNotNull(receivedMessage);
+
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		String clientName = (String) jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME);
+
+		logger.info(String.format("Remotely disconnecting session %s", jcsmpSession.getSessionName()));
+		sempV2Api.action().doMsgVpnClientDisconnect(vpnName, clientName, new ActionMsgVpnClientDisconnect());
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
+		logger.info(String.format("Acknowledging message %s", receivedMessage.getMessage().getMessageId()));
+		flowReceiverContainer.acknowledge(receivedMessage);
+		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
+
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+
+		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
+		assertThat(txFlows, hasSize(1));
+		assertEquals((Long) 1L, txFlows.get(0).getAckedMsgCount());
+		assertEquals((Long) 0L, txFlows.get(0).getUnackedMsgCount());
+		assertEquals((Long) 1L, txFlows.get(0).getRedeliveredMsgCount());
+	}
+
+	@Test
 	@Repeat(10) // should run a few times to make sure its stable
 	public void testConcurrentAll() throws Exception {
-		long flowId = flowReceiverContainer.bind();
+		UUID flowReferenceId = flowReceiverContainer.bind();
 
 		Callable<?>[] actions = new Callable[]{
 				(Callable<?>) () -> flowReceiverContainer.bind(),
 				(Callable<?>) () -> {flowReceiverContainer.unbind(); return null;},
 				(Callable<?>) () -> {
 					try {
-						return flowReceiverContainer.rebind(flowId);
+						return flowReceiverContainer.rebind(flowReferenceId);
 					} catch (IllegalStateException e) {
 						if (e.getMessage().contains("is not bound")) {
 							logger.info("Received expected exception due to no bound flow", e);

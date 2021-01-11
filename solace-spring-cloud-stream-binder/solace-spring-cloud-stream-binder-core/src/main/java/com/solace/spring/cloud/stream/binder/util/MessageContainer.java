@@ -8,12 +8,12 @@ import java.util.UUID;
 public class MessageContainer {
 	private final UUID id = UUID.randomUUID();
 	private final BytesXMLMessage message;
-	private final long flowId;
+	private final UUID flowReceiverReferenceId;
 	private boolean acknowledged;
 
-	MessageContainer(BytesXMLMessage message, long flowId) {
+	MessageContainer(BytesXMLMessage message, UUID flowReceiverReferenceId) {
 		this.message = message;
-		this.flowId = flowId;
+		this.flowReceiverReferenceId = flowReceiverReferenceId;
 	}
 
 	public UUID getId() {
@@ -24,8 +24,8 @@ public class MessageContainer {
 		return message;
 	}
 
-	public long getFlowId() {
-		return flowId;
+	public UUID getFlowReceiverReferenceId() {
+		return flowReceiverReferenceId;
 	}
 
 	public boolean isAcknowledged() {
@@ -41,7 +41,7 @@ public class MessageContainer {
 		return new StringJoiner(", ", MessageContainer.class.getSimpleName() + "[", "]")
 				.add("id=" + id)
 				.add("message=" + message)
-				.add("flowId=" + flowId)
+				.add("flowReceiverReferenceId=" + flowReceiverReferenceId)
 				.add("acknowledged=" + acknowledged)
 				.toString();
 	}

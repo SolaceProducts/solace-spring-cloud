@@ -78,6 +78,52 @@ public class UnsignedCounterBarrierTest {
 	}
 
 	@Test
+	public void testReset() {
+		UnsignedCounterBarrier unsignedCounterBarrier = new UnsignedCounterBarrier(2);
+		assertEquals(2, unsignedCounterBarrier.getCount());
+		unsignedCounterBarrier.reset();
+		assertEquals(0, unsignedCounterBarrier.getCount());
+	}
+
+	@Test
+	public void testResetUnsigned() {
+		UnsignedCounterBarrier unsignedCounterBarrier = new UnsignedCounterBarrier(-1);
+		assertEquals(-1, unsignedCounterBarrier.getCount());
+		unsignedCounterBarrier.reset();
+		assertEquals(0, unsignedCounterBarrier.getCount());
+	}
+
+	@Test
+	public void testResetTriggersConcurrentAwaitEmpty() throws Exception {
+		UnsignedCounterBarrier unsignedCounterBarrier = new UnsignedCounterBarrier(5);
+		int concurrency = 5;
+
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			ArrayList<Future<?>> futures = new ArrayList<>(concurrency);
+			for (int i = 0; i < concurrency; i++) {
+				futures.add(executorService.submit(() -> {
+					unsignedCounterBarrier.awaitEmpty();
+					return null;
+				}));
+			}
+			executorService.shutdown();
+
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			for (Future<?> future : futures) {
+				assertFalse(future.isDone());
+			}
+
+			unsignedCounterBarrier.reset();
+			for (Future<?> future : futures) {
+				future.get(1, TimeUnit.MINUTES);
+			}
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
 	public void testConcurrentAwaitEmpty() throws Exception {
 		UnsignedCounterBarrier unsignedCounterBarrier = new UnsignedCounterBarrier();
 		unsignedCounterBarrier.increment();
