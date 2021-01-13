@@ -1073,8 +1073,15 @@ public class FlowReceiverContainerIT extends ITBase {
 						logger.info(String.format("Receiving message from %s %s",
 								FlowReceiverContainer.class.getSimpleName(), flowReceiverContainer.getId()));
 						messageContainer = flowReceiverContainer.receive();
-					} catch (JCSMPTransportException | ClosedFacilityException e) {
+					} catch (JCSMPTransportException e) {
 						if (e.getMessage().contains("Consumer was closed while in receive")) {
+							logger.info("Received expected exception due to interrupt from flow shutdown", e);
+							return null;
+						} else {
+							throw e;
+						}
+					} catch (ClosedFacilityException e) {
+						if (e.getMessage().contains("Tried to call receive on a stopped message consumer")) {
 							logger.info("Received expected exception due to interrupt from flow shutdown", e);
 							return null;
 						} else {
