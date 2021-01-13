@@ -70,7 +70,7 @@ public class SolaceMessageChannelBinder
 														  ExtendedProducerProperties<SolaceProducerProperties> producerProperties,
 														  MessageChannel errorChannel) {
 		JCSMPOutboundMessageHandler handler = new JCSMPOutboundMessageHandler(
-				destination, jcsmpSession, errorChannel, sessionProducerManager);
+				destination, jcsmpSession, errorChannel, sessionProducerManager, producerProperties.getExtension());
 
 		if (errorChannel != null) {
 			handler.setErrorMessageStrategy(new DefaultErrorMessageStrategy());

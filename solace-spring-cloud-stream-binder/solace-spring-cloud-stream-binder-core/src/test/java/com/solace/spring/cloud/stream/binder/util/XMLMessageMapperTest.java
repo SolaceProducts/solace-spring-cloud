@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -482,6 +483,55 @@ public class XMLMessageMapperTest {
 
 		assertEquals(consumerProperties.getErrorMsgDmqEligible(), xmlMessage.isDMQEligible());
 		assertEquals(consumerProperties.getErrorMsgTtl().longValue(), xmlMessage.getTimeToLive());
+	}
+
+	@Test
+	public void testMapProducerSpringMessageToXMLMessage_WithExcludedHeader() throws SDTException {
+		String testPayload = "testPayload";
+		List<String> excludedHeaders = new ArrayList<>(Arrays
+				.asList("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE"));
+		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload)
+				.setHeader(
+						"io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE",
+						"any")
+				.build();
+
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders);
+		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders);
+
+		assertEquals(null, xmlMessage.getProperties()
+				.getMap("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE"));
+	}
+
+	@Test
+	public void testMapProducerSpringMessageToXMLMessage_WithExcludedHeader_ShouldNotMatchPartially() throws SDTException {
+		String testPayload = "testPayload";
+		List<String> excludedHeaders = new ArrayList<>(Arrays
+				.asList("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE"));
+		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload)
+				.setHeader(
+						"io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor",
+						"any")
+				.build();
+
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders);
+		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders);
+		assertEquals("any", xmlMessage.getProperties()
+				.get("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor"));
+	}
+
+	@Test
+	public void testMapProducerSpringMessageToXMLMessage_WithExcludedHeader_ShouldNotFilterSolaceHeader() throws SDTException {
+		String testPayload = "testPayload";
+		List<String> excludedHeaders = new ArrayList<>(Arrays
+				.asList(SolaceHeaders.CORRELATION_ID));
+		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload)
+				.setHeader(SolaceHeaders.CORRELATION_ID, "some_unique_id")
+				.build();
+
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders);
+		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders);
+		assertEquals("some_unique_id", xmlMessage.getCorrelationId());
 	}
 
 	@Test
@@ -940,7 +990,7 @@ public class XMLMessageMapperTest {
 		headers.put(key, value);
 		headers.put(BinderHeaders.TARGET_DESTINATION, "redirected-target");
 
-		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers));
+		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList());
 
 		assertThat(sdtMap.keySet(), hasItem(key));
 		assertThat(sdtMap.keySet(), hasItem(SolaceBinderHeaders.SERIALIZED_HEADERS));
@@ -961,7 +1011,7 @@ public class XMLMessageMapperTest {
 	public void testMapMessageHeadersToSDTMap_Null() throws Exception {
 		String key = "a";
 		Map<String,Object> headers = Collections.singletonMap(key, null);
-		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers));
+		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList());
 		assertThat(sdtMap.keySet(), hasItem(key));
 		assertNull(sdtMap.get(key));
 	}
@@ -972,7 +1022,7 @@ public class XMLMessageMapperTest {
 		Map<String,Object> headers = new HashMap<>();
 		JMS_INVALID_HEADER_NAMES.forEach(h -> headers.put(h, value));
 
-		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers));
+		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList());
 
 		for (String header : JMS_INVALID_HEADER_NAMES) {
 			assertThat(sdtMap.keySet(), hasItem(header));

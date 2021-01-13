@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.outbound;
 
+import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
@@ -27,6 +28,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	private final String id = UUID.randomUUID().toString();
 	private final Topic topic;
 	private final JCSMPSession jcsmpSession;
+	private final SolaceProducerProperties properties;
 	private MessageChannel errorChannel;
 	private JCSMPSessionProducerManager producerManager;
 	private XMLMessageProducer producer;
@@ -39,11 +41,13 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	public JCSMPOutboundMessageHandler(ProducerDestination destination,
 									   JCSMPSession jcsmpSession,
 									   MessageChannel errorChannel,
-									   JCSMPSessionProducerManager producerManager) {
+									   JCSMPSessionProducerManager producerManager,
+									   SolaceProducerProperties properties) {
 		this.topic = JCSMPFactory.onlyInstance().createTopic(destination.getName());
 		this.jcsmpSession = jcsmpSession;
 		this.errorChannel = errorChannel;
 		this.producerManager = producerManager;
+		this.properties = properties;
 	}
 
 	@Override
@@ -66,7 +70,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 					String.format("Unable to parse header %s", BinderHeaders.TARGET_DESTINATION), message, e);
 		}
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(message);
+		XMLMessage xmlMessage = xmlMessageMapper.map(message, this.properties.getHeaderExclusions());
 
 		try {
 			producer.send(xmlMessage, targetTopic);

@@ -35,6 +35,7 @@ import org.springframework.util.SerializationUtils;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -66,9 +67,13 @@ public class XMLMessageMapper {
 	}
 
 	public XMLMessage map(Message<?> message) {
+		return map(message, Collections.emptyList());
+	}
+
+	public XMLMessage map(Message<?> message, Collection<String> excludedHeaders) {
 		XMLMessage xmlMessage;
 		Object payload = message.getPayload();
-		SDTMap metadata = map(message.getHeaders());
+		SDTMap metadata = map(message.getHeaders(), excludedHeaders);
 		rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
 
 		if (payload instanceof byte[]) {
@@ -130,7 +135,7 @@ public class XMLMessageMapper {
 					throw exception;
 				}
 			} else if (header.getValue().hasOverriddenDefaultValue()) {
-					value = header.getValue().getDefaultValueOverride();
+				value = header.getValue().getDefaultValueOverride();
 			} else {
 				continue;
 			}
@@ -216,7 +221,7 @@ public class XMLMessageMapper {
 		return builder.build();
 	}
 
-	SDTMap map(MessageHeaders headers) {
+	SDTMap map(MessageHeaders headers, Collection<String> excludedHeaders) {
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
 		Set<String> serializedHeaders = new HashSet<>();
 		for (Map.Entry<String,Object> header : headers.entrySet()) {
@@ -224,6 +229,9 @@ public class XMLMessageMapper {
 					header.getKey().equalsIgnoreCase(BinderHeaders.TARGET_DESTINATION) ||
 					SolaceHeaderMeta.META.containsKey(header.getKey()) ||
 					SolaceBinderHeaderMeta.META.containsKey(header.getKey())) {
+				continue;
+			}
+			if (excludedHeaders.contains(header.getKey())){
 				continue;
 			}
 
