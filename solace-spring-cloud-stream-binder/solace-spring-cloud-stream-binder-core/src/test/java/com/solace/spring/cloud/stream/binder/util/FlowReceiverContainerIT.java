@@ -374,11 +374,13 @@ public class FlowReceiverContainerIT extends ITBase {
 			executorService.shutdown();
 
 			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(rebindFuture.isDone());
 			assertFalse(unbindFuture.isDone());
 
 			finishRebindLatch.countDown();
 			assertThat(rebindFuture.get(1, TimeUnit.MINUTES),
 					allOf(notNullValue(), not(equalTo(flowReferenceId))));
+			unbindFuture.get(1, TimeUnit.MINUTES);
 
 			assertNull(flowReceiverContainer.getFlowReceiverReference());
 
