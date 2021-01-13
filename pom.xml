@@ -31,6 +31,10 @@
         <!-- Must match ${project.parent.version} -->
         <solace.spring.boot.bom.version>1.1.0</solace.spring.boot.bom.version>
 
+        <!-- Override spring-boot version from solace-spring-boot to latest patch version -->
+        <!-- Remove this if the next version of solace-spring-boot works fine -->
+        <spring.boot.version>2.3.7.RELEASE</spring.boot.version>
+
         <solace.spring.cloud.connector.version>4.3.2-SNAPSHOT</solace.spring.cloud.connector.version>
         <solace.spring.cloud.stream-starter.version>3.0.0-SNAPSHOT</solace.spring.cloud.stream-starter.version>
 
