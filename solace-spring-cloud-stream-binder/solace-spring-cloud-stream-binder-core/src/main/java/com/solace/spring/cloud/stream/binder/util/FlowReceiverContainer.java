@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.util;
 
 import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.FlowReceiver;
@@ -8,12 +9,14 @@ import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.JCSMPTransportException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.lang.Nullable;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
@@ -30,6 +33,7 @@ public class FlowReceiverContainer {
 	private final String queueName;
 	private final EndpointProperties endpointProperties;
 	private final AtomicReference<FlowReceiverReference> flowReceiverAtomicReference = new AtomicReference<>();
+	private final AtomicBoolean isRebinding = new AtomicBoolean(false);
 
 	/* Ideally we would cache the outgoing message IDs and remove them as they get acknowledged,
 	 * but that has way too much overhead at scale (millions or billions of unacknowledged messages).
@@ -139,6 +143,7 @@ public class FlowReceiverContainer {
 				return existingFlowReceiverReferenceId;
 			}
 
+			isRebinding.set(true);
 			logger.info(String.format("Stopping flow receiver container %s", id));
 			flowReceiverReference.get().stop();
 			try {
@@ -153,6 +158,7 @@ public class FlowReceiverContainer {
 			unbind();
 			return bind();
 		} finally {
+			isRebinding.compareAndSet(true, false);
 			writeLock.unlock();
 		}
 	}
@@ -195,8 +201,20 @@ public class FlowReceiverContainer {
 
 		// The flow's receive shouldn't be locked behind the read lock.
 		// This lets it be interrupt-able if the flow were to be shutdown mid-receive.
-		BytesXMLMessage xmlMessage =  timeoutInMillis != null ? flowReceiverReference.get().receive(timeoutInMillis) :
-				flowReceiverReference.get().receive();
+		BytesXMLMessage xmlMessage;
+		try {
+			xmlMessage = timeoutInMillis != null ? flowReceiverReference.get().receive(timeoutInMillis) :
+					flowReceiverReference.get().receive();
+		} catch (JCSMPTransportException | ClosedFacilityException e) {
+			if (isRebinding.get()) {
+				logger.debug(String.format(
+						"Flow receiver container %s was interrupted by a rebind, exception will be ignored", id), e);
+				return null;
+			} else {
+				throw e;
+			}
+		}
+
 		if (xmlMessage == null) {
 			return null;
 		}
