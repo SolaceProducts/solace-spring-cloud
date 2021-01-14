@@ -9,7 +9,7 @@ import org.springframework.util.StringUtils;
 
 public class SolaceProvisioningUtil {
 	private static final String QUEUE_NAME_DELIM = ".";
-	private static final String DMQ_POSTFIX = "dmq";
+	private static final String ERROR_QUEUE_POSTFIX = "error";
 
 	private SolaceProvisioningUtil() {}
 
@@ -25,15 +25,15 @@ public class SolaceProvisioningUtil {
 		return endpointProperties;
 	}
 
-	public static EndpointProperties getDMQEndpointProperties(SolaceConsumerProperties properties) {
+	public static EndpointProperties getErrorQueueEndpointProperties(SolaceConsumerProperties properties) {
 		EndpointProperties endpointProperties = new EndpointProperties();
-		endpointProperties.setAccessType(properties.getDmqAccessType());
-		endpointProperties.setDiscardBehavior(properties.getDmqDiscardBehaviour());
-		endpointProperties.setMaxMsgRedelivery(properties.getDmqMaxMsgRedelivery());
-		endpointProperties.setMaxMsgSize(properties.getDmqMaxMsgSize());
-		endpointProperties.setPermission(properties.getDmqPermission());
-		endpointProperties.setQuota(properties.getDmqQuota());
-		endpointProperties.setRespectsMsgTTL(properties.getDmqRespectsMsgTtl());
+		endpointProperties.setAccessType(properties.getErrorQueueAccessType());
+		endpointProperties.setDiscardBehavior(properties.getErrorQueueDiscardBehaviour());
+		endpointProperties.setMaxMsgRedelivery(properties.getErrorQueueMaxMsgRedelivery());
+		endpointProperties.setMaxMsgSize(properties.getErrorQueueMaxMsgSize());
+		endpointProperties.setPermission(properties.getErrorQueuePermission());
+		endpointProperties.setQuota(properties.getErrorQueueQuota());
+		endpointProperties.setRespectsMsgTTL(properties.getErrorQueueRespectsMsgTtl());
 		return endpointProperties;
 	}
 
@@ -80,7 +80,7 @@ public class SolaceProvisioningUtil {
 				.replace(">", replacement);
 	}
 
-	public static String getDMQName(String queueName) {
-		return queueName + QUEUE_NAME_DELIM + DMQ_POSTFIX;
+	public static String getErrorQueueName(String queueName) {
+		return queueName + QUEUE_NAME_DELIM + ERROR_QUEUE_POSTFIX;
 	}
 }

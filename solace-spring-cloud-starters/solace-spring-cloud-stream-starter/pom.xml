@@ -32,18 +32,7 @@
 
     <build>
         <plugins>
-            <plugin>
-                <!-- JAR will always be empty - suppress build warning that JAR is empty -->
-                <!-- This warning is triggered when the target/classes directory does not exist -->
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-jar-plugin</artifactId>
-                <configuration>
-                    <classesDirectory>.</classesDirectory>
-                    <excludes>
-                        <exclude>**</exclude>
-                    </excludes>
-                </configuration>
-            </plugin>
+
         </plugins>
     </build>
 </project>

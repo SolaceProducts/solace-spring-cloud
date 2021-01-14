@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
+import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
@@ -81,8 +82,19 @@ public class SolaceMessageChannelBinder
 	protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
 													 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(destination, jcsmpSession,
-				properties.getConcurrency(), getConsumerEndpointProperties(properties),
-				getConsumerPostStart(properties), consumersRemoteStopFlag);
+				properties.getConcurrency(), provisioningProvider.hasTemporaryQueue(destination),
+				getConsumerEndpointProperties(properties));
+
+		adapter.setRemoteStopFlag(consumersRemoteStopFlag);
+		adapter.setPostStart(getConsumerPostStart(properties));
+
+		if (properties.getExtension().isAutoBindErrorQueue()) {
+			adapter.setErrorQueueInfrastructure(new ErrorQueueInfrastructure(
+					sessionProducerManager,
+					errorHandlerProducerKey,
+					provisioningProvider.getErrorQueueName(destination),
+					properties.getExtension()));
+		}
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
 		if (properties.getMaxAttempts() > 1) {
@@ -105,8 +117,18 @@ public class SolaceMessageChannelBinder
 		}
 
 		EndpointProperties endpointProperties = getConsumerEndpointProperties(consumerProperties);
-		Consumer<Queue> postStart = getConsumerPostStart(consumerProperties);
-		JCSMPMessageSource messageSource = new JCSMPMessageSource(destination, jcsmpSession, consumerProperties, endpointProperties, postStart);
+		JCSMPMessageSource messageSource = new JCSMPMessageSource(destination, jcsmpSession, consumerProperties,
+				endpointProperties, provisioningProvider.hasTemporaryQueue(destination));
+
+		messageSource.setPostStart(getConsumerPostStart(consumerProperties));
+
+		if (consumerProperties.getExtension().isAutoBindErrorQueue()) {
+			messageSource.setErrorQueueInfrastructure(new ErrorQueueInfrastructure(sessionProducerManager,
+					errorHandlerProducerKey,
+					provisioningProvider.getErrorQueueName(destination),
+					consumerProperties.getExtension()));
+		}
+
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, consumerProperties, true);
 		return new PolledConsumerResources(messageSource, errorInfra);
 	}
@@ -124,7 +146,7 @@ public class SolaceMessageChannelBinder
 	@Override
 	protected MessageHandler getErrorMessageHandler(ConsumerDestination destination, String group,
 													ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties) {
-			return new SolaceErrorMessageHandler(destination, consumerProperties, errorHandlerProducerKey, sessionProducerManager);
+			return new SolaceErrorMessageHandler();
 	}
 
 	@Override

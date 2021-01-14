@@ -1,13 +1,14 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
+import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
 import com.solacesystems.jcsmp.BytesXMLMessage;
-import com.solacesystems.jcsmp.FlowReceiver;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
-import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AckUtils;
+import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.retry.RecoveryCallback;
@@ -18,7 +19,6 @@ import org.springframework.retry.support.RetryTemplate;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import java.util.function.Function;
 
 class RetryableInboundXMLMessageListener extends InboundXMLMessageListener implements RetryListener {
 	private final RetryTemplate retryTemplate;
@@ -26,29 +26,40 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener imple
 
 	private static final Log logger = LogFactory.getLog(RetryableInboundXMLMessageListener.class);
 
-	RetryableInboundXMLMessageListener(FlowReceiver flowReceiver,
+	RetryableInboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 									   ConsumerDestination consumerDestination,
 									   Consumer<Message<?>> messageConsumer,
-									   Function<RuntimeException,Boolean> errorHandlerFunction,
+									   JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
 									   RetryTemplate retryTemplate,
 									   RecoveryCallback<?> recoveryCallback,
 									   @Nullable AtomicBoolean remoteStopFlag,
 									   ThreadLocal<AttributeAccessor> attributesHolder) {
-		super(flowReceiver, consumerDestination, messageConsumer, errorHandlerFunction, remoteStopFlag, attributesHolder, false, true);
+		super(flowReceiverContainer, consumerDestination, messageConsumer, ackCallbackFactory, remoteStopFlag,
+				attributesHolder, false, true);
 		this.retryTemplate = retryTemplate;
 		this.recoveryCallback = recoveryCallback;
 	}
 
 	@Override
-	void handleMessage(final Message<?> message, final BytesXMLMessage bytesXMLMessage) {
+	void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
+		Message<?> message = retryTemplate.execute((context) -> createMessage(bytesXMLMessage, acknowledgmentCallback),
+				(context) -> {
+			recoveryCallback.recover(context);
+			AckUtils.autoAck(acknowledgmentCallback);
+			return null;
+		});
+
+		if (message == null) {
+			return;
+		}
+
 		retryTemplate.execute((context) -> {
 			sendToConsumer(message, bytesXMLMessage);
-			AckUtils.autoAck(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message));
+			AckUtils.autoAck(acknowledgmentCallback);
 			return null;
 		}, (context) -> {
-			setAttributesIfNecessary(bytesXMLMessage, null);
 			Object toReturn = recoveryCallback.recover(context);
-			AckUtils.autoNack(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message));
+			AckUtils.autoAck(acknowledgmentCallback);
 			return toReturn;
 		});
 	}
