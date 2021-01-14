@@ -4,7 +4,7 @@ import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
-import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredSpringRunner;
+import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.spring.cloud.stream.binder.test.util.ThrowingFunction;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
@@ -60,7 +60,7 @@ import static org.hamcrest.Matchers.is;
 /**
  * All tests which modify the default provisioning lifecycle.
  */
-@RunWith(InheritedTestsFilteredSpringRunner.class)
+@RunWith(InheritedTestsFilteredRunner.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigFileApplicationContextInitializer.class)
 @IgnoreInheritedTests
 public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
@@ -339,55 +339,55 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testConsumerProvisionDmq() throws Exception {
+	public void testConsumerProvisionErrorQueue() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testConsumerProvisionDmq";
+		String group0 = "testConsumerProvisionErrorQueue";
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
-		assertThat(consumerProperties.getExtension().isProvisionDmq()).isTrue();
-		consumerProperties.getExtension().setProvisionDmq(false);
-		consumerProperties.getExtension().setAutoBindDmq(true);
+		assertThat(consumerProperties.getExtension().isProvisionErrorQueue()).isTrue();
+		consumerProperties.getExtension().setProvisionErrorQueue(false);
+		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 
-		String dmqName = destination0 + getDestinationNameDelimiter() + group0 + getDestinationNameDelimiter() + "dmq";
-		Queue dmq = JCSMPFactory.onlyInstance().createQueue(dmqName);
+		String errorQueueName = destination0 + getDestinationNameDelimiter() + group0 + getDestinationNameDelimiter() + "error";
+		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
 
 		Binding<MessageChannel> consumerBinding = null;
 
 		try {
-			logger.info(String.format("Pre-provisioning DMQ %s", dmq.getName()));
-			jcsmpSession.provision(dmq, new EndpointProperties(), JCSMPSession.WAIT_FOR_CONFIRM);
+			logger.info(String.format("Pre-provisioning error queue %s", errorQueue.getName()));
+			jcsmpSession.provision(errorQueue, new EndpointProperties(), JCSMPSession.WAIT_FOR_CONFIRM);
 
 			consumerBinding = binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
 			binderBindUnbindLatency();
 		} finally {
 			if (consumerBinding != null) consumerBinding.unbind();
-			jcsmpSession.deprovision(dmq, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
+			jcsmpSession.deprovision(errorQueue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
 		}
 	}
 
 	@Test
-	public void testFailConsumerProvisioningOnDisablingProvisionDmq() throws Exception {
+	public void testFailConsumerProvisioningOnDisablingProvisionErrorQueue() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testFailConsumerProvisioningOnDisablingProvisionDmq";
+		String group0 = "testFailConsumerProvisioningOnDisablingProvisionErrorQueue";
 
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
-		assertThat(consumerProperties.getExtension().isProvisionDmq()).isTrue();
-		consumerProperties.getExtension().setProvisionDmq(false);
-		consumerProperties.getExtension().setAutoBindDmq(true);
+		assertThat(consumerProperties.getExtension().isProvisionErrorQueue()).isTrue();
+		consumerProperties.getExtension().setProvisionErrorQueue(false);
+		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 
 		try {
 			Binding<MessageChannel> consumerBinding = binder.bindConsumer(
 					destination0, group0, moduleInputChannel, consumerProperties);
 			consumerBinding.unbind();
-			fail("Expected consumer provisioning to fail due to missing DMQ");
+			fail("Expected consumer provisioning to fail due to missing error queue");
 		} catch (ProvisioningException e) {
 			int expectedSubcodeEx = JCSMPErrorResponseSubcodeEx.UNKNOWN_QUEUE_NAME;
 			assertThat(e).hasCauseInstanceOf(JCSMPErrorResponseException.class);

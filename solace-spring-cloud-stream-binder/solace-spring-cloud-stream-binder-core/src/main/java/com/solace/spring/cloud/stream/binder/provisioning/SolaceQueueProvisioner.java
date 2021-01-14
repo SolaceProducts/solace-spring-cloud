@@ -34,8 +34,10 @@ import java.util.stream.Collectors;
 public class SolaceQueueProvisioner
 		implements ProvisioningProvider<ExtendedConsumerProperties<SolaceConsumerProperties>,ExtendedProducerProperties<SolaceProducerProperties>> {
 
-	private JCSMPSession jcsmpSession;
-	private Map<String, Set<String>> queueToTopicBindings = new HashMap<>();
+	private final JCSMPSession jcsmpSession;
+	private final Map<String, Set<String>> queueToTopicBindings = new HashMap<>();
+	private final Set<String> temporaryQueues = new HashSet<>();
+	private final Map<String, String> destinationToErrorQueue = new HashMap<>();
 
 	private static final Log logger = LogFactory.getLog(SolaceQueueProvisioner.class);
 
@@ -130,11 +132,14 @@ public class SolaceQueueProvisioner
 			trackQueueToTopicBinding(queue.getName(), additionalSubscription);
 		}
 
-		if (properties.getExtension().isAutoBindDmq()) {
-			provisionDMQ(queueName, properties.getExtension());
+		SolaceConsumerDestination destination = new SolaceConsumerDestination(queue.getName());
+
+		if (properties.getExtension().isAutoBindErrorQueue()) {
+			Queue errorQueue = provisionErrorQueue(queueName, properties.getExtension());
+			destinationToErrorQueue.put(destination.getName(), errorQueue.getName());
 		}
 
-		return new SolaceConsumerDestination(queue.getName());
+		return destination;
 	}
 
 	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties,
@@ -159,6 +164,7 @@ public class SolaceQueueProvisioner
 			} else {
 				// EndpointProperties will be applied during consumer creation
 				queue = jcsmpSession.createTemporaryQueue(name);
+				temporaryQueues.add(queue.getName());
 			}
 		} catch (JCSMPException e) {
 			String action = isDurable ? "provision durable" : "create temporary";
@@ -189,11 +195,11 @@ public class SolaceQueueProvisioner
 		return queue;
 	}
 
-	private void provisionDMQ(String queueName, SolaceConsumerProperties properties) {
-		String dmqName = SolaceProvisioningUtil.getDMQName(queueName);
-		logger.info(String.format("Provisioning DMQ %s", dmqName));
-		EndpointProperties endpointProperties = SolaceProvisioningUtil.getDMQEndpointProperties(properties);
-		provisionQueue(dmqName, true, endpointProperties, properties.isProvisionDmq(), "DMQ");
+	private Queue provisionErrorQueue(String queueName, SolaceConsumerProperties properties) {
+		String errorQueueName = SolaceProvisioningUtil.getErrorQueueName(queueName);
+		logger.info(String.format("Provisioning error queue %s", errorQueueName));
+		EndpointProperties endpointProperties = SolaceProvisioningUtil.getErrorQueueEndpointProperties(properties);
+		return provisionQueue(errorQueueName, true, endpointProperties, properties.isProvisionErrorQueue(), "Error Queue");
 	}
 
 	public void addSubscriptionToQueue(Queue queue, String topicName, SolaceCommonProperties properties) {
@@ -234,5 +240,13 @@ public class SolaceQueueProvisioner
 			queueToTopicBindings.put(queueName, new HashSet<>());
 		}
 		queueToTopicBindings.get(queueName).add(topicName);
+	}
+
+	public boolean hasTemporaryQueue(ConsumerDestination consumerDestination) {
+		return temporaryQueues.contains(consumerDestination.getName());
+	}
+
+	public String getErrorQueueName(ConsumerDestination consumerDestination) {
+		return destinationToErrorQueue.get(consumerDestination.getName());
 	}
 }
