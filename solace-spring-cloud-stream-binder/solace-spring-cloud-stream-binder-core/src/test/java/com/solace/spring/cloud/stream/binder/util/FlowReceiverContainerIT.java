@@ -82,7 +82,7 @@ import static org.junit.Assert.assertTrue;
 		initializers = ConfigFileApplicationContextInitializer.class)
 public class FlowReceiverContainerIT extends ITBase {
 	@Rule
-	public Timeout globalTimeout = new Timeout(1, TimeUnit.MINUTES);
+	public Timeout globalTimeout = new Timeout(5, TimeUnit.MINUTES);
 
 	@Rule
 	public ExpectedException thrown = ExpectedException.none();
