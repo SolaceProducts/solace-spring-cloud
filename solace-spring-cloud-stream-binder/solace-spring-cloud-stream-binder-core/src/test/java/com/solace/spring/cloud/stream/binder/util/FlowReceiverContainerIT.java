@@ -1050,7 +1050,7 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
-	@Repeat(10) // should run a few times to make sure its stable
+//	@Repeat(10) // should run a few times to make sure its stable
 	public void testConcurrentAll() throws Exception {
 		UUID flowReferenceId = flowReceiverContainer.bind();
 
