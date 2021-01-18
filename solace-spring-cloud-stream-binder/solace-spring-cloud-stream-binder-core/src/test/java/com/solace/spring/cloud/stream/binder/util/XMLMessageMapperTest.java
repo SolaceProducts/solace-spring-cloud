@@ -39,6 +39,7 @@ import org.springframework.util.MimeTypeUtils;
 import org.springframework.util.SerializationUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -50,6 +51,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.Assert.assertArrayEquals;
@@ -58,7 +60,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -72,6 +73,16 @@ public class XMLMessageMapperTest {
 	}
 
 	private static final Log logger = LogFactory.getLog(XMLMessageMapperTest.class);
+	private static final Set<String> JMS_INVALID_HEADER_NAMES = new HashSet<>(Arrays.asList("~ab;c", "NULL",
+			"TRUE", "FALSE", "NOT", "AND", "OR", "BETWEEN", "LIKE", "IN", "IS", "ESCAPE", "JMSX_abc", "JMS_abc"));
+
+	static {
+		assertTrue(JMS_INVALID_HEADER_NAMES.stream().anyMatch(h -> Character.isJavaIdentifierStart(h.charAt(0))));
+		assertTrue(JMS_INVALID_HEADER_NAMES.stream().map(CharSequence::chars)
+				.anyMatch(c -> c.skip(1).anyMatch(Character::isJavaIdentifierPart)));
+		assertTrue(JMS_INVALID_HEADER_NAMES.stream().anyMatch(h -> h.startsWith("JMSX")));
+		assertTrue(JMS_INVALID_HEADER_NAMES.stream().anyMatch(h -> h.startsWith("JMS_")));
+	}
 
 	@Test
 	public void testMapSpringMessageToXMLMessage_ByteArray() throws Exception {
@@ -834,6 +845,20 @@ public class XMLMessageMapperTest {
 	}
 
 	@Test
+	public void testMapMessageHeadersToSDTMap_NonJmsCompatible() throws Exception {
+		byte[] value = "test".getBytes();
+		Map<String,Object> headers = new HashMap<>();
+		JMS_INVALID_HEADER_NAMES.forEach(h -> headers.put(h, value));
+
+		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers));
+
+		for (String header : JMS_INVALID_HEADER_NAMES) {
+			assertThat(sdtMap.keySet(), CoreMatchers.hasItem(header));
+			assertEquals(value, sdtMap.getBytes(header));
+		}
+	}
+
+	@Test
 	public void testMapSDTMapToMessageHeaders_Serializable() throws Exception {
 		String key = "a";
 		SerializableFoo value = new SerializableFoo("abc123", "HOOPLA!");
@@ -850,6 +875,22 @@ public class XMLMessageMapperTest {
 				not(CoreMatchers.hasItem(SolaceBinderHeaders.SERIALIZED_HEADERS)));
 		assertEquals(value, messageHeaders.get(key));
 		assertNull(messageHeaders.get(SolaceBinderHeaders.SERIALIZED_HEADERS));
+	}
+
+	@Test
+	public void testMapSDTMapToMessageHeaders_NonJmsCompatible() throws Exception {
+		byte[] value = "test".getBytes();
+		SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
+		for (String header : JMS_INVALID_HEADER_NAMES) {
+			sdtMap.putBytes(header, value);
+		}
+
+		MessageHeaders messageHeaders = xmlMessageMapper.map(sdtMap);
+
+		for (String header : JMS_INVALID_HEADER_NAMES) {
+			assertThat(messageHeaders.keySet(), CoreMatchers.hasItem(header));
+			assertEquals(value, messageHeaders.get(header, byte[].class));
+		}
 	}
 
 	@Test
