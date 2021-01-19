@@ -886,7 +886,7 @@ public class XMLMessageMapperTest {
 
 	@Test
 	public void testMapMessageHeadersToSDTMap_NonJmsCompatible() throws Exception {
-		byte[] value = "test".getBytes();
+		byte[] value = "test".getBytes(); // byte[] values are not supported by JMS
 		Map<String,Object> headers = new HashMap<>();
 		JMS_INVALID_HEADER_NAMES.forEach(h -> headers.put(h, value));
 
@@ -991,7 +991,7 @@ public class XMLMessageMapperTest {
 
 	@Test
 	public void testMapSDTMapToMessageHeaders_NonJmsCompatible() throws Exception {
-		byte[] value = "test".getBytes();
+		byte[] value = "test".getBytes(); // byte[] values are not supported by JMS
 		SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
 		for (String header : JMS_INVALID_HEADER_NAMES) {
 			sdtMap.putBytes(header, value);

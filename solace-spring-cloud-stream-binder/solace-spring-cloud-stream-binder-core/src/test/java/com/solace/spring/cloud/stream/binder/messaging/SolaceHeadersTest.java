@@ -25,6 +25,7 @@ import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.anyOf;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalToObject;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.not;
@@ -254,6 +255,19 @@ public class SolaceHeadersTest {
 
 			assertThat(headerName, not(startsWithIgnoringCase("JMSX")));
 			assertThat(headerName, not(startsWithIgnoringCase("JMS_")));
+
+			if (!(headersClass.equals(SolaceHeaders.class))) {
+				assertThat(headersMeta.get(headerName).getType(),
+						anyOf(equalToObject(boolean.class), equalToObject(Boolean.class),
+								equalToObject(byte.class), equalToObject(Byte.class),
+								equalToObject(short.class), equalToObject(Short.class),
+								equalToObject(int.class), equalToObject(Integer.class),
+								equalToObject(long.class), equalToObject(Long.class),
+								equalToObject(float.class), equalToObject(Float.class),
+								equalToObject(double.class), equalToObject(Double.class),
+								equalToObject(String.class)
+						));
+			}
 		}
 	}
 
