@@ -10,7 +10,8 @@ public class SolaceBinderHeaderMeta<T> implements HeaderMeta<T> {
 	public static final Map<String, SolaceBinderHeaderMeta<?>> META = Stream.of(new Object[][] {
 			{SolaceBinderHeaders.MESSAGE_VERSION, new SolaceBinderHeaderMeta<>(Integer.class, true, false)},
 			{SolaceBinderHeaders.SERIALIZED_PAYLOAD, new SolaceBinderHeaderMeta<>(Boolean.class, false, false)},
-			{SolaceBinderHeaders.SERIALIZED_HEADERS, new SolaceBinderHeaderMeta<>(SDTStream.class, false, false)}
+			{SolaceBinderHeaders.SERIALIZED_HEADERS, new SolaceBinderHeaderMeta<>(String.class, false, false)},
+			{SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING, new SolaceBinderHeaderMeta<>(String.class, false, false)}
 	}).collect(Collectors.toMap(d -> (String) d[0], d -> (SolaceBinderHeaderMeta<?>) d[1]));
 
 	private final Class<T> type;
