@@ -1,8 +1,12 @@
 package com.solace.spring.cloud.stream.binder.util;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.ITBase;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
@@ -23,12 +27,15 @@ import org.springframework.boot.test.context.ConfigFileApplicationContextInitial
 import org.springframework.integration.support.DefaultMessageBuilderFactory;
 import org.springframework.integration.support.MessageBuilder;
 import org.springframework.test.context.ContextConfiguration;
+import org.springframework.util.SerializationUtils;
 
 import javax.jms.Connection;
 import javax.jms.JMSException;
 import javax.jms.MessageConsumer;
 import javax.jms.Session;
+import java.util.Base64;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -48,6 +55,7 @@ public class JmsCompatibilityIT extends ITBase {
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 
 	private static final Log logger = LogFactory.getLog(JmsCompatibilityIT.class);
+	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
 	@Before
 	public void setup() throws Exception {
@@ -155,6 +163,53 @@ public class JmsCompatibilityIT extends ITBase {
 							.isNotNull();
 				}
 			} catch (JMSException e) {
+				exceptionAtomicReference.set(e);
+				throw new RuntimeException(e);
+			} finally {
+				latch.countDown();
+			}
+		});
+
+		jmsConnection.start();
+		jcsmpProducer.send(jcsmpMessage, jcsmpTopic);
+
+		assertTrue(latch.await(1, TimeUnit.MINUTES));
+		assertNull(exceptionAtomicReference.get());
+		softly.assertAll();
+	}
+
+	@Test
+	public void testSerializedHeaders() throws Exception {
+		final String headerName = "abc";
+		final SerializableFoo headerValue = new SerializableFoo("Abc", "def");
+
+		XMLMessage jcsmpMessage = xmlMessageMapper.map(new DefaultMessageBuilderFactory()
+				.withPayload("test")
+				.setHeader(headerName, headerValue)
+				.build());
+
+		SoftAssertions softly = new SoftAssertions();
+		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
+		CountDownLatch latch = new CountDownLatch(1);
+		jmsConsumer.setMessageListener(msg -> {
+			try {
+				softly.assertThat(msg.getStringProperty(SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING))
+						.isEqualTo("base64");
+
+				String serializedHeadersJson = msg.getStringProperty(SolaceBinderHeaders.SERIALIZED_HEADERS);
+				softly.assertThat(serializedHeadersJson).isNotEmpty();
+
+				List<String> serializedHeaders = OBJECT_MAPPER.readerFor(new TypeReference<List<String>>() {})
+						.readValue(serializedHeadersJson);
+				softly.assertThat(serializedHeaders).containsOnlyOnce(headerName);
+
+				String encodedTestProperty = msg.getStringProperty(headerName);
+				softly.assertThat(encodedTestProperty).isNotNull();
+				softly.assertThat(encodedTestProperty).isBase64();
+
+				byte[] decodedTestProperty = Base64.getDecoder().decode(encodedTestProperty);
+				softly.assertThat(SerializationUtils.deserialize(decodedTestProperty)).isEqualTo(headerValue);
+			} catch (JMSException | JsonProcessingException e) {
 				exceptionAtomicReference.set(e);
 				throw new RuntimeException(e);
 			} finally {
