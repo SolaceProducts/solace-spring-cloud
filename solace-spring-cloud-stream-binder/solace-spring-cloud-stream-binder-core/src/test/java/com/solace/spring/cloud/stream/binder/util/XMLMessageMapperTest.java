@@ -93,9 +93,9 @@ public class XMLMessageMapperTest {
 			"TRUE", "FALSE", "NOT", "AND", "OR", "BETWEEN", "LIKE", "IN", "IS", "ESCAPE", "JMSX_abc", "JMS_abc"));
 
 	static {
-		assertTrue(JMS_INVALID_HEADER_NAMES.stream().anyMatch(h -> Character.isJavaIdentifierStart(h.charAt(0))));
+		assertTrue(JMS_INVALID_HEADER_NAMES.stream().anyMatch(h -> !Character.isJavaIdentifierStart(h.charAt(0))));
 		assertTrue(JMS_INVALID_HEADER_NAMES.stream().map(CharSequence::chars)
-				.anyMatch(c -> c.skip(1).anyMatch(Character::isJavaIdentifierPart)));
+				.anyMatch(c -> c.skip(1).anyMatch(c1 -> !Character.isJavaIdentifierPart(c1))));
 		assertTrue(JMS_INVALID_HEADER_NAMES.stream().anyMatch(h -> h.startsWith("JMSX")));
 		assertTrue(JMS_INVALID_HEADER_NAMES.stream().anyMatch(h -> h.startsWith("JMS_")));
 	}
