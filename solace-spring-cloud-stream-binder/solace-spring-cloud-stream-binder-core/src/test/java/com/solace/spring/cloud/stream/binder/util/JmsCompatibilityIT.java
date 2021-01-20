@@ -1,17 +1,25 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.ITBase;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
+import com.solacesystems.jcsmp.BytesMessage;
+import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solacesystems.jcsmp.MapMessage;
+import com.solacesystems.jcsmp.SDTMap;
+import com.solacesystems.jcsmp.SDTStream;
+import com.solacesystems.jcsmp.StreamMessage;
+import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessage;
+import com.solacesystems.jcsmp.XMLMessageConsumer;
+import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jms.SolConnectionFactory;
 import com.solacesystems.jms.SolJmsUtility;
@@ -26,29 +34,37 @@ import org.junit.Test;
 import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
 import org.springframework.integration.support.DefaultMessageBuilderFactory;
 import org.springframework.integration.support.MessageBuilder;
+import org.springframework.messaging.Message;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.util.SerializationUtils;
 
 import javax.jms.Connection;
-import javax.jms.JMSException;
 import javax.jms.MessageConsumer;
+import javax.jms.MessageProducer;
+import javax.jms.ObjectMessage;
 import javax.jms.Session;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Enumeration;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class,
 		initializers = ConfigFileApplicationContextInitializer.class)
 public class JmsCompatibilityIT extends ITBase {
+	private String topicName;
 	private Connection jmsConnection;
 	private Session jmsSession;
+	private MessageProducer jmsProducer;
 	private MessageConsumer jmsConsumer;
 	private com.solacesystems.jcsmp.Topic jcsmpTopic;
 	private XMLMessageProducer jcsmpProducer;
@@ -59,7 +75,7 @@ public class JmsCompatibilityIT extends ITBase {
 
 	@Before
 	public void setup() throws Exception {
-		String topicName = RandomStringUtils.randomAlphabetic(10);
+		topicName = RandomStringUtils.randomAlphabetic(10);
 
 		SolConnectionFactory solConnectionFactory = SolJmsUtility.createConnectionFactory();
 		solConnectionFactory.setHost((String) jcsmpSession.getProperty(JCSMPProperties.HOST));
@@ -68,6 +84,7 @@ public class JmsCompatibilityIT extends ITBase {
 		solConnectionFactory.setPassword((String) jcsmpSession.getProperty(JCSMPProperties.PASSWORD));
 		jmsConnection = solConnectionFactory.createConnection();
 		jmsSession = jmsConnection.createSession(false, Session.AUTO_ACKNOWLEDGE);
+		jmsProducer = jmsSession.createProducer(jmsSession.createTopic(topicName));
 		jmsConsumer = jmsSession.createConsumer(jmsSession.createTopic(topicName));
 
 		jcsmpTopic = JCSMPFactory.onlyInstance().createTopic(topicName);
@@ -103,6 +120,14 @@ public class JmsCompatibilityIT extends ITBase {
 
 		if (jcsmpProducer != null) {
 			jcsmpProducer.close();
+		}
+
+		if (jmsProducer != null) {
+			jmsProducer.close();
+		}
+
+		if (jmsConsumer != null) {
+			jmsConsumer.close();
 		}
 
 		if (jmsSession != null) {
@@ -145,6 +170,7 @@ public class JmsCompatibilityIT extends ITBase {
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
 		jmsConsumer.setMessageListener(msg -> {
+			logger.info("Got message " + msg);
 			try {
 				for (String headerName : SolaceBinderHeaderMeta.META.keySet()) {
 					// Everything should be receivable as a String in JMS
@@ -162,7 +188,7 @@ public class JmsCompatibilityIT extends ITBase {
 							.withFailMessage("Expecting JMS property %s to not be null", headerName)
 							.isNotNull();
 				}
-			} catch (JMSException e) {
+			} catch (Exception e) {
 				exceptionAtomicReference.set(e);
 				throw new RuntimeException(e);
 			} finally {
@@ -192,6 +218,7 @@ public class JmsCompatibilityIT extends ITBase {
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
 		jmsConsumer.setMessageListener(msg -> {
+			logger.info("Got message " + msg);
 			try {
 				softly.assertThat(msg.getStringProperty(SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING))
 						.isEqualTo("base64");
@@ -209,7 +236,7 @@ public class JmsCompatibilityIT extends ITBase {
 
 				byte[] decodedTestProperty = Base64.getDecoder().decode(encodedTestProperty);
 				softly.assertThat(SerializationUtils.deserialize(decodedTestProperty)).isEqualTo(headerValue);
-			} catch (JMSException | JsonProcessingException e) {
+			} catch (Exception e) {
 				exceptionAtomicReference.set(e);
 				throw new RuntimeException(e);
 			} finally {
@@ -223,5 +250,225 @@ public class JmsCompatibilityIT extends ITBase {
 		assertTrue(latch.await(1, TimeUnit.MINUTES));
 		assertNull(exceptionAtomicReference.get());
 		softly.assertAll();
+	}
+
+	@Test
+	public void testPayloadFromSpringToJms() throws Exception {
+		List<Message<?>> messages = new ArrayList<>();
+
+		{
+			messages.add(new DefaultMessageBuilderFactory()
+					.withPayload("test".getBytes())
+					.build());
+
+			messages.add(new DefaultMessageBuilderFactory()
+					.withPayload("test")
+					.build());
+
+			SDTStream sdtStream = JCSMPFactory.onlyInstance().createStream();
+			sdtStream.writeString("test");
+			messages.add(new DefaultMessageBuilderFactory()
+					.withPayload(sdtStream)
+					.build());
+
+			SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
+			sdtMap.putString("test", "test");
+			messages.add(new DefaultMessageBuilderFactory()
+					.withPayload(sdtMap)
+					.build());
+		}
+
+		Set<Class<? extends XMLMessage>> processedMessageTypes = new HashSet<>();
+		SoftAssertions softly = new SoftAssertions();
+		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
+		CountDownLatch latch = new CountDownLatch(messages.size());
+		jmsConsumer.setMessageListener(msg -> {
+			logger.info("Got message " + msg);
+			try {
+				if (msg instanceof javax.jms.BytesMessage) {
+					javax.jms.BytesMessage bytesMessage = (javax.jms.BytesMessage) msg;
+					byte[] payload = new byte[(int) bytesMessage.getBodyLength()];
+					softly.assertThat(bytesMessage.readBytes(payload)).isEqualTo(bytesMessage.getBodyLength());
+					softly.assertThat(payload).isEqualTo("test".getBytes());
+					processedMessageTypes.add(BytesMessage.class);
+				} else if (msg instanceof javax.jms.TextMessage) {
+					softly.assertThat(((javax.jms.TextMessage) msg).getText()).isEqualTo("test");
+					processedMessageTypes.add(TextMessage.class);
+				} else if (msg instanceof javax.jms.StreamMessage) {
+					softly.assertThat(((javax.jms.StreamMessage) msg).readString()).isEqualTo("test");
+					processedMessageTypes.add(StreamMessage.class);
+				} else if (msg instanceof javax.jms.MapMessage) {
+					softly.assertThat(((javax.jms.MapMessage) msg).getString("test")).isEqualTo("test");
+					processedMessageTypes.add(MapMessage.class);
+				} else {
+					throw new IllegalStateException(String.format("Message type %s has no test", msg.getClass()));
+				}
+			} catch (Exception e) {
+				exceptionAtomicReference.set(e);
+				while (latch.getCount() > 0) { // fail-fast
+					latch.countDown();
+				}
+				throw new RuntimeException(e);
+			} finally {
+				latch.countDown();
+			}
+		});
+		jmsConnection.start();
+
+		for (Message<?> message : messages) {
+			jcsmpProducer.send(xmlMessageMapper.map(message), jcsmpTopic);
+		}
+
+		assertTrue(latch.await(1, TimeUnit.MINUTES));
+		assertNull(exceptionAtomicReference.get());
+		softly.assertAll();
+		assertEquals(messages.size(), processedMessageTypes.size());
+	}
+
+	@Test
+	public void testPayloadFromJmsToSpring() throws Exception {
+		List<javax.jms.Message> messages = new ArrayList<>();
+
+		{
+			javax.jms.BytesMessage bytesMessage = jmsSession.createBytesMessage();
+			bytesMessage.writeBytes("test".getBytes());
+			messages.add(bytesMessage);
+
+			messages.add(jmsSession.createTextMessage("test"));
+
+			javax.jms.StreamMessage streamMessage = jmsSession.createStreamMessage();
+			streamMessage.writeString("test");
+			messages.add(streamMessage);
+
+			javax.jms.MapMessage mapMessage = jmsSession.createMapMessage();
+			mapMessage.setString("test", "test");
+			messages.add(mapMessage);
+		}
+
+		XMLMessageConsumer messageConsumer = null;
+		try {
+			Set<Class<? extends XMLMessage>> processedMessageTypes = new HashSet<>();
+			SoftAssertions softly = new SoftAssertions();
+			AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
+			CountDownLatch latch = new CountDownLatch(messages.size());
+			messageConsumer = jcsmpSession.getMessageConsumer(new XMLMessageListener() {
+				@Override
+				public void onReceive(BytesXMLMessage bytesXMLMessage) {
+					logger.info("Got message " + bytesXMLMessage);
+					try {
+						Message<?> msg = xmlMessageMapper.map(bytesXMLMessage, null);
+						if (msg.getPayload() instanceof byte[]) {
+							softly.assertThat(msg.getPayload()).isEqualTo("test".getBytes());
+							processedMessageTypes.add(BytesMessage.class);
+						} else if (msg.getPayload() instanceof String) {
+							softly.assertThat(msg.getPayload()).isEqualTo("test");
+							processedMessageTypes.add(TextMessage.class);
+						} else if (msg.getPayload() instanceof SDTStream) {
+							softly.assertThat(((SDTStream) msg.getPayload()).readString()).isEqualTo("test");
+							processedMessageTypes.add(StreamMessage.class);
+						} else if (msg.getPayload() instanceof SDTMap) {
+							softly.assertThat(((SDTMap) msg.getPayload()).getString("test")).isEqualTo("test");
+							processedMessageTypes.add(MapMessage.class);
+						}
+					} catch (Exception e) {
+						exceptionAtomicReference.set(e);
+						throw new RuntimeException(e);
+					} finally {
+						latch.countDown();
+					}
+				}
+
+				@Override
+				public void onException(JCSMPException e) {}
+			});
+
+			jcsmpSession.addSubscription(JCSMPFactory.onlyInstance().createTopic(topicName));
+			messageConsumer.start();
+			for (javax.jms.Message message : messages) {
+				jmsProducer.send(message);
+			}
+
+			assertTrue(latch.await(1, TimeUnit.MINUTES));
+			assertNull(exceptionAtomicReference.get());
+			softly.assertAll();
+			assertEquals(messages.size(), processedMessageTypes.size());
+		} finally {
+			if (messageConsumer != null) messageConsumer.close();
+		}
+	}
+
+	@Test
+	public void testSerializedPayloadFromSpringToJms() throws Exception {
+		final SerializableFoo payload = new SerializableFoo("Abc", "def");
+
+		SoftAssertions softly = new SoftAssertions();
+		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
+		CountDownLatch latch = new CountDownLatch(1);
+		jmsConsumer.setMessageListener(msg -> {
+			logger.info("Got message " + msg);
+			try {
+				softly.assertThat(msg.getBooleanProperty(SolaceBinderHeaders.SERIALIZED_PAYLOAD)).isTrue();
+
+				javax.jms.BytesMessage bytesMessage = (javax.jms.BytesMessage) msg;
+				byte[] receivedPayload = new byte[(int) bytesMessage.getBodyLength()];
+				bytesMessage.readBytes(receivedPayload);
+				softly.assertThat(SerializationUtils.deserialize(receivedPayload)).isEqualTo(payload);
+			} catch (Exception e) {
+				exceptionAtomicReference.set(e);
+				throw new RuntimeException(e);
+			} finally {
+				latch.countDown();
+			}
+		});
+
+		jmsConnection.start();
+		jcsmpProducer.send(xmlMessageMapper.map(new DefaultMessageBuilderFactory().withPayload(payload).build()),
+				jcsmpTopic);
+
+		assertTrue(latch.await(1, TimeUnit.MINUTES));
+		assertNull(exceptionAtomicReference.get());
+		softly.assertAll();
+	}
+
+	@Test
+	public void testSerializedPayloadFromJmsToSpring() throws Exception {
+		SerializableFoo payload = new SerializableFoo("test", "test");
+		ObjectMessage message = jmsSession.createObjectMessage(payload);
+		message.setBooleanProperty(SolaceBinderHeaders.SERIALIZED_PAYLOAD, true);
+
+		XMLMessageConsumer messageConsumer = null;
+		try {
+			SoftAssertions softly = new SoftAssertions();
+			AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
+			CountDownLatch latch = new CountDownLatch(1);
+			messageConsumer = jcsmpSession.getMessageConsumer(new XMLMessageListener() {
+				@Override
+				public void onReceive(BytesXMLMessage bytesXMLMessage) {
+					logger.info("Got message " + bytesXMLMessage);
+					try {
+						softly.assertThat(xmlMessageMapper.map(bytesXMLMessage, null).getPayload())
+								.isEqualTo(payload);
+					} catch (Exception e) {
+						exceptionAtomicReference.set(e);
+						throw new RuntimeException(e);
+					} finally {
+						latch.countDown();
+					}
+				}
+
+				@Override
+				public void onException(JCSMPException e) {}
+			});
+
+			jcsmpSession.addSubscription(JCSMPFactory.onlyInstance().createTopic(topicName));
+			messageConsumer.start();
+			jmsProducer.send(message);
+
+			assertTrue(latch.await(1, TimeUnit.MINUTES));
+			assertNull(exceptionAtomicReference.get());
+			softly.assertAll();
+		} finally {
+			if (messageConsumer != null) messageConsumer.close();
+		}
 	}
 }
