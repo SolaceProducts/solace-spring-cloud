@@ -1,6 +1,5 @@
 package com.solace.spring.cloud.stream.binder.messaging;
 
-import com.solacesystems.jcsmp.SDTStream;
 import org.springframework.messaging.Message;
 
 /**
@@ -26,6 +25,7 @@ public final class SolaceBinderHeaders {
 	/**
 	 * <p><b>Acceptable Value Type:</b> {@link Integer}</p>
 	 * <p><b>Access:</b> Read</p>
+	 * <p><b>Default Value: </b>{@code 1}</p>
 	 * <br>
 	 * <p>A static number set by the publisher to indicate the Spring Cloud Stream Solace message version.</p>
 	 */
@@ -41,11 +41,20 @@ public final class SolaceBinderHeaders {
 	public static final String SERIALIZED_PAYLOAD = PREFIX + "serializedPayload";
 
 	/**
-	 * <p><b>Acceptable Value Type:</b> {@link SDTStream}</p>
+	 * <p><b>Acceptable Value Type:</b> {@link String}</p>
 	 * <p><b>Access:</b> Internal Binder Use Only</p>
 	 * <br>
-	 * <p>A stream of header names where each entry indicates that that header’s value was serialized by a
+	 * <p>A JSON String array of header names where each entry indicates that that header’s value was serialized by a
 	 * Solace Spring Cloud Stream binder before publishing it to a broker.</p>
 	 */
 	public static final String SERIALIZED_HEADERS = PREFIX + "serializedHeaders";
+
+	/**
+	 * <p><b>Acceptable Value Type:</b> {@link String}</p>
+	 * <p><b>Access:</b> Internal Binder Use Only</p>
+	 * <p><b>Default Value: </b>{@code "base64"}</p>
+	 * <br>
+	 * <p>The encoding algorithm used to encode the headers indicated by {@link #SERIALIZED_HEADERS}.</p>
+	 */
+	public static final String SERIALIZED_HEADERS_ENCODING = PREFIX + "serializedHeadersEncoding";
 }

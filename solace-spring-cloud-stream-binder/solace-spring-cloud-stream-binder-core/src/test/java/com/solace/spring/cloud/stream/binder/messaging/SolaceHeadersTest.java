@@ -25,17 +25,18 @@ import java.util.stream.Collectors;
 
 import static org.hamcrest.CoreMatchers.anyOf;
 import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.equalToObject;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.CoreMatchers.startsWithIgnoringCase;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -228,6 +229,44 @@ public class SolaceHeadersTest {
 			} catch (IllegalArgumentException e) {
 				assertThat(e.getMessage(), containsString(String.format("Expected type %s, but got %s",
 						headerMeta.getValue().getType(), Object.class)));
+			}
+		}
+	}
+
+	@Test
+	public void testNameJmsCompatibility() {
+		for (String headerName : getAllHeaders()) {
+			assertTrue(Character.isJavaIdentifierStart(headerName.charAt(0)));
+			for (int i = 1; i < headerName.length(); i++) {
+				assertTrue(Character.isJavaIdentifierPart(headerName.charAt(i)));
+			}
+
+			assertNotEquals("NULL", headerName.toUpperCase());
+			assertNotEquals("TRUE", headerName.toUpperCase());
+			assertNotEquals("FALSE", headerName.toUpperCase());
+			assertNotEquals("NOT", headerName.toUpperCase());
+			assertNotEquals("AND", headerName.toUpperCase());
+			assertNotEquals("OR", headerName.toUpperCase());
+			assertNotEquals("BETWEEN", headerName.toUpperCase());
+			assertNotEquals("LIKE", headerName.toUpperCase());
+			assertNotEquals("IN", headerName.toUpperCase());
+			assertNotEquals("IS", headerName.toUpperCase());
+			assertNotEquals("ESCAPE", headerName.toUpperCase());
+
+			assertThat(headerName, not(startsWithIgnoringCase("JMSX")));
+			assertThat(headerName, not(startsWithIgnoringCase("JMS_")));
+
+			if (!(headersClass.equals(SolaceHeaders.class))) {
+				assertThat(headersMeta.get(headerName).getType(),
+						anyOf(equalToObject(boolean.class), equalToObject(Boolean.class),
+								equalToObject(byte.class), equalToObject(Byte.class),
+								equalToObject(short.class), equalToObject(Short.class),
+								equalToObject(int.class), equalToObject(Integer.class),
+								equalToObject(long.class), equalToObject(Long.class),
+								equalToObject(float.class), equalToObject(Float.class),
+								equalToObject(double.class), equalToObject(Double.class),
+								equalToObject(String.class)
+						));
 			}
 		}
 	}

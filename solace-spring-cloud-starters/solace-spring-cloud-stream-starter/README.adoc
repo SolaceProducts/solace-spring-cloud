@@ -462,27 +462,37 @@ These can be used for:
 
 TIP: Use link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/messaging/SolaceBinderHeaders.java[SolaceBinderHeaders] instead of hardcoding the header names. This class also contains the same documentation that you see here.
 
-[cols="1m,1m,1,4", options="header"]
+[cols="1m,1m,1,1m,4", options="header"]
 |===
 | Header Name
 | Type
 | Access
+| Default Value
 | Description
 
 | solace_scst_messageVersion
 | Integer
 | Read
+| 1
 | A static number set by the publisher to indicate the Spring Cloud Stream Solace message version.
 
 | solace_scst_serializedPayload
 | Boolean
 | Internal Binder Use Only
+|
 | Is `true` if a Solace Spring Cloud Stream binder has serialized the payload before publishing it to a broker. Is undefined otherwise.
 
 | solace_scst_serializedHeaders
-| SDTStream
+| String
 | Internal Binder Use Only
-| A stream of header names where each entry indicates that that header’s value was serialized by a Solace Spring Cloud Stream binder before publishing it to a broker.
+|
+| A JSON String array of header names where each entry indicates that that header’s value was serialized by a Solace Spring Cloud Stream binder before publishing it to a broker.
+
+| solace_scst_serializedHeadersEncoding
+| String
+| Internal Binder Use Only
+| "base64"
+| The encoding algorithm used to encode the headers indicated by `solace_scst_serializedHeaders`.
 |===
 
 == Consumer Concurrency
