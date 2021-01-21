@@ -203,7 +203,7 @@ public class XMLMessageMapper {
 		}
 
 		if (setRawMessageHeader) {
-			builder.setHeader(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE, xmlMessage);
+			builder.setHeader(SolaceBinderHeaders.RAW_MESSAGE, xmlMessage);
 		}
 
 		return builder.build();

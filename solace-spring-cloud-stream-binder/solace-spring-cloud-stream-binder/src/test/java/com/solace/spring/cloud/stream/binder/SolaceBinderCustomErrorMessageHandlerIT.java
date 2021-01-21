@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
 import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
@@ -243,6 +244,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		softAssertions.assertThat(((ErrorMessage) errorMessage).getOriginalMessage()).isNotNull();
 		softAssertions.assertThat(((ErrorMessage) errorMessage).getPayload()).isNotNull();
 		softAssertions.assertThat(errorMessage.getHeaders()
-				.get(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE)).isInstanceOf(XMLMessage.class);
+				.get(SolaceBinderHeaders.RAW_MESSAGE)).isInstanceOf(XMLMessage.class);
 	}
 }

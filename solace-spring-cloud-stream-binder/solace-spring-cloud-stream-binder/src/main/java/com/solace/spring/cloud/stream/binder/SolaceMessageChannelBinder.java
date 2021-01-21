@@ -2,6 +2,7 @@ package com.solace.spring.cloud.stream.binder;
 
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
@@ -136,9 +137,11 @@ public class SolaceMessageChannelBinder
 	@Override
 	protected void postProcessPollableSource(DefaultPollableMessageSource bindingTarget) {
 		bindingTarget.setAttributesProvider((accessor, message) -> {
-			Object rawMessage = message.getHeaders().get(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE);
-			if (rawMessage != null) {
-				accessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE, rawMessage);
+			if (message.getHeaders().containsKey(SolaceBinderHeaders.RAW_MESSAGE)) {
+				Object rawMessage = message.getHeaders().get(SolaceBinderHeaders.RAW_MESSAGE);
+				if (rawMessage != null) {
+					accessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE, rawMessage);
+				}
 			}
 		});
 	}

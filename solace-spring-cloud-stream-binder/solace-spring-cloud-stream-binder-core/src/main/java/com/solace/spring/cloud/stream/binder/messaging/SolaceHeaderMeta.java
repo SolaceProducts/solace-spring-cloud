@@ -55,6 +55,11 @@ public class SolaceHeaderMeta<T> implements HeaderMeta<T> {
 		return writeAction != null;
 	}
 
+	@Override
+	public Scope getScope() {
+		return Scope.WIRE;
+	}
+
 	public Function<XMLMessage, T> getReadAction() {
 		return readAction;
 	}
