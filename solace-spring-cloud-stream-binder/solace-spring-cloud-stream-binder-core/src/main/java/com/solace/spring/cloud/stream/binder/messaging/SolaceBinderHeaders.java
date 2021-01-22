@@ -37,6 +37,8 @@ public final class SolaceBinderHeaders {
 	 * <p><b>Access:</b> Read</p>
 	 * <br>
 	 * <p>The raw Solace message.</p>
+	 * <p><b><u>WARNING</u>:</b> <b>DO NOT</b> acknowledge this or make any other lasting changes.
+	 * This should only be used for debugging.</p>
 	 */
 	public static final String RAW_MESSAGE = PREFIX + "rawMessage";
 

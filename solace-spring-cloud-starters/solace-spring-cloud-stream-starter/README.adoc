@@ -482,6 +482,8 @@ TIP: Use link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream
 |
 | The raw Solace message.
 
+*[.underline]#WARNING#:* *DO NOT* acknowledge this or make any other lasting changes. This should only be used for debugging.
+
 | solace_scst_serializedPayload
 | Boolean
 | Internal Binder Use Only
