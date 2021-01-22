@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.util;
 
+import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -20,15 +21,10 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 
 	@Override
 	public void handleMessage(Message<?> message) throws MessagingException {
-		XMLMessage rawMessage = (XMLMessage) message.getHeaders().get(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE);
 		UUID springId = message.getHeaders().getId();
 		if (!(message instanceof ErrorMessage)) {
 			logger.warn(String.format("Spring message %s: Expected an %s, not a %s",
 					springId, ErrorMessage.class.getSimpleName(), message.getClass().getSimpleName()));
-			return;
-		} else if (rawMessage == null) {
-			logger.warn(String.format("Spring message %s: No header %s",
-					springId, SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE));
 			return;
 		}
 
@@ -48,8 +44,15 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 
 		UUID failedSpringId = failedMsg.getHeaders().getId();
 		logger.info(String.format("Spring message %s contains failed Spring message %s", springId, failedSpringId));
-		logger.info(String.format("Spring message %s contains raw %s %s",
-				springId, XMLMessage.class.getSimpleName(), rawMessage.getMessageId()));
+
+		if (message.getHeaders().containsKey(SolaceBinderHeaders.RAW_MESSAGE)) {
+			XMLMessage rawMessage = (XMLMessage) message.getHeaders().get(SolaceBinderHeaders.RAW_MESSAGE);
+			if (rawMessage != null) {
+				logger.info(String.format("Spring message %s contains raw %s %s",
+						springId, XMLMessage.class.getSimpleName(), rawMessage.getMessageId()));
+			}
+		}
+
 		AcknowledgmentCallback acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(failedMsg);
 		if (acknowledgmentCallback == null) { // Should never happen under normal use
 			logger.warn(String.format("Failed Spring message %s: No header %s, message cannot be acknowledged",

@@ -256,7 +256,8 @@ public class SolaceHeadersTest {
 			assertThat(headerName, not(startsWithIgnoringCase("JMSX")));
 			assertThat(headerName, not(startsWithIgnoringCase("JMS_")));
 
-			if (!(headersClass.equals(SolaceHeaders.class))) {
+			if (!headersClass.equals(SolaceHeaders.class)
+					&& HeaderMeta.Scope.WIRE.equals(headersMeta.get(headerName).getScope())) {
 				assertThat(headersMeta.get(headerName).getType(),
 						anyOf(equalToObject(boolean.class), equalToObject(Boolean.class),
 								equalToObject(byte.class), equalToObject(Byte.class),

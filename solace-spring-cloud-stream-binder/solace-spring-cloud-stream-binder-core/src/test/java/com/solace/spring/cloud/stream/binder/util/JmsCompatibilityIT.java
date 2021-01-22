@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.ITBase;
+import com.solace.spring.cloud.stream.binder.messaging.HeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solacesystems.jcsmp.BytesMessage;
@@ -145,6 +146,7 @@ public class JmsCompatibilityIT extends ITBase {
 				.withPayload(new SerializableFoo("abc", "def"));
 
 		for (Map.Entry<String, SolaceBinderHeaderMeta<?>> headerMeta : SolaceBinderHeaderMeta.META.entrySet()) {
+			if (!HeaderMeta.Scope.WIRE.equals(headerMeta.getValue().getScope())) continue;
 			Class<?> type = headerMeta.getValue().getType();
 			Object value;
 			try {
@@ -172,7 +174,9 @@ public class JmsCompatibilityIT extends ITBase {
 		jmsConsumer.setMessageListener(msg -> {
 			logger.info("Got message " + msg);
 			try {
-				for (String headerName : SolaceBinderHeaderMeta.META.keySet()) {
+				for (Map.Entry<String, SolaceBinderHeaderMeta<?>> headerMeta : SolaceBinderHeaderMeta.META.entrySet()) {
+					if (!HeaderMeta.Scope.WIRE.equals(headerMeta.getValue().getScope())) continue;
+					String headerName = headerMeta.getKey();
 					// Everything should be receivable as a String in JMS
 					softly.assertThat(msg.getStringProperty(headerName))
 							.withFailMessage("Expecting JMS property %s to not be null", headerName)

@@ -347,6 +347,7 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING:
 					assertEquals("base64", xmlMessage.getProperties().getString(header.getKey()));
 					break;
+				case SolaceBinderHeaders.RAW_MESSAGE:
 				case SolaceBinderHeaders.SERIALIZED_PAYLOAD:
 					assertNull(xmlMessage.getProperties().get(header.getKey()));
 					break;
@@ -597,8 +598,7 @@ public class XMLMessageMapperTest {
 		assertEquals(expectedPayload, springMessage.getPayload());
 		validateSpringMessage(springMessage, xmlMessage);
 
-		assertEquals(xmlMessage,
-				springMessage.getHeaders().get(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE));
+		assertEquals(xmlMessage, springMessage.getHeaders().get(SolaceBinderHeaders.RAW_MESSAGE));
 	}
 
 	@Test
@@ -634,6 +634,7 @@ public class XMLMessageMapperTest {
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : readableHeaders) {
+			if (!HeaderMeta.Scope.WIRE.equals(header.getValue().getScope())) continue;
 			switch (header.getKey()) {
 				case SolaceHeaders.APPLICATION_MESSAGE_ID:
 					Mockito.when(xmlMessage.getApplicationMessageId()).thenReturn(header.getKey());
@@ -762,6 +763,9 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.MESSAGE_VERSION:
 					assertEquals(xmlMessage.getProperties().get(header.getKey()), actualValue);
 					break;
+				case SolaceBinderHeaders.RAW_MESSAGE:
+					assertNull(actualValue);
+					break;
 				default:
 					fail(String.format("no test for header %s", header.getKey()));
 			}
@@ -814,6 +818,53 @@ public class XMLMessageMapperTest {
 		SDTMap filteredMetadata = JCSMPFactory.onlyInstance().createMap();
 		for (String metadataKey : metadata.keySet()) {
 			if (nonReadableHeaders.stream().map(Map.Entry::getKey).noneMatch(metadataKey::equals)) {
+				filteredMetadata.putObject(metadataKey, metadata.get(metadataKey));
+			}
+		}
+
+		validateSpringMessage(springMessage, xmlMessage, filteredMetadata);
+	}
+
+	@Test
+	public void testMapXMLMessageToSpringMessage_ReadLocalSolaceProperties() throws Exception {
+		Set<Map.Entry<String, ? extends HeaderMeta<?>>> readableLocalHeaders = Stream.of(
+				SolaceHeaderMeta.META.entrySet().stream(),
+				SolaceBinderHeaderMeta.META.entrySet().stream())
+				.flatMap(h -> h)
+				.filter(h -> h.getValue().isReadable())
+				.filter(h -> HeaderMeta.Scope.LOCAL.equals(h.getValue().getScope()))
+				.collect(Collectors.toSet());
+		assertNotEquals("Test header set was empty", 0, readableLocalHeaders.size());
+
+		TextMessage xmlMessage = Mockito.mock(TextMessage.class);
+		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
+
+		for (Map.Entry<String, ? extends HeaderMeta<?>> header : readableLocalHeaders) {
+			// Since these properties are local-scoped, their wire-values should be ignored
+			metadata.putString(header.getKey(), "test");
+		}
+
+		Mockito.when(xmlMessage.getProperties()).thenReturn(metadata);
+		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
+		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
+
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
+
+		for (Map.Entry<String, ? extends HeaderMeta<?>> header : readableLocalHeaders) {
+			switch (header.getKey()) {
+				case SolaceBinderHeaders.RAW_MESSAGE:
+					assertThat(springMessage.getHeaders(), not(hasKey(header)));
+					break;
+				default:
+					fail(String.format("no test for header %s", header.getKey()));
+			}
+		}
+
+		SDTMap filteredMetadata = JCSMPFactory.onlyInstance().createMap();
+		for (String metadataKey : metadata.keySet()) {
+			if (readableLocalHeaders.stream().map(Map.Entry::getKey).noneMatch(metadataKey::equals)) {
 				filteredMetadata.putObject(metadataKey, metadata.get(metadataKey));
 			}
 		}

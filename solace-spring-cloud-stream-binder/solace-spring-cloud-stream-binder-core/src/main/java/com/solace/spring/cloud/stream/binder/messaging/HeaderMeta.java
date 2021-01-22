@@ -4,4 +4,9 @@ public interface HeaderMeta<T> {
 	Class<T> getType();
 	boolean isReadable();
 	boolean isWritable();
+	Scope getScope();
+
+	enum Scope {
+		LOCAL, WIRE
+	}
 }

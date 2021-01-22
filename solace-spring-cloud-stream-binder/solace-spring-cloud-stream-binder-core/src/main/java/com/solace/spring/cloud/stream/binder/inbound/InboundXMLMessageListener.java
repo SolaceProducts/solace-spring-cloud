@@ -136,7 +136,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		if (needAttributes) {
 			AttributeAccessor attributes = attributesHolder.get();
 			if (attributes != null) {
-				attributes.setAttribute(SolaceMessageHeaderErrorMessageStrategy.INPUT_MESSAGE, message);
+				attributes.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, message);
 				attributes.setAttribute(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE, xmlMessage);
 			}
 		}
