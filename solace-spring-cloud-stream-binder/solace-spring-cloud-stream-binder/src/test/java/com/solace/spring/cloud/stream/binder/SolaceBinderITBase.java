@@ -60,13 +60,13 @@ public abstract class SolaceBinderITBase
 	@Autowired
 	private SpringJCSMPFactory springJCSMPFactory;
 
-	@Value("${test.solace.mgmt.host:#{null}}")
+	@Value("${test.solace.mgmt.host:localhost}")
 	private String solaceMgmtHost;
 
-	@Value("${test.solace.mgmt.username:#{null}}")
+	@Value("${test.solace.mgmt.username:admin}")
 	private String solaceMgmtUsername;
 
-	@Value("${test.solace.mgmt.password:#{null}}")
+	@Value("${test.solace.mgmt.password:admin}")
 	private String solaceMgmtPassword;
 
 	JCSMPSession jcsmpSession;

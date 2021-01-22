@@ -13,6 +13,7 @@ import com.solacesystems.jcsmp.JCSMPTransportException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.lang.Nullable;
+import org.springframework.messaging.MessagingException;
 
 import java.util.Objects;
 import java.util.UUID;
@@ -320,6 +321,28 @@ public class FlowReceiverContainer {
 
 	public String getQueueName() {
 		return queueName;
+	}
+
+	public void pause() {
+		FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+		if(flowReceiverReference != null) {
+			flowReceiverReference.get().stop();
+		} else {
+			logger.warn("Binder was not started, pause has no effect.");
+		}
+	}
+
+	public void resume() {
+		FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+		if(flowReceiverReference != null) {
+			try {
+				flowReceiverReference.get().start();
+			} catch (JCSMPException e) {
+				throw new MessagingException("Could not resume", e);
+			}
+		} else {
+			throw new MessagingException("Receiver is not started, cannot resume");
+		}
 	}
 
 	static class FlowReceiverReference {

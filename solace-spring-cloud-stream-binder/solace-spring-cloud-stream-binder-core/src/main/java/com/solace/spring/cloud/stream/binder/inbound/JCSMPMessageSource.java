@@ -19,6 +19,7 @@ import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.context.Lifecycle;
 import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
+import org.springframework.integration.core.Pausable;
 import org.springframework.integration.endpoint.AbstractMessageSource;
 import org.springframework.messaging.MessagingException;
 
@@ -30,7 +31,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle {
+public class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle, Pausable {
 	private final String id = UUID.randomUUID().toString();
 	private final String queueName;
 	private final JCSMPSession jcsmpSession;
@@ -184,5 +185,15 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 	public void setRemoteStopFlag(Supplier<Boolean> remoteStopFlag) {
 		this.remoteStopFlag = remoteStopFlag;
+	}
+
+	@Override
+	public void pause() {
+		this.flowReceiverContainer.pause();
+	}
+
+	@Override
+	public void resume() {
+		this.flowReceiverContainer.resume();
 	}
 }

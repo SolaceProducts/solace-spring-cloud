@@ -23,8 +23,10 @@ import org.springframework.integration.support.ErrorMessageUtils;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -38,8 +40,10 @@ abstract class InboundXMLMessageListener implements Runnable {
 	private final boolean needHolder;
 	private final boolean needAttributes;
 	private final AtomicBoolean stopFlag = new AtomicBoolean(false);
+	private final AtomicBoolean pauseFlag = new AtomicBoolean(false);
 	private final Supplier<Boolean> remoteStopFlag;
 
+	private static final int POLL_TIMEOUT_MS = 500;
 	private static final Log logger = LogFactory.getLog(InboundXMLMessageListener.class);
 
 	InboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
@@ -67,6 +71,10 @@ abstract class InboundXMLMessageListener implements Runnable {
 		try {
 			while (keepPolling()) {
 				try {
+					if (this.pauseFlag.get()) {
+						LockSupport.parkNanos(TimeUnit.MICROSECONDS.toNanos(POLL_TIMEOUT_MS));
+						continue;
+					}
 					receive();
 				} catch (RuntimeException e) {
 					// Shouldn't ever come in here.
@@ -89,7 +97,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		MessageContainer messageContainer;
 
 		try {
-			messageContainer = flowReceiverContainer.receive();
+			messageContainer = flowReceiverContainer.receive(POLL_TIMEOUT_MS);
 		} catch (JCSMPException e) {
 			String msg = String.format("Received error while trying to read message from endpoint %s",
 					flowReceiverContainer.getQueueName());
@@ -165,4 +173,6 @@ abstract class InboundXMLMessageListener implements Runnable {
 	public AtomicBoolean getStopFlag() {
 		return stopFlag;
 	}
+
+	public AtomicBoolean getPauseFlag() {return pauseFlag;};
 }

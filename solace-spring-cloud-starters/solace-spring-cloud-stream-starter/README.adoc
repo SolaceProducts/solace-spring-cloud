@@ -677,6 +677,38 @@ Error Queues should not be used with anonymous consumer groups.
 Since the names of anonymous consumer groups, and in turn the name of their would-be Error Queues, are randomly generated at runtime, it would provide little value to create bindings to these Error Queues because of their unpredictable naming and temporary existence. Also, your environment will be polluted with orphaned Error Queues whenever these consumers rebind.
 ====
 
+=== Pause and resume
+
+If you use annotated binder or polled message receiver, the consumption of messages can be paused and resumed. The predefined spring @Pausable interface is implemented, and thus the following both method can be used on binder:
+[source.java]
+----
+import org.springframework.cloud.stream.binder.Binding
+Binding::pause()
+Binding::resume()
+----
+For the example for a pollable consumer, for a complete example see SolaceBinderBasicIT -> testPolledConsumerPauseAndResume
+[source,java]
+----
+    private final Binding<PollableSource<MessageHandler>> consumerBinding;
+
+    public void pollConsumerWorker() throws Exception {
+        while(run) { // <1>
+            gotMessage = moduleInputChannel.poll(message1 -> process(message1))
+        }
+    }
+
+    public void pause() throws Exception {
+        consumerBinding.pause(); // <2>
+    }
+
+    public void resume() throws Exception {
+        consumerBinding.resume(); // <3>
+    }
+----
+<1> Polling worker thread, note: thread safety is not shown in favor of simplicity.
+<2> pause the binder like this, could be done anywhere.
+<3> resume dito as pause, to let the worker fetch new messages again.
+
 == Resources
 
 For more information about Spring Cloud Streams try these resources:
