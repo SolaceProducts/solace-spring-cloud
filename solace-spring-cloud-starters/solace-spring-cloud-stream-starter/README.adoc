@@ -221,6 +221,8 @@ autoBindErrorQueue::
 Whether to automatically create a durable error queue to which messages will be republished when message processing failures are encountered. Only applies once all internal retries have been exhausted.
 +
 Default: `false`
++
+TIP: Your ACL Profile must allow for publishing to this queue if you decide to use `autoBindErrorQueue`.
 
 provisionErrorQueue::
 Whether to provision durable queues for error queues when `autoBindErrorQueue` is `true`. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}.error`.
