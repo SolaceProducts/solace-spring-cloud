@@ -262,6 +262,11 @@ Whether the error queue respects Message TTL.
 +
 Default: `null`
 
+errorMsgDmqEligible::
+The eligibility for republished messages to be moved to a Dead Message Queue.
++
+Default: `null`
+
 errorMsgTtl::
 The number of milliseconds before republished messages are discarded or moved to a Dead Message Queue.
 +

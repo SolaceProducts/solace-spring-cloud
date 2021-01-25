@@ -20,6 +20,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	private Integer errorQueueQuota = null;
 	private Boolean errorQueueRespectsMsgTtl = null;
 
+	private Boolean errorMsgDmqEligible = null;
 	private Long errorMsgTtl = null;
 	// ------------------------
 
@@ -117,6 +118,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setErrorQueueRespectsMsgTtl(Boolean errorQueueRespectsMsgTtl) {
 		this.errorQueueRespectsMsgTtl = errorQueueRespectsMsgTtl;
+	}
+
+	public Boolean getErrorMsgDmqEligible() {
+		return errorMsgDmqEligible;
+	}
+
+	public void setErrorMsgDmqEligible(Boolean errorMsgDmqEligible) {
+		this.errorMsgDmqEligible = errorMsgDmqEligible;
 	}
 
 	public Long getErrorMsgTtl() {

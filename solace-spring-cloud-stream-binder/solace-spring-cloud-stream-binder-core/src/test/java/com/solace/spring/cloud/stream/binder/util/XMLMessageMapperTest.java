@@ -471,13 +471,16 @@ public class XMLMessageMapperTest {
 	@Test
 	public void testMapConsumerErrorSpringMessageToXMLMessage_WithProperties() {
 		String testPayload = "testPayload";
+		XMLMessage defaultXmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload).build();
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		consumerProperties.setErrorMsgDmqEligible(!defaultXmlMessage.isDMQEligible());
 		consumerProperties.setErrorMsgTtl(100L);
 
 		XMLMessage xmlMessage = xmlMessageMapper.mapError(testSpringMessage, consumerProperties);
 		Mockito.verify(xmlMessageMapper).map(testSpringMessage);
 
+		assertEquals(consumerProperties.getErrorMsgDmqEligible(), xmlMessage.isDMQEligible());
 		assertEquals(consumerProperties.getErrorMsgTtl().longValue(), xmlMessage.getTimeToLive());
 	}
 

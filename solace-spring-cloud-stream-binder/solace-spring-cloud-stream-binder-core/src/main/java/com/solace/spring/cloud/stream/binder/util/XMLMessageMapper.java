@@ -56,6 +56,9 @@ public class XMLMessageMapper {
 
 	public XMLMessage mapError(Message<?> message, SolaceConsumerProperties consumerProperties) {
 		XMLMessage xmlMessage = map(message);
+		if (consumerProperties.getErrorMsgDmqEligible() != null) {
+			xmlMessage.setDMQEligible(consumerProperties.getErrorMsgDmqEligible());
+		}
 		if (consumerProperties.getErrorMsgTtl() != null) {
 			xmlMessage.setTimeToLive(consumerProperties.getErrorMsgTtl());
 		}
