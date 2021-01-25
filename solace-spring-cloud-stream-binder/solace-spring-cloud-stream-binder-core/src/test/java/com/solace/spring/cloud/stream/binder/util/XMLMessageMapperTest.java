@@ -200,7 +200,6 @@ public class XMLMessageMapperTest {
 				.withPayload("")
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 
-		XMLMessage defaultXmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 		Set<Map.Entry<String, ? extends HeaderMeta<?>>> writeableHeaders = Stream.of(
 					SolaceHeaderMeta.META.entrySet().stream(),
 					SolaceBinderHeaderMeta.META.entrySet().stream())
@@ -220,7 +219,7 @@ public class XMLMessageMapperTest {
 					value = RandomStringUtils.randomAlphanumeric(10);
 					break;
 				case SolaceHeaders.DMQ_ELIGIBLE:
-					value = !defaultXmlMessage.isDMQEligible();
+					value = !(Boolean) ((SolaceHeaderMeta<?>) header.getValue()).getDefaultValueOverride();
 					break;
 				case SolaceHeaders.EXPIRATION:
 				case SolaceHeaders.SENDER_TIMESTAMP:
@@ -397,6 +396,35 @@ public class XMLMessageMapperTest {
 		validateXMLMessage(xmlMessage, testSpringMessage);
 	}
 
+	@Test
+	public void testMapSpringMessageToXMLMessage_OverrideDefaultSolaceProperties() throws Exception {
+		Set<Map.Entry<String, ? extends SolaceHeaderMeta<?>>> overriddenWriteableHeaders = SolaceHeaderMeta.META
+				.entrySet()
+				.stream()
+				.filter(h -> h.getValue().isWritable())
+				.filter(h -> h.getValue().hasOverriddenDefaultValue())
+				.collect(Collectors.toSet());
+		assertNotEquals("Test header set was empty", 0, overriddenWriteableHeaders.size());
+
+		Message<?> testSpringMessage = new DefaultMessageBuilderFactory()
+				.withPayload("")
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage);
+
+		for (Map.Entry<String, ? extends HeaderMeta<?>> header : overriddenWriteableHeaders) {
+			switch (header.getKey()) {
+				case SolaceHeaders.DMQ_ELIGIBLE:
+					assertTrue(xmlMessage.isDMQEligible());
+					break;
+				default:
+					fail(String.format("no test for header %s", header.getKey()));
+			}
+		}
+
+		validateXMLMessage(xmlMessage, testSpringMessage);
+	}
+
 	@Test(expected = SolaceMessageConversionException.class)
 	public void testFailMapSpringMessageToXMLMessage_InvalidPayload() {
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(new Object()).build();
@@ -443,13 +471,16 @@ public class XMLMessageMapperTest {
 	@Test
 	public void testMapConsumerErrorSpringMessageToXMLMessage_WithProperties() {
 		String testPayload = "testPayload";
+		XMLMessage defaultXmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload).build();
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		consumerProperties.setErrorMsgDmqEligible(!defaultXmlMessage.isDMQEligible());
 		consumerProperties.setErrorMsgTtl(100L);
 
 		XMLMessage xmlMessage = xmlMessageMapper.mapError(testSpringMessage, consumerProperties);
 		Mockito.verify(xmlMessageMapper).map(testSpringMessage);
 
+		assertEquals(consumerProperties.getErrorMsgDmqEligible(), xmlMessage.isDMQEligible());
 		assertEquals(consumerProperties.getErrorMsgTtl().longValue(), xmlMessage.getTimeToLive());
 	}
 

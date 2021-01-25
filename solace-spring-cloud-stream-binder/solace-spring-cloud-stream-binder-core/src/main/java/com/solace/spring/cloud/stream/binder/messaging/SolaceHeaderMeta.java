@@ -16,7 +16,7 @@ public class SolaceHeaderMeta<T> implements HeaderMeta<T> {
 			{SolaceHeaders.CORRELATION_ID, new SolaceHeaderMeta<>(String.class, XMLMessage::getCorrelationId, XMLMessage::setCorrelationId)},
 			{SolaceHeaders.DESTINATION, new SolaceHeaderMeta<>(Destination.class, XMLMessage::getDestination, null)},
 			{SolaceHeaders.DISCARD_INDICATION, new SolaceHeaderMeta<>(Boolean.class, XMLMessage::getDiscardIndication, null)},
-			{SolaceHeaders.DMQ_ELIGIBLE, new SolaceHeaderMeta<>(Boolean.class, XMLMessage::isDMQEligible, XMLMessage::setDMQEligible)},
+			{SolaceHeaders.DMQ_ELIGIBLE, new SolaceHeaderMeta<>(Boolean.class, XMLMessage::isDMQEligible, XMLMessage::setDMQEligible, true)},
 			{SolaceHeaders.EXPIRATION, new SolaceHeaderMeta<>(Long.class, XMLMessage::getExpiration, XMLMessage::setExpiration)},
 			{SolaceHeaders.HTTP_CONTENT_ENCODING, new SolaceHeaderMeta<>(String.class, XMLMessage::getHTTPContentEncoding, XMLMessage::setHTTPContentEncoding)},
 			{SolaceHeaders.PRIORITY, new SolaceHeaderMeta<>(Integer.class, XMLMessage::getPriority, XMLMessage::setPriority)},
@@ -33,11 +33,24 @@ public class SolaceHeaderMeta<T> implements HeaderMeta<T> {
 	private final Class<T> type;
 	private final Function<XMLMessage, T> readAction;
 	private final BiConsumer<XMLMessage, T> writeAction;
+	private final T defaultValueOverride;
+	private final boolean hasDefaultValueOverride;
+
+	private SolaceHeaderMeta(Class<T> type, Function<XMLMessage, T> readAction, BiConsumer<XMLMessage, T> writeAction,
+							 T defaultValueOverride) {
+		this.type = type;
+		this.readAction = readAction;
+		this.writeAction = writeAction;
+		this.defaultValueOverride = defaultValueOverride;
+		this.hasDefaultValueOverride = true;
+	}
 
 	private SolaceHeaderMeta(Class<T> type, Function<XMLMessage, T> readAction, BiConsumer<XMLMessage, T> writeAction) {
 		this.type = type;
 		this.readAction = readAction;
 		this.writeAction = writeAction;
+		this.defaultValueOverride = null;
+		this.hasDefaultValueOverride = false;
 	}
 
 	@Override
@@ -74,5 +87,18 @@ public class SolaceHeaderMeta<T> implements HeaderMeta<T> {
 						value.getClass()));
 			}
 		};
+	}
+
+	/**
+	 * Get the overridden default value. Overridden default values may be {@code null}.
+	 * Check {@link #hasOverriddenDefaultValue()} to be sure.
+	 * @return new default value or null if does not exist
+	 */
+	public T getDefaultValueOverride() {
+		return hasDefaultValueOverride ? defaultValueOverride : null;
+	}
+
+	public boolean hasOverriddenDefaultValue() {
+		return hasDefaultValueOverride;
 	}
 }
