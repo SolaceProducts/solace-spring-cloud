@@ -211,6 +211,47 @@ public class SolaceHeadersTest {
 	}
 
 	@Test
+	public void testDefaultValueOverride() {
+		if (!(headersClass.equals(SolaceHeaders.class))) {
+			logger.info(String.format("Test does not apply to %s", headersClass.getSimpleName()));
+			return;
+		}
+
+		XMLMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		@SuppressWarnings("unchecked") Map<String, SolaceHeaderMeta<?>> solaceHeaderMeta =
+				(Map<String, SolaceHeaderMeta<?>>) headersMeta;
+
+		for (Map.Entry<String, SolaceHeaderMeta<?>> headerMeta : solaceHeaderMeta.entrySet()) {
+			if (!headerMeta.getValue().isWritable()) continue;
+			if (!headerMeta.getValue().hasOverriddenDefaultValue()) {
+				assertThat(headerMeta.getValue().getDefaultValueOverride(), nullValue());
+				continue;
+			}
+
+			Object value = headerMeta.getValue().getDefaultValueOverride();
+
+			if (headerMeta.getValue().isReadable()) {
+				assertNotEquals("Overridden default value is the same as the original default value",
+						headerMeta.getValue().getReadAction().apply(xmlMessage), value);
+			}
+
+
+			logger.info(String.format("Writing %s: %s", headerMeta.getKey(), value));
+			headerMeta.getValue().getWriteAction().accept(xmlMessage, value);
+
+			if (headerMeta.getValue().isReadable()) {
+				assertEquals(value, headerMeta.getValue().getReadAction().apply(xmlMessage));
+			} else {
+				logger.warn(String.format("No read action for header %s. Cannot validate that write operation worked",
+						headerMeta.getKey()));
+			}
+		}
+
+		logger.info("Message Dump:\n" + xmlMessage.dump(XMLMessage.MSGDUMP_FULL));
+		logger.info("Message String:\n" + xmlMessage.toString());
+	}
+
+	@Test
 	public void testFailMetaWriteActionsWithInvalidType() {
 		if (!(headersClass.equals(SolaceHeaders.class))) {
 			logger.info(String.format("Test does not apply to %s", headersClass.getSimpleName()));

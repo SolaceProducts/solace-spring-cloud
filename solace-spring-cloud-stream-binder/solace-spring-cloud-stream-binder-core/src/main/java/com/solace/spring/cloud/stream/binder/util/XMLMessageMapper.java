@@ -126,16 +126,20 @@ public class XMLMessageMapper {
 					logger.warn(msg, exception);
 					throw exception;
 				}
+			} else if (header.getValue().hasOverriddenDefaultValue()) {
+					value = header.getValue().getDefaultValueOverride();
+			} else {
+				continue;
+			}
 
-				try {
-					header.getValue().getWriteAction().accept(xmlMessage, value);
-				} catch (Exception e) {
-					String msg = String.format("Could not set %s property from header %s of message %s",
-							XMLMessage.class.getSimpleName(), header.getKey(), message.getHeaders().getId());
-					SolaceMessageConversionException exception = new SolaceMessageConversionException(msg, e);
-					logger.warn(msg, exception);
-					throw exception;
-				}
+			try {
+				header.getValue().getWriteAction().accept(xmlMessage, value);
+			} catch (Exception e) {
+				String msg = String.format("Could not set %s property from header %s of message %s",
+						XMLMessage.class.getSimpleName(), header.getKey(), message.getHeaders().getId());
+				SolaceMessageConversionException exception = new SolaceMessageConversionException(msg, e);
+				logger.warn(msg, exception);
+				throw exception;
 			}
 		}
 
