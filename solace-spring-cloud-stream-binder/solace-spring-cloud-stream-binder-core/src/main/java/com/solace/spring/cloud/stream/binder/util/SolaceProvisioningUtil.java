@@ -51,27 +51,36 @@ public class SolaceProvisioningUtil {
 
 	public static String getQueueName(String topicName, String groupName,
 									  SolaceProducerProperties producerProperties) {
-		return getQueueName(topicName, groupName, producerProperties,
-				false, null);
+		return getQueueNames(topicName, groupName, producerProperties, true, false, null)
+				.getConsumerGroupQueueName();
 	}
 
-	public static String getQueueName(String topicName, String groupName,
-								SolaceConsumerProperties consumerProperties, boolean isAnonymous) {
-		return getQueueName(topicName, groupName, consumerProperties,
+	public static QueueNames getQueueNames(String topicName, String groupName,
+										   SolaceConsumerProperties consumerProperties, boolean isAnonymous) {
+		return getQueueNames(topicName, groupName, consumerProperties, consumerProperties.isUseGroupNameInQueueName(),
 				isAnonymous, consumerProperties.getAnonymousGroupPostfix());
 	}
 
-	private static String getQueueName(String topicName, String groupName,
-								SolaceCommonProperties properties,
-								boolean isAnonymous, String anonGroupPostfix) {
-		String queueName;
+	private static QueueNames getQueueNames(String topicName, String groupName, SolaceCommonProperties properties,
+											boolean useGroupName, boolean isAnonymous, String anonGroupPostfix) {
+		String commonPrefix = properties.getPrefix() + replaceTopicWildCards(topicName, "_");
+		StringBuilder groupQueueName = new StringBuilder(commonPrefix);
+		StringBuilder errorQueueName = new StringBuilder(commonPrefix);
+
 		if (isAnonymous) {
-			queueName = replaceTopicWildCards(topicName, "_") + QUEUE_NAME_DELIM + JCSMPFactory.onlyInstance().createUniqueName(anonGroupPostfix);
+			String uniquePostfix = JCSMPFactory.onlyInstance().createUniqueName(anonGroupPostfix);
+			groupQueueName.append(QUEUE_NAME_DELIM).append(uniquePostfix);
+			errorQueueName.append(QUEUE_NAME_DELIM).append(uniquePostfix);
 		} else {
-			queueName = replaceTopicWildCards(topicName, "_") + QUEUE_NAME_DELIM + groupName;
+			if (useGroupName) {
+				groupQueueName.append(QUEUE_NAME_DELIM).append(groupName);
+			}
+			errorQueueName.append(QUEUE_NAME_DELIM).append(groupName);
 		}
 
-		return properties.getPrefix() + queueName;
+		errorQueueName.append(QUEUE_NAME_DELIM).append(ERROR_QUEUE_POSTFIX);
+
+		return new QueueNames(groupQueueName.toString(), errorQueueName.toString());
 	}
 
 	private static String replaceTopicWildCards(String topicName, CharSequence replacement) {
@@ -80,7 +89,21 @@ public class SolaceProvisioningUtil {
 				.replace(">", replacement);
 	}
 
-	public static String getErrorQueueName(String queueName) {
-		return queueName + QUEUE_NAME_DELIM + ERROR_QUEUE_POSTFIX;
+	public static class QueueNames {
+		private final String consumerGroupQueueName;
+		private final String errorQueueName;
+
+		private QueueNames(String consumerGroupQueueName, String errorQueueName) {
+			this.consumerGroupQueueName = consumerGroupQueueName;
+			this.errorQueueName = errorQueueName;
+		}
+
+		public String getConsumerGroupQueueName() {
+			return consumerGroupQueueName;
+		}
+
+		public String getErrorQueueName() {
+			return errorQueueName;
+		}
 	}
 }

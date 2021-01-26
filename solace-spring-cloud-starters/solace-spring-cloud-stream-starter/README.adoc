@@ -165,6 +165,13 @@ Whether to add topic subscriptions to durable queues for non-anonymous consumer 
 +
 Default: `true`
 
+useGroupNameInQueueName::
+Whether to include the `group` name in the queue name for non-anonymous consumer groups. If set to `true`, the queue name will be `{prefix}{destination}.{group}`. If set to `false`, the queue name will be `{prefix}{destination}`.
++
+Default: `true`
++
+IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will consume from the same queue regardless of their configured `group` names.
+
 queueAccessType::
 Access type for the consumer group queue.
 +

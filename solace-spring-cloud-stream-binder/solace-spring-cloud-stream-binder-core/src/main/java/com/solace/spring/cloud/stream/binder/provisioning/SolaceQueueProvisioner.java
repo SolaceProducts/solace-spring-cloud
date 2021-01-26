@@ -103,7 +103,9 @@ public class SolaceQueueProvisioner
 		String topicName = SolaceProvisioningUtil.getTopicName(name, properties.getExtension());
 		boolean isAnonQueue = SolaceProvisioningUtil.isAnonQueue(group);
 		boolean isDurableQueue = SolaceProvisioningUtil.isDurableQueue(group);
-		String queueName = SolaceProvisioningUtil.getQueueName(name, group, properties.getExtension(), isAnonQueue);
+		SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(name, group,
+				properties.getExtension(), isAnonQueue);
+		String groupQueueName = queueNames.getConsumerGroupQueueName();
 
 		EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
 		boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
@@ -123,9 +125,9 @@ public class SolaceQueueProvisioner
 		}
 
 		logger.info(isAnonQueue ?
-				String.format("Creating anonymous (temporary) queue %s", queueName) :
-				String.format("Creating %s queue %s for consumer group %s", isDurableQueue ? "durable" : "temporary", queueName, group));
-		Queue queue = provisionQueue(queueName, isDurableQueue, endpointProperties, doDurableQueueProvisioning);
+				String.format("Creating anonymous (temporary) queue %s", groupQueueName) :
+				String.format("Creating %s queue %s for consumer group %s", isDurableQueue ? "durable" : "temporary", groupQueueName, group));
+		Queue queue = provisionQueue(groupQueueName, isDurableQueue, endpointProperties, doDurableQueueProvisioning);
 		trackQueueToTopicBinding(queue.getName(), topicName);
 
 		for (String additionalSubscription : properties.getExtension().getQueueAdditionalSubscriptions()) {
@@ -135,7 +137,7 @@ public class SolaceQueueProvisioner
 		SolaceConsumerDestination destination = new SolaceConsumerDestination(queue.getName());
 
 		if (properties.getExtension().isAutoBindErrorQueue()) {
-			Queue errorQueue = provisionErrorQueue(queueName, properties.getExtension());
+			Queue errorQueue = provisionErrorQueue(queueNames.getErrorQueueName(), properties.getExtension());
 			destinationToErrorQueue.put(destination.getName(), errorQueue.getName());
 		}
 
@@ -195,8 +197,7 @@ public class SolaceQueueProvisioner
 		return queue;
 	}
 
-	private Queue provisionErrorQueue(String queueName, SolaceConsumerProperties properties) {
-		String errorQueueName = SolaceProvisioningUtil.getErrorQueueName(queueName);
+	private Queue provisionErrorQueue(String errorQueueName, SolaceConsumerProperties properties) {
 		logger.info(String.format("Provisioning error queue %s", errorQueueName));
 		EndpointProperties endpointProperties = SolaceProvisioningUtil.getErrorQueueEndpointProperties(properties);
 		return provisionQueue(errorQueueName, true, endpointProperties, properties.isProvisionErrorQueue(), "Error Queue");

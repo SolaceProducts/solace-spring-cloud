@@ -7,6 +7,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	private int polledConsumerWaitTimeInMillis = 100;
 
 	private String[] queueAdditionalSubscriptions = new String[0];
+	private boolean useGroupNameInQueueName = true;
 
 	// Error Queue Properties ---------
 	private boolean autoBindErrorQueue = false;
@@ -46,6 +47,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setQueueAdditionalSubscriptions(String[] queueAdditionalSubscriptions) {
 		this.queueAdditionalSubscriptions = queueAdditionalSubscriptions;
+	}
+
+	public boolean isUseGroupNameInQueueName() {
+		return useGroupNameInQueueName;
+	}
+
+	public void setUseGroupNameInQueueName(boolean useGroupNameInQueueName) {
+		this.useGroupNameInQueueName = useGroupNameInQueueName;
 	}
 
 	public boolean isAutoBindErrorQueue() {
