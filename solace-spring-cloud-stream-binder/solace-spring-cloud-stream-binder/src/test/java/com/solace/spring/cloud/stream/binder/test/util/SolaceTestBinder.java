@@ -21,6 +21,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.integration.config.EnableIntegration;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
+import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -96,12 +97,13 @@ public class SolaceTestBinder
 	private void preBindCaptureConsumerResources(String name, String group, SolaceConsumerProperties consumerProperties) {
 		if (SolaceProvisioningUtil.isAnonQueue(group)) return; // we don't know any anon resource names before binding
 
-		String queueName = SolaceProvisioningUtil.getQueueName(name, group, consumerProperties, false);
+		SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(name, group,
+				consumerProperties, false);
 
 		// values set here may be overwritten after binding
-		queues.add(queueName);
+		queues.add(queueNames.getConsumerGroupQueueName());
 		if (consumerProperties.isAutoBindErrorQueue()) {
-			queues.add(SolaceProvisioningUtil.getErrorQueueName(queueName));
+			queues.add(queueNames.getErrorQueueName());
 		}
 	}
 
@@ -112,7 +114,9 @@ public class SolaceTestBinder
 			queues.add(queueName);
 		}
 		if (consumerProperties.isAutoBindErrorQueue()) {
-			String errorQueueName = extractErrorQueueName(binding, name);
+			String errorQueueName = StringUtils.hasText(consumerProperties.getErrorQueueNameOverride()) ?
+					consumerProperties.getErrorQueueNameOverride() :
+					extractErrorQueueName(binding, name, group, consumerProperties.isUseGroupNameInErrorQueueName());
 			queues.add(errorQueueName);
 			bindingNameToErrorQueueName.put(binding.getBindingName(), errorQueueName);
 		}
@@ -131,10 +135,18 @@ public class SolaceTestBinder
 		return matcher.group(1);
 	}
 
-	private String extractErrorQueueName(Binding<?> binding, String destination) {
+	private String extractErrorQueueName(Binding<?> binding, String destination, String group, boolean includeGroup) {
 		String fullQueueName = extractBindingDestination(binding);
-		String prefix = fullQueueName.startsWith("#P2P/QTMP/") ?
-				fullQueueName.substring(fullQueueName.indexOf(destination)) : fullQueueName;
+		String prefix;
+		if (fullQueueName.startsWith("#P2P/QTMP/")) {
+			prefix = fullQueueName.substring(fullQueueName.indexOf(destination));
+		} else if (includeGroup && !fullQueueName.endsWith('.' + group)) {
+			prefix = fullQueueName + '.' + group;
+		} else if (!includeGroup && fullQueueName.endsWith('.' + group)) {
+			prefix = fullQueueName.replace('.' + group, "");
+		} else {
+			prefix = fullQueueName;
+		}
 		return prefix + ".error";
 	}
 

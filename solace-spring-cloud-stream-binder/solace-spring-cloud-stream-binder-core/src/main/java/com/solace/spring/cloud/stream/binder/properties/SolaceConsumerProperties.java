@@ -7,10 +7,13 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	private int polledConsumerWaitTimeInMillis = 100;
 
 	private String[] queueAdditionalSubscriptions = new String[0];
+	private boolean useGroupNameInQueueName = true;
 
 	// Error Queue Properties ---------
 	private boolean autoBindErrorQueue = false;
 	private boolean provisionErrorQueue = true;
+	private String errorQueueNameOverride = null;
+	private boolean useGroupNameInErrorQueueName = true;
 
 	private int errorQueueAccessType = EndpointProperties.ACCESSTYPE_NONEXCLUSIVE;
 	private int errorQueuePermission = EndpointProperties.PERMISSION_CONSUME;
@@ -48,6 +51,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.queueAdditionalSubscriptions = queueAdditionalSubscriptions;
 	}
 
+	public boolean isUseGroupNameInQueueName() {
+		return useGroupNameInQueueName;
+	}
+
+	public void setUseGroupNameInQueueName(boolean useGroupNameInQueueName) {
+		this.useGroupNameInQueueName = useGroupNameInQueueName;
+	}
+
 	public boolean isAutoBindErrorQueue() {
 		return autoBindErrorQueue;
 	}
@@ -62,6 +73,22 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setProvisionErrorQueue(boolean provisionErrorQueue) {
 		this.provisionErrorQueue = provisionErrorQueue;
+	}
+
+	public String getErrorQueueNameOverride() {
+		return errorQueueNameOverride;
+	}
+
+	public void setErrorQueueNameOverride(String errorQueueNameOverride) {
+		this.errorQueueNameOverride = errorQueueNameOverride;
+	}
+
+	public boolean isUseGroupNameInErrorQueueName() {
+		return useGroupNameInErrorQueueName;
+	}
+
+	public void setUseGroupNameInErrorQueueName(boolean useGroupNameInErrorQueueName) {
+		this.useGroupNameInErrorQueueName = useGroupNameInErrorQueueName;
 	}
 
 	public int getErrorQueueAccessType() {
