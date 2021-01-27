@@ -51,18 +51,21 @@ public class SolaceProvisioningUtil {
 
 	public static String getQueueName(String topicName, String groupName,
 									  SolaceProducerProperties producerProperties) {
-		return getQueueNames(topicName, groupName, producerProperties, true, false, null)
+		return getQueueNames(topicName, groupName, producerProperties, false, null, true, true)
 				.getConsumerGroupQueueName();
 	}
 
 	public static QueueNames getQueueNames(String topicName, String groupName,
 										   SolaceConsumerProperties consumerProperties, boolean isAnonymous) {
-		return getQueueNames(topicName, groupName, consumerProperties, consumerProperties.isUseGroupNameInQueueName(),
-				isAnonymous, consumerProperties.getAnonymousGroupPostfix());
+		return getQueueNames(topicName, groupName, consumerProperties,
+				isAnonymous, consumerProperties.getAnonymousGroupPostfix(),
+				consumerProperties.isUseGroupNameInQueueName(),
+				consumerProperties.isUseGroupNameInErrorQueueName());
 	}
 
 	private static QueueNames getQueueNames(String topicName, String groupName, SolaceCommonProperties properties,
-											boolean useGroupName, boolean isAnonymous, String anonGroupPostfix) {
+											boolean isAnonymous, String anonGroupPostfix,
+											boolean useGroupName, boolean useGroupNameInErrorQueue) {
 		String commonPrefix = properties.getPrefix() + replaceTopicWildCards(topicName, "_");
 		StringBuilder groupQueueName = new StringBuilder(commonPrefix);
 		StringBuilder errorQueueName = new StringBuilder(commonPrefix);
@@ -75,7 +78,9 @@ public class SolaceProvisioningUtil {
 			if (useGroupName) {
 				groupQueueName.append(QUEUE_NAME_DELIM).append(groupName);
 			}
-			errorQueueName.append(QUEUE_NAME_DELIM).append(groupName);
+			if (useGroupNameInErrorQueue) {
+				errorQueueName.append(QUEUE_NAME_DELIM).append(groupName);
+			}
 		}
 
 		errorQueueName.append(QUEUE_NAME_DELIM).append(ERROR_QUEUE_POSTFIX);

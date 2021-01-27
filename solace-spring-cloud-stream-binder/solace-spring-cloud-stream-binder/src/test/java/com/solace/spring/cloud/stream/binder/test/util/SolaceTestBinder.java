@@ -113,7 +113,8 @@ public class SolaceTestBinder
 			queues.add(queueName);
 		}
 		if (consumerProperties.isAutoBindErrorQueue()) {
-			String errorQueueName = extractErrorQueueName(binding, name, group);
+			String errorQueueName = extractErrorQueueName(binding, name, group,
+					consumerProperties.isUseGroupNameInErrorQueueName());
 			queues.add(errorQueueName);
 			bindingNameToErrorQueueName.put(binding.getBindingName(), errorQueueName);
 		}
@@ -132,13 +133,15 @@ public class SolaceTestBinder
 		return matcher.group(1);
 	}
 
-	private String extractErrorQueueName(Binding<?> binding, String destination, String group) {
+	private String extractErrorQueueName(Binding<?> binding, String destination, String group, boolean includeGroup) {
 		String fullQueueName = extractBindingDestination(binding);
 		String prefix;
 		if (fullQueueName.startsWith("#P2P/QTMP/")) {
 			prefix = fullQueueName.substring(fullQueueName.indexOf(destination));
-		} else if (!fullQueueName.endsWith('.' + group)) {
+		} else if (includeGroup && !fullQueueName.endsWith('.' + group)) {
 			prefix = fullQueueName + '.' + group;
+		} else if (!includeGroup && fullQueueName.endsWith('.' + group)) {
+			prefix = fullQueueName.replace('.' + group, "");
 		} else {
 			prefix = fullQueueName;
 		}

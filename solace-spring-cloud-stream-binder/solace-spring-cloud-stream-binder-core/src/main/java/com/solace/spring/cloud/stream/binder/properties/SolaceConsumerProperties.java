@@ -12,6 +12,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	// Error Queue Properties ---------
 	private boolean autoBindErrorQueue = false;
 	private boolean provisionErrorQueue = true;
+	private boolean useGroupNameInErrorQueueName = true;
 
 	private int errorQueueAccessType = EndpointProperties.ACCESSTYPE_NONEXCLUSIVE;
 	private int errorQueuePermission = EndpointProperties.PERMISSION_CONSUME;
@@ -71,6 +72,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setProvisionErrorQueue(boolean provisionErrorQueue) {
 		this.provisionErrorQueue = provisionErrorQueue;
+	}
+
+	public boolean isUseGroupNameInErrorQueueName() {
+		return useGroupNameInErrorQueueName;
+	}
+
+	public void setUseGroupNameInErrorQueueName(boolean useGroupNameInErrorQueueName) {
+		this.useGroupNameInErrorQueueName = useGroupNameInErrorQueueName;
 	}
 
 	public int getErrorQueueAccessType() {

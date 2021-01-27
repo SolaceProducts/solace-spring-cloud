@@ -172,6 +172,13 @@ Default: `true`
 +
 IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will consume from the same queue regardless of their configured `group` names.
 
+useGroupNameInErrorQueueName::
+Whether to include the `group` name in the error queue name for non-anonymous consumer groups. If set to `true`, the error queue name will be `{prefix}{destination}.{group}.error`. If set to `false`, the error queue name will be `{prefix}{destination}.error`.
++
+Default: `true`
++
+IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will republish failed messages to the same error queue regardless of their configured `group` names.
+
 queueAccessType::
 Access type for the consumer group queue.
 +
