@@ -57,10 +57,17 @@ public class SolaceProvisioningUtil {
 
 	public static QueueNames getQueueNames(String topicName, String groupName,
 										   SolaceConsumerProperties consumerProperties, boolean isAnonymous) {
-		return getQueueNames(topicName, groupName, consumerProperties,
+		QueueNames queueNames = getQueueNames(topicName, groupName, consumerProperties,
 				isAnonymous, consumerProperties.getAnonymousGroupPostfix(),
 				consumerProperties.isUseGroupNameInQueueName(),
 				consumerProperties.isUseGroupNameInErrorQueueName());
+
+		if (StringUtils.hasText(consumerProperties.getErrorQueueNameOverride())) {
+			return new QueueNames(queueNames.getConsumerGroupQueueName(),
+					consumerProperties.getErrorQueueNameOverride());
+		} else {
+			return queueNames;
+		}
 	}
 
 	private static QueueNames getQueueNames(String topicName, String groupName, SolaceCommonProperties properties,

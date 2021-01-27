@@ -21,6 +21,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.integration.config.EnableIntegration;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
+import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -113,8 +114,9 @@ public class SolaceTestBinder
 			queues.add(queueName);
 		}
 		if (consumerProperties.isAutoBindErrorQueue()) {
-			String errorQueueName = extractErrorQueueName(binding, name, group,
-					consumerProperties.isUseGroupNameInErrorQueueName());
+			String errorQueueName = StringUtils.hasText(consumerProperties.getErrorQueueNameOverride()) ?
+					consumerProperties.getErrorQueueNameOverride() :
+					extractErrorQueueName(binding, name, group, consumerProperties.isUseGroupNameInErrorQueueName());
 			queues.add(errorQueueName);
 			bindingNameToErrorQueueName.put(binding.getBindingName(), errorQueueName);
 		}

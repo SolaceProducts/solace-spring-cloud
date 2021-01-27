@@ -172,13 +172,6 @@ Default: `true`
 +
 IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will consume from the same queue regardless of their configured `group` names.
 
-useGroupNameInErrorQueueName::
-Whether to include the `group` name in the error queue name for non-anonymous consumer groups. If set to `true`, the error queue name will be `{prefix}{destination}.{group}.error`. If set to `false`, the error queue name will be `{prefix}{destination}.error`.
-+
-Default: `true`
-+
-IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will republish failed messages to the same error queue regardless of their configured `group` names.
-
 queueAccessType::
 Access type for the consumer group queue.
 +
@@ -242,6 +235,18 @@ provisionErrorQueue::
 Whether to provision durable queues for error queues when `autoBindErrorQueue` is `true`. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}.error`.
 +
 Default: `true`
+
+errorQueueNameOverride::
+A custom error queue name.
++
+Default: `null`
+
+useGroupNameInErrorQueueName::
+Whether to include the `group` name in the error queue name for non-anonymous consumer groups. If set to `true`, the error queue name will be `{prefix}{destination}.{group}.error`. If set to `false`, the error queue name will be `{prefix}{destination}.error`.
++
+Default: `true`
++
+IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will republish failed messages to the same error queue regardless of their configured `group` names.
 
 errorQueueAccessType::
 Access type for the error queue.

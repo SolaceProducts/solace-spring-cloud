@@ -1602,4 +1602,138 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		producerBinding.unbind();
 		consumerBinding.unbind();
 	}
+
+	@Test
+	public void testConsumerProvisionErrorQueueNameOverride() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.getExtension().setErrorQueueNameOverride("some-custom-named-error-queue");
+		consumerProperties.getExtension().setAutoBindErrorQueue(true);
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+				destination0, group0, moduleInputChannel, consumerProperties);
+
+		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+		assertThat(queueName).isEqualTo(destination0 + '.' + group0);
+
+		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
+		assertThat(errorQueueName).isEqualTo(consumerProperties.getExtension().getErrorQueueNameOverride());
+
+		CountDownLatch latch = new CountDownLatch(consumerProperties.getMaxAttempts());
+		moduleInputChannel.subscribe(message1 -> {
+			latch.countDown();
+			throw new RuntimeException("Throwing expected exception!");
+		});
+
+		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
+		moduleOutputChannel.send(message);
+
+		assertThat(latch.await(1, TimeUnit.MINUTES)).isTrue();
+
+		final ConsumerFlowProperties errorQueueFlowProperties = new ConsumerFlowProperties();
+		errorQueueFlowProperties.setEndpoint(JCSMPFactory.onlyInstance().createQueue(errorQueueName));
+		errorQueueFlowProperties.setStartState(true);
+		FlowReceiver flowReceiver = null;
+		try {
+			flowReceiver = jcsmpSession.createFlow(null, errorQueueFlowProperties);
+			assertThat(flowReceiver.receive((int) TimeUnit.SECONDS.toMillis(10))).isNotNull();
+		} finally {
+			if (flowReceiver != null) {
+				flowReceiver.close();
+			}
+		}
+
+		// Give some time for the message to actually ack off the original queue
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+
+		List<MonitorMsgVpnQueueMsg> enqueuedMessages = sempV2Api.monitor()
+				.getMsgVpnQueueMsgs(msgVpnName, queueName, 2, null, null, null)
+				.getData();
+		assertThat(enqueuedMessages).hasSize(0);
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testAnonConsumerProvisionErrorQueueNameOverride() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.getExtension().setErrorQueueNameOverride("some-custom-named-error-queue");
+		consumerProperties.getExtension().setAutoBindErrorQueue(true);
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+				destination0, null, moduleInputChannel, consumerProperties);
+
+		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+		assertThat(queueName).contains('/' + destination0 + ".anon/");
+		assertThat(queueName).hasSizeGreaterThan(('/' + destination0 + ".anon/").length());
+
+		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
+		assertThat(errorQueueName).isEqualTo(consumerProperties.getExtension().getErrorQueueNameOverride());
+
+		CountDownLatch latch = new CountDownLatch(consumerProperties.getMaxAttempts());
+		moduleInputChannel.subscribe(message1 -> {
+			latch.countDown();
+			throw new RuntimeException("Throwing expected exception!");
+		});
+
+		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
+		moduleOutputChannel.send(message);
+
+		assertThat(latch.await(1, TimeUnit.MINUTES)).isTrue();
+
+		final ConsumerFlowProperties errorQueueFlowProperties = new ConsumerFlowProperties();
+		errorQueueFlowProperties.setEndpoint(JCSMPFactory.onlyInstance().createQueue(errorQueueName));
+		errorQueueFlowProperties.setStartState(true);
+		FlowReceiver flowReceiver = null;
+		try {
+			flowReceiver = jcsmpSession.createFlow(null, errorQueueFlowProperties);
+			assertThat(flowReceiver.receive((int) TimeUnit.SECONDS.toMillis(10))).isNotNull();
+		} finally {
+			if (flowReceiver != null) {
+				flowReceiver.close();
+			}
+		}
+
+		// Give some time for the message to actually ack off the original queue
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+
+		List<MonitorMsgVpnQueueMsg> enqueuedMessages = sempV2Api.monitor()
+				.getMsgVpnQueueMsgs(msgVpnName, queueName, 2, null, null, null)
+				.getData();
+		assertThat(enqueuedMessages).hasSize(0);
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
 }
