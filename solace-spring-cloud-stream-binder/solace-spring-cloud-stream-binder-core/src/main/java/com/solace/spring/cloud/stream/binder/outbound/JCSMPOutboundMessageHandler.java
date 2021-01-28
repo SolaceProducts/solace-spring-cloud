@@ -2,6 +2,7 @@ package com.solace.spring.cloud.stream.binder.outbound;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
+import com.solace.spring.cloud.stream.binder.util.ErrorChannelSendingCorrelationKey;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -52,10 +53,13 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 
 	@Override
 	public void handleMessage(Message<?> message) throws MessagingException {
+		ErrorChannelSendingCorrelationKey correlationKey = new ErrorChannelSendingCorrelationKey(message,
+				errorChannel, errorMessageStrategy);
+
 		if (! isRunning()) {
 			String msg0 = String.format("Cannot send message using handler %s", id);
 			String msg1 = String.format("Message handler %s is not running", id);
-			throw handleMessagingException(msg0, message, new ClosedChannelBindingException(msg1));
+			throw handleMessagingException(correlationKey, msg0, new ClosedChannelBindingException(msg1));
 		}
 
 		Topic targetTopic = topic;
@@ -66,18 +70,20 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 				targetTopic = JCSMPFactory.onlyInstance().createTopic(targetDestinationHeader);
 			}
 		} catch (IllegalArgumentException e) {
-			throw handleMessagingException(
-					String.format("Unable to parse header %s", BinderHeaders.TARGET_DESTINATION), message, e);
+			throw handleMessagingException(correlationKey,
+					String.format("Unable to parse header %s", BinderHeaders.TARGET_DESTINATION), e);
 		}
 
 		XMLMessage xmlMessage = xmlMessageMapper.map(message, properties.getHeaderExclusions(),
 				properties.isNonserializableHeaderConvertToString());
+		correlationKey.setRawMessage(xmlMessage);
+		xmlMessage.setCorrelationKey(correlationKey);
 
 		try {
 			producer.send(xmlMessage, targetTopic);
 		} catch (JCSMPException e) {
-			throw handleMessagingException(
-					String.format("Unable to send message to topic %s", targetTopic.getName()), message, e);
+			throw handleMessagingException(correlationKey,
+					String.format("Unable to send message to topic %s", targetTopic.getName()), e);
 		}
 	}
 
@@ -117,11 +123,9 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		this.errorMessageStrategy = errorMessageStrategy;
 	}
 
-	private MessagingException handleMessagingException(String msg, Message<?> message, Exception e)
+	private MessagingException handleMessagingException(ErrorChannelSendingCorrelationKey key, String msg, Exception e)
 			throws MessagingException {
 		logger.warn(msg, e);
-		MessagingException exception = new MessagingException(message, msg, e);
-		if (errorChannel != null) errorChannel.send(errorMessageStrategy.buildErrorMessage(exception, null));
-		return exception;
+		return key.send(msg, e);
 	}
 }
