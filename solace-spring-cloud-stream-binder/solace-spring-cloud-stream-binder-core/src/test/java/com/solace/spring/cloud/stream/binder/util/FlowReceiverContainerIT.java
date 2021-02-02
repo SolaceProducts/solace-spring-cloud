@@ -848,6 +848,44 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
+	public void testReceiveWhilePreRebinding() throws Exception {
+		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		producer.send(message, queue);
+		producer.send(message, queue);
+
+		MessageContainer messageContainer1 = flowReceiverContainer.receive();
+
+		ExecutorService executorService = Executors.newFixedThreadPool(2);
+		try {
+			Future<UUID> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowReferenceId));
+			Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+			assertFalse(rebindFuture.isDone());
+
+			Future<MessageContainer> receiveFuture = executorService.submit(() -> flowReceiverContainer.receive());
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(receiveFuture.isDone());
+			assertFalse(rebindFuture.isDone());
+
+			executorService.shutdown();
+
+			logger.info(String.format("Acknowledging message container %s", messageContainer1.getId()));
+			flowReceiverContainer.acknowledge(messageContainer1);
+
+			assertThat(rebindFuture.get(1, TimeUnit.MINUTES),
+					allOf(notNullValue(), not(equalTo(flowReferenceId))));
+
+			if (!isDurable) {
+				// Re-sending message since rebind deletes the temporary queue
+				producer.send(message, queue);
+			}
+			assertNotNull(receiveFuture.get(1, TimeUnit.MINUTES));
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
 	public void testReceiveWithTimeout() throws Exception {
 		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 
