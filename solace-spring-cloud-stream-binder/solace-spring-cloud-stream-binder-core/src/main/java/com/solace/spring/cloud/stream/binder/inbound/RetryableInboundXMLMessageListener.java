@@ -2,7 +2,11 @@ package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
+import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
+import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
+import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
 import com.solacesystems.jcsmp.BytesXMLMessage;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
@@ -41,7 +45,7 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener imple
 	}
 
 	@Override
-	void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
+	void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) throws SolaceAcknowledgmentException {
 		Message<?> message = retryTemplate.execute((context) -> createMessage(bytesXMLMessage, acknowledgmentCallback),
 				(context) -> {
 			recoveryCallback.recover(context);
@@ -84,5 +88,13 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener imple
 		logger.warn(String.format("Failed to consume a message from destination %s - attempt %s",
 				consumerDestination.getName(),
 				retryContext.getRetryCount()));
+		for (Throwable nestedThrowable : ExceptionUtils.getThrowableList(throwable)) {
+			if (nestedThrowable instanceof SolaceMessageConversionException ||
+					nestedThrowable instanceof SolaceStaleMessageException) {
+				// Do not retry if these exceptions are thrown
+				retryContext.setExhaustedOnly();
+				break;
+			}
+		}
 	}
 }

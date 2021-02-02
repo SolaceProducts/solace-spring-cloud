@@ -21,6 +21,7 @@ import org.springframework.integration.endpoint.AbstractMessageSource;
 import org.springframework.messaging.MessagingException;
 
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 public class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle {
@@ -96,6 +97,8 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 		try {
 			flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
+			flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
+					TimeUnit.MILLISECONDS);
 			flowReceiverContainer.bind();
 		} catch (JCSMPException e) {
 			String msg = String.format("Unable to get a message consumer for session %s", jcsmpSession.getSessionName());

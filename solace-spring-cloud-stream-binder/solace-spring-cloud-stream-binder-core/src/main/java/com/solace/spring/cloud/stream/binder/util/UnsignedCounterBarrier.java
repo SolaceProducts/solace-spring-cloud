@@ -52,16 +52,43 @@ class UnsignedCounterBarrier {
 		}
 	}
 
-	public void awaitEmpty() throws InterruptedException {
+	/**
+	 * Wait until counter is zero.
+	 * @param timeout the maximum wait time. If less than 0, then wait forever.
+	 * @param unit the timeout unit.
+	 * @return true if counter reached zero. False if timed out.
+	 * @throws InterruptedException if the wait was interrupted
+	 */
+	public boolean awaitEmpty(long timeout, TimeUnit unit) throws InterruptedException {
 		awaitLock.lock();
 		try {
-			while (Long.compareUnsigned(counter.get(), 0) > 0) {
-				logger.info(String.format("Waiting for %s items", counter.get()));
-				isZero.await(5, TimeUnit.SECONDS);
+			if (timeout > 0) {
+				logger.info(String.format("Waiting for %s items, time remaining: %s %s", counter.get(), timeout, unit));
+				long expiry = unit.toMillis(timeout) + System.currentTimeMillis();
+				while (isGreaterThanZero()) {
+					long realTimeout = expiry - System.currentTimeMillis();
+					if (realTimeout <= 0) {
+						return false;
+					}
+					isZero.await(realTimeout, TimeUnit.MILLISECONDS);
+				}
+				return true;
+			} else if (timeout < 0) {
+				while (isGreaterThanZero()) {
+					logger.info(String.format("Waiting for %s items", counter.get()));
+					isZero.await(5, TimeUnit.SECONDS);
+				}
+				return true;
+			} else {
+				return !isGreaterThanZero();
 			}
 		} finally {
 			awaitLock.unlock();
 		}
+	}
+
+	private boolean isGreaterThanZero() {
+		return Long.compareUnsigned(counter.get(), 0) > 0;
 	}
 
 	/**

@@ -224,6 +224,11 @@ Rate at which polled consumers will receive messages from their consumer group q
 +
 Default: `100`
 
+flowPreRebindWaitTimeout::
+The maximum time to wait for all unacknowledged messages to be acknowledged before a flow receiver rebind. Will wait forever if set to a value less than `0`.
++
+Default: `10000`
+
 autoBindErrorQueue::
 Whether to automatically create a durable error queue to which messages will be republished when message processing failures are encountered. Only applies once all internal retries have been exhausted.
 +
@@ -549,12 +554,15 @@ Message handlers can disable auto-acknowledgement and manually invoke the acknow
 public void consume(Message<?> message) {
     AcknowledgmentCallback acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(message); // <1>
     acknowledgmentCallback.noAutoAck(); // <2>
-    AckUtils.accept(acknowledgmentCallback); // <3>
+    try {
+        AckUtils.accept(acknowledgmentCallback); // <3>
+    } catch (SolaceAcknowledgmentException e) {} // <4>
 }
 ----
 <1> Get the message's acknowledgement callback header
 <2> Disable auto-acknowledgement
 <3> Acknowledge the message with the `ACCEPT` status
+<4> Handle any acknowledgment exceptions (mostly `SolaceStaleMessageException`)
 
 Refer to the https://docs.spring.io/spring-integration/api/org/springframework/integration/acks/AckUtils.html[AckUtils documentation] and https://javadoc.io/doc/org.springframework.integration/spring-integration-core/latest/org/springframework/integration/acks/AcknowledgmentCallback.html[AcknowledgmentCallback documentation] for more info on these objects.
 
@@ -581,6 +589,15 @@ Refer to <<Failed Message Error Handling>> for more info.
 Refer to <<Message Redelivery>> for more info.
 |===
 
+[IMPORTANT]
+====
+Acknowledgements may throw `SolaceAcknowledgmentException` depending on the current state of the consumer. Particularly if doing asynchronous acknowledgements, your invocation to acknowledge a message should catch `SolaceAcknowledgmentException` and deal with it accordingly.
+
+*Example:* +
+(refer to <<Message Redelivery>> for background info)
+
+A `SolaceAcknowledgmentException` with cause `SolaceStaleMessageException` may be thrown when trying to asynchronously `ACCEPT` a stale message after the timeout elapses for the `REQUEUE` of another message. Though for this particular example, since the message that failed to `ACCEPT` will be redelivered, this exception can be caught and ignored if you have no business logic to revert.
+====
 
 NOTE: Manual acknowledgements do not support any application-internal error handling strategies (i.e. retry template, error channel forwarding, etc). Also, throwing an exception in the message handler will always acknowledge the message in some way regardless if auto-acknowledgment is disabled.
 
@@ -637,10 +654,10 @@ The Solace API used in this binder implementation does not support individual me
 Here is what happens under the hood when this is triggered:
 
 1. The Solace flow receiver is stopped.
-2. Wait until all unacknowledged messages have been acknowledged.
+2. Wait until all unacknowledged messages have been acknowledged with a maximum timeout of `flowPreRebindWaitTimeout`. If timed out, the remaining unacknowledged messages will be stale and redelivered from the broker.
 3. Rebind the flow.
 
-Meaning if unacknowledged messages are not processed in a timely manner, this operation will stall.
+Meaning that if unacknowledged messages are not processed in a timely manner, this operation will stall and potentially cause unecessary message duplication.
 ====
 
 === Error Queue Republishing

@@ -4,16 +4,20 @@ import com.solacesystems.jcsmp.BytesXMLMessage;
 
 import java.util.StringJoiner;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 public class MessageContainer {
 	private final UUID id = UUID.randomUUID();
 	private final BytesXMLMessage message;
 	private final UUID flowReceiverReferenceId;
+	private final AtomicBoolean staleFlag;
 	private boolean acknowledged;
 
-	MessageContainer(BytesXMLMessage message, UUID flowReceiverReferenceId) {
+	MessageContainer(BytesXMLMessage message, UUID flowReceiverReferenceId, AtomicBoolean staleFlag) {
 		this.message = message;
 		this.flowReceiverReferenceId = flowReceiverReferenceId;
+		this.staleFlag = staleFlag;
 	}
 
 	public UUID getId() {
@@ -30,6 +34,10 @@ public class MessageContainer {
 
 	public boolean isAcknowledged() {
 		return acknowledged;
+	}
+
+	public boolean isStale() {
+		return staleFlag.get();
 	}
 
 	void setAcknowledged(boolean acknowledged) {

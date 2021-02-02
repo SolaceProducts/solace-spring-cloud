@@ -37,9 +37,9 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
-import org.springframework.test.annotation.Repeat;
 import org.springframework.test.context.ContextConfiguration;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
@@ -75,6 +75,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
@@ -431,12 +432,16 @@ public class FlowReceiverContainerIT extends ITBase {
 
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
-		assertNotNull(flowReceiverContainer.receive());
-		assertNotNull(flowReceiverContainer.receive());
+		List<MessageContainer> receivedMsgs = new ArrayList<>();
+		receivedMsgs.add(flowReceiverContainer.receive());
+		assertNotNull(receivedMsgs.get(receivedMsgs.size() - 1));
+		receivedMsgs.add(flowReceiverContainer.receive());
+		assertNotNull(receivedMsgs.get(receivedMsgs.size() - 1));
 		assertEquals(2, flowReceiverContainer.getNumUnacknowledgedMessages());
 
 		flowReceiverContainer.unbind();
 		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
+		assertTrue(receivedMsgs.stream().allMatch(MessageContainer::isStale));
 	}
 
 	@Test
@@ -598,6 +603,22 @@ public class FlowReceiverContainerIT extends ITBase {
 		} finally {
 			executorService.shutdownNow();
 		}
+	}
+
+	@Test
+	public void testRebindWithTimeout() throws Exception {
+		flowReceiverContainer.setRebindWaitTimeout(1, TimeUnit.SECONDS);
+
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer receivedMessage = flowReceiverContainer.receive();
+		assertNotNull(receivedMessage);
+
+		assertThat(flowReceiverContainer.rebind(flowReferenceId), allOf(notNullValue(), not(equalTo(flowReferenceId))));
+		assertEquals(0L, flowReceiverContainer.getNumUnacknowledgedMessages());
+
+		assertTrue(receivedMessage.isStale());
+		assertThrows(SolaceStaleMessageException.class, () -> flowReceiverContainer.acknowledge(receivedMessage));
 	}
 
 	@Test
@@ -958,7 +979,7 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
-	public void testAcknowledgeNull() {
+	public void testAcknowledgeNull() throws Exception {
 		flowReceiverContainer.acknowledge(null);
 	}
 
@@ -971,10 +992,10 @@ public class FlowReceiverContainerIT extends ITBase {
 		assertNotNull(messageReceived);
 
 		flowReceiverContainer.unbind();
+		assertEquals(0L, flowReceiverContainer.getNumUnacknowledgedMessages());
+		assertTrue(messageReceived.isStale());
 
-		thrown.expect(IllegalStateException.class);
-		thrown.expectMessage("Attempted an operation on a closed message consumer");
-		flowReceiverContainer.acknowledge(messageReceived);
+		assertThrows(SolaceStaleMessageException.class, () -> flowReceiverContainer.acknowledge(messageReceived));
 	}
 
 	@Test
@@ -1106,9 +1127,9 @@ public class FlowReceiverContainerIT extends ITBase {
 						logger.info(String.format("Acknowledging message %s %s",
 								((TextMessage) messageContainer.getMessage()).getText(), messageContainer));
 						flowReceiverContainer.acknowledge(messageContainer);
-					} catch (IllegalStateException e) {
+					} catch (SolaceStaleMessageException e) {
 						assertThat(e.getMessage(),
-								containsString("Attempted an operation on a closed message consumer"));
+								containsString("is stale"));
 					}
 
 					return null;
