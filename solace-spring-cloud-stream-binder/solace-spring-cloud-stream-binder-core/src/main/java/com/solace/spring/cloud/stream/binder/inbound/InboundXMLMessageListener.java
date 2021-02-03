@@ -3,13 +3,16 @@ package com.solace.spring.cloud.stream.binder.inbound;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
+import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
+import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.XMLMessage;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
@@ -57,7 +60,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		this.needAttributes = needAttributes;
 	}
 
-	abstract void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback);
+	abstract void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) throws SolaceAcknowledgmentException;
 
 	@Override
 	public void run() {
@@ -107,6 +110,12 @@ abstract class InboundXMLMessageListener implements Runnable {
 
 		try {
 			handleMessage(bytesXMLMessage, acknowledgmentCallback);
+		} catch (SolaceAcknowledgmentException e) {
+			if (ExceptionUtils.indexOfType(e, SolaceStaleMessageException.class) > -1) {
+				logger.warn(String.format("Cannot acknowledge stale XMLMessage %s", bytesXMLMessage.getMessageId()), e);
+			} else {
+				throw e;
+			}
 		} finally {
 			if (needHolder) {
 				attributesHolder.remove();

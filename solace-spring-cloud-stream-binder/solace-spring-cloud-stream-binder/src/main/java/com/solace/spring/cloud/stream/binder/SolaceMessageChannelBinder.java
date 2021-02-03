@@ -84,7 +84,7 @@ public class SolaceMessageChannelBinder
 													 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(destination, jcsmpSession,
 				properties.getConcurrency(), provisioningProvider.hasTemporaryQueue(destination),
-				getConsumerEndpointProperties(properties));
+				properties.getExtension(), getConsumerEndpointProperties(properties));
 
 		adapter.setRemoteStopFlag(consumersRemoteStopFlag);
 		adapter.setPostStart(getConsumerPostStart(properties));

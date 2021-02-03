@@ -2,6 +2,7 @@ package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
+import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -34,7 +35,7 @@ public class BasicInboundXMLMessageListener extends InboundXMLMessageListener {
 		this.errorHandlerFunction = errorHandlerFunction;
 	}
 
-	void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
+	void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) throws SolaceAcknowledgmentException {
 		Message<?> message;
 		try {
 			message = createMessage(bytesXMLMessage, acknowledgmentCallback);

@@ -16,6 +16,7 @@ import org.springframework.lang.Nullable;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
@@ -53,6 +54,9 @@ public class FlowReceiverContainer {
 	// Ideally we'd only use this for locking the rebind function,
 	// but since we can't create FlowReceiver objects without connecting it, we have to use this lock everywhere.
 	private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+
+	private long rebindWaitTimeout = -1;
+	private TimeUnit rebindWaitTimeoutUnit = TimeUnit.SECONDS;
 
 	private static final Log logger = LogFactory.getLog(FlowReceiverContainer.class);
 
@@ -106,6 +110,7 @@ public class FlowReceiverContainer {
 			FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.getAndSet(null);
 			if (flowReceiverReference != null) {
 				logger.info(String.format("Unbinding flow receiver container %s", id));
+				flowReceiverReference.getStaleMessagesFlag().set(true);
 				flowReceiverReference.get().close();
 				unacknowledgedMessageTracker.reset();
 			}
@@ -147,7 +152,10 @@ public class FlowReceiverContainer {
 			logger.info(String.format("Stopping flow receiver container %s", id));
 			flowReceiverReference.get().stop();
 			try {
-				unacknowledgedMessageTracker.awaitEmpty();
+				if (!unacknowledgedMessageTracker.awaitEmpty(rebindWaitTimeout, rebindWaitTimeoutUnit)) {
+					logger.info(String.format("Timed out while flow receiver container %s was waiting for the" +
+							" remaining messages to be acknowledged. They will be stale. Continuing rebind.", id));
+				}
 			} catch (InterruptedException e) {
 				logger.info(String.format("Flow receiver container %s was interrupted while waiting for the " +
 						"remaining messages to be acknowledged. Starting flow.", id));
@@ -219,7 +227,8 @@ public class FlowReceiverContainer {
 			return null;
 		}
 
-		MessageContainer messageContainer = new MessageContainer(xmlMessage, flowReceiverReference.getId());
+		MessageContainer messageContainer = new MessageContainer(xmlMessage, flowReceiverReference.getId(),
+				flowReceiverReference.getStaleMessagesFlag());
 		unacknowledgedMessageTracker.increment();
 		return messageContainer;
 	}
@@ -230,10 +239,15 @@ public class FlowReceiverContainer {
 	 * may be passed as a parameter to this function. Failure to do so will misalign the timing for when rebinds
 	 * will occur, causing rebinds to unintentionally trigger early/late.</p>
 	 * @param messageContainer The message
+	 * @throws SolaceStaleMessageException the message is stale and cannot be acknowledged
 	 */
-	public void acknowledge(MessageContainer messageContainer) {
+	public void acknowledge(MessageContainer messageContainer) throws SolaceStaleMessageException {
 		if (messageContainer == null || messageContainer.isAcknowledged()) {
 			return;
+		}
+		if (messageContainer.isStale()) {
+			throw new SolaceStaleMessageException(String.format("Message container %s (XMLMessage %s) is stale",
+					messageContainer.getId(), messageContainer.getMessage().getMessageId()));
 		}
 
 		messageContainer.getMessage().ackMessage();
@@ -251,9 +265,14 @@ public class FlowReceiverContainer {
 	 * @throws JCSMPException a JCSMP exception
 	 * @throws InterruptedException was interrupted while waiting for the remaining messages to be acknowledged
 	 */
-	public UUID acknowledgeRebind(MessageContainer messageContainer) throws JCSMPException, InterruptedException {
+	public UUID acknowledgeRebind(MessageContainer messageContainer)
+			throws JCSMPException, InterruptedException, SolaceStaleMessageException {
 		if (messageContainer == null || messageContainer.isAcknowledged()) {
 			return null;
+		}
+		if (messageContainer.isStale()) {
+			throw new SolaceStaleMessageException(String.format("Message container %s (XMLMessage %s) is stale",
+					messageContainer.getId(), messageContainer.getMessage().getMessageId()));
 		}
 
 		unacknowledgedMessageTracker.decrement();
@@ -269,6 +288,11 @@ public class FlowReceiverContainer {
 
 		messageContainer.setAcknowledged(true);
 		return flowReceiverReferenceId;
+	}
+
+	public void setRebindWaitTimeout(long timeout, TimeUnit unit) {
+		this.rebindWaitTimeout = timeout;
+		this.rebindWaitTimeoutUnit = unit;
 	}
 
 	/**
@@ -301,6 +325,7 @@ public class FlowReceiverContainer {
 	static class FlowReceiverReference {
 		private final UUID id = UUID.randomUUID();
 		private final FlowReceiver flowReceiver;
+		private final AtomicBoolean staleMessagesFlag = new AtomicBoolean(false);
 
 		public FlowReceiverReference(FlowReceiver flowReceiver) {
 			this.flowReceiver = flowReceiver;
@@ -320,6 +345,10 @@ public class FlowReceiverContainer {
 
 		public FlowReceiver get() {
 			return flowReceiver;
+		}
+
+		public AtomicBoolean getStaleMessagesFlag() {
+			return staleMessagesFlag;
 		}
 
 		@Override

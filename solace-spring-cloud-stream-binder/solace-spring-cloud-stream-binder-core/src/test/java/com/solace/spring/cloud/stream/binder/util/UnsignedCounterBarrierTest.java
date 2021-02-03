@@ -8,8 +8,10 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class UnsignedCounterBarrierTest {
 	@Test
@@ -98,14 +100,11 @@ public class UnsignedCounterBarrierTest {
 		UnsignedCounterBarrier unsignedCounterBarrier = new UnsignedCounterBarrier(5);
 		int concurrency = 5;
 
-		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		ExecutorService executorService = Executors.newFixedThreadPool(concurrency);
 		try {
-			ArrayList<Future<?>> futures = new ArrayList<>(concurrency);
+			ArrayList<Future<Boolean>> futures = new ArrayList<>(concurrency);
 			for (int i = 0; i < concurrency; i++) {
-				futures.add(executorService.submit(() -> {
-					unsignedCounterBarrier.awaitEmpty();
-					return null;
-				}));
+				futures.add(executorService.submit(() -> unsignedCounterBarrier.awaitEmpty(-1, TimeUnit.DAYS)));
 			}
 			executorService.shutdown();
 
@@ -115,8 +114,8 @@ public class UnsignedCounterBarrierTest {
 			}
 
 			unsignedCounterBarrier.reset();
-			for (Future<?> future : futures) {
-				future.get(1, TimeUnit.MINUTES);
+			for (Future<Boolean> future : futures) {
+				assertTrue(future.get(1, TimeUnit.MINUTES));
 			}
 		} finally {
 			executorService.shutdownNow();
@@ -130,14 +129,11 @@ public class UnsignedCounterBarrierTest {
 
 		int concurrency = 5;
 
-		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		ExecutorService executorService = Executors.newFixedThreadPool(concurrency);
 		try {
-			ArrayList<Future<?>> futures = new ArrayList<>(concurrency);
+			ArrayList<Future<Boolean>> futures = new ArrayList<>(concurrency);
 			for (int i = 0; i < concurrency; i++) {
-				futures.add(executorService.submit(() -> {
-					unsignedCounterBarrier.awaitEmpty();
-					return null;
-				}));
+				futures.add(executorService.submit(() -> unsignedCounterBarrier.awaitEmpty(-1, TimeUnit.DAYS)));
 			}
 			executorService.shutdown();
 
@@ -147,11 +143,33 @@ public class UnsignedCounterBarrierTest {
 			}
 
 			unsignedCounterBarrier.decrement();
-			for (Future<?> future : futures) {
-				future.get(1, TimeUnit.MINUTES);
+			for (Future<Boolean> future : futures) {
+				assertTrue(future.get(1, TimeUnit.MINUTES));
 			}
 		} finally {
 			executorService.shutdownNow();
 		}
+	}
+
+	@Test
+	public void testAwaitEmptyTimeout() throws Exception {
+		UnsignedCounterBarrier unsignedCounterBarrier = new UnsignedCounterBarrier();
+		unsignedCounterBarrier.increment();
+
+		long timeout = 3;
+		TimeUnit unit = TimeUnit.SECONDS;
+		long expectedExpiry = unit.toMillis(timeout) + System.currentTimeMillis();
+		assertFalse(unsignedCounterBarrier.awaitEmpty(timeout, unit));
+		assertThat(System.currentTimeMillis()).isGreaterThanOrEqualTo(expectedExpiry);
+	}
+
+	@Test
+	public void testAwaitEmptyNoTimeout() throws Exception {
+		UnsignedCounterBarrier unsignedCounterBarrier = new UnsignedCounterBarrier();
+		unsignedCounterBarrier.increment();
+		long expectedMaxExpiry = System.currentTimeMillis() + TimeUnit.SECONDS.toMillis(1); // being lenient
+		assertFalse(unsignedCounterBarrier.awaitEmpty(0, TimeUnit.DAYS));
+		long currentTime = System.currentTimeMillis();
+		assertThat(currentTime).isLessThan(expectedMaxExpiry);
 	}
 }

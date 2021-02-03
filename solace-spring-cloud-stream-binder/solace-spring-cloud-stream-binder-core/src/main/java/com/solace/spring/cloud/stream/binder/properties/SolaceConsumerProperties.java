@@ -2,9 +2,12 @@ package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solacesystems.jcsmp.EndpointProperties;
 
+import java.util.concurrent.TimeUnit;
+
 public class SolaceConsumerProperties extends SolaceCommonProperties {
 	private String anonymousGroupPostfix = "anon";
 	private int polledConsumerWaitTimeInMillis = 100;
+	private long flowPreRebindWaitTimeout = TimeUnit.SECONDS.toMillis(10);
 
 	private String[] queueAdditionalSubscriptions = new String[0];
 	private boolean useGroupNameInQueueName = true;
@@ -41,6 +44,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setPolledConsumerWaitTimeInMillis(int polledConsumerWaitTimeInMillis) {
 		this.polledConsumerWaitTimeInMillis = polledConsumerWaitTimeInMillis;
+	}
+
+	public long getFlowPreRebindWaitTimeout() {
+		return flowPreRebindWaitTimeout;
+	}
+
+	public void setFlowPreRebindWaitTimeout(long flowPreRebindWaitTimeout) {
+		this.flowPreRebindWaitTimeout = flowPreRebindWaitTimeout;
 	}
 
 	public String[] getQueueAdditionalSubscriptions() {

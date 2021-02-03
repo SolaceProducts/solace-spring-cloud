@@ -25,6 +25,7 @@ import org.junit.rules.ExpectedException;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.mockito.Mockito;
 import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.test.context.ContextConfiguration;
@@ -41,6 +42,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasProperty;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(Parameterized.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class,
@@ -324,6 +326,57 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
 			acknowledgmentCallback.acknowledge(status);
 			verifyExpectedState.run();
+		}
+	}
+
+	@Test
+	public void testAckStaleMessage() throws Exception {
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer messageContainer = Mockito.spy(flowReceiverContainer.receive(
+				(int) TimeUnit.SECONDS.toMillis(10)));
+		assertNotNull(messageContainer);
+		Mockito.when(messageContainer.isStale()).thenReturn(true);
+		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
+
+		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
+			SolaceAcknowledgmentException exception = assertThrows(SolaceAcknowledgmentException.class,
+					() -> acknowledgmentCallback.acknowledge(status));
+			if (!isDurable && status.equals(AcknowledgmentCallback.Status.REQUEUE)) {
+				assertThat(exception).hasCauseInstanceOf(UnsupportedOperationException.class);
+			} else {
+				assertThat(exception).hasCauseInstanceOf(SolaceStaleMessageException.class);
+			}
+			validateNumEnqueuedMessages(queue.getName(), 1);
+			validateNumRedeliveredMessages(queue.getName(), 0);
+			validateQueueBindAttempts(queue.getName(), 1);
+		}
+	}
+
+	@Test
+	public void testAckStaleMessageWithErrorQueue() throws Exception {
+		TextMessage messageToSend = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		messageToSend.setText("test");
+		producer.send(messageToSend, queue);
+		MessageContainer messageContainer = Mockito.spy(flowReceiverContainer.receive(
+				(int) TimeUnit.SECONDS.toMillis(10)));
+		assertNotNull(messageContainer);
+		Mockito.when(messageContainer.isStale()).thenReturn(true);
+		ErrorQueueInfrastructure errorQueueInfrastructure = initializeErrorQueueInfrastructure();
+		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
+
+		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
+			SolaceAcknowledgmentException exception = assertThrows(SolaceAcknowledgmentException.class,
+					() -> acknowledgmentCallback.acknowledge(status));
+			if (!isDurable && status.equals(AcknowledgmentCallback.Status.REQUEUE)) {
+				assertThat(exception).hasCauseInstanceOf(UnsupportedOperationException.class);
+			} else {
+				assertThat(exception).hasCauseInstanceOf(SolaceStaleMessageException.class);
+			}
+			validateNumEnqueuedMessages(queue.getName(), 1);
+			validateNumRedeliveredMessages(queue.getName(), 0);
+			validateQueueBindAttempts(queue.getName(), 1);
+			validateNumEnqueuedMessages(errorQueueInfrastructure.getErrorQueueName(), 0);
+			validateNumRedeliveredMessages(errorQueueInfrastructure.getErrorQueueName(), 0);
 		}
 	}
 

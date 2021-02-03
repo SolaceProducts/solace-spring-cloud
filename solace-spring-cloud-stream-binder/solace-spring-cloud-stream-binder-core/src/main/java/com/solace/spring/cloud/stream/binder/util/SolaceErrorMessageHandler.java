@@ -2,6 +2,7 @@ package com.solace.spring.cloud.stream.binder.util;
 
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solacesystems.jcsmp.XMLMessage;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
@@ -28,17 +29,28 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 			return;
 		}
 
-		Object payload = message.getPayload();
-		if (!(payload instanceof MessagingException)) {
-			logger.warn(String.format("Spring message %s: Message payload is a %s, not a %s. Nothing to process",
-					springId, payload.getClass().getSimpleName(), MessagingException.class.getSimpleName()));
+		ErrorMessage errorMessage = (ErrorMessage) message;
+		Throwable payload = errorMessage.getPayload();
+
+		if (ExceptionUtils.indexOfType(payload, SolaceStaleMessageException.class) > -1) {
+			if (logger.isDebugEnabled()) {
+				logger.debug(String.format("Spring message %s: Message is stale, nothing to do", springId), payload);
+			} else {
+				logger.info(String.format("Spring message %s: Message is stale, nothing to do", springId));
+			}
 			return;
 		}
 
-		Message<?> failedMsg = ((MessagingException) payload).getFailedMessage();
+		Message<?> failedMsg;
+		if (payload instanceof MessagingException && ((MessagingException) payload).getFailedMessage() != null) {
+			failedMsg = ((MessagingException) payload).getFailedMessage();
+		} else {
+			failedMsg = errorMessage.getOriginalMessage();
+		}
+
 		if (failedMsg == null) {
-			logger.warn(String.format("Spring message %s: %s does not have an attached %s, no message to process",
-					springId, MessagingException.class.getSimpleName(), Message.class.getSimpleName()));
+			logger.warn(String.format("Spring message %s: Does not have an attached %s, nothing to process",
+					springId, Message.class.getSimpleName()));
 			return;
 		}
 
@@ -60,6 +72,18 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 			return;
 		}
 
-		AckUtils.reject(acknowledgmentCallback);
+		try {
+			AckUtils.reject(acknowledgmentCallback);
+		} catch (SolaceAcknowledgmentException e) {
+			if (ExceptionUtils.indexOfType(e, SolaceStaleMessageException.class) > -1) {
+				if (logger.isDebugEnabled()) {
+					logger.debug(String.format("Spring message %s: Message is stale, nothing to do", springId), payload);
+				} else {
+					logger.info(String.format("Spring message %s: Message is stale, nothing to do", springId));
+				}
+			} else {
+				throw e;
+			}
+		}
 	}
 }

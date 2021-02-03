@@ -7,8 +7,6 @@ import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 
-import java.util.UUID;
-
 public class JCSMPAcknowledgementCallbackFactory {
 	private final FlowReceiverContainer flowReceiverContainer;
 	private final boolean hasTemporaryQueue;
@@ -86,11 +84,11 @@ public class JCSMPAcknowledgementCallbackFactory {
 							flowReceiverContainer.acknowledgeRebind(messageContainer);
 						}
 				}
+			} catch (SolaceAcknowledgmentException e) {
+				throw e;
 			} catch (Exception e) {
-				if (!(e instanceof SolaceAcknowledgmentException)) {
-					throw new SolaceAcknowledgmentException(String.format("Failed to acknowledge XMLMessage %s",
-							messageContainer.getMessage().getMessageId()), e);
-				}
+				throw new SolaceAcknowledgmentException(String.format("Failed to acknowledge XMLMessage %s",
+						messageContainer.getMessage().getMessageId()), e);
 			}
 		}
 
@@ -98,7 +96,7 @@ public class JCSMPAcknowledgementCallbackFactory {
 		 * Send the message to the error queue and acknowledge the message.
 		 * @return {@code true} if successful, {@code false} if {@code errorQueueInfrastructure} is not defined.
 		 */
-		private boolean republishToErrorQueue() {
+		private boolean republishToErrorQueue() throws SolaceStaleMessageException {
 			if (errorQueueInfrastructure == null) {
 				return false;
 			}
@@ -107,20 +105,16 @@ public class JCSMPAcknowledgementCallbackFactory {
 					XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
 					errorQueueInfrastructure.getErrorQueueName()));
 
-			FlowReceiverContainer.FlowReceiverReference flowReceiverReference =
-					flowReceiverContainer.getFlowReceiverReference();
-			UUID expectedFlowId = messageContainer.getFlowReceiverReferenceId();
-			UUID actualFlowId = flowReceiverReference != null ? flowReceiverReference.getId() : null;
-			if (flowReceiverReference == null || !expectedFlowId.equals(actualFlowId)) {
-				throw new IllegalStateException(String.format("Cannot republish failed %s %s to error queue %s , " +
-								"flow %s is closed (active flow: %s), message will be redelivered",
-						XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
-						errorQueueInfrastructure.getErrorQueueName(), expectedFlowId, actualFlowId));
+			if (messageContainer.isStale()) {
+				throw new SolaceStaleMessageException(String.format("Cannot republish failed message container %s " +
+								"(XMLMessage %s) to error queue %s. Message is stale and will be redelivered.",
+						messageContainer.getId(), messageContainer.getMessage().getMessageId(),
+						errorQueueInfrastructure.getErrorQueueName()));
 			}
 
 			Message<?> springMessage = xmlMessageMapper.map(messageContainer.getMessage(), null);
-			errorQueueInfrastructure.send(springMessage); //TODO block on the publish acknowledgment
-			flowReceiverContainer.acknowledge(messageContainer);
+			errorQueueInfrastructure.send(springMessage);
+			flowReceiverContainer.acknowledge(messageContainer); //TODO do in the pub ack or timeout and retry
 			return true;
 		}
 

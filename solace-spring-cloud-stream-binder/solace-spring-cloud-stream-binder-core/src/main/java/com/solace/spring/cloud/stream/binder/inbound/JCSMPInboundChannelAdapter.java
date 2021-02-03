@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
@@ -35,6 +36,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final String id = UUID.randomUUID().toString();
 	private final ConsumerDestination consumerDestination;
 	private final JCSMPSession jcsmpSession;
+	private final SolaceConsumerProperties consumerProperties;
 	private final EndpointProperties endpointProperties;
 	private final int concurrency;
 	private final boolean hasTemporaryQueue;
@@ -54,11 +56,13 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 									  JCSMPSession jcsmpSession,
 									  int concurrency,
 									  boolean hasTemporaryQueue,
+									  SolaceConsumerProperties consumerProperties,
 									  @Nullable EndpointProperties endpointProperties) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
 		this.concurrency = concurrency;
 		this.hasTemporaryQueue = hasTemporaryQueue;
+		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
 		this.consumerStopFlags = new HashSet<>(this.concurrency);
 	}
@@ -95,6 +99,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			for (int i = 0; i < concurrency; i++) {
 				logger.info(String.format("Creating consumer %s of %s for inbound adapter %s", i + 1, concurrency, id));
 				FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
+				flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getFlowPreRebindWaitTimeout(),
+						TimeUnit.MILLISECONDS);
 				flowReceiverContainer.bind();
 				flowReceivers.add(flowReceiverContainer);
 			}
