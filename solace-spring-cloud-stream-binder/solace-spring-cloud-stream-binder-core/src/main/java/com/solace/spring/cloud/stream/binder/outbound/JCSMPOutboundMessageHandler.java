@@ -28,9 +28,9 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	private final String id = UUID.randomUUID().toString();
 	private final Topic topic;
 	private final JCSMPSession jcsmpSession;
+	private final MessageChannel errorChannel;
+	private final JCSMPSessionProducerManager producerManager;
 	private final SolaceProducerProperties properties;
-	private MessageChannel errorChannel;
-	private JCSMPSessionProducerManager producerManager;
 	private XMLMessageProducer producer;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private boolean isRunning = false;
@@ -70,7 +70,8 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 					String.format("Unable to parse header %s", BinderHeaders.TARGET_DESTINATION), message, e);
 		}
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(message, this.properties.getHeaderExclusions());
+		XMLMessage xmlMessage = xmlMessageMapper.map(message, properties.getHeaderExclusions(),
+				properties.isNonserializableHeaderConvertToString());
 
 		try {
 			producer.send(xmlMessage, targetTopic);

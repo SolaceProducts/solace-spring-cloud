@@ -56,7 +56,7 @@ public class XMLMessageMapper {
 	private final ObjectReader stringSetReader = OBJECT_MAPPER.readerFor(new TypeReference<Set<String>>(){});
 
 	public XMLMessage mapError(Message<?> message, SolaceConsumerProperties consumerProperties) {
-		XMLMessage xmlMessage = map(message);
+		XMLMessage xmlMessage = map(message, Collections.emptyList(), false);
 		if (consumerProperties.getErrorMsgDmqEligible() != null) {
 			xmlMessage.setDMQEligible(consumerProperties.getErrorMsgDmqEligible());
 		}
@@ -66,14 +66,10 @@ public class XMLMessageMapper {
 		return xmlMessage;
 	}
 
-	public XMLMessage map(Message<?> message) {
-		return map(message, Collections.emptyList());
-	}
-
-	public XMLMessage map(Message<?> message, Collection<String> excludedHeaders) {
+	public XMLMessage map(Message<?> message, Collection<String> excludedHeaders, boolean convertNonSerializableHeadersToString) {
 		XMLMessage xmlMessage;
 		Object payload = message.getPayload();
-		SDTMap metadata = map(message.getHeaders(), excludedHeaders);
+		SDTMap metadata = map(message.getHeaders(), excludedHeaders, convertNonSerializableHeadersToString);
 		rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
 
 		if (payload instanceof byte[]) {
@@ -221,7 +217,7 @@ public class XMLMessageMapper {
 		return builder.build();
 	}
 
-	SDTMap map(MessageHeaders headers, Collection<String> excludedHeaders) {
+	SDTMap map(MessageHeaders headers, Collection<String> excludedHeaders, boolean convertNonSerializableHeadersToString) {
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
 		Set<String> serializedHeaders = new HashSet<>();
 		for (Map.Entry<String,Object> header : headers.entrySet()) {
@@ -231,11 +227,12 @@ public class XMLMessageMapper {
 					SolaceBinderHeaderMeta.META.containsKey(header.getKey())) {
 				continue;
 			}
-			if (excludedHeaders.contains(header.getKey())){
+			if (excludedHeaders != null && excludedHeaders.contains(header.getKey())) {
 				continue;
 			}
 
-			addSDTMapObject(metadata, serializedHeaders, header.getKey(), header.getValue());
+			addSDTMapObject(metadata, serializedHeaders, header.getKey(), header.getValue(),
+					convertNonSerializableHeadersToString);
 		}
 
 		if (!serializedHeaders.isEmpty()) {
@@ -308,7 +305,8 @@ public class XMLMessageMapper {
 	/**
 	 * Wrapper function which converts Serializable objects to byte[] if they aren't naturally supported by the SDTMap
 	 */
-	private void addSDTMapObject(SDTMap sdtMap, Set<String> serializedHeaders, String key, Object object)
+	private void addSDTMapObject(SDTMap sdtMap, Set<String> serializedHeaders, String key, Object object,
+								 boolean convertNonSerializableHeadersToString)
 			throws SolaceMessageConversionException {
 		rethrowableCall((k, o) -> {
 			try {
@@ -319,6 +317,11 @@ public class XMLMessageMapper {
 							DEFAULT_ENCODING.encode(rethrowableCall(SerializationUtils::serialize, o)));
 
 					serializedHeaders.add(k);
+				} else if (convertNonSerializableHeadersToString && o != null) {
+					if (logger.isDebugEnabled()) {
+						logger.debug(String.format("Irreversibly converting header %s to String", k));
+					}
+					sdtMap.putString(k, o.toString());
 				} else {
 					throw e;
 				}

@@ -305,9 +305,16 @@ The following properties are available for Solace producers only and must be pre
 See link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceCommonProperties.java[SolaceCommonProperties] and link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceProducerProperties.java[SolaceProducerProperties] for the most updated list.
 
 headerExclusions::
-The list of headers to exclude from the published message. This will not filter out any Solace message headers.
+The list of headers to exclude from the published message. Excluding Solace message headers is not supported.
 +
 Default: Empty `List&lt;String&gt;`
+
+nonserializableHeaderConvertToString::
+When set to `true`, irreversibly convert non-serializable headers to strings. An exception is thrown otherwise.
++
+Default: `false`
++
+IMPORTANT: Non-serializable headers should have a meaningful `toString()` implementation. Otherwise enabling this feature may result in potential data loss.
 
 prefix::
 Naming prefix for all topics and queues.
