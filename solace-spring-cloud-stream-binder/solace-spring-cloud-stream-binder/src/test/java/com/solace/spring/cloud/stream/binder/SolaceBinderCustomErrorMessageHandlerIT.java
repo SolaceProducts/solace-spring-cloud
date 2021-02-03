@@ -1,13 +1,11 @@
 package com.solace.spring.cloud.stream.binder;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
-import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
 import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
-import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.assertj.core.api.SoftAssertions;
@@ -18,6 +16,7 @@ import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.cloud.stream.config.BindingProperties;
+import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.support.MessageBuilder;
 import org.springframework.messaging.Message;
@@ -243,7 +242,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		softAssertions.assertThat(errorMessage).isInstanceOf(ErrorMessage.class);
 		softAssertions.assertThat(((ErrorMessage) errorMessage).getOriginalMessage()).isNotNull();
 		softAssertions.assertThat(((ErrorMessage) errorMessage).getPayload()).isNotNull();
-		softAssertions.assertThat(errorMessage.getHeaders()
-				.get(SolaceBinderHeaders.RAW_MESSAGE)).isInstanceOf(XMLMessage.class);
+		softAssertions.assertThat((Object) StaticMessageHeaderAccessor.getSourceData(errorMessage))
+				.isInstanceOf(XMLMessage.class);
 	}
 }

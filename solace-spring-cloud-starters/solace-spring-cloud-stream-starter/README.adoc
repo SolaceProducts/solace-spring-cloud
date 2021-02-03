@@ -519,14 +519,6 @@ TIP: Use link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream
 | 1
 | A static number set by the publisher to indicate the Spring Cloud Stream Solace message version.
 
-| solace_scst_rawMessage
-| XMLMessage
-| Read
-|
-| The raw Solace message.
-
-*[.underline]#WARNING#:* *DO NOT* acknowledge this or make any other lasting changes. This should only be used for debugging.
-
 | solace_scst_serializedPayload
 | Boolean
 | Internal Binder Use Only

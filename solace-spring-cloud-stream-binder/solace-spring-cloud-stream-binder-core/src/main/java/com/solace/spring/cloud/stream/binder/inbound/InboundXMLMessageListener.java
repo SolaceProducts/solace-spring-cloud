@@ -137,7 +137,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		messageConsumer.accept(message);
 	}
 
-	void setAttributesIfNecessary(XMLMessage xmlMessage, org.springframework.messaging.Message<?> message) {
+	void setAttributesIfNecessary(XMLMessage xmlMessage, Message<?> message) {
 		if (needHolder) {
 			attributesHolder.set(ErrorMessageUtils.getAttributeAccessor(null, null));
 		}
@@ -146,7 +146,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 			AttributeAccessor attributes = attributesHolder.get();
 			if (attributes != null) {
 				attributes.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, message);
-				attributes.setAttribute(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE, xmlMessage);
+				attributes.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_RAW_MESSAGE, xmlMessage);
 			}
 		}
 	}

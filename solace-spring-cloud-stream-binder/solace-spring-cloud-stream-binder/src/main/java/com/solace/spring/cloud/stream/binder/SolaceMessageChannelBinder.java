@@ -2,7 +2,6 @@ package com.solace.spring.cloud.stream.binder;
 
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
-import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
@@ -12,6 +11,7 @@ import com.solace.spring.cloud.stream.binder.util.SolaceProvisioningUtil;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
+import com.solacesystems.jcsmp.XMLMessage;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.cloud.stream.binder.AbstractMessageChannelBinder;
 import org.springframework.cloud.stream.binder.BinderSpecificPropertiesProvider;
@@ -25,6 +25,7 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
+import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.core.MessageProducer;
 import org.springframework.integration.support.DefaultErrorMessageStrategy;
 import org.springframework.integration.support.ErrorMessageStrategy;
@@ -137,11 +138,9 @@ public class SolaceMessageChannelBinder
 	@Override
 	protected void postProcessPollableSource(DefaultPollableMessageSource bindingTarget) {
 		bindingTarget.setAttributesProvider((accessor, message) -> {
-			if (message.getHeaders().containsKey(SolaceBinderHeaders.RAW_MESSAGE)) {
-				Object rawMessage = message.getHeaders().get(SolaceBinderHeaders.RAW_MESSAGE);
-				if (rawMessage != null) {
-					accessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.SOLACE_RAW_MESSAGE, rawMessage);
-				}
+			Object sourceData = StaticMessageHeaderAccessor.getSourceData(message);
+			if (sourceData == null || sourceData instanceof XMLMessage) {
+				accessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_RAW_MESSAGE, sourceData);
 			}
 		});
 	}
