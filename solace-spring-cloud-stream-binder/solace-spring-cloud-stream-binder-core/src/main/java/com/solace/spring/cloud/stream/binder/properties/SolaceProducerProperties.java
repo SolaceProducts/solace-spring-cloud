@@ -8,6 +8,7 @@ import java.util.Map;
 public class SolaceProducerProperties extends SolaceCommonProperties {
 	private Map<String,String[]> queueAdditionalSubscriptions = new HashMap<>();
 	private List<String> headerExclusions = new ArrayList<>();
+	private boolean nonserializableHeaderConvertToString = false;
 
 	public Map<String, String[]> getQueueAdditionalSubscriptions() {
 		return queueAdditionalSubscriptions;
@@ -23,5 +24,13 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 
 	public void setHeaderExclusions(List<String> headerExclusions) {
 		this.headerExclusions = headerExclusions;
+	}
+
+	public boolean isNonserializableHeaderConvertToString() {
+		return nonserializableHeaderConvertToString;
+	}
+
+	public void setNonserializableHeaderConvertToString(boolean nonserializableHeaderConvertToString) {
+		this.nonserializableHeaderConvertToString = nonserializableHeaderConvertToString;
 	}
 }

@@ -53,7 +53,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -66,6 +65,7 @@ import static org.hamcrest.Matchers.emptyString;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -110,7 +110,7 @@ public class XMLMessageMapperTest {
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE)
 				.build();
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, null, false);
 
 		assertThat(xmlMessage, CoreMatchers.instanceOf(BytesMessage.class));
 		assertEquals(testSpringMessage.getPayload(), ((BytesMessage) xmlMessage).getData());
@@ -126,7 +126,7 @@ public class XMLMessageMapperTest {
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, null, false);
 
 		assertThat(xmlMessage, CoreMatchers.instanceOf(TextMessage.class));
 		assertEquals(testSpringMessage.getPayload(), ((TextMessage) xmlMessage).getText());
@@ -142,7 +142,7 @@ public class XMLMessageMapperTest {
 				.setHeader(MessageHeaders.CONTENT_TYPE, "application/x-java-serialized-object")
 				.build();
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, null, false);
 
 		assertThat(xmlMessage, CoreMatchers.instanceOf(BytesMessage.class));
 		assertEquals(testSpringMessage.getPayload(),
@@ -167,7 +167,7 @@ public class XMLMessageMapperTest {
 				.setHeader(MessageHeaders.CONTENT_TYPE, "application/x-java-serialized-object")
 				.build();
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, null, false);
 
 		assertThat(xmlMessage, CoreMatchers.instanceOf(StreamMessage.class));
 		assertEquals(testSpringMessage.getPayload(), ((StreamMessage) xmlMessage).getStream());
@@ -188,7 +188,7 @@ public class XMLMessageMapperTest {
 				.setHeader(MessageHeaders.CONTENT_TYPE, "application/x-java-serialized-object")
 				.build();
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, null, false);
 
 		assertThat(xmlMessage, CoreMatchers.instanceOf(MapMessage.class));
 		assertEquals(testSpringMessage.getPayload(), ((MapMessage) xmlMessage).getMap());
@@ -246,7 +246,7 @@ public class XMLMessageMapperTest {
 		}
 
 		Message<?> testSpringMessage = messageBuilder.build();
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, null, false);
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
 			Object expectedValue = testSpringMessage.getHeaders().get(header.getKey());
@@ -318,7 +318,7 @@ public class XMLMessageMapperTest {
 		}
 
 		Message<?> testSpringMessage = messageBuilder.build();
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, null, false);
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : nonWriteableHeaders) {
 			switch (header.getKey()) {
@@ -380,7 +380,7 @@ public class XMLMessageMapperTest {
 				.setHeader("solace_foo2", undefinedSolaceHeader2)
 				.build();
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, null, false);
 
 		assertEquals(undefinedSolaceHeader1, xmlMessage.getProperties().getString("solace_foo1"));
 		assertEquals(undefinedSolaceHeader2, SerializationUtils.deserialize(Base64.getDecoder()
@@ -411,7 +411,7 @@ public class XMLMessageMapperTest {
 				.withPayload("")
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, null, false);
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : overriddenWriteableHeaders) {
 			switch (header.getKey()) {
@@ -429,7 +429,7 @@ public class XMLMessageMapperTest {
 	@Test(expected = SolaceMessageConversionException.class)
 	public void testFailMapSpringMessageToXMLMessage_InvalidPayload() {
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(new Object()).build();
-		xmlMessageMapper.map(testSpringMessage);
+		xmlMessageMapper.map(testSpringMessage, null, false);
 	}
 
 	@Test
@@ -447,7 +447,7 @@ public class XMLMessageMapperTest {
 					.setHeader(header.getKey(), new Object())
 					.build();
 			try {
-				xmlMessageMapper.map(testSpringMessage);
+				xmlMessageMapper.map(testSpringMessage, null, false);
 				fail(String.format("Expected message mapping to fail for header %s", header.getKey()));
 			} catch (SolaceMessageConversionException e) {
 				assertEquals(e.getMessage(), String.format(
@@ -464,7 +464,7 @@ public class XMLMessageMapperTest {
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload).build();
 
 		XMLMessage xmlMessage = xmlMessageMapper.mapError(testSpringMessage, new SolaceConsumerProperties());
-		Mockito.verify(xmlMessageMapper).map(testSpringMessage);
+		Mockito.verify(xmlMessageMapper).map(testSpringMessage, Collections.emptyList(), false);
 
 		assertEquals(0, xmlMessage.getTimeToLive());
 	}
@@ -479,7 +479,7 @@ public class XMLMessageMapperTest {
 		consumerProperties.setErrorMsgTtl(100L);
 
 		XMLMessage xmlMessage = xmlMessageMapper.mapError(testSpringMessage, consumerProperties);
-		Mockito.verify(xmlMessageMapper).map(testSpringMessage);
+		Mockito.verify(xmlMessageMapper).map(testSpringMessage, Collections.emptyList(), false);
 
 		assertEquals(consumerProperties.getErrorMsgDmqEligible(), xmlMessage.isDMQEligible());
 		assertEquals(consumerProperties.getErrorMsgTtl().longValue(), xmlMessage.getTimeToLive());
@@ -488,34 +488,32 @@ public class XMLMessageMapperTest {
 	@Test
 	public void testMapProducerSpringMessageToXMLMessage_WithExcludedHeader() throws SDTException {
 		String testPayload = "testPayload";
-		List<String> excludedHeaders = new ArrayList<>(Arrays
-				.asList("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE"));
+		List<String> excludedHeaders = Collections.singletonList("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE");
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload)
 				.setHeader(
 						"io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE",
 						"any")
 				.build();
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders);
-		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders, false);
+		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders, false);
 
-		assertEquals(null, xmlMessage.getProperties()
+		assertNull(xmlMessage.getProperties()
 				.getMap("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE"));
 	}
 
 	@Test
 	public void testMapProducerSpringMessageToXMLMessage_WithExcludedHeader_ShouldNotMatchPartially() throws SDTException {
 		String testPayload = "testPayload";
-		List<String> excludedHeaders = new ArrayList<>(Arrays
-				.asList("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE"));
+		List<String> excludedHeaders = Collections.singletonList("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE");
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload)
 				.setHeader(
 						"io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor",
 						"any")
 				.build();
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders);
-		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders, false);
+		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders, false);
 		assertEquals("any", xmlMessage.getProperties()
 				.get("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor"));
 	}
@@ -576,7 +574,7 @@ public class XMLMessageMapperTest {
 				.collect(Collectors.toList());
 
 		Message<?> testSpringMessage = messageBuilder.build();
-		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders);
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders, false);
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
 			Object expectedValue = testSpringMessage.getHeaders().get(header.getKey());
@@ -621,15 +619,17 @@ public class XMLMessageMapperTest {
 				assertEquals(expectedValue, xmlMessage.getUserData());
 				break;
 			default:
-				for (Map.Entry<String, SolaceBinderHeaderMeta<?>> binderHeaderMetaEntry : SolaceBinderHeaderMeta.META.entrySet()) {
-					if (SolaceHeaderMeta.Scope.WIRE.equals(binderHeaderMetaEntry.getValue().getScope())) {
-						assertNotNull(xmlMessage.getProperties().get(binderHeaderMetaEntry.getKey()));
-					}
-				}
+				fail(String.format("no test for header %s", header.getKey()));
 			}
 		}
 
-		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders);
+		for (Map.Entry<String, SolaceBinderHeaderMeta<?>> binderHeaderMetaEntry : SolaceBinderHeaderMeta.META.entrySet()) {
+			if (SolaceHeaderMeta.Scope.WIRE.equals(binderHeaderMetaEntry.getValue().getScope())) {
+				assertNotNull(xmlMessage.getProperties().get(binderHeaderMetaEntry.getKey()));
+			}
+		}
+
+		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders, false);
 	}
 
 	@Test
@@ -1088,7 +1088,7 @@ public class XMLMessageMapperTest {
 		headers.put(key, value);
 		headers.put(BinderHeaders.TARGET_DESTINATION, "redirected-target");
 
-		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList());
+		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList(), false);
 
 		assertThat(sdtMap.keySet(), hasItem(key));
 		assertThat(sdtMap.keySet(), hasItem(SolaceBinderHeaders.SERIALIZED_HEADERS));
@@ -1106,10 +1106,28 @@ public class XMLMessageMapperTest {
 	}
 
 	@Test
+	public void testMapMessageHeadersToSDTMap_NonSerializable() {
+		SolaceMessageConversionException thrown = assertThrows(SolaceMessageConversionException.class,
+				() -> xmlMessageMapper.map(new MessageHeaders(Collections.singletonMap("a", new Object())),
+						Collections.emptyList(), false));
+		assertThat(thrown.getCause(), instanceOf(IllegalArgumentException.class));
+		assertThat(thrown.getMessage(), containsString("Invalid type as value - Object"));
+	}
+
+	@Test
+	public void testMapMessageHeadersToSDTMap_NonSerializableToString() throws Exception {
+		String key = "a";
+		Object value = new Object();
+		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(Collections.singletonMap(key, value)),
+				Collections.emptyList(), true);
+		assertEquals(value.toString(), sdtMap.get(key));
+	}
+
+	@Test
 	public void testMapMessageHeadersToSDTMap_Null() throws Exception {
 		String key = "a";
 		Map<String,Object> headers = Collections.singletonMap(key, null);
-		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList());
+		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList(), false);
 		assertThat(sdtMap.keySet(), hasItem(key));
 		assertNull(sdtMap.get(key));
 	}
@@ -1120,7 +1138,7 @@ public class XMLMessageMapperTest {
 		Map<String,Object> headers = new HashMap<>();
 		JMS_INVALID_HEADER_NAMES.forEach(h -> headers.put(h, value));
 
-		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList());
+		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList(), false);
 
 		for (String header : JMS_INVALID_HEADER_NAMES) {
 			assertThat(sdtMap.keySet(), hasItem(header));
@@ -1258,7 +1276,7 @@ public class XMLMessageMapperTest {
 		int i = 0;
 		do {
 			logger.info(String.format("Iteration %s - Message<?> to XMLMessage:\n%s", i, springMessage));
-			xmlMessage = xmlMessageMapper.map(springMessage);
+			xmlMessage = xmlMessageMapper.map(springMessage, null, false);
 			validateXMLMessage(xmlMessage, expectedSpringMessage, springHeaders);
 
 			logger.info(String.format("Iteration %s - XMLMessage to Message<?>:\n%s", i, xmlMessage));

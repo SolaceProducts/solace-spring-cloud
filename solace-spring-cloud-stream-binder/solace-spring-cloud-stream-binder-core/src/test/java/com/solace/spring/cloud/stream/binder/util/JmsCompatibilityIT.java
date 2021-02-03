@@ -166,7 +166,7 @@ public class JmsCompatibilityIT extends ITBase {
 			springMessageBuilder.setHeader(headerMeta.getKey(), value);
 		}
 
-		XMLMessage jcsmpMessage = xmlMessageMapper.map(springMessageBuilder.build());
+		XMLMessage jcsmpMessage = xmlMessageMapper.map(springMessageBuilder.build(), null, false);
 
 		SoftAssertions softly = new SoftAssertions();
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
@@ -216,7 +216,7 @@ public class JmsCompatibilityIT extends ITBase {
 		XMLMessage jcsmpMessage = xmlMessageMapper.map(new DefaultMessageBuilderFactory()
 				.withPayload("test")
 				.setHeader(headerName, headerValue)
-				.build());
+				.build(), null, false);
 
 		SoftAssertions softly = new SoftAssertions();
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
@@ -320,7 +320,7 @@ public class JmsCompatibilityIT extends ITBase {
 		jmsConnection.start();
 
 		for (Message<?> message : messages) {
-			jcsmpProducer.send(xmlMessageMapper.map(message), jcsmpTopic);
+			jcsmpProducer.send(xmlMessageMapper.map(message, null, false), jcsmpTopic);
 		}
 
 		assertTrue(latch.await(1, TimeUnit.MINUTES));
@@ -426,7 +426,8 @@ public class JmsCompatibilityIT extends ITBase {
 		});
 
 		jmsConnection.start();
-		jcsmpProducer.send(xmlMessageMapper.map(new DefaultMessageBuilderFactory().withPayload(payload).build()),
+		jcsmpProducer.send(xmlMessageMapper.map(new DefaultMessageBuilderFactory().withPayload(payload).build(),
+				null, false),
 				jcsmpTopic);
 
 		assertTrue(latch.await(1, TimeUnit.MINUTES));
