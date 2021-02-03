@@ -215,7 +215,7 @@ public class XMLMessageMapper {
 		}
 
 		if (setRawMessageHeader) {
-			builder.setHeader(SolaceBinderHeaders.RAW_MESSAGE, xmlMessage);
+			builder.setHeader(IntegrationMessageHeaderAccessor.SOURCE_DATA, xmlMessage);
 		}
 
 		return builder.build();

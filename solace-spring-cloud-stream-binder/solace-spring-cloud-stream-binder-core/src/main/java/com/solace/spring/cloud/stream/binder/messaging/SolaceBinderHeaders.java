@@ -1,6 +1,5 @@
 package com.solace.spring.cloud.stream.binder.messaging;
 
-import com.solacesystems.jcsmp.XMLMessage;
 import org.springframework.messaging.Message;
 
 /**
@@ -31,16 +30,6 @@ public final class SolaceBinderHeaders {
 	 * <p>A static number set by the publisher to indicate the Spring Cloud Stream Solace message version.</p>
 	 */
 	public static final String MESSAGE_VERSION = PREFIX + "messageVersion";
-
-	/**
-	 * <p><b>Acceptable Value Type:</b> {@link XMLMessage}</p>
-	 * <p><b>Access:</b> Read</p>
-	 * <br>
-	 * <p>The raw Solace message.</p>
-	 * <p><b><u>WARNING</u>:</b> <b>DO NOT</b> acknowledge this or make any other lasting changes.
-	 * This should only be used for debugging.</p>
-	 */
-	public static final String RAW_MESSAGE = PREFIX + "rawMessage";
 
 	/**
 	 * <p><b>Acceptable Value Type:</b> {@link Boolean}</p>

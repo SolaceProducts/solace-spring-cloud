@@ -1,7 +1,5 @@
 package com.solace.spring.cloud.stream.binder.messaging;
 
-import com.solacesystems.jcsmp.XMLMessage;
-
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -9,7 +7,6 @@ import java.util.stream.Stream;
 public class SolaceBinderHeaderMeta<T> implements HeaderMeta<T> {
 	public static final Map<String, SolaceBinderHeaderMeta<?>> META = Stream.of(new Object[][] {
 			{SolaceBinderHeaders.MESSAGE_VERSION, new SolaceBinderHeaderMeta<>(Integer.class, true, false, Scope.WIRE)},
-			{SolaceBinderHeaders.RAW_MESSAGE, new SolaceBinderHeaderMeta<>(XMLMessage.class, true, false, Scope.LOCAL)},
 			{SolaceBinderHeaders.SERIALIZED_PAYLOAD, new SolaceBinderHeaderMeta<>(Boolean.class, false, false, Scope.WIRE)},
 			{SolaceBinderHeaders.SERIALIZED_HEADERS, new SolaceBinderHeaderMeta<>(String.class, false, false, Scope.WIRE)},
 			{SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING, new SolaceBinderHeaderMeta<>(String.class, false, false, Scope.WIRE)}

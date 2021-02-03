@@ -1,6 +1,5 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
@@ -57,12 +56,10 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 		UUID failedSpringId = failedMsg.getHeaders().getId();
 		logger.info(String.format("Spring message %s contains failed Spring message %s", springId, failedSpringId));
 
-		if (message.getHeaders().containsKey(SolaceBinderHeaders.RAW_MESSAGE)) {
-			XMLMessage rawMessage = (XMLMessage) message.getHeaders().get(SolaceBinderHeaders.RAW_MESSAGE);
-			if (rawMessage != null) {
-				logger.info(String.format("Spring message %s contains raw %s %s",
-						springId, XMLMessage.class.getSimpleName(), rawMessage.getMessageId()));
-			}
+		Object sourceData = StaticMessageHeaderAccessor.getSourceData(message);
+		if (sourceData instanceof XMLMessage) {
+			logger.info(String.format("Spring message %s contains raw %s %s",
+					springId, XMLMessage.class.getSimpleName(), ((XMLMessage) sourceData).getMessageId()));
 		}
 
 		AcknowledgmentCallback acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(failedMsg);

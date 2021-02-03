@@ -347,7 +347,6 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING:
 					assertEquals("base64", xmlMessage.getProperties().getString(header.getKey()));
 					break;
-				case SolaceBinderHeaders.RAW_MESSAGE:
 				case SolaceBinderHeaders.SERIALIZED_PAYLOAD:
 					assertNull(xmlMessage.getProperties().get(header.getKey()));
 					break;
@@ -777,7 +776,7 @@ public class XMLMessageMapperTest {
 		assertEquals(expectedPayload, springMessage.getPayload());
 		validateSpringMessage(springMessage, xmlMessage);
 
-		assertEquals(xmlMessage, springMessage.getHeaders().get(SolaceBinderHeaders.RAW_MESSAGE));
+		assertEquals(xmlMessage, StaticMessageHeaderAccessor.getSourceData(springMessage));
 	}
 
 	@Test
@@ -942,9 +941,6 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.MESSAGE_VERSION:
 					assertEquals(xmlMessage.getProperties().get(header.getKey()), actualValue);
 					break;
-				case SolaceBinderHeaders.RAW_MESSAGE:
-					assertNull(actualValue);
-					break;
 				default:
 					fail(String.format("no test for header %s", header.getKey()));
 			}
@@ -1013,7 +1009,7 @@ public class XMLMessageMapperTest {
 				.filter(h -> h.getValue().isReadable())
 				.filter(h -> HeaderMeta.Scope.LOCAL.equals(h.getValue().getScope()))
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, readableLocalHeaders.size());
+//		assertNotEquals("Test header set was empty", 0, readableLocalHeaders.size());
 
 		TextMessage xmlMessage = Mockito.mock(TextMessage.class);
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
@@ -1032,13 +1028,7 @@ public class XMLMessageMapperTest {
 		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : readableLocalHeaders) {
-			switch (header.getKey()) {
-				case SolaceBinderHeaders.RAW_MESSAGE:
-					assertThat(springMessage.getHeaders(), not(hasKey(header)));
-					break;
-				default:
-					fail(String.format("no test for header %s", header.getKey()));
-			}
+			fail(String.format("no test for header %s", header.getKey()));
 		}
 
 		SDTMap filteredMetadata = JCSMPFactory.onlyInstance().createMap();
