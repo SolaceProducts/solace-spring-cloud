@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -482,6 +483,153 @@ public class XMLMessageMapperTest {
 
 		assertEquals(consumerProperties.getErrorMsgDmqEligible(), xmlMessage.isDMQEligible());
 		assertEquals(consumerProperties.getErrorMsgTtl().longValue(), xmlMessage.getTimeToLive());
+	}
+
+	@Test
+	public void testMapProducerSpringMessageToXMLMessage_WithExcludedHeader() throws SDTException {
+		String testPayload = "testPayload";
+		List<String> excludedHeaders = new ArrayList<>(Arrays
+				.asList("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE"));
+		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload)
+				.setHeader(
+						"io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE",
+						"any")
+				.build();
+
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders);
+		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders);
+
+		assertEquals(null, xmlMessage.getProperties()
+				.getMap("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE"));
+	}
+
+	@Test
+	public void testMapProducerSpringMessageToXMLMessage_WithExcludedHeader_ShouldNotMatchPartially() throws SDTException {
+		String testPayload = "testPayload";
+		List<String> excludedHeaders = new ArrayList<>(Arrays
+				.asList("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor.SCOPE"));
+		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload)
+				.setHeader(
+						"io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor",
+						"any")
+				.build();
+
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders);
+		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders);
+		assertEquals("any", xmlMessage.getProperties()
+				.get("io.opentracing.contrib.spring.integration.messaging.OpenTracingChannelInterceptor"));
+	}
+
+	@Test
+	public void testMapProducerSpringMessageToXMLMessage_WithExcludedHeader_ShouldNotFilterSolaceHeader() throws SDTException {
+		MessageBuilder<?> messageBuilder = new DefaultMessageBuilderFactory()
+				.withPayload(new SerializableFoo("a", "b"))
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.setHeader("test-serializable-header", new SerializableFoo("a", "b"));
+
+		Set<Map.Entry<String, ? extends HeaderMeta<?>>> writeableHeaders = Stream.of(
+				SolaceHeaderMeta.META.entrySet().stream(),
+				SolaceBinderHeaderMeta.META.entrySet().stream())
+				.flatMap(h -> h)
+				.filter(h -> h.getValue().isWritable())
+				.collect(Collectors.toSet());
+		assertNotEquals("Test header set was empty", 0, writeableHeaders.size());
+
+		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
+			Object value;
+			switch (header.getKey()) {
+			case SolaceHeaders.APPLICATION_MESSAGE_ID:
+			case SolaceHeaders.APPLICATION_MESSAGE_TYPE:
+			case SolaceHeaders.CORRELATION_ID:
+			case SolaceHeaders.HTTP_CONTENT_ENCODING:
+			case SolaceHeaders.SENDER_ID:
+				value = RandomStringUtils.randomAlphanumeric(10);
+				break;
+			case SolaceHeaders.DMQ_ELIGIBLE:
+				value = !(Boolean) ((SolaceHeaderMeta<?>) header.getValue()).getDefaultValueOverride();
+				break;
+			case SolaceHeaders.EXPIRATION:
+			case SolaceHeaders.SENDER_TIMESTAMP:
+			case SolaceHeaders.SEQUENCE_NUMBER:
+			case SolaceHeaders.TIME_TO_LIVE:
+				value = (long) RandomUtils.JVM_RANDOM.nextInt(10000);
+				break;
+			case SolaceHeaders.PRIORITY:
+				value = RandomUtils.JVM_RANDOM.nextInt(255);
+				break;
+			case SolaceHeaders.REPLY_TO:
+				value = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(10));
+				break;
+			case SolaceHeaders.USER_DATA:
+				value = RandomStringUtils.randomAlphanumeric(10).getBytes();
+				break;
+			default:
+				value = null;
+				fail(String.format("no test for header %s", header.getKey()));
+			}
+			assertNotNull(value);
+			messageBuilder.setHeader(header.getKey(), value);
+		}
+
+		List<String> excludedHeaders = writeableHeaders.stream()
+				.map(Map.Entry::getKey)
+				.collect(Collectors.toList());
+
+		Message<?> testSpringMessage = messageBuilder.build();
+		XMLMessage xmlMessage = xmlMessageMapper.map(testSpringMessage, excludedHeaders);
+
+		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
+			Object expectedValue = testSpringMessage.getHeaders().get(header.getKey());
+			switch (header.getKey()) {
+			case SolaceHeaders.APPLICATION_MESSAGE_ID:
+				assertEquals(expectedValue, xmlMessage.getApplicationMessageId());
+				break;
+			case SolaceHeaders.APPLICATION_MESSAGE_TYPE:
+				assertEquals(expectedValue, xmlMessage.getApplicationMessageType());
+				break;
+			case SolaceHeaders.CORRELATION_ID:
+				assertEquals(expectedValue, xmlMessage.getCorrelationId());
+				break;
+			case SolaceHeaders.DMQ_ELIGIBLE:
+				assertEquals(expectedValue, xmlMessage.isDMQEligible());
+				break;
+			case SolaceHeaders.EXPIRATION:
+				assertEquals(expectedValue, xmlMessage.getExpiration());
+				break;
+			case SolaceHeaders.HTTP_CONTENT_ENCODING:
+				assertEquals(expectedValue, xmlMessage.getHTTPContentEncoding());
+				break;
+			case SolaceHeaders.PRIORITY:
+				assertEquals(expectedValue, xmlMessage.getPriority());
+				break;
+			case SolaceHeaders.REPLY_TO:
+				assertEquals(expectedValue, xmlMessage.getReplyTo());
+				break;
+			case SolaceHeaders.SENDER_ID:
+				assertEquals(expectedValue, xmlMessage.getSenderId());
+				break;
+			case SolaceHeaders.SENDER_TIMESTAMP:
+				assertEquals(expectedValue, xmlMessage.getSenderTimestamp());
+				break;
+			case SolaceHeaders.SEQUENCE_NUMBER:
+				assertEquals(expectedValue, xmlMessage.getSequenceNumber());
+				break;
+			case SolaceHeaders.TIME_TO_LIVE:
+				assertEquals(expectedValue, xmlMessage.getTimeToLive());
+				break;
+			case SolaceHeaders.USER_DATA:
+				assertEquals(expectedValue, xmlMessage.getUserData());
+				break;
+			default:
+				for (Map.Entry<String, SolaceBinderHeaderMeta<?>> binderHeaderMetaEntry : SolaceBinderHeaderMeta.META.entrySet()) {
+					if (SolaceHeaderMeta.Scope.WIRE.equals(binderHeaderMetaEntry.getValue().getScope())) {
+						assertNotNull(xmlMessage.getProperties().get(binderHeaderMetaEntry.getKey()));
+					}
+				}
+			}
+		}
+
+		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders);
 	}
 
 	@Test
@@ -940,7 +1088,7 @@ public class XMLMessageMapperTest {
 		headers.put(key, value);
 		headers.put(BinderHeaders.TARGET_DESTINATION, "redirected-target");
 
-		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers));
+		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList());
 
 		assertThat(sdtMap.keySet(), hasItem(key));
 		assertThat(sdtMap.keySet(), hasItem(SolaceBinderHeaders.SERIALIZED_HEADERS));
@@ -961,7 +1109,7 @@ public class XMLMessageMapperTest {
 	public void testMapMessageHeadersToSDTMap_Null() throws Exception {
 		String key = "a";
 		Map<String,Object> headers = Collections.singletonMap(key, null);
-		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers));
+		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList());
 		assertThat(sdtMap.keySet(), hasItem(key));
 		assertNull(sdtMap.get(key));
 	}
@@ -972,7 +1120,7 @@ public class XMLMessageMapperTest {
 		Map<String,Object> headers = new HashMap<>();
 		JMS_INVALID_HEADER_NAMES.forEach(h -> headers.put(h, value));
 
-		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers));
+		SDTMap sdtMap = xmlMessageMapper.map(new MessageHeaders(headers), Collections.emptyList());
 
 		for (String header : JMS_INVALID_HEADER_NAMES) {
 			assertThat(sdtMap.keySet(), hasItem(header));
