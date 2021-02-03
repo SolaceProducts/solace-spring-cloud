@@ -8,10 +8,12 @@ import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFa
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.Queue;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
@@ -22,7 +24,11 @@ import org.springframework.messaging.MessagingException;
 
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle {
 	private final String id = UUID.randomUUID().toString();
@@ -34,7 +40,9 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private FlowReceiverContainer flowReceiverContainer;
 	private JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
-	private boolean isRunning = false;
+	private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
+	private volatile boolean isRunning = false;
+	private Supplier<Boolean> remoteStopFlag;
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
 	private Consumer<Queue> postStart;
 
@@ -52,12 +60,23 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 	@Override
 	protected Object doReceive() {
-		if (!isRunning()) {
-			String msg0 = String.format("Cannot receive message using message source %s", id);
-			String msg1 = String.format("Message source %s is not running", id);
-			ClosedChannelBindingException closedBindingException = new ClosedChannelBindingException(msg1);
-			logger.warn(msg0, closedBindingException);
-			throw new MessagingException(msg0, closedBindingException);
+		Lock readLock = readWriteLock.readLock();
+		readLock.lock();
+		try {
+			if (remoteStopFlag.get()) {
+				if (logger.isDebugEnabled()) {
+					logger.debug(String.format("Message source %s is not running. Cannot receive message", id));
+				}
+				return null;
+			} else if (!isRunning()) {
+				String msg0 = String.format("Cannot receive message using message source %s", id);
+				String msg1 = String.format("Message source %s is not running", id);
+				ClosedChannelBindingException closedBindingException = new ClosedChannelBindingException(msg1);
+				logger.warn(msg0, closedBindingException);
+				throw new MessagingException(msg0, closedBindingException);
+			}
+		} finally {
+			readLock.unlock();
 		}
 
 		MessageContainer messageContainer;
@@ -65,9 +84,14 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			int timeout = consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis();
 			messageContainer = flowReceiverContainer.receive(timeout);
 		} catch (JCSMPException e) {
-			if (!isRunning()) {
-				logger.warn(String.format("Exception received while consuming a message, but the consumer " +
-						"<message source ID: %s> is currently shutdown. Exception will be ignored", id), e);
+			if (!isRunning() || remoteStopFlag.get()) {
+				String msg = String.format("Exception received while consuming a message, but the consumer " +
+						"<message source ID: %s> is currently shutdown. Exception will be ignored", id);
+				if (e instanceof JCSMPTransportException || e instanceof ClosedFacilityException) {
+					logger.debug(msg, e);
+				} else {
+					logger.warn(msg, e);
+				}
 				return null;
 			} else {
 				String msg = String.format("Unable to consume message from queue %s", queueName);
@@ -89,39 +113,51 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 	@Override
 	public void start() {
-		logger.info(String.format("Creating consumer to queue %s <message source ID: %s>", queueName, id));
-		if (isRunning()) {
-			logger.warn(String.format("Nothing to do, message source %s is already running", id));
-			return;
-		}
-
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
 		try {
-			flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
-			flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
-					TimeUnit.MILLISECONDS);
-			flowReceiverContainer.bind();
-		} catch (JCSMPException e) {
-			String msg = String.format("Unable to get a message consumer for session %s", jcsmpSession.getSessionName());
-			logger.warn(msg, e);
-			throw new RuntimeException(msg, e);
+			logger.info(String.format("Creating consumer to queue %s <message source ID: %s>", queueName, id));
+			if (isRunning()) {
+				logger.warn(String.format("Nothing to do, message source %s is already running", id));
+				return;
+			}
+
+			try {
+				flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
+				flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
+						TimeUnit.MILLISECONDS);
+				flowReceiverContainer.bind();
+			} catch (JCSMPException e) {
+				String msg = String.format("Unable to get a message consumer for session %s", jcsmpSession.getSessionName());
+				logger.warn(msg, e);
+				throw new RuntimeException(msg, e);
+			}
+
+			if (postStart != null) {
+				postStart.accept(JCSMPFactory.onlyInstance().createQueue(queueName));
+			}
+
+			ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer, hasTemporaryQueue);
+			ackCallbackFactory.setErrorQueueInfrastructure(errorQueueInfrastructure);
+
+			isRunning = true;
+		} finally {
+			writeLock.unlock();
 		}
-
-		if (postStart != null) {
-			postStart.accept(JCSMPFactory.onlyInstance().createQueue(queueName));
-		}
-
-		ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer, hasTemporaryQueue);
-		ackCallbackFactory.setErrorQueueInfrastructure(errorQueueInfrastructure);
-
-		isRunning = true;
 	}
 
 	@Override
 	public void stop() {
-		if (!isRunning()) return;
-		logger.info(String.format("Stopping consumer to queue %s <message source ID: %s>", queueName, id));
-		flowReceiverContainer.unbind();
-		isRunning = false;
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
+		try {
+			if (!isRunning()) return;
+			logger.info(String.format("Stopping consumer to queue %s <message source ID: %s>", queueName, id));
+			flowReceiverContainer.unbind();
+			isRunning = false;
+		} finally {
+			writeLock.unlock();
+		}
 	}
 
 	@Override
@@ -135,5 +171,9 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 	public void setPostStart(Consumer<Queue> postStart) {
 		this.postStart = postStart;
+	}
+
+	public void setRemoteStopFlag(Supplier<Boolean> remoteStopFlag) {
+		this.remoteStopFlag = remoteStopFlag;
 	}
 }
