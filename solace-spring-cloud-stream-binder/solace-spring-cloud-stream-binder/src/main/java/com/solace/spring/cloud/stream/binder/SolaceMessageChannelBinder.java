@@ -122,6 +122,7 @@ public class SolaceMessageChannelBinder
 		JCSMPMessageSource messageSource = new JCSMPMessageSource(destination, jcsmpSession, consumerProperties,
 				endpointProperties, provisioningProvider.hasTemporaryQueue(destination));
 
+		messageSource.setRemoteStopFlag(consumersRemoteStopFlag::get);
 		messageSource.setPostStart(getConsumerPostStart(consumerProperties));
 
 		if (consumerProperties.getExtension().isAutoBindErrorQueue()) {
