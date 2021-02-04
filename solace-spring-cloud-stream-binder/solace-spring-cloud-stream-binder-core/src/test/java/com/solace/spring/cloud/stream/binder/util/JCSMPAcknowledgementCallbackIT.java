@@ -21,7 +21,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -37,10 +36,6 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.hasProperty;
-import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 
@@ -50,9 +45,6 @@ import static org.junit.Assert.assertThrows;
 public class JCSMPAcknowledgementCallbackIT extends ITBase {
 	@Rule
 	public Timeout globalTimeout = new Timeout(1, TimeUnit.MINUTES);
-
-	@Rule
-	public ExpectedException thrown = ExpectedException.none();
 
 	@Parameterized.Parameter
 	public String parameterSetName; // Only used for parameter set naming
@@ -174,9 +166,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 
 	@Test
 	public void testRejectWithErrorQueue() throws Exception {
-		TextMessage messageToSend = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-		messageToSend.setText("test");
-		producer.send(messageToSend, queue);
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 
 		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
 		assertNotNull(messageContainer);
@@ -209,11 +199,10 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 			validateNumRedeliveredMessages(queue.getName(), 1);
 			validateQueueBindAttempts(queue.getName(), 2);
 		} else {
-			thrown.expect(SolaceAcknowledgmentException.class);
-			thrown.expectCause(allOf(instanceOf(UnsupportedOperationException.class),
-					hasProperty("message",
-							containsString("not supported with temporary queues"))));
-			acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
+			SolaceAcknowledgmentException thrown = assertThrows(SolaceAcknowledgmentException.class,
+					() -> acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE));
+			assertThat(thrown).hasCauseInstanceOf(UnsupportedOperationException.class);
+			assertThat(thrown.getCause()).hasMessageContaining("not supported with temporary queues");
 		}
 	}
 
@@ -273,9 +262,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 
 	@Test
 	public void testReAckAfterRejectWithErrorQueue() throws Exception {
-		TextMessage messageToSend = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-		messageToSend.setText("test");
-		producer.send(messageToSend, queue);
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 
 		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
 		assertNotNull(messageContainer);
@@ -354,9 +341,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 
 	@Test
 	public void testAckStaleMessageWithErrorQueue() throws Exception {
-		TextMessage messageToSend = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-		messageToSend.setText("test");
-		producer.send(messageToSend, queue);
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = Mockito.spy(flowReceiverContainer.receive(
 				(int) TimeUnit.SECONDS.toMillis(10)));
 		assertNotNull(messageContainer);

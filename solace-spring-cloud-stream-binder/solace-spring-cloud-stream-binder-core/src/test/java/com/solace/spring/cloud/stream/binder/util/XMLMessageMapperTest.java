@@ -458,27 +458,36 @@ public class XMLMessageMapperTest {
 	}
 
 	@Test
-	public void testMapConsumerErrorSpringMessageToXMLMessage() {
-		String testPayload = "testPayload";
-		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload).build();
+	public void testMapXMLMessageToErrorXMLMessage() throws Exception {
+		SDTMap headers = JCSMPFactory.onlyInstance().createMap();
+		headers.putInteger(SolaceBinderHeaders.MESSAGE_VERSION, 1);
+		headers.putString("a", "abc");
+		TextMessage inputMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		inputMessage.setText("test-payload");
+		inputMessage.setProperties(headers);
+		inputMessage.setApplicationMessageId("test");
+		inputMessage.setDMQEligible(true);
+		inputMessage.setTimeToLive(1L);
+		inputMessage.setReadOnly();
 
-		XMLMessage xmlMessage = xmlMessageMapper.mapError(testSpringMessage, new SolaceConsumerProperties());
-		Mockito.verify(xmlMessageMapper).map(testSpringMessage, Collections.emptyList(), false);
-
-		assertEquals(0, xmlMessage.getTimeToLive());
+		XMLMessage errorMessage = xmlMessageMapper.mapError(inputMessage, new SolaceConsumerProperties());
+		assertThat(errorMessage, instanceOf(TextMessage.class));
+		assertEquals(inputMessage.getText(), ((TextMessage) errorMessage).getText());
+		assertEquals(inputMessage.getProperties(), errorMessage.getProperties());
+		assertEquals(inputMessage.getApplicationMessageId(), errorMessage.getApplicationMessageId());
+		assertEquals(inputMessage.isDMQEligible(), errorMessage.isDMQEligible());
+		assertEquals(inputMessage.getTimeToLive(), errorMessage.getTimeToLive());
+		assertFalse(errorMessage.isReadOnly());
 	}
 
 	@Test
-	public void testMapConsumerErrorSpringMessageToXMLMessage_WithProperties() {
-		String testPayload = "testPayload";
-		XMLMessage defaultXmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(testPayload).build();
+	public void testMapXMLMessageToErrorXMLMessage_WithProperties() {
+		TextMessage inputMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
-		consumerProperties.setErrorMsgDmqEligible(!defaultXmlMessage.isDMQEligible());
+		consumerProperties.setErrorMsgDmqEligible(!inputMessage.isDMQEligible());
 		consumerProperties.setErrorMsgTtl(100L);
 
-		XMLMessage xmlMessage = xmlMessageMapper.mapError(testSpringMessage, consumerProperties);
-		Mockito.verify(xmlMessageMapper).map(testSpringMessage, Collections.emptyList(), false);
+		XMLMessage xmlMessage = xmlMessageMapper.mapError(inputMessage, consumerProperties);
 
 		assertEquals(consumerProperties.getErrorMsgDmqEligible(), xmlMessage.isDMQEligible());
 		assertEquals(consumerProperties.getErrorMsgTtl().longValue(), xmlMessage.getTimeToLive());

@@ -1,12 +1,12 @@
 package com.solace.spring.cloud.stream.binder.util;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.messaging.Message;
 import org.springframework.messaging.MessagingException;
 
 public class ErrorQueueInfrastructure {
@@ -26,7 +26,7 @@ public class ErrorQueueInfrastructure {
 		this.consumerProperties = consumerProperties;
 	}
 
-	public void send(Message<?> message) {
+	public void send(BytesXMLMessage message) {
 		XMLMessage xmlMessage = xmlMessageMapper.mapError(message, consumerProperties);
 		try {
 			Queue queue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
