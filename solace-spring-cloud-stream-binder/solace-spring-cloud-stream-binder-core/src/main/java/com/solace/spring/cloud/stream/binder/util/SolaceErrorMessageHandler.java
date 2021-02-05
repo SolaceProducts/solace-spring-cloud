@@ -4,7 +4,6 @@ import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
@@ -21,7 +20,9 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 
 	@Override
 	public void handleMessage(Message<?> message) throws MessagingException {
-		UUID springId = message.getHeaders().getId();
+		UUID springId = StaticMessageHeaderAccessor.getId(message);
+		StringBuilder info = new StringBuilder("Processing message ").append(springId).append(" <");
+
 		if (!(message instanceof ErrorMessage)) {
 			logger.warn(String.format("Spring message %s: Expected an %s, not a %s",
 					springId, ErrorMessage.class.getSimpleName(), message.getClass().getSimpleName()));
@@ -47,25 +48,27 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 			failedMsg = errorMessage.getOriginalMessage();
 		}
 
-		if (failedMsg == null) {
-			logger.warn(String.format("Spring message %s: Does not have an attached %s, nothing to process",
-					springId, Message.class.getSimpleName()));
-			return;
+		if (failedMsg != null) {
+			info.append("failed-message: ").append(StaticMessageHeaderAccessor.getId(failedMsg)).append(", ");
 		}
-
-		UUID failedSpringId = failedMsg.getHeaders().getId();
-		logger.info(String.format("Spring message %s contains failed Spring message %s", springId, failedSpringId));
 
 		Object sourceData = StaticMessageHeaderAccessor.getSourceData(message);
 		if (sourceData instanceof XMLMessage) {
-			logger.info(String.format("Spring message %s contains raw %s %s",
-					springId, XMLMessage.class.getSimpleName(), ((XMLMessage) sourceData).getMessageId()));
+			info.append("source-message: ").append(((XMLMessage) sourceData).getMessageId()).append(", ");
 		}
 
-		AcknowledgmentCallback acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(failedMsg);
-		if (acknowledgmentCallback == null) { // Should never happen under normal use
-			logger.warn(String.format("Failed Spring message %s: No header %s, message cannot be acknowledged",
-					failedSpringId, IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK));
+		logger.info(info.append('>'));
+
+		AcknowledgmentCallback acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(message);
+		if (acknowledgmentCallback == null && failedMsg != null) {
+			acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(failedMsg);
+		}
+
+		if (acknowledgmentCallback == null) {
+			// Should never happen under normal use
+			logger.warn(String.format(
+					"Spring message %s does not contain an acknowledgment callback. Message cannot be acknowledged",
+					springId));
 			return;
 		}
 
