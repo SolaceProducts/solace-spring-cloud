@@ -10,6 +10,7 @@ import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solacesystems.common.util.ByteArray;
 import com.solacesystems.jcsmp.BytesMessage;
+import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.DeliveryMode;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.MapMessage;
@@ -55,15 +56,15 @@ public class XMLMessageMapper {
 	private final ObjectWriter stringSetWriter = OBJECT_MAPPER.writerFor(new TypeReference<Set<String>>(){});
 	private final ObjectReader stringSetReader = OBJECT_MAPPER.readerFor(new TypeReference<Set<String>>(){});
 
-	public XMLMessage mapError(Message<?> message, SolaceConsumerProperties consumerProperties) {
-		XMLMessage xmlMessage = map(message, Collections.emptyList(), false);
+	public BytesXMLMessage mapError(BytesXMLMessage inputMessage, SolaceConsumerProperties consumerProperties) {
+		BytesXMLMessage errorMessage = JCSMPFactory.onlyInstance().createMessage(inputMessage);
 		if (consumerProperties.getErrorMsgDmqEligible() != null) {
-			xmlMessage.setDMQEligible(consumerProperties.getErrorMsgDmqEligible());
+			errorMessage.setDMQEligible(consumerProperties.getErrorMsgDmqEligible());
 		}
 		if (consumerProperties.getErrorMsgTtl() != null) {
-			xmlMessage.setTimeToLive(consumerProperties.getErrorMsgTtl());
+			errorMessage.setTimeToLive(consumerProperties.getErrorMsgTtl());
 		}
-		return xmlMessage;
+		return errorMessage;
 	}
 
 	public XMLMessage map(Message<?> message, Collection<String> excludedHeaders, boolean convertNonSerializableHeadersToString) {

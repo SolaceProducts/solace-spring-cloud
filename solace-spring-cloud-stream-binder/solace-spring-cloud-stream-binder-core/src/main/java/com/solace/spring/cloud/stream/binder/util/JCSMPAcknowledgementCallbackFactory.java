@@ -5,7 +5,6 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.lang.Nullable;
-import org.springframework.messaging.Message;
 
 public class JCSMPAcknowledgementCallbackFactory {
 	private final FlowReceiverContainer flowReceiverContainer;
@@ -31,7 +30,6 @@ public class JCSMPAcknowledgementCallbackFactory {
 		private final FlowReceiverContainer flowReceiverContainer;
 		private final boolean hasTemporaryQueue;
 		private final ErrorQueueInfrastructure errorQueueInfrastructure;
-		private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 		private boolean autoAckEnabled = true;
 
 		private static final Log logger = LogFactory.getLog(JCSMPAcknowledgementCallback.class);
@@ -112,8 +110,7 @@ public class JCSMPAcknowledgementCallbackFactory {
 						errorQueueInfrastructure.getErrorQueueName()));
 			}
 
-			Message<?> springMessage = xmlMessageMapper.map(messageContainer.getMessage(), null);
-			errorQueueInfrastructure.send(springMessage);
+			errorQueueInfrastructure.send(messageContainer.getMessage());
 			flowReceiverContainer.acknowledge(messageContainer); //TODO do in the pub ack or timeout and retry
 			return true;
 		}

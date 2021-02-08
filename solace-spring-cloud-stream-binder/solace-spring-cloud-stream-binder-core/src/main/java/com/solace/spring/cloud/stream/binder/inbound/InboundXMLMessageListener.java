@@ -124,7 +124,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 	}
 
 	Message<?> createMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
-		setAttributesIfNecessary(bytesXMLMessage, null);
+		setAttributesIfNecessary(bytesXMLMessage, acknowledgmentCallback);
 		return xmlMessageMapper.map(bytesXMLMessage, acknowledgmentCallback);
 	}
 
@@ -137,7 +137,16 @@ abstract class InboundXMLMessageListener implements Runnable {
 		messageConsumer.accept(message);
 	}
 
+	void setAttributesIfNecessary(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback) {
+		setAttributesIfNecessary(xmlMessage, null, acknowledgmentCallback);
+	}
+
 	void setAttributesIfNecessary(XMLMessage xmlMessage, Message<?> message) {
+		setAttributesIfNecessary(xmlMessage, message, null);
+	}
+
+	private void setAttributesIfNecessary(XMLMessage xmlMessage, Message<?> message,
+								  AcknowledgmentCallback acknowledgmentCallback) {
 		if (needHolder) {
 			attributesHolder.set(ErrorMessageUtils.getAttributeAccessor(null, null));
 		}
@@ -147,6 +156,8 @@ abstract class InboundXMLMessageListener implements Runnable {
 			if (attributes != null) {
 				attributes.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, message);
 				attributes.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_RAW_MESSAGE, xmlMessage);
+				attributes.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_ACKNOWLEDGMENT_CALLBACK,
+						acknowledgmentCallback);
 			}
 		}
 	}

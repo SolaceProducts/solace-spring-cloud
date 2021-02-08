@@ -1,5 +1,7 @@
 package com.solace.spring.cloud.stream.binder.util;
 
+import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.TextMessage;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -9,6 +11,7 @@ import org.mockito.junit.MockitoJUnit;
 import org.mockito.junit.MockitoRule;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
+import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.support.ErrorMessageUtils;
 import org.springframework.messaging.Message;
@@ -34,7 +37,28 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testHandleAcknowledgmentCallback() {
+	public void testAcknowledgmentCallbackHeader() {
+		Message<?> inputMessage = MessageBuilder.withPayload("test")
+				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK,
+						Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class))
+				.build();
+
+		attributeAccessor.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, inputMessage);
+		attributeAccessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_ACKNOWLEDGMENT_CALLBACK,
+				this.acknowledgementCallback);
+
+		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
+				new MessagingException(inputMessage),
+				attributeAccessor);
+
+		errorMessageHandler.handleMessage(errorMessage);
+		Mockito.verify(this.acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(StaticMessageHeaderAccessor.getAcknowledgmentCallback(inputMessage), Mockito.never())
+				.acknowledge(Mockito.any());
+	}
+
+	@Test
+	public void testFailedMessageAcknowledgmentCallback() {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -100,6 +124,24 @@ public class SolaceErrorMessageHandlerTest {
 
 		errorMessageHandler.handleMessage(errorMessage);
 		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+	}
+
+	@Test
+	public void testSourceDataHeader() {
+		Message<?> inputMessage = MessageBuilder.withPayload("test")
+				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
+				.build();
+		TextMessage sourceData = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+
+		attributeAccessor.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, inputMessage);
+		attributeAccessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_RAW_MESSAGE, sourceData);
+
+		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
+				new MessagingException(inputMessage),
+				attributeAccessor);
+
+		errorMessageHandler.handleMessage(errorMessage);
+		Mockito.verify(this.acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
 	}
 
 	@Test

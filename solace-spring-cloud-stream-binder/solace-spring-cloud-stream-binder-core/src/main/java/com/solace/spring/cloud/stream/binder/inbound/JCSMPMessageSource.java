@@ -7,7 +7,6 @@ import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
-import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -18,6 +17,7 @@ import com.solacesystems.jcsmp.Queue;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.context.Lifecycle;
+import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.endpoint.AbstractMessageSource;
 import org.springframework.messaging.MessagingException;
@@ -100,10 +100,19 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			}
 		}
 
+		if (messageContainer == null) return null;
+
 		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createCallback(messageContainer);
 
-		BytesXMLMessage xmlMessage = messageContainer != null ? messageContainer.getMessage() : null;
-		return xmlMessage != null ? xmlMessageMapper.map(xmlMessage, acknowledgmentCallback, true) : null;
+		try {
+			return xmlMessageMapper.map(messageContainer.getMessage(), acknowledgmentCallback, true);
+		} catch (Exception e) {
+			//TODO If one day the errorChannel or attributesHolder can be retrieved, use those instead
+			logger.warn(String.format("XMLMessage %s cannot be consumed. It will be rejected",
+					messageContainer.getMessage().getMessageId()), e);
+			AckUtils.reject(acknowledgmentCallback);
+			return null;
+		}
 	}
 
 	@Override
