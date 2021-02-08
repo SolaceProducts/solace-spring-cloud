@@ -28,6 +28,7 @@ import org.springframework.integration.channel.DirectChannel;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
+import org.springframework.messaging.SubscribableChannel;
 import org.springframework.test.context.junit4.rules.SpringClassRule;
 import org.springframework.test.context.junit4.rules.SpringMethodRule;
 
@@ -129,9 +130,14 @@ public abstract class SolaceBinderITBase
 	<T extends AbstractSubscribableChannel> T createChannel(String channelName, Class<T> type,
 															MessageHandler messageHandler)
 			throws IllegalAccessException, InstantiationException {
-		T channel = type.newInstance();
-		channel.setComponentName(channelName);
-		testBinder.getApplicationContext().registerBean(channelName, type, () -> channel);
+		T channel;
+		if (testBinder.getApplicationContext().containsBean(channelName)) {
+			channel = testBinder.getApplicationContext().getBean(channelName, type);
+		} else {
+			channel = type.newInstance();
+			channel.setComponentName(channelName);
+			testBinder.getApplicationContext().registerBean(channelName, type, () -> channel);
+		}
 		channel.subscribe(messageHandler);
 		return channel;
 	}

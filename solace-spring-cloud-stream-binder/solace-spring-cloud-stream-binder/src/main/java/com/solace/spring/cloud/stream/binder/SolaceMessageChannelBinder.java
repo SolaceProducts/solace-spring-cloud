@@ -74,7 +74,7 @@ public class SolaceMessageChannelBinder
 				destination, jcsmpSession, errorChannel, sessionProducerManager, producerProperties.getExtension());
 
 		if (errorChannel != null) {
-			handler.setErrorMessageStrategy(new DefaultErrorMessageStrategy());
+			handler.setErrorMessageStrategy(errorMessageStrategy);
 		}
 
 		return handler;
