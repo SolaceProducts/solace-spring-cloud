@@ -10,7 +10,6 @@ import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
@@ -81,28 +80,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queue.getName(), new EndpointProperties());
 		flowReceiverContainer.bind();
 		acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer, !isDurable);
-		producer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-
-			@Override
-			public void handleError(String s, JCSMPException e, long l) {
-				//never called
-			}
-
-			@Override
-			public void responseReceived(String s) {
-				//never called
-			}
-
-			@Override
-			public void responseReceivedEx(Object key) {
-				logger.debug("Got message with key: " + key);
-			}
-
-			@Override
-			public void handleErrorEx(Object o, JCSMPException e, long l) {
-				logger.error(e);
-			}
-		});
+		producer = jcsmpSession.getMessageProducer(new JCSMPSessionProducerManager.CloudStreamEventHandler());
 	}
 
 	@After
@@ -373,7 +351,8 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		String producerManagerKey = UUID.randomUUID().toString();
 		JCSMPSessionProducerManager jcsmpSessionProducerManager = new JCSMPSessionProducerManager(jcsmpSession);
 		ErrorQueueInfrastructure errorQueueInfrastructure = new ErrorQueueInfrastructure(jcsmpSessionProducerManager,
-				producerManagerKey, RandomStringUtils.randomAlphanumeric(20), new SolaceConsumerProperties());
+				producerManagerKey, RandomStringUtils.randomAlphanumeric(20), new SolaceConsumerProperties(),
+				new RetryableTaskService());
 		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueInfrastructure.getErrorQueueName());
 		acknowledgementCallbackFactory.setErrorQueueInfrastructure(errorQueueInfrastructure);
 		closeErrorQueueInfrastructureCallback = () -> {

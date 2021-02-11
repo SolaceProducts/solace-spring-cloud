@@ -30,6 +30,7 @@ public class JCSMPAcknowledgementCallbackFactory {
 		private final FlowReceiverContainer flowReceiverContainer;
 		private final boolean hasTemporaryQueue;
 		private final ErrorQueueInfrastructure errorQueueInfrastructure;
+		private boolean acknowledged = false;
 		private boolean autoAckEnabled = true;
 
 		private static final Log logger = LogFactory.getLog(JCSMPAcknowledgementCallback.class);
@@ -45,7 +46,8 @@ public class JCSMPAcknowledgementCallbackFactory {
 
 		@Override
 		public void acknowledge(Status status) {
-			if (messageContainer.isAcknowledged()) {
+			// messageContainer.isAcknowledged() might be async set which is why we also need a local ack variable
+			if (acknowledged || messageContainer.isAcknowledged()) {
 				logger.info(String.format("%s %s is already acknowledged", XMLMessage.class.getSimpleName(),
 						messageContainer.getMessage().getMessageId()));
 				return;
@@ -88,6 +90,8 @@ public class JCSMPAcknowledgementCallbackFactory {
 				throw new SolaceAcknowledgmentException(String.format("Failed to acknowledge XMLMessage %s",
 						messageContainer.getMessage().getMessageId()), e);
 			}
+
+			acknowledged = true;
 		}
 
 		/**
@@ -110,14 +114,14 @@ public class JCSMPAcknowledgementCallbackFactory {
 						errorQueueInfrastructure.getErrorQueueName()));
 			}
 
-			errorQueueInfrastructure.send(messageContainer.getMessage());
-			flowReceiverContainer.acknowledge(messageContainer); //TODO do in the pub ack or timeout and retry
+			errorQueueInfrastructure.createCorrelationKey(messageContainer, flowReceiverContainer, hasTemporaryQueue)
+					.handleError();
 			return true;
 		}
 
 		@Override
 		public boolean isAcknowledged() {
-			return messageContainer.isAcknowledged();
+			return acknowledged || messageContainer.isAcknowledged();
 		}
 
 		@Override

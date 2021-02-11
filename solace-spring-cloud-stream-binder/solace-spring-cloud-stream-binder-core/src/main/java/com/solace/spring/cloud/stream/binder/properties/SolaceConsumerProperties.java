@@ -17,6 +17,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	private boolean provisionErrorQueue = true;
 	private String errorQueueNameOverride = null;
 	private boolean useGroupNameInErrorQueueName = true;
+	private long errorQueueMaxDeliveryAttempts = 3;
 
 	private int errorQueueAccessType = EndpointProperties.ACCESSTYPE_NONEXCLUSIVE;
 	private int errorQueuePermission = EndpointProperties.PERMISSION_CONSUME;
@@ -100,6 +101,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setUseGroupNameInErrorQueueName(boolean useGroupNameInErrorQueueName) {
 		this.useGroupNameInErrorQueueName = useGroupNameInErrorQueueName;
+	}
+
+	public long getErrorQueueMaxDeliveryAttempts() {
+		return errorQueueMaxDeliveryAttempts;
+	}
+
+	public void setErrorQueueMaxDeliveryAttempts(long errorQueueMaxDeliveryAttempts) {
+		this.errorQueueMaxDeliveryAttempts = errorQueueMaxDeliveryAttempts;
 	}
 
 	public int getErrorQueueAccessType() {

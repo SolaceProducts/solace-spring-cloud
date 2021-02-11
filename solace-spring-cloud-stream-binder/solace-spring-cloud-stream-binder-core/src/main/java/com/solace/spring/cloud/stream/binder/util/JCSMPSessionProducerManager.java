@@ -14,6 +14,7 @@ import java.util.UUID;
 
 public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessageProducer> {
 	private final JCSMPSession session;
+	private final CloudStreamEventHandler publisherEventHandler = new CloudStreamEventHandler();
 
 	private static final Log logger = LogFactory.getLog(JCSMPSessionProducerManager.class);
 
@@ -32,12 +33,23 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 		sharedResource.close();
 	}
 
-	private final JCSMPStreamingPublishCorrelatingEventHandler publisherEventHandler =
-			new JCSMPStreamingPublishCorrelatingEventHandler() {
+	static class CloudStreamEventHandler implements JCSMPStreamingPublishCorrelatingEventHandler {
 
 		@Override
 		public void responseReceivedEx(Object correlationKey) {
-			logger.debug("Producer received response for correlation key: " + correlationKey);
+			if (correlationKey instanceof ErrorQueueRepublishCorrelationKey) {
+				ErrorQueueRepublishCorrelationKey key = (ErrorQueueRepublishCorrelationKey) correlationKey;
+				try {
+					key.handleSuccess();
+				} catch (SolaceStaleMessageException e) { // unlikely to happen
+					logger.warn(String.format("Message %s successfully sent to error queue %s, " +
+									"but the reference is now stale. Message is likely duplicated and was/will be" +
+									" redelivered on the original queue.",
+							key.getSourceMessageId(), key.getErrorQueueName()), e);
+				}
+			} else {
+				logger.debug("Producer received response for correlation key: " + correlationKey);
+			}
 		}
 
 		@SuppressWarnings("ThrowableNotThrown")
@@ -54,10 +66,19 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 						messageId, springMessageId, timestamp);
 				logger.warn(msg, cause);
 				key.send(msg, cause);
+			} else if (correlationKey instanceof ErrorQueueRepublishCorrelationKey) {
+				ErrorQueueRepublishCorrelationKey key = (ErrorQueueRepublishCorrelationKey) correlationKey;
+				try {
+					key.handleError();
+				} catch (SolaceStaleMessageException e) { // unlikely to happen
+					logger.warn(String.format("Cannot republish message %s to error queue %s. " +
+									"It was/will be redelivered on the original queue",
+							key.getSourceMessageId(), key.getErrorQueueName()), e);
+				}
 			} else {
 				logger.warn(String.format("Producer received error for correlation key: %s at %s", correlationKey,
 						timestamp), cause);
 			}
 		}
-	};
+	}
 }
