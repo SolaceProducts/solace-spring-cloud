@@ -16,9 +16,11 @@ import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.cloud.stream.binder.RequeueCurrentMessageException;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
+import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.support.ErrorMessageUtils;
 import org.springframework.lang.Nullable;
@@ -110,10 +112,22 @@ abstract class InboundXMLMessageListener implements Runnable {
 		try {
 			handleMessage(bytesXMLMessage, acknowledgmentCallback);
 		} catch (SolaceAcknowledgmentException e) {
-			if (ExceptionUtils.indexOfType(e, SolaceStaleMessageException.class) > -1) {
-				logger.warn(String.format("Cannot acknowledge stale XMLMessage %s", bytesXMLMessage.getMessageId()), e);
-			} else {
-				throw e;
+			swallowStaleException(e, bytesXMLMessage);
+		} catch (Exception e) {
+			try {
+				if (ExceptionUtils.indexOfType(e, RequeueCurrentMessageException.class) > -1) {
+					logger.warn(String.format(
+							"Exception thrown while processing XMLMessage %s. Message will be requeued.",
+							bytesXMLMessage.getMessageId()), e);
+					AckUtils.requeue(acknowledgmentCallback);
+				} else {
+					logger.warn(String.format(
+							"Exception thrown while processing XMLMessage %s. Message will be rejected.",
+							bytesXMLMessage.getMessageId()), e);
+					AckUtils.reject(acknowledgmentCallback);
+				}
+			} catch (SolaceAcknowledgmentException e1) {
+				swallowStaleException(e1, bytesXMLMessage);
 			}
 		} finally {
 			if (needHolder) {
@@ -158,6 +172,14 @@ abstract class InboundXMLMessageListener implements Runnable {
 				attributes.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_ACKNOWLEDGMENT_CALLBACK,
 						acknowledgmentCallback);
 			}
+		}
+	}
+
+	private void swallowStaleException(SolaceAcknowledgmentException e, BytesXMLMessage bytesXMLMessage) {
+		if (ExceptionUtils.indexOfType(e, SolaceStaleMessageException.class) > -1) {
+			logger.info(String.format("Cannot acknowledge stale XMLMessage %s", bytesXMLMessage.getMessageId()), e);
+		} else {
+			throw e;
 		}
 	}
 
