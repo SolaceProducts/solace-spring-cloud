@@ -31,7 +31,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -67,7 +66,10 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.greaterThan;
+import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasSize;
+import static org.hamcrest.Matchers.lessThan;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.junit.Assert.assertEquals;
@@ -85,15 +87,13 @@ public class FlowReceiverContainerIT extends ITBase {
 	@Rule
 	public Timeout globalTimeout = new Timeout(5, TimeUnit.MINUTES);
 
-	@Rule
-	public ExpectedException thrown = ExpectedException.none();
-
 	@Parameterized.Parameter
 	public String parameterSetName; // Only used for parameter set naming
 
 	@Parameterized.Parameter(1)
 	public boolean isDurable;
 
+	private String vpnName;
 	private FlowReceiverContainer flowReceiverContainer;
 	private XMLMessageProducer producer;
 	private Queue queue;
@@ -110,6 +110,8 @@ public class FlowReceiverContainerIT extends ITBase {
 
 	@Before
 	public void setup() throws Exception {
+		vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
 		if (isDurable) {
 			queue = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(20));
 			EndpointProperties endpointProperties = new EndpointProperties();
@@ -417,10 +419,10 @@ public class FlowReceiverContainerIT extends ITBase {
 			assertNull(flowReceiverContainer.getFlowReceiverReference());
 			assertThat(getTxFlows(1, null), hasSize(0));
 
-			thrown.expect(ExecutionException.class);
-			thrown.expectCause(instanceOf(JCSMPTransportException.class));
-			thrown.expectMessage("Consumer was closed while in receive");
-			receiveFuture.get(1, TimeUnit.MINUTES);
+			ExecutionException exception = assertThrows(ExecutionException.class,
+					() -> receiveFuture.get(1, TimeUnit.MINUTES));
+			assertThat(exception.getCause(), instanceOf(JCSMPTransportException.class));
+			assertThat(exception.getMessage(), containsString("Consumer was closed while in receive"));
 		} finally {
 			executorService.shutdownNow();
 		}
@@ -516,19 +518,15 @@ public class FlowReceiverContainerIT extends ITBase {
 
 	@Test
 	public void testRebindANonBoundFlow() throws Exception {
-		thrown.expect(IllegalStateException.class);
-		thrown.expectMessage("is not bound");
-		try {
-			flowReceiverContainer.rebind(UUID.randomUUID());
-		} catch (IllegalStateException e) {
-			if (isDurable) {
-				MonitorMsgVpnQueue queueInfo = getQueueInfo();
-				assertNotNull(queueInfo);
-				assertEquals((Long) 0L, queueInfo.getBindRequestCount());
-			} else {
-				assertNull(getQueueInfo());
-			}
-			throw e;
+		UnboundFlowReceiverContainerException exception = assertThrows(UnboundFlowReceiverContainerException.class,
+				() -> flowReceiverContainer.rebind(UUID.randomUUID()));
+		assertThat(exception.getMessage(), containsString("is not bound"));
+		if (isDurable) {
+			MonitorMsgVpnQueue queueInfo = getQueueInfo();
+			assertNotNull(queueInfo);
+			assertEquals((Long) 0L, queueInfo.getBindRequestCount());
+		} else {
+			assertNull(getQueueInfo());
 		}
 	}
 
@@ -675,6 +673,30 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
+	public void testRebindAfterFlowDisconnect() throws Exception {
+		if (!isDurable) {
+			logger.info("Test does not apply for non-durable queues");
+			return;
+		}
+
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		flowReceiverContainer.bind();
+		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.MINUTES.toMillis(1));
+
+		logger.info(String.format("Disabling egress to queue %s", queue.getName()));
+		sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false),
+				null);
+		retryAssert(() -> assertFalse(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.isEgressEnabled()));
+
+		assertThrows(JCSMPException.class, () -> flowReceiverContainer.acknowledgeRebind(messageContainer));
+		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
+		assertNull(flowReceiverContainer.getFlowReceiverReference());
+	}
+
+	@Test
 	public void testRebindAfterFlowReconnect() throws Exception {
 		if (!isDurable) {
 			logger.info("Test does not apply for non-durable queues");
@@ -689,17 +711,23 @@ public class FlowReceiverContainerIT extends ITBase {
 		MessageContainer receivedMessage = flowReceiverContainer.receive();
 		assertNotNull(receivedMessage);
 
-		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-
 		logger.info(String.format("Disabling egress to queue %s", queue.getName()));
 		sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false),
 				null);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		retryAssert(() -> assertFalse(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.isEgressEnabled()));
+
+		Thread.sleep(TimeUnit.SECONDS.toMillis(1));
 
 		logger.info(String.format("Enabling egress to queue %s", queue.getName()));
 		sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true),
 				null);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		retryAssert(() -> assertTrue(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.isEgressEnabled()));
 
 		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
 		logger.info(String.format("Initiating rebind with message container %s", receivedMessage.getId()));
@@ -710,13 +738,13 @@ public class FlowReceiverContainerIT extends ITBase {
 		Mockito.verify(flowReceiverContainer, Mockito.times(1)).unbind();
 		Mockito.verify(flowReceiverContainer, Mockito.times(2)).bind(); // +1 for init bind
 
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
-
-		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
-		assertThat(txFlows, hasSize(1));
-		assertEquals((Long) 0L, txFlows.get(0).getAckedMsgCount());
-		assertEquals((Long) 1L, txFlows.get(0).getUnackedMsgCount());
-		assertEquals((Long) 1L, txFlows.get(0).getRedeliveredMsgCount());
+		retryAssert(() -> {
+			List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(2, null);
+			assertThat(txFlows, hasSize(1));
+			assertEquals((Long) 0L, txFlows.get(0).getAckedMsgCount());
+			assertEquals((Long) 1L, txFlows.get(0).getUnackedMsgCount());
+			assertEquals((Long) 1L, txFlows.get(0).getRedeliveredMsgCount());
+		});
 	}
 
 	@Test
@@ -729,7 +757,6 @@ public class FlowReceiverContainerIT extends ITBase {
 		MessageContainer receivedMessage = flowReceiverContainer.receive();
 		assertNotNull(receivedMessage);
 
-		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 		String clientName = (String) jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME);
 
 		logger.info(String.format("Remotely disconnecting session %s", jcsmpSession.getSessionName()));
@@ -803,10 +830,12 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
-	public void testReceiveOnANonBoundFlow() throws Exception {
-		thrown.expect(IllegalStateException.class);
-		thrown.expectMessage("is not bound");
-		flowReceiverContainer.receive();
+	public void testReceiveOnANonBoundFlow() {
+		long startTime = System.currentTimeMillis();
+		UnboundFlowReceiverContainerException exception = assertThrows(UnboundFlowReceiverContainerException.class,
+				() -> flowReceiverContainer.receive());
+		assertThat(System.currentTimeMillis() - startTime, greaterThan(TimeUnit.SECONDS.toMillis(5)));
+		assertThat(exception.getMessage(), containsString("is not bound"));
 	}
 
 	@Test
@@ -886,6 +915,12 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
+	public void testReceiveNoWait() throws Exception {
+		flowReceiverContainer.bind();
+		assertNull(flowReceiverContainer.receive(0));
+	}
+
+	@Test
 	public void testReceiveWithTimeout() throws Exception {
 		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 
@@ -900,9 +935,78 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
-	public void testReceiveThrowTimeout() throws Exception {
+	public void testReceiveElapsedTimeout() throws Exception {
 		flowReceiverContainer.bind();
 		assertNull(flowReceiverContainer.receive(1));
+	}
+
+	@Test
+	public void testReceiveNegativeTimeout() throws Exception {
+		flowReceiverContainer.bind();
+		assertNull(flowReceiverContainer.receive(-1));
+	}
+
+	@Test
+	public void testReceiveZeroTimeout() throws Exception {
+		flowReceiverContainer.bind();
+		assertNull(flowReceiverContainer.receive(0));
+	}
+
+	@Test
+	public void testReceiveWithDelayedBind() throws Exception {
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			long startTime = System.currentTimeMillis();
+			Future<MessageContainer> future = executorService.submit(() -> flowReceiverContainer.receive());
+
+			Thread.sleep(TimeUnit.SECONDS.toMillis(2));
+			assertFalse(future.isDone());
+			flowReceiverContainer.bind();
+
+			if (!isDurable) {
+				producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+			}
+
+			assertNotNull(future.get(1, TimeUnit.MINUTES));
+			assertThat(System.currentTimeMillis() - startTime, lessThan(5500L));
+			assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
+	public void testReceiveWithTimeoutAndDelayedBind() throws Exception {
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			long timeout = TimeUnit.SECONDS.toMillis(10);
+			long bindDelay = TimeUnit.SECONDS.toMillis(5);
+
+			long startTime = System.currentTimeMillis();
+			Future<MessageContainer> future = executorService.submit(() -> flowReceiverContainer.receive((int) timeout));
+
+			Thread.sleep(bindDelay);
+			assertFalse(future.isDone());
+
+			flowReceiverContainer.bind();
+
+			if (isDurable) {
+				assertNotNull(future.get(1, TimeUnit.MINUTES));
+				assertThat(System.currentTimeMillis() - startTime, lessThan(timeout + 500));
+				assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
+			} else {
+				assertNull(future.get(1, TimeUnit.MINUTES));
+				assertThat(System.currentTimeMillis() - startTime,
+						allOf(greaterThanOrEqualTo(timeout), lessThan(timeout + 500)));
+				assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
+			}
+		} finally {
+			executorService.shutdownNow();
+		}
 	}
 
 	@Test
@@ -932,8 +1036,6 @@ public class FlowReceiverContainerIT extends ITBase {
 
 		flowReceiverContainer.bind();
 
-		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-
 		ExecutorService executorService = Executors.newSingleThreadExecutor();
 		try {
 			Future<MessageContainer> receiveFuture = executorService.submit(() -> flowReceiverContainer.receive());
@@ -945,7 +1047,10 @@ public class FlowReceiverContainerIT extends ITBase {
 			logger.info(String.format("Disabling egress to queue %s", queue.getName()));
 			sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false),
 					null);
-			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			retryAssert(() -> assertFalse(sempV2Api.monitor()
+					.getMsgVpnQueue(vpnName, queue.getName(), null)
+					.getData()
+					.isEgressEnabled()));
 
 			logger.info(String.format("Sending message to queue %s", queue.getName()));
 			producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
@@ -953,7 +1058,10 @@ public class FlowReceiverContainerIT extends ITBase {
 			logger.info(String.format("Enabling egress to queue %s", queue.getName()));
 			sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true),
 					null);
-			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			retryAssert(() -> assertTrue(sempV2Api.monitor()
+					.getMsgVpnQueue(vpnName, queue.getName(), null)
+					.getData()
+					.isEgressEnabled()));
 
 			assertNotNull(receiveFuture.get(1, TimeUnit.MINUTES));
 		} finally {
@@ -965,7 +1073,6 @@ public class FlowReceiverContainerIT extends ITBase {
 	public void testReceiveInterruptedBySessionReconnect() throws Exception {
 		flowReceiverContainer.bind();
 
-		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 		String clientName = (String) jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME);
 
 		ExecutorService executorService = Executors.newSingleThreadExecutor();
@@ -1017,6 +1124,28 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
+	public void testWaitForBind() throws Exception {
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<Boolean> future = executorService.submit(() ->
+					flowReceiverContainer.waitForBind(TimeUnit.HOURS.toMillis(1)));
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(future.isDone());
+			flowReceiverContainer.bind();
+			assertTrue(future.get(1, TimeUnit.MINUTES));
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
+	public void testWaitForBindNegative() throws Exception {
+		long startTime = System.currentTimeMillis();
+		assertFalse(flowReceiverContainer.waitForBind(-100));
+		assertThat(System.currentTimeMillis() - startTime, lessThan(500L));
+	}
+
+	@Test
 	public void testAcknowledgeNull() throws Exception {
 		flowReceiverContainer.acknowledge(null);
 	}
@@ -1051,17 +1180,23 @@ public class FlowReceiverContainerIT extends ITBase {
 		MessageContainer receivedMessage = flowReceiverContainer.receive();
 		assertNotNull(receivedMessage);
 
-		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-
 		logger.info(String.format("Disabling egress to queue %s", queue.getName()));
 		sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false),
 				null);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		retryAssert(() -> assertFalse(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.isEgressEnabled()));
+
+		Thread.sleep(TimeUnit.SECONDS.toMillis(1));
 
 		logger.info(String.format("Enabling egress to queue %s", queue.getName()));
 		sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true),
 				null);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		retryAssert(() -> assertTrue(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.isEgressEnabled()));
 
 		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
 		logger.info(String.format("Acknowledging message %s", receivedMessage.getMessage().getMessageId()));
@@ -1087,7 +1222,6 @@ public class FlowReceiverContainerIT extends ITBase {
 		MessageContainer receivedMessage = flowReceiverContainer.receive();
 		assertNotNull(receivedMessage);
 
-		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 		String clientName = (String) jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME);
 
 		logger.info(String.format("Remotely disconnecting session %s", jcsmpSession.getSessionName()));
@@ -1119,13 +1253,9 @@ public class FlowReceiverContainerIT extends ITBase {
 				(Callable<?>) () -> {
 					try {
 						return flowReceiverContainer.rebind(flowReferenceId);
-					} catch (IllegalStateException e) {
-						if (e.getMessage().contains("is not bound")) {
-							logger.info("Received expected exception due to no bound flow", e);
-							return null;
-						} else {
-							throw e;
-						}
+					} catch (UnboundFlowReceiverContainerException e) {
+						logger.info("Received expected exception due to no bound flow", e);
+						return null;
 					}
 				},
 				(Callable<?>) () -> {
@@ -1148,13 +1278,9 @@ public class FlowReceiverContainerIT extends ITBase {
 						} else {
 							throw e;
 						}
-					} catch (IllegalStateException e) {
-						if (e.getMessage().contains("is not bound")) {
-							logger.info("Received expected exception due to no bound flow", e);
-							return null;
-						} else {
-							throw e;
-						}
+					} catch (UnboundFlowReceiverContainerException e) {
+						logger.info("Received expected exception due to no bound flow", e);
+						return null;
 					}
 
 					if (messageContainer == null) {
@@ -1209,8 +1335,7 @@ public class FlowReceiverContainerIT extends ITBase {
 
 	private MonitorMsgVpnQueue getQueueInfo() throws ApiException, JsonProcessingException {
 		try {
-			return sempV2Api.monitor().getMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
-					queue.getName(), null).getData();
+			return sempV2Api.monitor().getMsgVpnQueue(vpnName, queue.getName(), null).getData();
 		} catch (ApiException e) {
 			return processApiException(e);
 		}
@@ -1220,8 +1345,8 @@ public class FlowReceiverContainerIT extends ITBase {
 			throws ApiException, JsonProcessingException {
 		try {
 			return sempV2Api.monitor()
-					.getMsgVpnQueueTxFlows((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
-					queue.getName(), count, cursor, null, null).getData();
+					.getMsgVpnQueueTxFlows(vpnName, queue.getName(), count, cursor, null, null)
+					.getData();
 		} catch (ApiException e) {
 			return processApiException(e);
 		}

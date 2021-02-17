@@ -6,6 +6,8 @@ import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
+import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
+import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.EndpointProperties;
@@ -34,6 +36,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private final String id = UUID.randomUUID().toString();
 	private final String queueName;
 	private final JCSMPSession jcsmpSession;
+	private final RetryableTaskService taskService;
 	private final EndpointProperties endpointProperties;
 	private final boolean hasTemporaryQueue;
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
@@ -48,11 +51,13 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 	public JCSMPMessageSource(ConsumerDestination destination,
 							  JCSMPSession jcsmpSession,
+							  RetryableTaskService taskService,
 							  ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
 							  EndpointProperties endpointProperties,
 							  boolean hasTemporaryQueue) {
 		this.queueName = destination.getName();
 		this.jcsmpSession = jcsmpSession;
+		this.taskService = taskService;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
 		this.hasTemporaryQueue = hasTemporaryQueue;
@@ -98,6 +103,13 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				logger.warn(msg, e);
 				throw new MessagingException(msg, e);
 			}
+		} catch (UnboundFlowReceiverContainerException e) {
+			if (logger.isDebugEnabled()) {
+				// Might be thrown when async rebinding and this is configured with a super short timeout.
+				// Hide this so we don't flood the logger.
+				logger.debug(String.format("Unable to receive message from queue %s", queueName), e);
+			}
+			return null;
 		}
 
 		if (messageContainer == null) return null;
@@ -146,7 +158,8 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				postStart.accept(JCSMPFactory.onlyInstance().createQueue(queueName));
 			}
 
-			ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer, hasTemporaryQueue);
+			ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer, hasTemporaryQueue,
+					taskService);
 			ackCallbackFactory.setErrorQueueInfrastructure(errorQueueInfrastructure);
 
 			isRunning = true;

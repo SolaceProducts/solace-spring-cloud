@@ -6,6 +6,7 @@ import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
+import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ClosedFacilityException;
@@ -68,9 +69,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 			while (keepPolling()) {
 				try {
 					receive();
-				} catch (RuntimeException e) {
-					// Shouldn't ever come in here.
-					// Doing this just in case since the message consumers shouldn't ever stop unless interrupted.
+				} catch (RuntimeException | UnboundFlowReceiverContainerException e) {
 					logger.warn(String.format("Exception received while consuming messages from destination %s",
 							consumerDestination.getName()), e);
 				}
@@ -85,7 +84,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		return !stopFlag.get() && !remoteStopFlag.get();
 	}
 
-	public void receive() {
+	private void receive() throws UnboundFlowReceiverContainerException {
 		MessageContainer messageContainer;
 
 		try {

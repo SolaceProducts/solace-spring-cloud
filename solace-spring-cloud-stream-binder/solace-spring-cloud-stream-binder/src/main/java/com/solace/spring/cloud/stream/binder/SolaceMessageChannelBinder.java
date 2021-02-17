@@ -50,8 +50,7 @@ public class SolaceMessageChannelBinder
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
 	private SolaceExtendedBindingProperties extendedBindingProperties = new SolaceExtendedBindingProperties();
 
-	private volatile RetryableTaskService taskService; // use getTaskService() instead of accessing this directly
-	private final Object taskServiceLock = new Object();
+	private final RetryableTaskService taskService = new RetryableTaskService();
 
 	private static final SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
 
@@ -88,7 +87,7 @@ public class SolaceMessageChannelBinder
 	protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
 													 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(destination, jcsmpSession,
-				properties.getConcurrency(), provisioningProvider.hasTemporaryQueue(destination),
+				properties.getConcurrency(), provisioningProvider.hasTemporaryQueue(destination), taskService,
 				properties.getExtension(), getConsumerEndpointProperties(properties));
 
 		adapter.setRemoteStopFlag(consumersRemoteStopFlag);
@@ -100,7 +99,7 @@ public class SolaceMessageChannelBinder
 					errorHandlerProducerKey,
 					provisioningProvider.getErrorQueueName(destination),
 					properties.getExtension(),
-					getTaskService()));
+					taskService));
 		}
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
@@ -124,8 +123,8 @@ public class SolaceMessageChannelBinder
 		}
 
 		EndpointProperties endpointProperties = getConsumerEndpointProperties(consumerProperties);
-		JCSMPMessageSource messageSource = new JCSMPMessageSource(destination, jcsmpSession, consumerProperties,
-				endpointProperties, provisioningProvider.hasTemporaryQueue(destination));
+		JCSMPMessageSource messageSource = new JCSMPMessageSource(destination, jcsmpSession, taskService,
+				consumerProperties, endpointProperties, provisioningProvider.hasTemporaryQueue(destination));
 
 		messageSource.setRemoteStopFlag(consumersRemoteStopFlag::get);
 		messageSource.setPostStart(getConsumerPostStart(consumerProperties));
@@ -135,7 +134,7 @@ public class SolaceMessageChannelBinder
 					errorHandlerProducerKey,
 					provisioningProvider.getErrorQueueName(destination),
 					consumerProperties.getExtension(),
-					getTaskService()));
+					taskService));
 		}
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, consumerProperties, true);
@@ -202,15 +201,6 @@ public class SolaceMessageChannelBinder
 
 	public void setExtendedBindingProperties(SolaceExtendedBindingProperties extendedBindingProperties) {
 		this.extendedBindingProperties = extendedBindingProperties;
-	}
-
-	private RetryableTaskService getTaskService() {
-		synchronized (taskServiceLock) {
-			if (taskService == null) {
-				taskService = new RetryableTaskService();
-			}
-		}
-		return taskService;
 	}
 
 	/**

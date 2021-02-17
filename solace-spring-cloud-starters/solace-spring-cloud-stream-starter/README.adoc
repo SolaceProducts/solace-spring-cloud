@@ -220,7 +220,7 @@ Naming postfix for the anonymous consumer group queue.
 Default: `"anon"`
 
 polledConsumerWaitTimeInMillis::
-Rate at which polled consumers will receive messages from their consumer group queue.
+Maximum wait time for polled consumers to receive a message from their consumer group queue.
 +
 Default: `100`
 
@@ -252,6 +252,11 @@ Whether to include the `group` name in the error queue name for non-anonymous co
 Default: `true`
 +
 IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will republish failed messages to the same error queue regardless of their configured `group` names.
+
+errorQueueMaxDeliveryAttempts::
+Maximum number of attempts to send a failed message to the error queue. When all delivery attempts have been exhausted, the failed message will be requeued.
++
+Default: `3`
 
 errorQueueAccessType::
 Access type for the error queue.

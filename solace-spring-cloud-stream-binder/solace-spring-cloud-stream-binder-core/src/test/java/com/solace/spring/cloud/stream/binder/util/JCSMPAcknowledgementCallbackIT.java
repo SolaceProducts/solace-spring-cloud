@@ -3,7 +3,7 @@ package com.solace.spring.cloud.stream.binder.util;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.ITBase;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
-import com.solace.test.integration.semp.v2.monitor.ApiException;
+import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solacesystems.jcsmp.Consumer;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -20,6 +20,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.function.ThrowingRunnable;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -35,8 +36,10 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
+import static org.junit.Assert.assertTrue;
 
 @RunWith(Parameterized.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class,
@@ -54,6 +57,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 	private FlowReceiverContainer flowReceiverContainer;
 	private JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory;
 	private XMLMessageProducer producer;
+	private String vpnName;
 	private Queue queue;
 	private Runnable closeErrorQueueInfrastructureCallback;
 
@@ -79,8 +83,10 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 
 		flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queue.getName(), new EndpointProperties());
 		flowReceiverContainer.bind();
-		acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer, !isDurable);
+		acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer, !isDurable,
+				new RetryableTaskService());
 		producer = jcsmpSession.getMessageProducer(new JCSMPSessionProducerManager.CloudStreamEventHandler());
+		vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 	}
 
 	@After
@@ -112,11 +118,10 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
 
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.ACCEPT);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
-
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 		validateNumEnqueuedMessages(queue.getName(), 0);
 		validateNumRedeliveredMessages(queue.getName(), 0);
-		validateQueueBindAttempts(queue.getName(), 1);
+		validateQueueBindSuccesses(queue.getName(), 1);
 	}
 
 	@Test
@@ -127,19 +132,72 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
 
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 
 		if (isDurable) {
 			// Message was redelivered
-			validateNumEnqueuedMessages(queue.getName(), 1);
 			validateNumRedeliveredMessages(queue.getName(), 1);
-			validateQueueBindAttempts(queue.getName(), 2);
+			validateQueueBindSuccesses(queue.getName(), 2);
+			validateNumEnqueuedMessages(queue.getName(), 1);
 		} else {
 			// Message was discarded
 			validateNumEnqueuedMessages(queue.getName(), 0);
 			validateNumRedeliveredMessages(queue.getName(), 0);
-			validateQueueBindAttempts(queue.getName(), 1);
+			validateQueueBindSuccesses(queue.getName(), 1);
 		}
+	}
+
+	@Test
+	public void testRejectFail() throws Exception {
+		if (!isDurable) {
+			logger.info("This test does not apply for non-durable endpoints");
+			return;
+		}
+
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
+		assertNotNull(messageContainer);
+		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
+
+		logger.info(String.format("Disabling egress for queue %s", queue.getName()));
+		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
+				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false), null);
+		retryAssert(() -> assertFalse(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.isEgressEnabled()));
+
+		logger.info(String.format("Acknowledging message container %s", messageContainer.getId()));
+		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+
+		logger.info(String.format("Verifying message container %s hasn't been ack'd", messageContainer.getId()));
+		assertThat(messageContainer.isAcknowledged()).isFalse();
+		assertThat(messageContainer.isStale()).isTrue();
+		validateNumEnqueuedMessages(queue.getName(), 1);
+		validateNumRedeliveredMessages(queue.getName(), 0);
+		validateQueueBindSuccesses(queue.getName(), 1);
+		assertThat(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.getBindRequestCount())
+				.isGreaterThan(1);
+
+		logger.info(String.format("Enabling egress for queue %s", queue.getName()));
+		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
+				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true), null);
+		retryAssert(() -> assertTrue(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.isEgressEnabled()));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5)); // rebind task retry interval
+
+		// Message was redelivered
+		logger.info("Verifying message was redelivered");
+		validateNumRedeliveredMessages(queue.getName(), 1);
+//		validateQueueBindSuccesses(queue.getName(), 2); //TODO Re-enable once SOL-45982 is fixed
+		validateNumEnqueuedMessages(queue.getName(), 1);
 	}
 
 	@Test
@@ -152,12 +210,52 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
 
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 		validateNumEnqueuedMessages(queue.getName(), 0);
 		validateNumRedeliveredMessages(queue.getName(), 0);
-		validateQueueBindAttempts(queue.getName(), 1);
+		validateQueueBindSuccesses(queue.getName(), 1);
 		validateNumEnqueuedMessages(errorQueueInfrastructure.getErrorQueueName(), 1);
+		validateNumRedeliveredMessages(errorQueueInfrastructure.getErrorQueueName(), 0);
+	}
+
+	@Test
+	public void testRejectWithErrorQueueFail() throws Exception {
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+
+		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
+		assertNotNull(messageContainer);
+		ErrorQueueInfrastructure errorQueueInfrastructure = initializeErrorQueueInfrastructure();
+		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
+
+		logger.info(String.format("Disabling ingress for error queue %s",
+				errorQueueInfrastructure.getErrorQueueName()));
+		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
+				errorQueueInfrastructure.getErrorQueueName(), new ConfigMsgVpnQueue().ingressEnabled(false), null);
+		retryAssert(() -> assertFalse(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, errorQueueInfrastructure.getErrorQueueName(), null)
+				.getData()
+				.isIngressEnabled()));
+
+		logger.info(String.format("Acknowledging message container %s", messageContainer.getId()));
+		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+
+		if (isDurable) {
+			// Message was redelivered
+			logger.info("Verifying message was redelivered");
+			validateNumRedeliveredMessages(queue.getName(), 1);
+			validateQueueBindSuccesses(queue.getName(), 2);
+			validateNumEnqueuedMessages(queue.getName(), 1);
+		} else {
+			// Message was discarded
+			logger.info("Verifying message was discarded");
+			validateNumEnqueuedMessages(queue.getName(), 0);
+			validateNumRedeliveredMessages(queue.getName(), 0);
+			validateQueueBindSuccesses(queue.getName(), 1);
+		}
+
+		validateNumEnqueuedMessages(errorQueueInfrastructure.getErrorQueueName(), 0);
 		validateNumRedeliveredMessages(errorQueueInfrastructure.getErrorQueueName(), 0);
 	}
 
@@ -171,102 +269,21 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 
 		if (isDurable) {
 			acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
-			Thread.sleep(TimeUnit.SECONDS.toMillis(3));
-
-			validateNumEnqueuedMessages(queue.getName(), 1);
+			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 			validateNumRedeliveredMessages(queue.getName(), 1);
-			validateQueueBindAttempts(queue.getName(), 2);
+			validateQueueBindSuccesses(queue.getName(), 2);
+			validateNumEnqueuedMessages(queue.getName(), 1);
 		} else {
 			SolaceAcknowledgmentException thrown = assertThrows(SolaceAcknowledgmentException.class,
 					() -> acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE));
+			assertThat(acknowledgmentCallback.isAcknowledged()).isFalse();
 			assertThat(thrown).hasCauseInstanceOf(UnsupportedOperationException.class);
 			assertThat(thrown.getCause()).hasMessageContaining("not supported with temporary queues");
 		}
 	}
 
 	@Test
-	public void testReAckAfterAccept() throws Exception {
-		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
-		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
-		assertNotNull(messageContainer);
-		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
-
-		Runnable verifyExpectedState = () -> {
-			validateNumEnqueuedMessages(queue.getName(), 0);
-			validateNumRedeliveredMessages(queue.getName(), 0);
-			validateQueueBindAttempts(queue.getName(), 1);
-		};
-
-		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.ACCEPT);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
-		verifyExpectedState.run();
-
-		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
-			acknowledgmentCallback.acknowledge(status);
-			verifyExpectedState.run();
-		}
-	}
-
-	@Test
-	public void testReAckAfterReject() throws Exception {
-		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
-		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
-		assertNotNull(messageContainer);
-		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
-
-		Runnable verifyExpectedState = () -> {
-			if (isDurable) {
-				// Message was redelivered
-				validateNumEnqueuedMessages(queue.getName(), 1);
-				validateNumRedeliveredMessages(queue.getName(), 1);
-				validateQueueBindAttempts(queue.getName(), 2);
-			} else {
-				// Message was discarded
-				validateNumEnqueuedMessages(queue.getName(), 0);
-				validateNumRedeliveredMessages(queue.getName(), 0);
-				validateQueueBindAttempts(queue.getName(), 1);
-			}
-		};
-
-		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
-		verifyExpectedState.run();
-
-		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
-			acknowledgmentCallback.acknowledge(status);
-			verifyExpectedState.run();
-		}
-	}
-
-	@Test
-	public void testReAckAfterRejectWithErrorQueue() throws Exception {
-		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
-
-		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
-		assertNotNull(messageContainer);
-		ErrorQueueInfrastructure errorQueueInfrastructure = initializeErrorQueueInfrastructure();
-		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
-
-		Runnable verifyExpectedState = () -> {
-			validateNumEnqueuedMessages(queue.getName(), 0);
-			validateNumRedeliveredMessages(queue.getName(), 0);
-			validateQueueBindAttempts(queue.getName(), 1);
-			validateNumEnqueuedMessages(errorQueueInfrastructure.getErrorQueueName(), 1);
-			validateNumRedeliveredMessages(errorQueueInfrastructure.getErrorQueueName(), 0);
-		};
-
-		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
-		verifyExpectedState.run();
-
-		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
-			acknowledgmentCallback.acknowledge(status);
-			verifyExpectedState.run();
-		}
-	}
-
-	@Test
-	public void testReAckAfterRequeue() throws Exception {
+	public void testRequeueFail() throws Exception {
 		if (!isDurable) {
 			logger.info("This test does not apply for non-durable endpoints");
 			return;
@@ -278,18 +295,157 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		assertNotNull(messageContainer);
 		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
 
-		Runnable verifyExpectedState = () -> {
-			validateNumEnqueuedMessages(queue.getName(), 1);
-			validateNumRedeliveredMessages(queue.getName(), 1);
-			validateQueueBindAttempts(queue.getName(), 2);
+		logger.info(String.format("Disabling egress for queue %s", queue.getName()));
+		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
+				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false), null);
+		retryAssert(() -> assertFalse(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.isEgressEnabled()));
+
+		logger.info(String.format("Acknowledging message container %s", messageContainer.getId()));
+		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+
+		logger.info(String.format("Verifying message container %s hasn't been ack'd", messageContainer.getId()));
+		assertThat(messageContainer.isAcknowledged()).isFalse();
+		assertThat(messageContainer.isStale()).isTrue();
+		validateNumEnqueuedMessages(queue.getName(), 1);
+		validateNumRedeliveredMessages(queue.getName(), 0);
+		validateQueueBindSuccesses(queue.getName(), 1);
+		assertThat(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.getBindRequestCount())
+				.isGreaterThan(1);
+
+		logger.info(String.format("Enabling egress for queue %s", queue.getName()));
+		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
+				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true), null);
+		retryAssert(() -> assertTrue(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.isEgressEnabled()));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5)); // rebind task retry interval
+
+		// Message was redelivered
+		logger.info("Verifying message was redelivered");
+		validateNumRedeliveredMessages(queue.getName(), 1);
+//		validateQueueBindSuccesses(queue.getName(), 2); //TODO Re-enable once SOL-45982 is fixed
+		validateNumEnqueuedMessages(queue.getName(), 1);
+	}
+
+	@Test
+	public void testReAckAfterAccept() throws Throwable {
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
+		assertNotNull(messageContainer);
+		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
+
+		ThrowingRunnable verifyExpectedState = () -> {
+			validateNumEnqueuedMessages(queue.getName(), 0);
+			validateNumRedeliveredMessages(queue.getName(), 0);
+			validateQueueBindSuccesses(queue.getName(), 1);
 		};
 
-		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.ACCEPT);
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 		verifyExpectedState.run();
 
 		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
 			acknowledgmentCallback.acknowledge(status);
+			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+			verifyExpectedState.run();
+		}
+	}
+
+	@Test
+	public void testReAckAfterReject() throws Throwable {
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
+		assertNotNull(messageContainer);
+		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
+
+		ThrowingRunnable verifyExpectedState = () -> {
+			if (isDurable) {
+				// Message was redelivered
+				validateNumRedeliveredMessages(queue.getName(), 1);
+				validateQueueBindSuccesses(queue.getName(), 2);
+				validateNumEnqueuedMessages(queue.getName(), 1);
+			} else {
+				// Message was discarded
+				validateNumEnqueuedMessages(queue.getName(), 0);
+				validateNumRedeliveredMessages(queue.getName(), 0);
+				validateQueueBindSuccesses(queue.getName(), 1);
+			}
+		};
+
+		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+		verifyExpectedState.run();
+
+		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
+			acknowledgmentCallback.acknowledge(status);
+			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+			verifyExpectedState.run();
+		}
+	}
+
+	@Test
+	public void testReAckAfterRejectWithErrorQueue() throws Throwable {
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+
+		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
+		assertNotNull(messageContainer);
+		ErrorQueueInfrastructure errorQueueInfrastructure = initializeErrorQueueInfrastructure();
+		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
+
+		ThrowingRunnable verifyExpectedState = () -> {
+			validateNumEnqueuedMessages(queue.getName(), 0);
+			validateNumRedeliveredMessages(queue.getName(), 0);
+			validateQueueBindSuccesses(queue.getName(), 1);
+			validateNumEnqueuedMessages(errorQueueInfrastructure.getErrorQueueName(), 1);
+			validateNumRedeliveredMessages(errorQueueInfrastructure.getErrorQueueName(), 0);
+		};
+
+		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+		verifyExpectedState.run();
+
+		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
+			acknowledgmentCallback.acknowledge(status);
+			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+			verifyExpectedState.run();
+		}
+	}
+
+	@Test
+	public void testReAckAfterRequeue() throws Throwable {
+		if (!isDurable) {
+			logger.info("This test does not apply for non-durable endpoints");
+			return;
+		}
+
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+
+		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
+		assertNotNull(messageContainer);
+		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
+
+		ThrowingRunnable verifyExpectedState = () -> {
+			validateNumRedeliveredMessages(queue.getName(), 1);
+			validateQueueBindSuccesses(queue.getName(), 2);
+			validateNumEnqueuedMessages(queue.getName(), 1);
+		};
+
+		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+		verifyExpectedState.run();
+
+		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
+			acknowledgmentCallback.acknowledge(status);
+			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 			verifyExpectedState.run();
 		}
 	}
@@ -306,6 +462,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
 			SolaceAcknowledgmentException exception = assertThrows(SolaceAcknowledgmentException.class,
 					() -> acknowledgmentCallback.acknowledge(status));
+			assertThat(acknowledgmentCallback.isAcknowledged()).isFalse();
 			if (!isDurable && status.equals(AcknowledgmentCallback.Status.REQUEUE)) {
 				assertThat(exception).hasCauseInstanceOf(UnsupportedOperationException.class);
 			} else {
@@ -313,7 +470,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 			}
 			validateNumEnqueuedMessages(queue.getName(), 1);
 			validateNumRedeliveredMessages(queue.getName(), 0);
-			validateQueueBindAttempts(queue.getName(), 1);
+			validateQueueBindSuccesses(queue.getName(), 1);
 		}
 	}
 
@@ -330,6 +487,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
 			SolaceAcknowledgmentException exception = assertThrows(SolaceAcknowledgmentException.class,
 					() -> acknowledgmentCallback.acknowledge(status));
+			assertThat(acknowledgmentCallback.isAcknowledged()).isFalse();
 			if (!isDurable && status.equals(AcknowledgmentCallback.Status.REQUEUE)) {
 				assertThat(exception).hasCauseInstanceOf(UnsupportedOperationException.class);
 			} else {
@@ -337,7 +495,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 			}
 			validateNumEnqueuedMessages(queue.getName(), 1);
 			validateNumRedeliveredMessages(queue.getName(), 0);
-			validateQueueBindAttempts(queue.getName(), 1);
+			validateQueueBindSuccesses(queue.getName(), 1);
 			validateNumEnqueuedMessages(errorQueueInfrastructure.getErrorQueueName(), 0);
 			validateNumRedeliveredMessages(errorQueueInfrastructure.getErrorQueueName(), 0);
 		}
@@ -374,41 +532,26 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		return errorQueueInfrastructure;
 	}
 
-	private void validateNumEnqueuedMessages(String queueName, int expectedCount) {
-		String msgVpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		try {
-			assertThat(sempV2Api.monitor()
-					.getMsgVpnQueueMsgs(msgVpnName, queueName, null, null, null, null)
-					.getData())
-					.hasSize(expectedCount);
-		} catch (ApiException e) {
-			throw new RuntimeException(e);
-		}
+	private void validateNumEnqueuedMessages(String queueName, int expectedCount) throws InterruptedException {
+		retryAssert(() -> assertThat(sempV2Api.monitor()
+				.getMsgVpnQueueMsgs(vpnName, queueName, null, null, null, null)
+				.getData())
+				.hasSize(expectedCount));
 	}
 
-	private void validateNumRedeliveredMessages(String queueName, int expectedCount) {
-		String msgVpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		try {
-			assertThat(sempV2Api.monitor()
-					.getMsgVpnQueue(msgVpnName, queueName, null)
-					.getData()
-					.getRedeliveredMsgCount())
-					.isEqualTo(expectedCount);
-		} catch (ApiException e) {
-			throw new RuntimeException(e);
-		}
+	private void validateNumRedeliveredMessages(String queueName, int expectedCount) throws InterruptedException {
+		retryAssert(() -> assertThat(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queueName, null)
+				.getData()
+				.getRedeliveredMsgCount())
+				.isEqualTo(expectedCount));
 	}
 
-	private void validateQueueBindAttempts(String queueName, int expectedCount) {
-		String msgVpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		try {
-			assertThat(sempV2Api.monitor()
-					.getMsgVpnQueue(msgVpnName, queueName, null)
-					.getData()
-					.getBindRequestCount())
-					.isEqualTo(expectedCount);
-		} catch (ApiException e) {
-			throw new RuntimeException(e);
-		}
+	private void validateQueueBindSuccesses(String queueName, int expectedCount) throws InterruptedException {
+		retryAssert(() -> assertThat(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queueName, null)
+				.getData()
+				.getBindSuccessCount())
+				.isEqualTo(expectedCount));
 	}
 }

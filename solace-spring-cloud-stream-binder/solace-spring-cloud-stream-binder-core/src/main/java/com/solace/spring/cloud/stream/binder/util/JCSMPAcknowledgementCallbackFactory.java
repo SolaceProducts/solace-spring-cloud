@@ -9,11 +9,14 @@ import org.springframework.lang.Nullable;
 public class JCSMPAcknowledgementCallbackFactory {
 	private final FlowReceiverContainer flowReceiverContainer;
 	private final boolean hasTemporaryQueue;
+	private final RetryableTaskService taskService;
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
 
-	public JCSMPAcknowledgementCallbackFactory(FlowReceiverContainer flowReceiverContainer, boolean hasTemporaryQueue) {
+	public JCSMPAcknowledgementCallbackFactory(FlowReceiverContainer flowReceiverContainer, boolean hasTemporaryQueue,
+											   RetryableTaskService taskService) {
 		this.flowReceiverContainer = flowReceiverContainer;
 		this.hasTemporaryQueue = hasTemporaryQueue;
+		this.taskService = taskService;
 	}
 
 	public void setErrorQueueInfrastructure(ErrorQueueInfrastructure errorQueueInfrastructure) {
@@ -22,7 +25,7 @@ public class JCSMPAcknowledgementCallbackFactory {
 
 	public AcknowledgmentCallback createCallback(MessageContainer messageContainer) {
 		return new JCSMPAcknowledgementCallback(messageContainer, flowReceiverContainer, hasTemporaryQueue,
-				errorQueueInfrastructure);
+				taskService, errorQueueInfrastructure);
 	}
 
 	static class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
@@ -30,6 +33,7 @@ public class JCSMPAcknowledgementCallbackFactory {
 		private final FlowReceiverContainer flowReceiverContainer;
 		private final boolean hasTemporaryQueue;
 		private final ErrorQueueInfrastructure errorQueueInfrastructure;
+		private final RetryableTaskService taskService;
 		private boolean acknowledged = false;
 		private boolean autoAckEnabled = true;
 
@@ -37,10 +41,12 @@ public class JCSMPAcknowledgementCallbackFactory {
 
 		JCSMPAcknowledgementCallback(MessageContainer messageContainer, FlowReceiverContainer flowReceiverContainer,
 									 boolean hasTemporaryQueue,
+									 RetryableTaskService taskService,
 									 @Nullable ErrorQueueInfrastructure errorQueueInfrastructure) {
 			this.messageContainer = messageContainer;
 			this.flowReceiverContainer = flowReceiverContainer;
 			this.hasTemporaryQueue = hasTemporaryQueue;
+			this.taskService = taskService;
 			this.errorQueueInfrastructure = errorQueueInfrastructure;
 		}
 
@@ -77,11 +83,16 @@ public class JCSMPAcknowledgementCallbackFactory {
 							throw new UnsupportedOperationException(String.format(
 									"Cannot %s XMLMessage %s, this operation is not supported with temporary queues",
 									status, messageContainer.getMessage().getMessageId()));
+						} else if (messageContainer.isStale()) {
+							throw new SolaceStaleMessageException(String.format(
+									"Message container %s (XMLMessage %s) is stale",
+									messageContainer.getId(), messageContainer.getMessage().getMessageId()));
 						} else {
 							logger.info(String.format("%s %s: Will be re-queued onto queue %s",
 									XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
 									flowReceiverContainer.getQueueName()));
-							flowReceiverContainer.acknowledgeRebind(messageContainer);
+							taskService.submit(new RetryableRebindTask(flowReceiverContainer, messageContainer,
+									taskService));
 						}
 				}
 			} catch (SolaceAcknowledgmentException e) {

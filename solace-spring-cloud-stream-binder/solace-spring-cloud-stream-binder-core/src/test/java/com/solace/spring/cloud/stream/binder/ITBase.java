@@ -3,6 +3,8 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.SpringJCSMPFactory;
+import org.assertj.core.api.SoftAssertions;
+import org.assertj.core.api.SoftAssertionsProvider;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -11,6 +13,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.test.context.junit4.rules.SpringClassRule;
 import org.springframework.test.context.junit4.rules.SpringMethodRule;
+
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -55,5 +59,24 @@ public abstract class ITBase {
 		if (jcsmpSession != null && !jcsmpSession.isClosed()) {
 			jcsmpSession.closeSession();
 		}
+	}
+
+	public void retryAssert(SoftAssertionsProvider.ThrowingRunnable assertRun) throws InterruptedException {
+		retryAssert(assertRun, 10, TimeUnit.SECONDS);
+	}
+
+	@SuppressWarnings("BusyWait")
+	public void retryAssert(SoftAssertionsProvider.ThrowingRunnable assertRun, long timeout, TimeUnit unit)
+			throws InterruptedException {
+			final long expiry = System.currentTimeMillis() + unit.toMillis(timeout);
+			SoftAssertions softAssertions;
+			do {
+				softAssertions = new SoftAssertions();
+				softAssertions.check(assertRun);
+				if (!softAssertions.wasSuccess()) {
+					Thread.sleep(500);
+				}
+			} while (!softAssertions.wasSuccess() && System.currentTimeMillis() < expiry);
+			softAssertions.assertAll();
 	}
 }

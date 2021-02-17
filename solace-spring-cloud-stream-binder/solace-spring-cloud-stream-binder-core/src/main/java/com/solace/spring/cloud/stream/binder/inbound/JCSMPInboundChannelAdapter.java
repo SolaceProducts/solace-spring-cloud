@@ -4,6 +4,7 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
+import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -40,6 +41,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final EndpointProperties endpointProperties;
 	private final int concurrency;
 	private final boolean hasTemporaryQueue;
+	private final RetryableTaskService taskService;
 	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
 	private final Set<AtomicBoolean> consumerStopFlags;
 	private Consumer<Queue> postStart;
@@ -56,12 +58,14 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 									  JCSMPSession jcsmpSession,
 									  int concurrency,
 									  boolean hasTemporaryQueue,
+									  RetryableTaskService taskService,
 									  SolaceConsumerProperties consumerProperties,
 									  @Nullable EndpointProperties endpointProperties) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
 		this.concurrency = concurrency;
 		this.hasTemporaryQueue = hasTemporaryQueue;
+		this.taskService = taskService;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
 		this.consumerStopFlags = new HashSet<>(this.concurrency);
@@ -195,7 +199,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 	private InboundXMLMessageListener buildListener(FlowReceiverContainer flowReceiverContainer) {
 		JCSMPAcknowledgementCallbackFactory ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, hasTemporaryQueue);
+				flowReceiverContainer, hasTemporaryQueue, taskService);
 		ackCallbackFactory.setErrorQueueInfrastructure(errorQueueInfrastructure);
 
 		InboundXMLMessageListener listener;

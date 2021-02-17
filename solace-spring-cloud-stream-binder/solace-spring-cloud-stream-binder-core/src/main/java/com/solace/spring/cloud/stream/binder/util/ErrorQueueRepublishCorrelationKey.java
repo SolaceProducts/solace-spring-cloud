@@ -1,7 +1,6 @@
 package com.solace.spring.cloud.stream.binder.util;
 
 import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -33,12 +32,12 @@ public class ErrorQueueRepublishCorrelationKey {
 
 	public void handleError() throws SolaceStaleMessageException {
 		while (true) {
-			if (errorQueueDeliveryAttempt >= errorQueueInfrastructure.getMaxDeliveryAttempts()) {
-				fallback();
-				break;
-			} else if (messageContainer.isStale()) {
+			if (messageContainer.isStale()) {
 				throw new SolaceStaleMessageException(String.format("Message container %s (XMLMessage %s) is stale",
 						messageContainer.getId(), messageContainer.getMessage().getMessageId()));
+			} else if (errorQueueDeliveryAttempt >= errorQueueInfrastructure.getMaxDeliveryAttempts()) {
+				fallback();
+				break;
 			} else {
 				errorQueueDeliveryAttempt++;
 				logger.info(String.format("Republishing XMLMessage %s to error queue %s - attempt %s of %s",
@@ -59,29 +58,16 @@ public class ErrorQueueRepublishCorrelationKey {
 	private void fallback() throws SolaceStaleMessageException {
 		if (hasTemporaryQueue) {
 			logger.info(String.format(
-					"Exceeded max error queue delivery attempts and cannot requeue %s %s since this flow is " +
-							"bound to a temporary queue, failed message will be discarded",
-					XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId()));
+					"Exceeded max error queue delivery attempts and cannot requeue XMLMessage %s since queue %s is " +
+							"temporary. Failed message will be discarded.",
+					messageContainer.getMessage().getMessageId(), flowReceiverContainer.getQueueName()));
 			flowReceiverContainer.acknowledge(messageContainer);
 		} else {
 			logger.info(String.format(
 					"Exceeded max error queue delivery attempts. XMLMessage %s will be re-queued onto queue %s",
 					messageContainer.getMessage().getMessageId(), flowReceiverContainer.getQueueName()));
-			retryableTaskService.submit(() -> {
-				try {
-					flowReceiverContainer.acknowledgeRebind(messageContainer);
-					return true;
-				} catch (JCSMPException e) {
-					logger.warn(String.format("failed to rebind queue %s. Will retry",
-							flowReceiverContainer.getQueueName()), e);
-					return false;
-				} catch (SolaceStaleMessageException e) {
-					// Nothing to do.
-					logger.debug(String.format("Message container %s (XMLMessage %s) is stale",
-							messageContainer.getId(), messageContainer.getMessage().getMessageId()), e);
-					return true;
-				}
-			});
+			retryableTaskService.submit(new RetryableRebindTask(flowReceiverContainer, messageContainer,
+					retryableTaskService));
 		}
 	}
 
@@ -90,5 +76,9 @@ public class ErrorQueueRepublishCorrelationKey {
 	}
 	public String getErrorQueueName() {
 		return errorQueueInfrastructure.getErrorQueueName();
+	}
+
+	long getErrorQueueDeliveryAttempt() {
+		return errorQueueDeliveryAttempt;
 	}
 }
