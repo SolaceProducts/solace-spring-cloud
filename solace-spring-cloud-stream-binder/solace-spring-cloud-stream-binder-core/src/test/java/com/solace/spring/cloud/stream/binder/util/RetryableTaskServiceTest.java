@@ -80,7 +80,7 @@ public class RetryableTaskServiceTest {
 	}
 
 	@Test
-	public void testRetryOrder() throws Exception {
+	public void testRetryMultiple() throws Exception {
 		final int numTasks = 3;
 		final int numAttempts = 3;
 		final int taskToEarlyTerminate = 1;
@@ -92,19 +92,19 @@ public class RetryableTaskServiceTest {
 			retryLatches.add(new CountDownLatch(taskToEarlyTerminate == i ? numAttempts - 1 : numAttempts));
 		}
 
-		ConcurrentLinkedQueue<Integer> receiveOrder = new ConcurrentLinkedQueue<>();
-		List<Integer> expectedReceiveOrder = new ArrayList<>();
+		ConcurrentLinkedQueue<Integer> received = new ConcurrentLinkedQueue<>();
+		List<Integer> expectedReceived = new ArrayList<>();
 
 		for (int attempt = 1; attempt <= numAttempts; attempt++) {
 			for (int taskId = 0; taskId < numTasks; taskId++) {
 				if (taskToEarlyTerminate == taskId && attempt >= numAttempts) continue;
-				expectedReceiveOrder.add(taskId);
+				expectedReceived.add(taskId);
 			}
 		}
 
 		BiFunction<Integer, CountDownLatch, RetryableTask> taskGenerator = (id, retryLatch) -> attempt -> {
 			startLatch.await();
-			receiveOrder.add(id);
+			received.add(id);
 			logger.info(String.format("Task %s: Attempt %s", id, attempt));
 			retryLatch.countDown();
 			if (retryLatch.getCount() <= 0) {
@@ -122,13 +122,13 @@ public class RetryableTaskServiceTest {
 			taskService.submit(task);
 		}
 
-		assertThat(receiveOrder).isEmpty();
+		assertThat(received).isEmpty();
 		startLatch.countDown();
 
 		for (CountDownLatch retryLatch : retryLatches) {
 			assertThat(retryLatch.await(1, TimeUnit.MINUTES)).isTrue();
 		}
-		assertThat(receiveOrder.toArray(new Integer[0])).isEqualTo(expectedReceiveOrder.toArray());
+		assertThat(received.toArray(new Integer[0])).containsExactlyInAnyOrderElementsOf(expectedReceived);
 		for (RetryableTask task : tasks) {
 			assertThat(taskService.hasTask(task)).isFalse();
 		}
@@ -174,5 +174,34 @@ public class RetryableTaskServiceTest {
 	public void testSubmitNull() {
 		taskService.submit(null);
 		assertThrows(NullPointerException.class, () -> taskService.hasTask(null));
+	}
+
+	@Test
+	public void testConcurrentBlocking() throws Exception {
+		CountDownLatch latch = new CountDownLatch(2);
+		CountDownLatch continueLatch = new CountDownLatch(1);
+		RetryableTask task1 = attempt -> {
+			logger.info("Starting task 1");
+			latch.countDown();
+			continueLatch.await();
+			return true;
+		};
+
+		RetryableTask task2 = attempt -> {
+			logger.info("Starting task 2");
+			latch.countDown();
+			continueLatch.await();
+			return true;
+		};
+
+		taskService.submit(task1);
+		taskService.submit(task2);
+		assertThat(latch.await(1, TimeUnit.MINUTES)).isTrue();
+		assertThat(taskService.hasTask(task1)).isTrue();
+		assertThat(taskService.hasTask(task2)).isTrue();
+		continueLatch.countDown();
+		Thread.sleep(500);
+		assertThat(taskService.hasTask(task1)).isFalse();
+		assertThat(taskService.hasTask(task2)).isFalse();
 	}
 }

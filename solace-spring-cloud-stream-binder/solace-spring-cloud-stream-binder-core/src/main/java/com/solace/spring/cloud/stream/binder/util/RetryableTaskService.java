@@ -5,6 +5,7 @@ import org.apache.commons.logging.LogFactory;
 
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -14,7 +15,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * Service for delegating retryable tasks.
  */
 public class RetryableTaskService {
-	private final ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+	private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+	private final ExecutorService workerService = Executors.newCachedThreadPool();
 	private static final Log logger = LogFactory.getLog(RetryableTaskService.class);
 	private final Set<RetryableTask> tasks = ConcurrentHashMap.newKeySet();
 
@@ -35,11 +37,12 @@ public class RetryableTaskService {
 		}
 
 		tasks.add(task);
-		executorService.execute(new RetryableTaskWrapper(this, task, retryInterval, unit));
+		scheduler.execute(new RetryableTaskWrapper(this, task, retryInterval, unit));
 	}
 
 	public void close() {
-		executorService.shutdownNow();
+		scheduler.shutdownNow();
+		workerService.shutdownNow();
 		if (!tasks.isEmpty()) {
 			logger.info(String.format("Task service shutdown. Cancelling tasks: %s", tasks));
 		}
@@ -67,6 +70,10 @@ public class RetryableTaskService {
 
 		@Override
 		public void run() {
+			taskService.workerService.execute(this::runWorker);
+		}
+
+		private void runWorker() {
 			if (Thread.currentThread().isInterrupted()) {
 				logger.info(String.format("Interrupt received. Aborting task: %s", task));
 				taskService.tasks.remove(task);
@@ -77,7 +84,7 @@ public class RetryableTaskService {
 				if (task.run(attempt.incrementAndGet())) {
 					taskService.tasks.remove(task);
 				} else {
-					taskService.executorService.schedule(this, retryInterval, unit);
+					taskService.scheduler.schedule(this, retryInterval, unit);
 				}
 			} catch (InterruptedException e) {
 				logger.info(String.format("Interrupt received. Aborting task: %s", task), e);

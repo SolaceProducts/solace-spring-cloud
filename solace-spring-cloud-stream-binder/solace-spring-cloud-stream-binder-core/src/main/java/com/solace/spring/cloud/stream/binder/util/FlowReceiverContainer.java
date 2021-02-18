@@ -134,8 +134,32 @@ public class FlowReceiverContainer {
 	 */
 	public UUID rebind(UUID flowReceiverReferenceId) throws JCSMPException, InterruptedException,
 			UnboundFlowReceiverContainerException {
+		return rebind(flowReceiverReferenceId, false);
+	}
+
+	/**
+	 * Same as {@link #rebind(UUID)}, but with the option to return immediately with {@code null} if the lock cannot
+	 * be acquired.
+	 * @param flowReceiverReferenceId The flow receiver reference ID to match.
+	 * @param returnImmediately return {@code null} if {@code true} and lock cannot be acquired.
+	 * @return The new flow reference ID or the existing flow reference ID if it the flow reference IDs do not match.
+	 * Or {@code null} if {@code returnImmediately} is {@code true} and the lock cannot be acquired.
+	 * @throws JCSMPException a JCSMP exception
+	 * @throws InterruptedException was interrupted while waiting for the remaining messages to be acknowledged
+	 * @throws UnboundFlowReceiverContainerException flow receiver container is not bound
+	 * @see #rebind(UUID)
+	 */
+	public UUID rebind(UUID flowReceiverReferenceId, boolean returnImmediately) throws JCSMPException,
+			InterruptedException, UnboundFlowReceiverContainerException {
 		Lock writeLock = readWriteLock.writeLock();
-		writeLock.lock();
+		if (returnImmediately) {
+			if (!writeLock.tryLock()) {
+				return null;
+			}
+		} else {
+			writeLock.lock();
+		}
+
 		try {
 			logger.info(String.format("Rebinding flow receiver container %s", id));
 			FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
@@ -338,7 +362,7 @@ public class FlowReceiverContainer {
 	 * <p><b>Note:</b> If an exception is thrown, the flow container may be left in an unbound state.
 	 * Use {@link MessageContainer#isStale()} and {@link #isBound()} to check and {@link #bind()} to recover.</p>
 	 * @param messageContainer The message.
-	 * @return The new flow reference ID or {@code null} if no flow was bound or the message was already acknowledged.
+	 * @return The new flow reference ID or the current flow reference ID if message was already acknowledge.
 	 * @throws JCSMPException a JCSMP exception
 	 * @throws InterruptedException was interrupted while waiting for the remaining messages to be acknowledged
 	 * @throws SolaceStaleMessageException the message is stale and cannot be acknowledged
@@ -346,9 +370,47 @@ public class FlowReceiverContainer {
 	 */
 	public UUID acknowledgeRebind(MessageContainer messageContainer)
 			throws JCSMPException, InterruptedException, SolaceStaleMessageException, UnboundFlowReceiverContainerException {
+		return acknowledgeRebind(messageContainer, false);
+	}
+
+	/**
+	 * Same as {@link #acknowledge(MessageContainer)}, but with the option to return immediately with if the lock
+	 * cannot be acquired.
+	 * @param messageContainer The message.
+	 * @param returnImmediately Return {@code null} if {@code true} and the lock cannot be acquired.
+	 * @return The new flow reference ID, or the current flow reference ID if message was already acknowledge,
+	 * or {@code null} if {@code returnImmediately} is {@code true} and the lock cannot be acquired.
+	 * @throws JCSMPException a JCSMP exception
+	 * @throws InterruptedException was interrupted while waiting for the remaining messages to be acknowledged
+	 * @throws SolaceStaleMessageException the message is stale and cannot be acknowledged
+	 * @throws UnboundFlowReceiverContainerException flow container is not bound
+	 * @see #acknowledgeRebind(MessageContainer)
+	 */
+	public UUID acknowledgeRebind(MessageContainer messageContainer, boolean returnImmediately)
+			throws JCSMPException, InterruptedException, SolaceStaleMessageException, UnboundFlowReceiverContainerException {
 		if (messageContainer == null || messageContainer.isAcknowledged()) {
-			return null;
+			Lock readLock = readWriteLock.readLock();
+			if (returnImmediately) {
+				if (!readLock.tryLock()) {
+					return null;
+				}
+			} else {
+				readLock.lock();
+			}
+
+			try {
+				FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+				if (flowReceiverReference == null) {
+					throw new UnboundFlowReceiverContainerException(String.format(
+							"Flow receiver container %s is not bound", id));
+				} else {
+					return flowReceiverReference.getId();
+				}
+			} finally {
+				readLock.unlock();
+			}
 		}
+
 		if (messageContainer.isStale()) {
 			throw new SolaceStaleMessageException(String.format("Message container %s (XMLMessage %s) is stale",
 					messageContainer.getId(), messageContainer.getMessage().getMessageId()));
@@ -358,7 +420,7 @@ public class FlowReceiverContainer {
 
 		UUID flowReceiverReferenceId;
 		try {
-			flowReceiverReferenceId = rebind(messageContainer.getFlowReceiverReferenceId());
+			flowReceiverReferenceId = rebind(messageContainer.getFlowReceiverReferenceId(), returnImmediately);
 		} catch (Exception e) {
 			if (!messageContainer.isStale()) {
 				logger.debug("Failed to rebind, re-incrementing unacknowledged-messages counter", e);

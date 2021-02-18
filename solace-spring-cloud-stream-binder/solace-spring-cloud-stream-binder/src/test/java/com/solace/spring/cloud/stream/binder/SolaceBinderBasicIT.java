@@ -41,7 +41,6 @@ import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.SubscribableChannel;
 import org.springframework.messaging.support.ErrorMessage;
 import org.springframework.test.context.ContextConfiguration;
-import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.util.MimeTypeUtils;
 
 import java.util.HashMap;
@@ -453,16 +452,12 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
 		moduleOutputChannel.send(message);
 
-		boolean gotMessage = false;
-		for (int i = 0; !gotMessage && i < 100; i++) {
-			gotMessage = moduleInputChannel.poll(message1 -> {
-				throw new RuntimeException("Throwing expected exception!");
-			});
-		}
-		assertThat(gotMessage).isTrue();
+		retryAssert(() -> assertThat(moduleInputChannel.poll(message1 -> {
+			throw new RuntimeException("Throwing expected exception!");
+		})).isTrue());
 
-		gotMessage = moduleInputChannel.poll(message1 -> logger.info(String.format("Received message %s", message1)));
-		assertThat(gotMessage).isTrue();
+		retryAssert(() -> assertThat(moduleInputChannel.poll(message1 ->
+				logger.info(String.format("Received message %s", message1)))).isTrue());
 
 		producerBinding.unbind();
 		consumerBinding.unbind();

@@ -27,6 +27,7 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
@@ -44,7 +45,7 @@ public class RetryableRebindTaskIT extends ITBase {
 	private FlowReceiverContainer flowReceiverContainer;
 	private XMLMessageProducer producer;
 
-	private static final Log logger = LogFactory.getLog(RetryableBindTaskIT.class);
+	private static final Log logger = LogFactory.getLog(RetryableRebindTaskIT.class);
 
 	@Before
 	public void setUp() throws Exception {
@@ -79,6 +80,7 @@ public class RetryableRebindTaskIT extends ITBase {
 		UUID flowId = Objects.requireNonNull(flowReceiverContainer.getFlowReceiverReference()).getId();
 
 		assertTrue(task.run(1));
+		Mockito.verify(flowReceiverContainer).acknowledgeRebind(messageContainer, true);
 		assertTrue(messageContainer.isAcknowledged());
 		assertTrue(messageContainer.isStale());
 		assertTrue(flowReceiverContainer.isBound());
@@ -91,8 +93,10 @@ public class RetryableRebindTaskIT extends ITBase {
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
 		RetryableRebindTask task = new RetryableRebindTask(flowReceiverContainer, messageContainer, taskService);
 
-		Mockito.doThrow(new JCSMPException("test")).when(flowReceiverContainer).acknowledgeRebind(messageContainer);
+		Mockito.doThrow(new JCSMPException("test")).when(flowReceiverContainer)
+				.acknowledgeRebind(messageContainer, true);
 		assertFalse(task.run(1));
+		Mockito.verify(flowReceiverContainer).acknowledgeRebind(messageContainer, true);
 		assertFalse(messageContainer.isAcknowledged());
 		assertFalse(messageContainer.isStale());
 	}
@@ -112,6 +116,7 @@ public class RetryableRebindTaskIT extends ITBase {
 		Mockito.when(messageContainer.isStale()).thenReturn(true);
 		assertTrue(task.run(1));
 		assertEquals(flowId, Objects.requireNonNull(flowReceiverContainer.getFlowReceiverReference()).getId());
+		Mockito.verify(messageContainer).isStale();
 	}
 
 	@Test
@@ -140,9 +145,11 @@ public class RetryableRebindTaskIT extends ITBase {
 				null);
 
 		retryAssert(() -> {
+			assertTrue(sempV2Api.monitor().getMsgVpnQueue(vpnName, queue.getName(), null).getData()
+					.isEgressEnabled());
 			assertFalse(taskService.hasTask(new RetryableBindTask(flowReceiverContainer)));
 			assertTrue(flowReceiverContainer.isBound());
-		});
+		}, 1, TimeUnit.MINUTES);
 
 //		assertNotNull(flowReceiverContainer.receive(5000)); //TODO Re-enable once SOL-45982 is fixed
 	}

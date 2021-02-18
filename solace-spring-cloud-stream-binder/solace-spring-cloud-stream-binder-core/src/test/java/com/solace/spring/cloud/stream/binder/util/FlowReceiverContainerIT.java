@@ -620,6 +620,121 @@ public class FlowReceiverContainerIT extends ITBase {
 	}
 
 	@Test
+	public void testRebindReturnImmediately() throws Exception {
+		flowReceiverContainer.setRebindWaitTimeout(-1, TimeUnit.SECONDS); // block forever
+
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer blockingMsg = flowReceiverContainer.receive();
+		assertNotNull(blockingMsg);
+
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<UUID> future = executorService.submit(() -> flowReceiverContainer.rebind(flowReferenceId));
+			Thread.sleep(1000);
+			assertNull(flowReceiverContainer.rebind(flowReferenceId, true));
+			flowReceiverContainer.acknowledge(blockingMsg);
+			assertThat(future.get(1, TimeUnit.MINUTES), allOf(notNullValue(), not(equalTo(flowReferenceId))));
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
+	public void testRebindAckReturnImmediately() throws Exception {
+		flowReceiverContainer.setRebindWaitTimeout(-1, TimeUnit.SECONDS); // block forever
+
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer receivedMessage1 = flowReceiverContainer.receive();
+		MessageContainer receivedMessage2 = flowReceiverContainer.receive();
+		assertNotNull(receivedMessage1);
+		assertNotNull(receivedMessage2);
+
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<UUID> future = executorService.submit(() -> flowReceiverContainer.rebind(flowReferenceId));
+			Thread.sleep(1000);
+			assertNull(flowReceiverContainer.acknowledgeRebind(receivedMessage1, true));
+			assertFalse(future.isDone());
+			assertNull(flowReceiverContainer.acknowledgeRebind(receivedMessage2, true));
+			UUID newFlowReferenceId = future.get(1, TimeUnit.MINUTES);
+			assertThat(newFlowReferenceId, allOf(notNullValue(), not(equalTo(flowReferenceId))));
+			assertEquals(newFlowReferenceId, flowReceiverContainer.acknowledgeRebind(receivedMessage1, true));
+			assertEquals(newFlowReferenceId, flowReceiverContainer.acknowledgeRebind(receivedMessage2, true));
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
+	public void testRebindAckAlreadyAcknowledged() throws Exception {
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer receivedMessage = flowReceiverContainer.receive();
+		assertNotNull(receivedMessage);
+		flowReceiverContainer.acknowledge(receivedMessage);
+		assertEquals(flowReferenceId, flowReceiverContainer.acknowledgeRebind(receivedMessage));
+	}
+
+	@Test
+	public void testRebindAckAlreadyAcknowledgedBlocked() throws Exception {
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer receivedMsg = flowReceiverContainer.receive();
+		MessageContainer blockingMsg = flowReceiverContainer.receive();
+		assertNotNull(receivedMsg);
+		assertNotNull(blockingMsg);
+		flowReceiverContainer.acknowledge(receivedMsg);
+
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<UUID> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowReferenceId));
+			Future<UUID> ackFuture = executorService.submit(() -> flowReceiverContainer.acknowledgeRebind(receivedMsg));
+
+			// To make sure the flow rebind and ack rebind are actually blocked
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(rebindFuture.isDone());
+			assertFalse(ackFuture.isDone());
+
+			flowReceiverContainer.acknowledge(blockingMsg);
+			UUID newFlowReferenceId = rebindFuture.get(1, TimeUnit.MINUTES);
+			assertThat(newFlowReferenceId, allOf(notNullValue(), not(equalTo(flowReferenceId))));
+			assertEquals(newFlowReferenceId, flowReceiverContainer.acknowledgeRebind(receivedMsg, true));
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
+	public void testRebindAckAlreadyAcknowledgedAndReturnImmediately() throws Exception {
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer receivedMsg = flowReceiverContainer.receive();
+		MessageContainer blockingMsg = flowReceiverContainer.receive();
+		assertNotNull(receivedMsg);
+		assertNotNull(blockingMsg);
+		flowReceiverContainer.acknowledge(receivedMsg);
+
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<UUID> future = executorService.submit(() -> flowReceiverContainer.rebind(flowReferenceId));
+			Thread.sleep(1000);
+			assertNull(flowReceiverContainer.acknowledgeRebind(receivedMsg, true));
+			assertFalse(future.isDone());
+			flowReceiverContainer.acknowledge(blockingMsg);
+			UUID newFlowReferenceId = future.get(1, TimeUnit.MINUTES);
+			assertThat(newFlowReferenceId, allOf(notNullValue(), not(equalTo(flowReferenceId))));
+			assertEquals(newFlowReferenceId, flowReceiverContainer.acknowledgeRebind(receivedMsg, true));
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@Test
 	public void testRebindInterrupt() throws Exception {
 		UUID flowReferenceId = flowReceiverContainer.bind();
 

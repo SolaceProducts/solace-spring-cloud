@@ -24,8 +24,7 @@ public class RetryableRebindTask implements RetryableTaskService.RetryableTask {
 	@Override
 	public boolean run(int attempt) throws InterruptedException {
 		try {
-			flowReceiverContainer.acknowledgeRebind(messageContainer);
-			return true;
+			return flowReceiverContainer.acknowledgeRebind(messageContainer, true) != null;
 		} catch (JCSMPException | UnboundFlowReceiverContainerException e) {
 			if (messageContainer.isStale() && !flowReceiverContainer.isBound()) {
 				logger.warn(String.format(
