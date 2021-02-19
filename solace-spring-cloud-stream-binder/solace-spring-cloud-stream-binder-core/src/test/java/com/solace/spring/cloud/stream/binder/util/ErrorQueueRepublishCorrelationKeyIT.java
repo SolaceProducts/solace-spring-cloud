@@ -78,7 +78,8 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 			queue = jcsmpSession.createTemporaryQueue(RandomStringUtils.randomAlphanumeric(20));
 		}
 
-		flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queue.getName(), new EndpointProperties());
+		flowReceiverContainer = Mockito.spy(new FlowReceiverContainer(jcsmpSession, queue.getName(),
+				new EndpointProperties()));
 		flowReceiverContainer.bind();
 
 		String producerManagerKey = UUID.randomUUID().toString();
@@ -139,7 +140,7 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
 		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
 
-		key.handleError();
+		key.handleError(false);
 
 		Mockito.verify(errorQueueInfrastructure, Mockito.times(1)).send(messageContainer, key);
 		assertEquals(1, key.getErrorQueueDeliveryAttempt());
@@ -161,7 +162,7 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 			}
 		}).when(errorQueueInfrastructure).send(messageContainer, key);
 
-		key.handleError();
+		key.handleError(false);
 
 		int maxDeliveryAttempts = Math.toIntExact(errorQueueInfrastructure.getMaxDeliveryAttempts());
 		Mockito.verify(errorQueueInfrastructure, Mockito.times(maxDeliveryAttempts)).send(messageContainer, key);
@@ -200,7 +201,7 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 			return invocation.callRealMethod();
 		}).when(errorQueueInfrastructure).send(messageContainer, key);
 
-		key.handleError();
+		key.handleError(false);
 		assertTrue(latch.await(1, TimeUnit.MINUTES));
 
 		int maxDeliveryAttempts = Math.toIntExact(errorQueueInfrastructure.getMaxDeliveryAttempts());
@@ -218,7 +219,7 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 
 		Mockito.doThrow(new JCSMPException("test")).when(errorQueueInfrastructure).send(messageContainer, key);
 
-		key.handleError();
+		key.handleError(false);
 
 		int maxDeliveryAttempts = Math.toIntExact(errorQueueInfrastructure.getMaxDeliveryAttempts());
 		Mockito.verify(errorQueueInfrastructure, Mockito.times(maxDeliveryAttempts)).send(messageContainer, key);
@@ -227,12 +228,72 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 
 		if (isDurable) {
 			validateNumEnqueuedMessages(queue, 1);
-			Mockito.verify(retryableTaskService, Mockito.times(1))
-					.submit(new RetryableRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
+			Mockito.verify(flowReceiverContainer).acknowledgeRebind(messageContainer, true);
 			assertEquals((Long) 2L, sempV2Api.monitor()
 					.getMsgVpnQueue(vpnName, queue.getName(), null)
 					.getData()
 					.getBindSuccessCount());
+		} else {
+			validateNumEnqueuedMessages(queue, 0);
+		}
+	}
+
+	@Test
+	public void testHandleErrorRequeueFallbackSkipSync() throws Exception {
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
+
+		Mockito.doThrow(new JCSMPException("test")).when(errorQueueInfrastructure).send(messageContainer, key);
+
+		key.handleError(true);
+
+		int maxDeliveryAttempts = Math.toIntExact(errorQueueInfrastructure.getMaxDeliveryAttempts());
+		Mockito.verify(errorQueueInfrastructure, Mockito.times(maxDeliveryAttempts)).send(messageContainer, key);
+		assertEquals(maxDeliveryAttempts, key.getErrorQueueDeliveryAttempt());
+		validateNumEnqueuedMessages(errorQueue, 0);
+
+		if (isDurable) {
+			validateNumEnqueuedMessages(queue, 1);
+			Mockito.verify(retryableTaskService)
+					.submit(new RetryableRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
+			Mockito.verify(flowReceiverContainer).acknowledgeRebind(messageContainer, true);
+			retryAssert(() -> assertEquals((Long) 2L, sempV2Api.monitor()
+					.getMsgVpnQueue(vpnName, queue.getName(), null)
+					.getData()
+					.getBindSuccessCount()));
+		} else {
+			validateNumEnqueuedMessages(queue, 0);
+		}
+	}
+
+	@Test
+	public void testHandleErrorRequeueFallbackFail() throws Exception {
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
+
+		Mockito.doThrow(new JCSMPException("test")).when(errorQueueInfrastructure).send(messageContainer, key);
+		Mockito.doThrow(new JCSMPException("test")).doCallRealMethod().when(flowReceiverContainer)
+				.acknowledgeRebind(messageContainer, true);
+
+		key.handleError(false);
+
+		int maxDeliveryAttempts = Math.toIntExact(errorQueueInfrastructure.getMaxDeliveryAttempts());
+		Mockito.verify(errorQueueInfrastructure, Mockito.times(maxDeliveryAttempts)).send(messageContainer, key);
+		assertEquals(maxDeliveryAttempts, key.getErrorQueueDeliveryAttempt());
+		validateNumEnqueuedMessages(errorQueue, 0);
+
+		if (isDurable) {
+			validateNumEnqueuedMessages(queue, 1);
+			Mockito.verify(retryableTaskService)
+					.submit(new RetryableRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
+			Mockito.verify(flowReceiverContainer, Mockito.times(2))
+					.acknowledgeRebind(messageContainer, true);
+			retryAssert(() -> assertEquals((Long) 2L, sempV2Api.monitor()
+					.getMsgVpnQueue(vpnName, queue.getName(), null)
+					.getData()
+					.getBindSuccessCount()));
 		} else {
 			validateNumEnqueuedMessages(queue, 0);
 		}
@@ -245,7 +306,7 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 		Mockito.when(messageContainer.isStale()).thenReturn(true);
 		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
 
-		assertThrows(SolaceStaleMessageException.class, key::handleError);
+		assertThrows(SolaceStaleMessageException.class, () -> key.handleError(false));
 		assertEquals(0, key.getErrorQueueDeliveryAttempt());
 	}
 

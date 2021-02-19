@@ -69,7 +69,7 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 			} else if (correlationKey instanceof ErrorQueueRepublishCorrelationKey) {
 				ErrorQueueRepublishCorrelationKey key = (ErrorQueueRepublishCorrelationKey) correlationKey;
 				try {
-					key.handleError();
+					key.handleError(true);
 				} catch (SolaceStaleMessageException e) { // unlikely to happen
 					logger.warn(String.format("Cannot republish message %s to error queue %s. " +
 									"It was/will be redelivered on the original queue",

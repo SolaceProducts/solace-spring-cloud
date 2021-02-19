@@ -33,6 +33,9 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,6 +57,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 	@Parameterized.Parameter(1)
 	public boolean isDurable;
 
+	private RetryableTaskService retryableTaskService;
 	private FlowReceiverContainer flowReceiverContainer;
 	private JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory;
 	private XMLMessageProducer producer;
@@ -73,6 +77,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 
 	@Before
 	public void setup() throws Exception {
+		retryableTaskService = Mockito.spy(new RetryableTaskService());
 		if (isDurable) {
 			queue = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(20));
 			EndpointProperties endpointProperties = new EndpointProperties();
@@ -84,7 +89,7 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queue.getName(), new EndpointProperties());
 		flowReceiverContainer.bind();
 		acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer, !isDurable,
-				new RetryableTaskService());
+				retryableTaskService);
 		producer = jcsmpSession.getMessageProducer(new JCSMPSessionProducerManager.CloudStreamEventHandler());
 		vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 	}
@@ -334,6 +339,55 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		validateNumRedeliveredMessages(queue.getName(), 1);
 //		validateQueueBindSuccesses(queue.getName(), 2); //TODO Re-enable once SOL-45982 is fixed
 		validateNumEnqueuedMessages(queue.getName(), 1);
+	}
+
+	@Test
+	public void testRequeueDelegateWhileRebinding() throws Exception {
+		if (!isDurable) {
+			logger.info("This test does not apply for non-durable endpoints");
+			return;
+		}
+
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+
+		MessageContainer messageContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
+		MessageContainer blockingContainer = flowReceiverContainer.receive((int) TimeUnit.SECONDS.toMillis(10));
+		assertNotNull(messageContainer);
+		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
+
+		ExecutorService executorService = Executors.newSingleThreadExecutor();
+		try {
+			Future<UUID> rebindFuture = executorService.submit(() ->
+					flowReceiverContainer.rebind(messageContainer.getFlowReceiverReferenceId()));
+
+			logger.info(String.format("Acknowledging message container %s", messageContainer.getId()));
+			acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
+			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+			Mockito.verify(retryableTaskService)
+					.submit(new RetryableRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
+			Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+
+			logger.info(String.format("Verifying message container %s hasn't been ack'd", messageContainer.getId()));
+			assertFalse(rebindFuture.isDone());
+			assertThat(messageContainer.isAcknowledged()).isTrue();
+			assertThat(messageContainer.isStale()).isFalse();
+			validateNumEnqueuedMessages(queue.getName(), 2);
+			validateNumRedeliveredMessages(queue.getName(), 0);
+			validateQueueBindSuccesses(queue.getName(), 1);
+
+			flowReceiverContainer.acknowledge(blockingContainer);
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5)); // rebind task retry interval
+			assertNotNull(rebindFuture.get(1, TimeUnit.MINUTES));
+
+			// Message was redelivered
+			logger.info("Verifying message was redelivered");
+			validateNumRedeliveredMessages(queue.getName(), 1);
+			validateQueueBindSuccesses(queue.getName(), 2);
+			validateNumEnqueuedMessages(queue.getName(), 1);
+		} finally {
+			executorService.shutdownNow();
+		}
 	}
 
 	@Test

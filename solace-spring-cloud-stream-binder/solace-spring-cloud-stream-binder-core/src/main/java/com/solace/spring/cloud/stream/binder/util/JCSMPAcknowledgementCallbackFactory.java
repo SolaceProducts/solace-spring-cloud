@@ -91,8 +91,11 @@ public class JCSMPAcknowledgementCallbackFactory {
 							logger.info(String.format("%s %s: Will be re-queued onto queue %s",
 									XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
 									flowReceiverContainer.getQueueName()));
-							taskService.submit(new RetryableRebindTask(flowReceiverContainer, messageContainer,
-									taskService));
+							RetryableRebindTask rebindTask = new RetryableRebindTask(flowReceiverContainer,
+									messageContainer, taskService);
+							if (!rebindTask.run(0)) {
+								taskService.submit(rebindTask);
+							}
 						}
 				}
 			} catch (SolaceAcknowledgmentException e) {
@@ -126,7 +129,7 @@ public class JCSMPAcknowledgementCallbackFactory {
 			}
 
 			errorQueueInfrastructure.createCorrelationKey(messageContainer, flowReceiverContainer, hasTemporaryQueue)
-					.handleError();
+					.handleError(false);
 			return true;
 		}
 

@@ -30,13 +30,13 @@ public class ErrorQueueRepublishCorrelationKey {
 		flowReceiverContainer.acknowledge(messageContainer);
 	}
 
-	public void handleError() throws SolaceStaleMessageException {
+	public void handleError(boolean skipSyncFallbackAttempt) throws SolaceStaleMessageException {
 		while (true) {
 			if (messageContainer.isStale()) {
 				throw new SolaceStaleMessageException(String.format("Message container %s (XMLMessage %s) is stale",
 						messageContainer.getId(), messageContainer.getMessage().getMessageId()));
 			} else if (errorQueueDeliveryAttempt >= errorQueueInfrastructure.getMaxDeliveryAttempts()) {
-				fallback();
+				fallback(skipSyncFallbackAttempt);
 				break;
 			} else {
 				errorQueueDeliveryAttempt++;
@@ -55,7 +55,7 @@ public class ErrorQueueRepublishCorrelationKey {
 		}
 	}
 
-	private void fallback() throws SolaceStaleMessageException {
+	private void fallback(boolean skipSyncAttempt) throws SolaceStaleMessageException {
 		if (hasTemporaryQueue) {
 			logger.info(String.format(
 					"Exceeded max error queue delivery attempts and cannot requeue XMLMessage %s since queue %s is " +
@@ -66,8 +66,17 @@ public class ErrorQueueRepublishCorrelationKey {
 			logger.info(String.format(
 					"Exceeded max error queue delivery attempts. XMLMessage %s will be re-queued onto queue %s",
 					messageContainer.getMessage().getMessageId(), flowReceiverContainer.getQueueName()));
-			retryableTaskService.submit(new RetryableRebindTask(flowReceiverContainer, messageContainer,
-					retryableTaskService));
+
+			RetryableRebindTask rebindTask = new RetryableRebindTask(flowReceiverContainer, messageContainer,
+					retryableTaskService);
+			try {
+				if (skipSyncAttempt || !rebindTask.run(0)) {
+					retryableTaskService.submit(rebindTask);
+				}
+			} catch (InterruptedException interruptedException) {
+				logger.info(String.format("Interrupt received while rebinding to queue %s with message %s",
+						flowReceiverContainer.getQueueName(), messageContainer.getMessage().getMessageId()));
+			}
 		}
 	}
 

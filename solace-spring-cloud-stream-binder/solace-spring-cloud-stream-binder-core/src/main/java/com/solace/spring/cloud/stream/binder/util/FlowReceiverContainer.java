@@ -375,7 +375,7 @@ public class FlowReceiverContainer {
 
 	/**
 	 * Same as {@link #acknowledge(MessageContainer)}, but with the option to return immediately with if the lock
-	 * cannot be acquired.
+	 * cannot be acquired. Even if immediately returned, the message container will still be marked as acknowledged.
 	 * @param messageContainer The message.
 	 * @param returnImmediately Return {@code null} if {@code true} and the lock cannot be acquired.
 	 * @return The new flow reference ID, or the current flow reference ID if message was already acknowledge,
