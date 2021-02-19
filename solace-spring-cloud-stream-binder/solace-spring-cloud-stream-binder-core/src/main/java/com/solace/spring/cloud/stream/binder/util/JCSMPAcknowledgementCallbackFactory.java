@@ -91,7 +91,7 @@ public class JCSMPAcknowledgementCallbackFactory {
 							logger.info(String.format("%s %s: Will be re-queued onto queue %s",
 									XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
 									flowReceiverContainer.getQueueName()));
-							RetryableRebindTask rebindTask = new RetryableRebindTask(flowReceiverContainer,
+							RetryableAckRebindTask rebindTask = new RetryableAckRebindTask(flowReceiverContainer,
 									messageContainer, taskService);
 							if (!rebindTask.run(0)) {
 								taskService.submit(rebindTask);

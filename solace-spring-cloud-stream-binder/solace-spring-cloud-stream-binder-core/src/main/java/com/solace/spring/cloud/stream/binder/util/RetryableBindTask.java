@@ -10,7 +10,7 @@ import java.util.StringJoiner;
 public class RetryableBindTask implements RetryableTaskService.RetryableTask {
 	private final FlowReceiverContainer flowReceiverContainer;
 
-	private static final Log logger = LogFactory.getLog(RetryableRebindTask.class);
+	private static final Log logger = LogFactory.getLog(RetryableBindTask.class);
 
 	public RetryableBindTask(FlowReceiverContainer flowReceiverContainer) {
 		this.flowReceiverContainer = flowReceiverContainer;

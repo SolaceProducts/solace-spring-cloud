@@ -67,7 +67,7 @@ public class ErrorQueueRepublishCorrelationKey {
 					"Exceeded max error queue delivery attempts. XMLMessage %s will be re-queued onto queue %s",
 					messageContainer.getMessage().getMessageId(), flowReceiverContainer.getQueueName()));
 
-			RetryableRebindTask rebindTask = new RetryableRebindTask(flowReceiverContainer, messageContainer,
+			RetryableAckRebindTask rebindTask = new RetryableAckRebindTask(flowReceiverContainer, messageContainer,
 					retryableTaskService);
 			try {
 				if (skipSyncAttempt || !rebindTask.run(0)) {

@@ -256,7 +256,7 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 		if (isDurable) {
 			validateNumEnqueuedMessages(queue, 1);
 			Mockito.verify(retryableTaskService)
-					.submit(new RetryableRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
+					.submit(new RetryableAckRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
 			Mockito.verify(flowReceiverContainer).acknowledgeRebind(messageContainer, true);
 			retryAssert(() -> assertEquals((Long) 2L, sempV2Api.monitor()
 					.getMsgVpnQueue(vpnName, queue.getName(), null)
@@ -287,7 +287,7 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 		if (isDurable) {
 			validateNumEnqueuedMessages(queue, 1);
 			Mockito.verify(retryableTaskService)
-					.submit(new RetryableRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
+					.submit(new RetryableAckRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
 			Mockito.verify(flowReceiverContainer, Mockito.times(2))
 					.acknowledgeRebind(messageContainer, true);
 			retryAssert(() -> assertEquals((Long) 2L, sempV2Api.monitor()

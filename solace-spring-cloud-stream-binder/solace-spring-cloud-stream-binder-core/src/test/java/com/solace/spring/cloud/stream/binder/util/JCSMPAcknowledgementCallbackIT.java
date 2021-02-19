@@ -86,7 +86,8 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 			queue = jcsmpSession.createTemporaryQueue(RandomStringUtils.randomAlphanumeric(20));
 		}
 
-		flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queue.getName(), new EndpointProperties());
+		flowReceiverContainer = Mockito.spy(new FlowReceiverContainer(jcsmpSession, queue.getName(),
+				new EndpointProperties()));
 		flowReceiverContainer.bind();
 		acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer, !isDurable,
 				retryableTaskService);
@@ -360,12 +361,17 @@ public class JCSMPAcknowledgementCallbackIT extends ITBase {
 		try {
 			Future<UUID> rebindFuture = executorService.submit(() ->
 					flowReceiverContainer.rebind(messageContainer.getFlowReceiverReferenceId()));
+			Thread.sleep(1000);
+			assertFalse(rebindFuture.isDone());
+
+			Mockito.doReturn(null).doCallRealMethod().when(flowReceiverContainer)
+					.acknowledgeRebind(messageContainer, true);
 
 			logger.info(String.format("Acknowledging message container %s", messageContainer.getId()));
 			acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
 			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 			Mockito.verify(retryableTaskService)
-					.submit(new RetryableRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
+					.submit(new RetryableAckRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
 			Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 			logger.info(String.format("Verifying message container %s hasn't been ack'd", messageContainer.getId()));
