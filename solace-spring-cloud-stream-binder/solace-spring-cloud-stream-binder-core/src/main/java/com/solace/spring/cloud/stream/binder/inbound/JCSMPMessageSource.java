@@ -77,7 +77,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				String msg0 = String.format("Cannot receive message using message source %s", id);
 				String msg1 = String.format("Message source %s is not running", id);
 				ClosedChannelBindingException closedBindingException = new ClosedChannelBindingException(msg1);
-				logger.warn(msg0, closedBindingException);
+				logger.warn(closedBindingException, msg0);
 				throw new MessagingException(msg0, closedBindingException);
 			}
 		} finally {
@@ -93,21 +93,21 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				String msg = String.format("Exception received while consuming a message, but the consumer " +
 						"<message source ID: %s> is currently shutdown. Exception will be ignored", id);
 				if (e instanceof JCSMPTransportException || e instanceof ClosedFacilityException) {
-					logger.debug(msg, e);
+					logger.debug(e, msg);
 				} else {
-					logger.warn(msg, e);
+					logger.warn(e, msg);
 				}
 				return null;
 			} else {
 				String msg = String.format("Unable to consume message from queue %s", queueName);
-				logger.warn(msg, e);
+				logger.warn(e, msg);
 				throw new MessagingException(msg, e);
 			}
 		} catch (UnboundFlowReceiverContainerException e) {
 			if (logger.isDebugEnabled()) {
 				// Might be thrown when async rebinding and this is configured with a super short timeout.
 				// Hide this so we don't flood the logger.
-				logger.debug(String.format("Unable to receive message from queue %s", queueName), e);
+				logger.debug(e, String.format("Unable to receive message from queue %s", queueName));
 			}
 			return null;
 		}
@@ -120,8 +120,8 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			return xmlMessageMapper.map(messageContainer.getMessage(), acknowledgmentCallback, true);
 		} catch (Exception e) {
 			//TODO If one day the errorChannel or attributesHolder can be retrieved, use those instead
-			logger.warn(String.format("XMLMessage %s cannot be consumed. It will be rejected",
-					messageContainer.getMessage().getMessageId()), e);
+			logger.warn(e, String.format("XMLMessage %s cannot be consumed. It will be rejected",
+					messageContainer.getMessage().getMessageId()));
 			AckUtils.reject(acknowledgmentCallback);
 			return null;
 		}
@@ -150,7 +150,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				flowReceiverContainer.bind();
 			} catch (JCSMPException e) {
 				String msg = String.format("Unable to get a message consumer for session %s", jcsmpSession.getSessionName());
-				logger.warn(msg, e);
+				logger.warn(e, msg);
 				throw new RuntimeException(msg, e);
 			}
 
