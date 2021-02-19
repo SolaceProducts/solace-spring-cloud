@@ -64,7 +64,7 @@ class UnsignedCounterBarrier {
 		try {
 			if (timeout > 0) {
 				logger.info(String.format("Waiting for %s items, time remaining: %s %s", counter.get(), timeout, unit));
-				long expiry = unit.toMillis(timeout) + System.currentTimeMillis();
+				final long expiry = unit.toMillis(timeout) + System.currentTimeMillis();
 				while (isGreaterThanZero()) {
 					long realTimeout = expiry - System.currentTimeMillis();
 					if (realTimeout <= 0) {

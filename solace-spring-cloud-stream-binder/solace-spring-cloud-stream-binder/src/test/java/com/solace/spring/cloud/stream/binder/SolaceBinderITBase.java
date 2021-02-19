@@ -11,6 +11,8 @@ import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.SpringJCSMPFactory;
+import org.assertj.core.api.SoftAssertions;
+import org.assertj.core.api.SoftAssertionsProvider;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
@@ -28,7 +30,6 @@ import org.springframework.integration.channel.DirectChannel;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
-import org.springframework.messaging.SubscribableChannel;
 import org.springframework.test.context.junit4.rules.SpringClassRule;
 import org.springframework.test.context.junit4.rules.SpringMethodRule;
 
@@ -125,6 +126,25 @@ public abstract class SolaceBinderITBase
 	@Override
 	public Spy spyOn(String name) {
 		return null;
+	}
+
+	public void retryAssert(SoftAssertionsProvider.ThrowingRunnable assertRun) throws InterruptedException {
+		retryAssert(assertRun, 10, TimeUnit.SECONDS);
+	}
+
+	@SuppressWarnings("BusyWait")
+	public void retryAssert(SoftAssertionsProvider.ThrowingRunnable assertRun, long timeout, TimeUnit unit)
+			throws InterruptedException {
+		final long expiry = System.currentTimeMillis() + unit.toMillis(timeout);
+		SoftAssertions softAssertions;
+		do {
+			softAssertions = new SoftAssertions();
+			softAssertions.check(assertRun);
+			if (!softAssertions.wasSuccess()) {
+				Thread.sleep(500);
+			}
+		} while (!softAssertions.wasSuccess() && System.currentTimeMillis() < expiry);
+		softAssertions.assertAll();
 	}
 
 	<T extends AbstractSubscribableChannel> T createChannel(String channelName, Class<T> type,

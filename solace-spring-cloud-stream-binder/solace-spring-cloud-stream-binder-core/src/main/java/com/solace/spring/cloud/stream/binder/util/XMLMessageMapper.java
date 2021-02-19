@@ -64,6 +64,9 @@ public class XMLMessageMapper {
 		if (consumerProperties.getErrorMsgTtl() != null) {
 			errorMessage.setTimeToLive(consumerProperties.getErrorMsgTtl());
 		}
+		if (DeliveryMode.DIRECT.equals(errorMessage.getDeliveryMode())) {
+			errorMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+		}
 		return errorMessage;
 	}
 
