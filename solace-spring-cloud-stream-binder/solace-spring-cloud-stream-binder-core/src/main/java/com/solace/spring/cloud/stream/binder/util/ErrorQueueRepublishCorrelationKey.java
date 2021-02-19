@@ -1,6 +1,5 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import com.solacesystems.jcsmp.JCSMPException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -46,7 +45,7 @@ public class ErrorQueueRepublishCorrelationKey {
 				try {
 					errorQueueInfrastructure.send(messageContainer, this);
 					break;
-				} catch (JCSMPException e) {
+				} catch (Exception e) {
 					logger.warn(String.format("Could not send XMLMessage %s to error queue %s",
 							messageContainer.getMessage().getMessageId(),
 							errorQueueInfrastructure.getErrorQueueName()));

@@ -156,7 +156,7 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 
 		Mockito.doAnswer(invocation -> {
 			if (key.getErrorQueueDeliveryAttempt() < errorQueueInfrastructure.getMaxDeliveryAttempts()) {
-				throw new JCSMPException("Test");
+				throw new Exception("Test");
 			} else {
 				return invocation.callRealMethod();
 			}
