@@ -29,14 +29,13 @@ public class RetryableTaskService {
 			return;
 		}
 
-		if (hasTask(task)) {
+		if (!tasks.add(task)) {
 			if (logger.isDebugEnabled()) {
 				logger.debug(String.format("Skipping task submission. Task already exists: %s", task));
 			}
 			return;
 		}
 
-		tasks.add(task);
 		scheduler.execute(new RetryableTaskWrapper(this, task, retryInterval, unit));
 	}
 
