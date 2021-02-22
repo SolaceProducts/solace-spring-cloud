@@ -13,8 +13,10 @@ import com.solacesystems.jcsmp.Queue;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
+import org.springframework.context.Lifecycle;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.context.OrderlyShutdownCapable;
+import org.springframework.integration.core.Pausable;
 import org.springframework.integration.endpoint.MessageProducerSupport;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessagingException;
@@ -33,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-public class JCSMPInboundChannelAdapter extends MessageProducerSupport implements OrderlyShutdownCapable {
+public class JCSMPInboundChannelAdapter extends MessageProducerSupport implements OrderlyShutdownCapable, Lifecycle, Pausable {
 	private final String id = UUID.randomUUID().toString();
 	private final ConsumerDestination consumerDestination;
 	private final JCSMPSession jcsmpSession;
@@ -44,6 +46,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final RetryableTaskService taskService;
 	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
 	private final Set<AtomicBoolean> consumerStopFlags;
+	private final Set<AtomicBoolean> consumerPauseFlags;
 	private Consumer<Queue> postStart;
 	private ExecutorService executorService;
 	private AtomicBoolean remoteStopFlag;
@@ -69,6 +72,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
 		this.consumerStopFlags = new HashSet<>(this.concurrency);
+		this.consumerPauseFlags = new HashSet<>(this.concurrency);
 	}
 
 	@Override
@@ -120,6 +124,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 				.map(this::buildListener)
 				.forEach(listener -> {
 					consumerStopFlags.add(listener.getStopFlag());
+					consumerPauseFlags.add(listener.getPauseFlag());
 					executorService.submit(listener);
 				});
 		executorService.shutdown(); // All tasks have been submitted
@@ -233,5 +238,15 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			);
 		}
 		return listener;
+	}
+
+	@Override
+	public void pause() {
+		this.consumerPauseFlags.forEach(flag -> flag.set(true));
+	}
+
+	@Override
+	public void resume() {
+		this.consumerPauseFlags.forEach(flag -> flag.set(false));
 	}
 }
