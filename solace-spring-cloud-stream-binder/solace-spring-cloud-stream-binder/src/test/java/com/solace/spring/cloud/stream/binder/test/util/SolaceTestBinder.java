@@ -4,7 +4,7 @@ import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
-import com.solace.spring.cloud.stream.binder.util.SolaceProvisioningUtil;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
@@ -61,7 +61,7 @@ public class SolaceTestBinder
 												ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		preBindCaptureConsumerResources(name, group, properties.getExtension());
 		Binding<MessageChannel> binding = super.bindConsumer(name, group, moduleInputChannel, properties);
-		captureConsumerResources(binding, name, group, properties.getExtension());
+		captureConsumerResources(binding, group, properties.getExtension());
 		return binding;
 	}
 
@@ -71,7 +71,7 @@ public class SolaceTestBinder
 																		ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		preBindCaptureConsumerResources(name, group, properties.getExtension());
 		Binding<PollableSource<MessageHandler>> binding = super.bindPollableConsumer(name, group, inboundBindTarget, properties);
-		captureConsumerResources(binding, name, group, properties.getExtension());
+		captureConsumerResources(binding, group, properties.getExtension());
 		return binding;
 	}
 
@@ -107,7 +107,7 @@ public class SolaceTestBinder
 		}
 	}
 
-	private void captureConsumerResources(Binding<?> binding, String name, String group, SolaceConsumerProperties consumerProperties) {
+	private void captureConsumerResources(Binding<?> binding, String group, SolaceConsumerProperties consumerProperties) {
 		String queueName = extractBindingDestination(binding);
 		bindingNameToQueueName.put(binding.getBindingName(), queueName);
 		if (!SolaceProvisioningUtil.isAnonQueue(group)) {
@@ -116,7 +116,7 @@ public class SolaceTestBinder
 		if (consumerProperties.isAutoBindErrorQueue()) {
 			String errorQueueName = StringUtils.hasText(consumerProperties.getErrorQueueNameOverride()) ?
 					consumerProperties.getErrorQueueNameOverride() :
-					extractErrorQueueName(binding, name, group, consumerProperties.isUseGroupNameInErrorQueueName());
+					extractErrorQueueName(binding, group, consumerProperties);
 			queues.add(errorQueueName);
 			bindingNameToErrorQueueName.put(binding.getBindingName(), errorQueueName);
 		}
@@ -135,19 +135,36 @@ public class SolaceTestBinder
 		return matcher.group(1);
 	}
 
-	private String extractErrorQueueName(Binding<?> binding, String destination, String group, boolean includeGroup) {
+	private String extractErrorQueueName(Binding<?> binding, String group, SolaceConsumerProperties consumerProperties) {
 		String fullQueueName = extractBindingDestination(binding);
-		String prefix;
-		if (fullQueueName.startsWith("#P2P/QTMP/")) {
-			prefix = fullQueueName.substring(fullQueueName.indexOf(destination));
-		} else if (includeGroup && !fullQueueName.endsWith('.' + group)) {
-			prefix = fullQueueName + '.' + group;
-		} else if (!includeGroup && fullQueueName.endsWith('.' + group)) {
-			prefix = fullQueueName.replace('.' + group, "");
+		boolean isTemporary = fullQueueName.startsWith("#P2P/QTMP/");
+		String errorQueueName;
+		if (isTemporary) {
+			errorQueueName = fullQueueName.substring(fullQueueName.indexOf('/', "#P2P/QTMP/".length()) + 1);
 		} else {
-			prefix = fullQueueName;
+			errorQueueName = fullQueueName;
 		}
-		return prefix + ".error";
+
+		int groupIdx;
+		if (consumerProperties.getQueueNamePrefix() != null && !consumerProperties.getQueueNamePrefix().isEmpty()) {
+			String prefix = errorQueueName.substring(0, consumerProperties.getQueueNamePrefix().length()) + "/error";
+			String postfix = errorQueueName.substring(consumerProperties.getQueueNamePrefix().length());
+			groupIdx = prefix.length() + postfix.substring(0, postfix.indexOf("/", 1)).length();
+			errorQueueName = prefix + postfix;
+		} else {
+			groupIdx = "error/".length() + errorQueueName.substring(0, errorQueueName.indexOf("/")).length();
+			errorQueueName = "error/" + errorQueueName;
+		}
+
+		if (!isTemporary) {
+			if (consumerProperties.isUseGroupNameInErrorQueueName() && !consumerProperties.isUseGroupNameInQueueName()) {
+				errorQueueName = errorQueueName.substring(0, groupIdx) + '/' + group + errorQueueName.substring(groupIdx);
+			} else if (!consumerProperties.isUseGroupNameInErrorQueueName() && consumerProperties.isUseGroupNameInQueueName()) {
+				errorQueueName = errorQueueName.replace('/' + group + '/', "/");
+			}
+		}
+
+		return errorQueueName;
 	}
 
 	@Override

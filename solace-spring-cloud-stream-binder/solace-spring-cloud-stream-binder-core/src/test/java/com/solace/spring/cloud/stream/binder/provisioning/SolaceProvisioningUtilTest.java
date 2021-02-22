@@ -1,7 +1,7 @@
-package com.solace.spring.cloud.stream.binder.util;
+package com.solace.spring.cloud.stream.binder.provisioning;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
-import com.solace.spring.cloud.stream.binder.util.SolaceProvisioningUtil.QueueNames;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil.QueueNames;
 import org.junit.Test;
 
 import static org.junit.Assert.assertEquals;

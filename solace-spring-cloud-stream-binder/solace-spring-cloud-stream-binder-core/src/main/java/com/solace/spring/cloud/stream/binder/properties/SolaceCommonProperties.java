@@ -3,7 +3,7 @@ package com.solace.spring.cloud.stream.binder.properties;
 import com.solacesystems.jcsmp.EndpointProperties;
 
 public class SolaceCommonProperties {
-	private String prefix = ""; // Naming prefix for all topics and queues
+	private String queueNamePrefix = "scst";
 	private boolean provisionDurableQueue = true;
 	private boolean provisionSubscriptionsToDurableQueue = true;
 
@@ -17,12 +17,12 @@ public class SolaceCommonProperties {
 	private Boolean queueRespectsMsgTtl = null;
 	// ------------------------
 
-	public String getPrefix() {
-		return prefix;
+	public String getQueueNamePrefix() {
+		return queueNamePrefix;
 	}
 
-	public void setPrefix(String prefix) {
-		this.prefix = prefix;
+	public void setQueueNamePrefix(String queueNamePrefix) {
+		this.queueNamePrefix = queueNamePrefix;
 	}
 
 	public boolean isProvisionDurableQueue() {

@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueue;
@@ -18,6 +19,7 @@ import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.PropertyMismatchException;
 import com.solacesystems.jcsmp.Queue;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.Assume;
 import org.junit.Test;
@@ -87,13 +89,13 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, "testSendAndReceiveBad", moduleInputChannel, consumerProperties);
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -125,7 +127,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String destination0EC = String.format("%s%serrors", destination0, getDestinationNameDelimiter());
 
 		ExtendedProducerProperties<SolaceProducerProperties> producerProps = createProducerProperties();
@@ -173,14 +175,14 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, "testConsumerRequeue", moduleInputChannel, consumerProperties);
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -215,13 +217,10 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testConsumerErrorQueueRepublish";
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
-		String errorQueueName = queueName + getDestinationNameDelimiter() + "error";
-		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -245,7 +244,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		moduleOutputChannel.send(message);
 
 		final ConsumerFlowProperties errorQueueFlowProperties = new ConsumerFlowProperties();
-		errorQueueFlowProperties.setEndpoint(errorQueue);
+		errorQueueFlowProperties.setEndpoint(JCSMPFactory.onlyInstance().createQueue(
+				binder.getConsumerErrorQueueName(consumerBinding)));
 		errorQueueFlowProperties.setStartState(true);
 		FlowReceiver flowReceiver = null;
 		try {
@@ -261,7 +261,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		List<MonitorMsgVpnQueueMsg> enqueuedMessages = sempV2Api.monitor()
-				.getMsgVpnQueueMsgs(vpnName, queueName, 2, null, null, null)
+				.getMsgVpnQueueMsgs(vpnName, binder.getConsumerQueueName(consumerBinding), 2, null, null, null)
 				.getData();
 		assertThat(enqueuedMessages).hasSize(0);
 
@@ -276,7 +276,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -342,7 +342,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -401,7 +401,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -434,7 +434,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -470,13 +470,10 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testPolledConsumerRequeue";
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
-		String errorQueueName = queueName + getDestinationNameDelimiter() + "error";
-		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -504,7 +501,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		assertThat(gotMessage).isTrue();
 
 		final ConsumerFlowProperties errorQueueFlowProperties = new ConsumerFlowProperties();
-		errorQueueFlowProperties.setEndpoint(errorQueue);
+		errorQueueFlowProperties.setEndpoint(JCSMPFactory.onlyInstance().createQueue(
+				binder.getConsumerErrorQueueName(consumerBinding)));
 		errorQueueFlowProperties.setStartState(true);
 		FlowReceiver flowReceiver = null;
 		try {
@@ -520,7 +518,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
 		List<MonitorMsgVpnQueueMsg> enqueuedMessages = sempV2Api.monitor()
-				.getMsgVpnQueueMsgs(vpnName, queueName, 2, null, null, null)
+				.getMsgVpnQueueMsgs(vpnName, binder.getConsumerQueueName(consumerBinding), 2, null, null, null)
 				.getData();
 		assertThat(enqueuedMessages).hasSize(0);
 
@@ -535,7 +533,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -600,7 +598,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -660,13 +658,14 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	public void testFailProducerProvisioningOnRequiredQueuePropertyChange() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testFailProducerProvisioningOnRequiredQueuePropertyChange";
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		int defaultAccessType = createConsumerProperties().getExtension().getQueueAccessType();
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
-		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
+				.getQueueName(destination0, group0, createProducerProperties().getExtension()));
 
 		logger.info(String.format("Pre-provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
 				queue.getName(), endpointProperties.getAccessType(), defaultAccessType));
@@ -693,13 +692,15 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	public void testFailConsumerProvisioningOnQueuePropertyChange() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testFailConsumerProvisioningOnQueuePropertyChange";
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		int defaultAccessType = createConsumerProperties().getExtension().getQueueAccessType();
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
-		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
+				.getQueueNames(destination0, group0, createConsumerProperties().getExtension(), false)
+				.getConsumerGroupQueueName());
 
 		logger.info(String.format("Pre-provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
 				queue.getName(), endpointProperties.getAccessType(), defaultAccessType));
@@ -725,14 +726,15 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	public void testFailConsumerProvisioningOnErrorQueuePropertyChange() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testFailConsumerProvisioningOnErrorQueuePropertyChange";
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		int defaultAccessType = createConsumerProperties().getExtension().getQueueAccessType();
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
-		String errorQueueName = destination0 + getDestinationNameDelimiter() + group0 + getDestinationNameDelimiter() + "error";
-		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
+		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
+				.getQueueNames(destination0, group0, createConsumerProperties().getExtension(), false)
+				.getErrorQueueName());
 
 		logger.info(String.format("Pre-provisioning error queue %s with AccessType %s to conflict with defaultAccessType %s",
 				errorQueue.getName(), endpointProperties.getAccessType(), defaultAccessType));
@@ -743,8 +745,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		try {
 			ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 			consumerProperties.getExtension().setAutoBindErrorQueue(true);
-			consumerBinding = binder.bindConsumer(
-					destination0, group0, moduleInputChannel, consumerProperties);
+			consumerBinding = binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
 			consumerBinding.unbind();
 			fail("Expected consumer provisioning to fail due to error queue property change");
 		} catch (ProvisioningException e) {
@@ -764,7 +765,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel1 = createBindableChannel("output1", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String destination1 = "some-destl";
 		String wildcardDestination1 = destination1.substring(0, destination1.length() - 1) + "*";
 
@@ -778,7 +779,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 				.setQueueAdditionalSubscriptions(new String[]{wildcardDestination1, "some-random-sub"});
 
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, "testConsumerAdditionalSubscriptions", moduleInputChannel, consumerProperties);
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -813,10 +814,10 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel1 = createBindableChannel("output1", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String destination1 = "some-destl";
 		String wildcardDestination1 = destination1.substring(0, destination1.length() - 1) + "*";
-		String group0 = "testProducerAdditionalSubscriptions";
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties();
 		Map<String,String[]> groupsAdditionalSubs = new HashMap<>();
@@ -864,9 +865,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testConsumerReconnect";
-		String queue0 = destination0 + getDestinationNameDelimiter() + group0;
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -874,6 +874,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 				destination0, group0, moduleInputChannel, createConsumerProperties());
 
 		binderBindUnbindLatency();
+
+		String queue0 = binder.getConsumerQueueName(consumerBinding);
 
 		final AtomicInteger numMsgsConsumed = new AtomicInteger(0);
 		final Set<String> uniquePayloadsReceived = new HashSet<>();
@@ -923,7 +925,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 
 		logger.info("Stopping producer");
 		executor.shutdownNow();
-		executor.awaitTermination(20, TimeUnit.SECONDS);
+		assertThat(executor.awaitTermination(20, TimeUnit.SECONDS)).isTrue();
 		int numMsgsSent = future.get(5, TimeUnit.SECONDS);
 
 		assertThat(poll(() -> sempV2Api.monitor().getMsgVpnQueueMsgs(vpnName, queue0, Integer.MAX_VALUE,
@@ -958,9 +960,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testConsumerUnbind";
-		String queue0 = destination0 + getDestinationNameDelimiter() + group0;
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -968,6 +969,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 				destination0, group0, moduleInputChannel, createConsumerProperties());
 
 		binderBindUnbindLatency();
+
+		String queue0 = binder.getConsumerQueueName(consumerBinding);
 
 		final AtomicInteger numMsgsConsumed = new AtomicInteger(0);
 		final Set<String> uniquePayloadsReceived = new HashSet<>();
@@ -1010,7 +1013,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 
 		logger.info("Stopping producer");
 		executor.shutdownNow();
-		executor.awaitTermination(20, TimeUnit.SECONDS);
+		assertThat(executor.awaitTermination(20, TimeUnit.SECONDS)).isTrue();
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
 		logger.info("Rebinding consumer");
@@ -1051,8 +1054,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testBinderDestroy";
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		binder.bindConsumer(destination0, group0, moduleInputChannel, createConsumerProperties());
 
