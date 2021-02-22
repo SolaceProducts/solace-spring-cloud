@@ -24,9 +24,11 @@ import org.springframework.cloud.stream.provisioning.ProvisioningException;
 import org.springframework.cloud.stream.provisioning.ProvisioningProvider;
 import org.springframework.util.StringUtils;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -124,17 +126,25 @@ public class SolaceQueueProvisioner
 			}
 		}
 
+		List<SolaceTopicMatcher> topicMatcher = new ArrayList<>();
+
 		logger.info(isAnonQueue ?
 				String.format("Creating anonymous (temporary) queue %s", groupQueueName) :
 				String.format("Creating %s queue %s for consumer group %s", isDurableQueue ? "durable" : "temporary", groupQueueName, group));
 		Queue queue = provisionQueue(groupQueueName, isDurableQueue, endpointProperties, doDurableQueueProvisioning);
 		trackQueueToTopicBinding(queue.getName(), topicName);
+		if (SolaceTopicMatcher.containsVariable(topicName)) {
+			topicMatcher.add(new SolaceTopicMatcher(topicName));
+		}
 
 		for (String additionalSubscription : properties.getExtension().getQueueAdditionalSubscriptions()) {
 			trackQueueToTopicBinding(queue.getName(), additionalSubscription);
+			if (SolaceTopicMatcher.containsVariable(additionalSubscription)) {
+				topicMatcher.add(new SolaceTopicMatcher(additionalSubscription));
+			}
 		}
 
-		SolaceConsumerDestination destination = new SolaceConsumerDestination(queue.getName());
+		SolaceConsumerDestination destination = new SolaceConsumerDestination(queue.getName(), topicMatcher);
 
 		if (properties.getExtension().isAutoBindErrorQueue()) {
 			Queue errorQueue = provisionErrorQueue(queueNames.getErrorQueueName(), properties.getExtension());

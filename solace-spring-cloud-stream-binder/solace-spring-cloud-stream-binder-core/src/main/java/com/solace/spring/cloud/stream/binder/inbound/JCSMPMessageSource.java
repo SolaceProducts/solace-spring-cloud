@@ -1,6 +1,17 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceTopicMatcher;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
@@ -9,6 +20,7 @@ import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
 import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
+import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -16,6 +28,7 @@ import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.Queue;
+
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.context.Lifecycle;
@@ -23,14 +36,6 @@ import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.endpoint.AbstractMessageSource;
 import org.springframework.messaging.MessagingException;
-
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 public class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle {
 	private final String id = UUID.randomUUID().toString();
@@ -40,6 +45,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private final EndpointProperties endpointProperties;
 	private final boolean hasTemporaryQueue;
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
+	private final List<SolaceTopicMatcher> topicMatcher;
 	private FlowReceiverContainer flowReceiverContainer;
 	private JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
@@ -56,6 +62,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 							  EndpointProperties endpointProperties,
 							  boolean hasTemporaryQueue) {
 		this.queueName = destination.getName();
+		this.topicMatcher = ((SolaceConsumerDestination) destination).getTopicMatcher();
 		this.jcsmpSession = jcsmpSession;
 		this.taskService = taskService;
 		this.consumerProperties = consumerProperties;
@@ -117,7 +124,8 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createCallback(messageContainer);
 
 		try {
-			return xmlMessageMapper.map(messageContainer.getMessage(), acknowledgmentCallback, true);
+			BytesXMLMessage xmlMessage = messageContainer != null ? messageContainer.getMessage() : null;
+			return xmlMessage != null ? xmlMessageMapper.map(xmlMessage, acknowledgmentCallback, topicMatcher, true) : null;
 		} catch (Exception e) {
 			//TODO If one day the errorChannel or attributesHolder can be retrieved, use those instead
 			logger.warn(e, String.format("XMLMessage %s cannot be consumed. It will be rejected",
