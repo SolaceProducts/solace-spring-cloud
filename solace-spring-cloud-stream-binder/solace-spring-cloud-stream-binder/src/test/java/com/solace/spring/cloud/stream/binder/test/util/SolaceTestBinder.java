@@ -4,7 +4,7 @@ import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
-import com.solace.spring.cloud.stream.binder.util.SolaceProvisioningUtil;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
@@ -61,7 +61,7 @@ public class SolaceTestBinder
 												ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		preBindCaptureConsumerResources(name, group, properties.getExtension());
 		Binding<MessageChannel> binding = super.bindConsumer(name, group, moduleInputChannel, properties);
-		captureConsumerResources(binding, name, group, properties.getExtension());
+		captureConsumerResources(binding, group, properties.getExtension());
 		return binding;
 	}
 
@@ -71,7 +71,7 @@ public class SolaceTestBinder
 																		ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		preBindCaptureConsumerResources(name, group, properties.getExtension());
 		Binding<PollableSource<MessageHandler>> binding = super.bindPollableConsumer(name, group, inboundBindTarget, properties);
-		captureConsumerResources(binding, name, group, properties.getExtension());
+		captureConsumerResources(binding, group, properties.getExtension());
 		return binding;
 	}
 
@@ -107,7 +107,7 @@ public class SolaceTestBinder
 		}
 	}
 
-	private void captureConsumerResources(Binding<?> binding, String name, String group, SolaceConsumerProperties consumerProperties) {
+	private void captureConsumerResources(Binding<?> binding, String group, SolaceConsumerProperties consumerProperties) {
 		String queueName = extractBindingDestination(binding);
 		bindingNameToQueueName.put(binding.getBindingName(), queueName);
 		if (!SolaceProvisioningUtil.isAnonQueue(group)) {
@@ -116,7 +116,7 @@ public class SolaceTestBinder
 		if (consumerProperties.isAutoBindErrorQueue()) {
 			String errorQueueName = StringUtils.hasText(consumerProperties.getErrorQueueNameOverride()) ?
 					consumerProperties.getErrorQueueNameOverride() :
-					extractErrorQueueName(binding, name, group, consumerProperties.isUseGroupNameInErrorQueueName());
+					extractErrorQueueName(binding);
 			queues.add(errorQueueName);
 			bindingNameToErrorQueueName.put(binding.getBindingName(), errorQueueName);
 		}
@@ -135,19 +135,12 @@ public class SolaceTestBinder
 		return matcher.group(1);
 	}
 
-	private String extractErrorQueueName(Binding<?> binding, String destination, String group, boolean includeGroup) {
-		String fullQueueName = extractBindingDestination(binding);
-		String prefix;
-		if (fullQueueName.startsWith("#P2P/QTMP/")) {
-			prefix = fullQueueName.substring(fullQueueName.indexOf(destination));
-		} else if (includeGroup && !fullQueueName.endsWith('.' + group)) {
-			prefix = fullQueueName + '.' + group;
-		} else if (!includeGroup && fullQueueName.endsWith('.' + group)) {
-			prefix = fullQueueName.replace('.' + group, "");
-		} else {
-			prefix = fullQueueName;
-		}
-		return prefix + ".error";
+	private String extractErrorQueueName(Binding<?> binding) {
+		String destination = (String) binding.getExtendedInfo().getOrDefault("bindingDestination", "");
+		assertThat(destination).startsWith("SolaceConsumerDestination");
+		Matcher matcher = Pattern.compile("errorQueueName='(.*?)'").matcher(destination);
+		assertThat(matcher.find()).isTrue();
+		return matcher.group(1);
 	}
 
 	@Override

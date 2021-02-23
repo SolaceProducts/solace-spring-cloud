@@ -12,6 +12,7 @@ import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.Queue;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.Before;
 import org.junit.Test;
@@ -82,12 +83,12 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
-				destination0, "testAccept", moduleInputChannel, createConsumerProperties());
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -117,14 +118,14 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
-				"testReject", moduleInputChannel, consumerProperties);
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -167,12 +168,8 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testRejectWithErrorQueue";
-
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
-		String errorQueueName = queueName + getDestinationNameDelimiter() + "error";
-		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -187,6 +184,9 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(binder.getConsumerErrorQueueName(consumerBinding));
 
 		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message, msg -> {
 			AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
@@ -224,14 +224,14 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
-				"testRequeue", moduleInputChannel, consumerProperties);
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -274,12 +274,12 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
-				"testAsyncAccept", moduleInputChannel, createConsumerProperties());
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -322,12 +322,12 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
-				"testAsyncReject", moduleInputChannel, createConsumerProperties());
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -380,12 +380,8 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testAsyncRejectWithErrorQueue";
-
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
-		String errorQueueName = queueName + getDestinationNameDelimiter() + "error";
-		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -400,6 +396,9 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(binder.getConsumerErrorQueueName(consumerBinding));
 
 		ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
 		try {
@@ -446,12 +445,12 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
-				"testAsyncRequeue", moduleInputChannel, createConsumerProperties());
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -502,12 +501,12 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
-				"testNoAck", moduleInputChannel, createConsumerProperties());
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -538,13 +537,13 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
-				"testNoAckAndThrowException", moduleInputChannel, consumerProperties);
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -585,13 +584,13 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
-				"testAcceptAndThrowException", moduleInputChannel, consumerProperties);
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -633,13 +632,13 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
-				"testRejectAndThrowException", moduleInputChannel, consumerProperties);
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -682,13 +681,13 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
-		"testRequeueAndThrowException", moduleInputChannel, consumerProperties);
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -731,12 +730,8 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testNoAckAndThrowExceptionWithErrorQueue";
-
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
-		String errorQueueName = queueName + getDestinationNameDelimiter() + "error";
-		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -752,6 +747,9 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 
 		binderBindUnbindLatency();
 
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
+
 		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
 				(msg, callback) -> {
 					AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
@@ -761,7 +759,7 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 				}, consumerProperties.getMaxAttempts());
 
 		final ConsumerFlowProperties errorQueueFlowProperties = new ConsumerFlowProperties();
-		errorQueueFlowProperties.setEndpoint(errorQueue);
+		errorQueueFlowProperties.setEndpoint(JCSMPFactory.onlyInstance().createQueue(errorQueueName));
 		errorQueueFlowProperties.setStartState(true);
 		FlowReceiver flowReceiver = null;
 		try {
@@ -792,11 +790,8 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testAcceptAndThrowExceptionWithErrorQueue";
-
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
-		String errorQueueName = queueName + getDestinationNameDelimiter() + "error";
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -811,6 +806,9 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
 
 		final CountDownLatch redeliveredLatch = new CountDownLatch(1);
 		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
@@ -847,12 +845,8 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testRejectAndThrowExceptionWithErrorQueue";
-
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
-		String errorQueueName = queueName + getDestinationNameDelimiter() + "error";
-		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -868,6 +862,9 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 
 		binderBindUnbindLatency();
 
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
+
 		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
 				(msg, callback) -> {
 					AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
@@ -878,7 +875,7 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 				}, consumerProperties.getMaxAttempts());
 
 		final ConsumerFlowProperties errorQueueFlowProperties = new ConsumerFlowProperties();
-		errorQueueFlowProperties.setEndpoint(errorQueue);
+		errorQueueFlowProperties.setEndpoint(JCSMPFactory.onlyInstance().createQueue(errorQueueName));
 		errorQueueFlowProperties.setStartState(true);
 		FlowReceiver flowReceiver = null;
 		try {
@@ -909,11 +906,8 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String group0 = "testRequeueAndThrowExceptionWithErrorQueue";
-
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
-		String errorQueueName = queueName + getDestinationNameDelimiter() + "error";
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -928,6 +922,9 @@ public class SolaceBinderClientAckIT<T> extends SolaceBinderITBase {
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
 
 		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
 				(msg, callback) -> {

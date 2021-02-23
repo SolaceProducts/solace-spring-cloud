@@ -70,7 +70,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
 				getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
@@ -97,6 +96,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
 
 		final CountDownLatch consumeLatch = new CountDownLatch(consumerProperties.getMaxAttempts());
 		moduleInputChannel.subscribe(msg -> {
@@ -135,7 +136,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
 				getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
@@ -160,6 +160,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
 
 		moduleInputChannel.subscribe(msg -> {
 			logger.info(String.format("Received message %s", msg));
@@ -207,7 +209,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
 				getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
@@ -232,6 +233,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
 
 		final CountDownLatch latch = new CountDownLatch(1);
 		moduleInputChannel.subscribe(msg -> {
@@ -272,7 +275,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
 				getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
@@ -311,6 +313,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
 
 		CompletableFuture<AcknowledgmentCallback> staleTriggeringAckFuture = new CompletableFuture<>();
 
@@ -375,7 +379,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
 				getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
@@ -402,6 +405,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
 
 		final CountDownLatch consumeLatch = new CountDownLatch(consumerProperties.getMaxAttempts());
 		moduleInputChannel.subscribe(msg -> {
@@ -440,7 +445,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
 				getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
@@ -465,6 +469,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
 
 		moduleInputChannel.subscribe(msg -> {
 			logger.info(String.format("Received message %s", msg));
@@ -512,7 +518,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
 				getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
@@ -537,6 +542,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
 
 		final CountDownLatch latch = new CountDownLatch(1);
 		moduleInputChannel.subscribe(msg -> {
@@ -577,7 +584,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
 				getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
@@ -601,6 +607,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
 
 		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
 		moduleOutputChannel.send(message);
@@ -641,7 +649,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
 				getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
@@ -665,6 +672,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
 
 		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
 		moduleOutputChannel.send(message);
@@ -713,7 +722,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
 				getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
-		String queueName = destination0 + getDestinationNameDelimiter() + group0;
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
@@ -737,6 +745,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.build();
 
 		binderBindUnbindLatency();
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
 
 		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
 		moduleOutputChannel.send(message);

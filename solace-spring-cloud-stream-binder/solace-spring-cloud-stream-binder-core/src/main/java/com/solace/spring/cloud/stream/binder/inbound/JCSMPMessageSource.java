@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
@@ -17,7 +18,6 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.Queue;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
-import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.context.Lifecycle;
 import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
@@ -49,18 +49,17 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
 	private Consumer<Queue> postStart;
 
-	public JCSMPMessageSource(ConsumerDestination destination,
+	public JCSMPMessageSource(SolaceConsumerDestination destination,
 							  JCSMPSession jcsmpSession,
 							  RetryableTaskService taskService,
 							  ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
-							  EndpointProperties endpointProperties,
-							  boolean hasTemporaryQueue) {
+							  EndpointProperties endpointProperties) {
 		this.queueName = destination.getName();
 		this.jcsmpSession = jcsmpSession;
 		this.taskService = taskService;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
-		this.hasTemporaryQueue = hasTemporaryQueue;
+		this.hasTemporaryQueue = destination.isTemporary();
 	}
 
 	@Override

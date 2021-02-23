@@ -5,7 +5,6 @@ import com.solacesystems.jcsmp.EndpointProperties;
 import java.util.concurrent.TimeUnit;
 
 public class SolaceConsumerProperties extends SolaceCommonProperties {
-	private String anonymousGroupPostfix = "anon";
 	private int polledConsumerWaitTimeInMillis = 100;
 	private long flowPreRebindWaitTimeout = TimeUnit.SECONDS.toMillis(10);
 
@@ -30,14 +29,6 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	private Boolean errorMsgDmqEligible = null;
 	private Long errorMsgTtl = null;
 	// ------------------------
-
-	public String getAnonymousGroupPostfix() {
-		return anonymousGroupPostfix;
-	}
-
-	public void setAnonymousGroupPostfix(String anonymousGroupPostfix) {
-		this.anonymousGroupPostfix = anonymousGroupPostfix;
-	}
 
 	public int getPolledConsumerWaitTimeInMillis() {
 		return polledConsumerWaitTimeInMillis;

@@ -4,6 +4,7 @@ import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
 import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
@@ -90,7 +91,9 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
 
-		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
+				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getConsumerGroupQueueName());
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
 
@@ -145,7 +148,8 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
 		consumerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(false);
 
-		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
+				.getQueueName(destination0, group0, producerProperties.getExtension()));
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
 
@@ -195,7 +199,9 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
 
-		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
+				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getConsumerGroupQueueName());
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
 
@@ -364,7 +370,9 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		consumerProperties.getExtension().setProvisionErrorQueue(false);
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 
-		String errorQueueName = destination0 + getDestinationNameDelimiter() + group0 + getDestinationNameDelimiter() + "error";
+		String errorQueueName = SolaceProvisioningUtil
+				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getErrorQueueName();
 		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
 
 		Binding<MessageChannel> consumerBinding = null;
@@ -443,7 +451,7 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		moduleOutputChannel.send(message);
 		assertThat(latch.await(10, TimeUnit.SECONDS)).isFalse();
 
-		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(binder.getConsumerQueueName(consumerBinding));
 		Topic topic = JCSMPFactory.onlyInstance().createTopic(destination0);
 		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topic.getName()));
 		jcsmpSession.addSubscription(queue, topic, JCSMPSession.WAIT_FOR_CONFIRM);
@@ -495,7 +503,7 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		moduleOutputChannel.send(message);
 		assertThat(latch.await(10, TimeUnit.SECONDS)).isFalse();
 
-		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(binder.getConsumerQueueName(consumerBinding));
 		Topic topic = JCSMPFactory.onlyInstance().createTopic(destination0);
 		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topic.getName()));
 		jcsmpSession.addSubscription(queue, topic, JCSMPSession.WAIT_FOR_CONFIRM);
@@ -541,7 +549,7 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 			moduleInputChannel.poll(message1 -> fail(String.format("Didn't expect to receive message %s", message1)));
 		}
 
-		Queue queue = JCSMPFactory.onlyInstance().createQueue(destination0 + getDestinationNameDelimiter() + group0);
+		Queue queue = JCSMPFactory.onlyInstance().createQueue(binder.getConsumerQueueName(consumerBinding));
 		Topic topic = JCSMPFactory.onlyInstance().createTopic(destination0);
 		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topic.getName()));
 		jcsmpSession.addSubscription(queue, topic, JCSMPSession.WAIT_FOR_CONFIRM);
@@ -604,7 +612,6 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String queue0 = destination0 + getDestinationNameDelimiter() + group0;
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -627,6 +634,8 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		}
 
 		binderBindUnbindLatency();
+
+		String queue0 = binder.getConsumerQueueName(consumerBinding);
 
 		final long stallIntervalInMillis = 100;
 		final CyclicBarrier barrier = new CyclicBarrier(consumerConcurrency);
@@ -723,7 +732,6 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String queue0 = destination0 + getDestinationNameDelimiter() + group0;
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
@@ -746,6 +754,8 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		}
 
 		binderBindUnbindLatency();
+
+		String queue0 = binder.getConsumerQueueName(consumerBinding);
 
 		messages.forEach(moduleOutputChannel::send);
 
@@ -916,7 +926,6 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 
 		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String queue0 = destination0 + getDestinationNameDelimiter() + group0;
 
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
@@ -924,6 +933,10 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.setConcurrency(concurrency);
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
+
+		String queue0 = SolaceProvisioningUtil
+				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getConsumerGroupQueueName();
 
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
@@ -1059,8 +1072,8 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 
 			ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
 			consumerFlowProperties.setStartState(true);
-			consumerFlowProperties.setEndpoint(JCSMPFactory.onlyInstance().createQueue(
-					topic0.replaceAll("[*>]", "_") + getDestinationNameDelimiter() + group0));
+			consumerFlowProperties.setEndpoint(JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
+					.getQueueName(topic0, group0, producerProperties.getExtension())));
 			flowReceiver = jcsmpSession.createFlow(new XMLMessageListener() {
 				@Override
 				public void onReceive(BytesXMLMessage bytesXMLMessage) {
@@ -1292,10 +1305,10 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
-		assertThat(queueName).isEqualTo(destination0);
+		assertThat(queueName).doesNotContain('/' + group0 + '/');
 
 		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
-		assertThat(errorQueueName).isEqualTo(destination0 + "." + group0 + ".error");
+		assertThat(errorQueueName).contains('/' + group0 + '/');
 
 		CountDownLatch latch = new CountDownLatch(consumerProperties.getMaxAttempts());
 		moduleInputChannel.subscribe(message1 -> {
@@ -1359,10 +1372,10 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
-		assertThat(queueName).isEqualTo(destination0);
+		assertThat(queueName).doesNotContain('/' + group0 + '/');
 
 		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
-		assertThat(errorQueueName).isEqualTo(destination0 + "." + group0 + ".error");
+		assertThat(errorQueueName).contains('/' + group0 + '/');
 
 		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
 		moduleOutputChannel.send(message);
@@ -1425,12 +1438,7 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
-		assertThat(queueName).contains('/' + destination0 + ".anon/");
-		assertThat(queueName).hasSizeGreaterThan(('/' + destination0 + ".anon/").length());
-
 		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
-		assertThat(errorQueueName).startsWith(destination0 + ".anon/");
-		assertThat(errorQueueName).endsWith(".error");
 
 		CountDownLatch latch = new CountDownLatch(consumerProperties.getMaxAttempts());
 		moduleInputChannel.subscribe(message1 -> {
@@ -1494,10 +1502,10 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
-		assertThat(queueName).isEqualTo(destination0 + '.' + group0);
+		assertThat(queueName).contains('/' + group0 + '/');
 
 		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
-		assertThat(errorQueueName).isEqualTo(destination0 + ".error");
+		assertThat(errorQueueName).doesNotContain('/' + group0 + '/');
 
 		CountDownLatch latch = new CountDownLatch(consumerProperties.getMaxAttempts());
 		moduleInputChannel.subscribe(message1 -> {
@@ -1560,12 +1568,7 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
-		assertThat(queueName).contains('/' + destination0 + ".anon/");
-		assertThat(queueName).hasSizeGreaterThan(('/' + destination0 + ".anon/").length());
-
 		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
-		assertThat(errorQueueName).startsWith(destination0 + ".anon/");
-		assertThat(errorQueueName).endsWith(".error");
 
 		CountDownLatch latch = new CountDownLatch(consumerProperties.getMaxAttempts());
 		moduleInputChannel.subscribe(message1 -> {
@@ -1629,7 +1632,8 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
-		assertThat(queueName).isEqualTo(destination0 + '.' + group0);
+		assertThat(queueName).contains('/' + group0 + '/');
+		assertThat(queueName).endsWith('/' + destination0);
 
 		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
 		assertThat(errorQueueName).isEqualTo(consumerProperties.getExtension().getErrorQueueNameOverride());
@@ -1695,8 +1699,7 @@ public class SolaceBinderProvisioningLifecycleIT extends SolaceBinderITBase {
 		binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
-		assertThat(queueName).contains('/' + destination0 + ".anon/");
-		assertThat(queueName).hasSizeGreaterThan(('/' + destination0 + ".anon/").length());
+		assertThat(queueName).endsWith('/' + destination0);
 
 		String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
 		assertThat(errorQueueName).isEqualTo(consumerProperties.getExtension().getErrorQueueNameOverride());

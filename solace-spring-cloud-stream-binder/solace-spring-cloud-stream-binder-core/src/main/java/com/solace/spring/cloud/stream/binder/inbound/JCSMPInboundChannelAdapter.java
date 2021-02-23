@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
@@ -12,7 +13,6 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.context.OrderlyShutdownCapable;
 import org.springframework.integration.endpoint.MessageProducerSupport;
@@ -35,12 +35,11 @@ import java.util.function.Consumer;
 
 public class JCSMPInboundChannelAdapter extends MessageProducerSupport implements OrderlyShutdownCapable {
 	private final String id = UUID.randomUUID().toString();
-	private final ConsumerDestination consumerDestination;
+	private final SolaceConsumerDestination consumerDestination;
 	private final JCSMPSession jcsmpSession;
 	private final SolaceConsumerProperties consumerProperties;
 	private final EndpointProperties endpointProperties;
 	private final int concurrency;
-	private final boolean hasTemporaryQueue;
 	private final RetryableTaskService taskService;
 	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
 	private final Set<AtomicBoolean> consumerStopFlags;
@@ -54,17 +53,15 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private static final Log logger = LogFactory.getLog(JCSMPInboundChannelAdapter.class);
 	private static final ThreadLocal<AttributeAccessor> attributesHolder = new ThreadLocal<>();
 
-	public JCSMPInboundChannelAdapter(ConsumerDestination consumerDestination,
+	public JCSMPInboundChannelAdapter(SolaceConsumerDestination consumerDestination,
 									  JCSMPSession jcsmpSession,
 									  int concurrency,
-									  boolean hasTemporaryQueue,
 									  RetryableTaskService taskService,
 									  SolaceConsumerProperties consumerProperties,
 									  @Nullable EndpointProperties endpointProperties) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
 		this.concurrency = concurrency;
-		this.hasTemporaryQueue = hasTemporaryQueue;
 		this.taskService = taskService;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
@@ -199,7 +196,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 	private InboundXMLMessageListener buildListener(FlowReceiverContainer flowReceiverContainer) {
 		JCSMPAcknowledgementCallbackFactory ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, hasTemporaryQueue, taskService);
+				flowReceiverContainer, consumerDestination.isTemporary(), taskService);
 		ackCallbackFactory.setErrorQueueInfrastructure(errorQueueInfrastructure);
 
 		InboundXMLMessageListener listener;

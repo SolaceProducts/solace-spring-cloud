@@ -1,7 +1,6 @@
 package com.solace.spring.cloud.stream.binder.provisioning;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceCommonProperties;
-import com.solace.spring.cloud.stream.binder.util.SolaceProvisioningUtil;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.InvalidOperationException;
@@ -25,7 +24,7 @@ import org.springframework.cloud.stream.provisioning.ProvisioningProvider;
 import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -35,9 +34,6 @@ public class SolaceQueueProvisioner
 		implements ProvisioningProvider<ExtendedConsumerProperties<SolaceConsumerProperties>,ExtendedProducerProperties<SolaceProducerProperties>> {
 
 	private final JCSMPSession jcsmpSession;
-	private final Map<String, Set<String>> queueToTopicBindings = new HashMap<>();
-	private final Set<String> temporaryQueues = new HashSet<>();
-	private final Map<String, String> destinationToErrorQueue = new HashMap<>();
 
 	private static final Log logger = LogFactory.getLog(SolaceQueueProvisioner.class);
 
@@ -68,11 +64,9 @@ public class SolaceQueueProvisioner
 			Queue queue = provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning);
 
 			addSubscriptionToQueue(queue, topicName, properties.getExtension());
-			trackQueueToTopicBinding(queue.getName(), topicName);
 
 			for (String extraTopic : requiredGroupsExtraSubs.getOrDefault(groupName, new String[0])) {
 				addSubscriptionToQueue(queue, extraTopic, properties.getExtension());
-				trackQueueToTopicBinding(queue.getName(), extraTopic);
 			}
 		}
 
@@ -128,20 +122,17 @@ public class SolaceQueueProvisioner
 				String.format("Creating anonymous (temporary) queue %s", groupQueueName) :
 				String.format("Creating %s queue %s for consumer group %s", isDurableQueue ? "durable" : "temporary", groupQueueName, group));
 		Queue queue = provisionQueue(groupQueueName, isDurableQueue, endpointProperties, doDurableQueueProvisioning);
-		trackQueueToTopicBinding(queue.getName(), topicName);
 
-		for (String additionalSubscription : properties.getExtension().getQueueAdditionalSubscriptions()) {
-			trackQueueToTopicBinding(queue.getName(), additionalSubscription);
-		}
+		Set<String> topicSubscriptions = new HashSet<>(Collections.singletonList(topicName));
+		topicSubscriptions.addAll(Arrays.asList(properties.getExtension().getQueueAdditionalSubscriptions()));
 
-		SolaceConsumerDestination destination = new SolaceConsumerDestination(queue.getName());
-
+		String errorQueueName = null;
 		if (properties.getExtension().isAutoBindErrorQueue()) {
-			Queue errorQueue = provisionErrorQueue(queueNames.getErrorQueueName(), properties.getExtension());
-			destinationToErrorQueue.put(destination.getName(), errorQueue.getName());
+			errorQueueName = provisionErrorQueue(queueNames.getErrorQueueName(), properties.getExtension()).getName();
 		}
 
-		return destination;
+		return new SolaceConsumerDestination(queue.getName(), name, queueNames.getPhysicalGroupName(), !isDurableQueue,
+				errorQueueName, topicSubscriptions);
 	}
 
 	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties,
@@ -166,7 +157,6 @@ public class SolaceQueueProvisioner
 			} else {
 				// EndpointProperties will be applied during consumer creation
 				queue = jcsmpSession.createTemporaryQueue(name);
-				temporaryQueues.add(queue.getName());
 			}
 		} catch (JCSMPException e) {
 			String action = isDurable ? "provision durable" : "create temporary";
@@ -230,24 +220,5 @@ public class SolaceQueueProvisioner
 			logger.warn(msg, e);
 			throw new ProvisioningException(msg, e);
 		}
-	}
-
-	public Set<String> getTrackedTopicsForQueue(String queueName) {
-		return queueToTopicBindings.get(queueName);
-	}
-
-	private void trackQueueToTopicBinding(String queueName, String topicName) {
-		if (! queueToTopicBindings.containsKey(queueName)) {
-			queueToTopicBindings.put(queueName, new HashSet<>());
-		}
-		queueToTopicBindings.get(queueName).add(topicName);
-	}
-
-	public boolean hasTemporaryQueue(ConsumerDestination consumerDestination) {
-		return temporaryQueues.contains(consumerDestination.getName());
-	}
-
-	public String getErrorQueueName(ConsumerDestination consumerDestination) {
-		return destinationToErrorQueue.get(consumerDestination.getName());
 	}
 }
