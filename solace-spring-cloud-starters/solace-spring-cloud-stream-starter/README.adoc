@@ -2,7 +2,7 @@
 :revnumber: 3.0.0
 :toc: preamble
 :icons: font
-:scst-version: 3.0.10.RELEASE
+:scst-version: 3.1.1
 
 // Github-Specific Settings
 ifdef::env-github[]
@@ -150,25 +150,40 @@ The following properties are available for Solace consumers only and must be pre
 
 See link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceCommonProperties.java[SolaceCommonProperties] and link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceConsumerProperties.java[SolaceConsumerProperties] for the most updated list.
 
-prefix::
-Naming prefix for all topics and queues.
-+
-Default: `""`
-
 provisionDurableQueue::
-Whether to provision durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}`.
+Whether to provision durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker.
 +
-Default: `true`
+Default: `true` +
+See: <<Generated Queue Name Syntax>>
 
 provisionSubscriptionsToDurableQueue::
 Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum) on the consumer group's queue on the message broker. This property also applies to topics added by the `queueAdditionalSubscriptions` property.
 +
 Default: `true`
 
-useGroupNameInQueueName::
-Whether to include the `group` name in the queue name for non-anonymous consumer groups. If set to `true`, the queue name will be `{prefix}{destination}.{group}`. If set to `false`, the queue name will be `{prefix}{destination}`.
+queueNamePrefix::
+Naming prefix for all queues.
 +
-Default: `true`
+Default: `"scst"` +
+See: <<Generated Queue Name Syntax>>
+
+useFamiliarityInQueueName::
+When set to `true`, the familiarity modifier, `wk`/`an`, is included in the generated queue name.
++
+Default: `true` +
+See: <<Generated Queue Name Syntax>>
+
+useDestinationEncodingInQueue::
+When set to `true`, the destination encoding (`plain`), is included in the generated queue name.
++
+Default: `true` +
+See: <<Generated Queue Name Syntax>>
+
+useGroupNameInQueueName::
+Whether to include the `group` name in the queue name for non-anonymous consumer groups.
++
+Default: `true` +
+See: <<Generated Queue Name Syntax>>
 +
 IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will consume from the same queue regardless of their configured `group` names.
 
@@ -214,11 +229,6 @@ The `prefix` property is not applied on these subscriptions.
 +
 Default: `String[0]`
 
-anonymousGroupPostfix::
-Naming postfix for the anonymous consumer group queue.
-+
-Default: `"anon"`
-
 polledConsumerWaitTimeInMillis::
 Maximum wait time for polled consumers to receive a message from their consumer group queue.
 +
@@ -237,19 +247,22 @@ Default: `false`
 TIP: Your ACL Profile must allow for publishing to this queue if you decide to use `autoBindErrorQueue`.
 
 provisionErrorQueue::
-Whether to provision durable queues for error queues when `autoBindErrorQueue` is `true`. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}.error`.
+Whether to provision durable queues for error queues when `autoBindErrorQueue` is `true`. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker.
 +
-Default: `true`
+Default: `true` +
+See: <<Generated Error Queue Name Syntax>>
 
 errorQueueNameOverride::
 A custom error queue name.
 +
-Default: `null`
+Default: `null` +
+See: <<Generated Error Queue Name Syntax>>
 
 useGroupNameInErrorQueueName::
-Whether to include the `group` name in the error queue name for non-anonymous consumer groups. If set to `true`, the error queue name will be `{prefix}{destination}.{group}.error`. If set to `false`, the error queue name will be `{prefix}{destination}.error`.
+Whether to include the `group` name in the error queue name for non-anonymous consumer groups.
 +
-Default: `true`
+Default: `true` +
+See: <<Generated Error Queue Name Syntax>>
 +
 IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will republish failed messages to the same error queue regardless of their configured `group` names.
 
@@ -321,20 +334,34 @@ Default: `false`
 +
 IMPORTANT: Non-serializable headers should have a meaningful `toString()` implementation. Otherwise enabling this feature may result in potential data loss.
 
-prefix::
-Naming prefix for all topics and queues.
-+
-Default: `""`
-
 provisionDurableQueue::
-Whether to provision durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker. Typically, this queue's name should have a format of `{prefix}{destination}.{group}`.
+Whether to provision durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker.
 +
-Default: `true`
+Default: `true` +
+See: <<Generated Queue Name Syntax>>
 
 provisionSubscriptionsToDurableQueue::
 Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum) on the consumer group's queue on the message broker. This property also applies to topics added by the `queueAdditionalSubscriptions` property.
 +
 Default: `true`
+
+queueNamePrefix::
+Naming prefix for all queues.
++
+Default: `"scst"` +
+See: <<Generated Queue Name Syntax>>
+
+useFamiliarityInQueueName::
+When set to `true`, the familiarity modifier, `wk`/`an`, is included in the generated queue name.
++
+Default: `true` +
+See: <<Generated Queue Name Syntax>>
+
+useDestinationEncodingInQueue::
+When set to `true`, the destination encoding (`plain`), is included in the generated queue name.
++
+Default: `true` +
+See: <<Generated Queue Name Syntax>>
 
 queueAccessType::
 Access type for the required consumer group queue.
@@ -543,6 +570,44 @@ TIP: Use link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream
 | The encoding algorithm used to encode the headers indicated by `solace_scst_serializedHeaders`.
 |===
 
+== Generated Queue Name Syntax
+
+By default, generated consumer group queue names have the following form:
+
+----
+<prefix>/<familiarity-modifier>/<group>/<destination-encoding>/<encoded-destination>
+----
+
+prefix::
+A static prefix as indicated by the `queueNamePrefix` configuration option.
+
+familiarity-modifier::
+Indicates the durability of the consumer group (`wk` for well-known or `an` for anonymous). Can be enabled/disabled with the `useFamiliarityInQueueName` config option.
+
+group::
+The consumer `group` name. Can be enabled/disabled for consumers with the `useGroupNameInQueueName` consumer config option.
+
+destination-encoding::
+Indicates the encoding scheme used to encode the destination in the queue name (currently only `plain` is supported). Can be enabled/disabled with the `useDestinationEncodingInQueueName` config option.
+
+encoded-destination::
+The encoded `destination` as per `<destination-encoding>`.
+
+=== Generated Error Queue Name Syntax
+
+By default, generated error queue names have the following form:
+
+----
+<prefix>/error/<familiarity-modifier>/<group>/<destination-encoding>/<encoded-destination>
+----
+
+The definitions of each segment of the error queue matches that from <<Generated Queue Name Syntax>>, with the following exceptions:
+
+group::
+The consumer `group` name. Can be enabled/disabled with the `useGroupNameInErrorQueueName` consumer config option.
+
+The error queue name can also be manually overridden with the `errorQueueNameOverride` consumer config option.
+
 == Consumer Concurrency
 
 Configure Spring Cloud Stream's https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_consumer_properties[concurrency consumer property] to enable concurrent message consumption for a particular consumer binding.
@@ -673,7 +738,7 @@ Meaning that if unacknowledged messages are not processed in a timely manner, th
 
 First, it must be noted that an Error Queue is different from a https://docs.solace.com/Configuring-and-Managing/Setting-Dead-Msg-Queues.htm[Dead Message Queue (DMQ)]. In particular, a DMQ is used to capture re-routed failed messages as a consequence of Solace PubSub+ messaging features such as TTL expiration or exceeding a message's max redelivery count. Whereas the purpose of an Error Queue is to capture re-routed messages which have been successfully consumed from the message broker, yet cannot be processed by the application.
 
-An Error Queue can be provisioned for a particular consumer group by setting the `autoBindErrorQueue` consumer config option to `true`. This Error Queue is simply another durable queue which is named using a period-delimited concatenation of their consumer group name and `error`. And like the queues used for consumer groups, its endpoint properties can be configured by means of any consumer properties whose names begin with "errorQueue".
+An Error Queue can be provisioned for a particular consumer group by setting the `autoBindErrorQueue` consumer config option to `true`. This Error Queue is simply another durable queue which is named as per the <<Generated Error Queue Name Syntax>> section. And like the queues used for consumer groups, its endpoint properties can be configured by means of any consumer properties whose names begin with "errorQueue".
 
 [NOTE]
 ====
