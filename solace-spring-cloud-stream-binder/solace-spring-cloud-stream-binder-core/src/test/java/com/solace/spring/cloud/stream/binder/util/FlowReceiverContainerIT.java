@@ -66,7 +66,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.instanceOf;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.lessThan;
@@ -949,7 +948,7 @@ public class FlowReceiverContainerIT extends ITBase {
 		long startTime = System.currentTimeMillis();
 		UnboundFlowReceiverContainerException exception = assertThrows(UnboundFlowReceiverContainerException.class,
 				() -> flowReceiverContainer.receive());
-		assertThat(System.currentTimeMillis() - startTime, greaterThan(TimeUnit.SECONDS.toMillis(5)));
+		assertThat(System.currentTimeMillis() - startTime, greaterThanOrEqualTo(TimeUnit.SECONDS.toMillis(5)));
 		assertThat(exception.getMessage(), containsString("is not bound"));
 	}
 

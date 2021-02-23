@@ -116,7 +116,7 @@ public class SolaceTestBinder
 		if (consumerProperties.isAutoBindErrorQueue()) {
 			String errorQueueName = StringUtils.hasText(consumerProperties.getErrorQueueNameOverride()) ?
 					consumerProperties.getErrorQueueNameOverride() :
-					extractErrorQueueName(binding, group, consumerProperties);
+					extractErrorQueueName(binding);
 			queues.add(errorQueueName);
 			bindingNameToErrorQueueName.put(binding.getBindingName(), errorQueueName);
 		}
@@ -135,36 +135,12 @@ public class SolaceTestBinder
 		return matcher.group(1);
 	}
 
-	private String extractErrorQueueName(Binding<?> binding, String group, SolaceConsumerProperties consumerProperties) {
-		String fullQueueName = extractBindingDestination(binding);
-		boolean isTemporary = fullQueueName.startsWith("#P2P/QTMP/");
-		String errorQueueName;
-		if (isTemporary) {
-			errorQueueName = fullQueueName.substring(fullQueueName.indexOf('/', "#P2P/QTMP/".length()) + 1);
-		} else {
-			errorQueueName = fullQueueName;
-		}
-
-		int groupIdx;
-		if (consumerProperties.getQueueNamePrefix() != null && !consumerProperties.getQueueNamePrefix().isEmpty()) {
-			String prefix = errorQueueName.substring(0, consumerProperties.getQueueNamePrefix().length()) + "/error";
-			String postfix = errorQueueName.substring(consumerProperties.getQueueNamePrefix().length());
-			groupIdx = prefix.length() + postfix.substring(0, postfix.indexOf("/", 1)).length();
-			errorQueueName = prefix + postfix;
-		} else {
-			groupIdx = "error/".length() + errorQueueName.substring(0, errorQueueName.indexOf("/")).length();
-			errorQueueName = "error/" + errorQueueName;
-		}
-
-		if (!isTemporary) {
-			if (consumerProperties.isUseGroupNameInErrorQueueName() && !consumerProperties.isUseGroupNameInQueueName()) {
-				errorQueueName = errorQueueName.substring(0, groupIdx) + '/' + group + errorQueueName.substring(groupIdx);
-			} else if (!consumerProperties.isUseGroupNameInErrorQueueName() && consumerProperties.isUseGroupNameInQueueName()) {
-				errorQueueName = errorQueueName.replace('/' + group + '/', "/");
-			}
-		}
-
-		return errorQueueName;
+	private String extractErrorQueueName(Binding<?> binding) {
+		String destination = (String) binding.getExtendedInfo().getOrDefault("bindingDestination", "");
+		assertThat(destination).startsWith("SolaceConsumerDestination");
+		Matcher matcher = Pattern.compile("errorQueueName='(.*?)'").matcher(destination);
+		assertThat(matcher.find()).isTrue();
+		return matcher.group(1);
 	}
 
 	@Override
