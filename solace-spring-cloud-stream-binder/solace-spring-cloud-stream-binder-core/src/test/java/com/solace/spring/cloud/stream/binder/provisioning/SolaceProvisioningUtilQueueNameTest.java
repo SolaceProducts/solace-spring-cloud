@@ -28,7 +28,7 @@ public class SolaceProvisioningUtilQueueNameTest {
 
     private static final Log logger = LogFactory.getLog(SolaceProvisioningUtilQueueNameTest.class);
 
-    @Parameters(name = "dest: {0}, group: {1}, prefix: {2}, useGroup: {3}, useGroupInEQ: {4}")
+    @Parameters(name = "dest: {0}, group: {1}, prefix: {2}, useGroup: {3}, useGroupInEQ: {4}, useFamiliarity: {5}, useDestEnc: {6}")
     public static Collection<Object[]> data() {
         List<List<Object>> testCases = new ArrayList<>();
 
@@ -68,8 +68,11 @@ public class SolaceProvisioningUtilQueueNameTest {
             testCases.addAll(dupeList2);
         }
 
-        // useGroupNameInQueueName, useGroupNameInErrorQueueName
-        for (int i = 0; i < 2; i++) {
+        // useGroupNameInQueueName
+        // useGroupNameInErrorQueueName
+        // useFamiliarityInQueueName
+        // useDestinationEncodingInQueueName
+        for (int i = 0; i < 4; i++) {
             List<List<Object>> dupeList = deepClone(testCases);
             for (List<Object> testCase : testCases) {
                 testCase.add(true);
@@ -93,7 +96,8 @@ public class SolaceProvisioningUtilQueueNameTest {
     }
 
     public SolaceProvisioningUtilQueueNameTest(String destination, String groupName, String prefix, boolean useGroupName,
-                                               boolean useGroupNameInErrorQueue) {
+                                               boolean useGroupNameInErrorQueue, boolean useFamiliarity,
+                                               boolean useDestinationEncoding) {
         this.destination = destination;
         this.groupName = groupName;
         this.isAnonymous = groupName == null;
@@ -106,6 +110,8 @@ public class SolaceProvisioningUtilQueueNameTest {
         }
         this.consumerProperties.setUseGroupNameInQueueName(useGroupName);
         this.consumerProperties.setUseGroupNameInErrorQueueName(useGroupNameInErrorQueue);
+        this.consumerProperties.setUseFamiliarityInQueueName(useFamiliarity);
+        this.consumerProperties.setUseDestinationEncodingInQueueName(useDestinationEncoding);
     }
 
     @Test
@@ -122,22 +128,25 @@ public class SolaceProvisioningUtilQueueNameTest {
             levelIdx++;
         }
 
-        if (isAnonymous) {
-            assertEquals("an", levels[levelIdx]);
+        if (consumerProperties.isUseFamiliarityInQueueName()) {
+            assertEquals(actual, isAnonymous ? "an" : "wk", levels[levelIdx]);
             levelIdx++;
+        }
+
+        if (isAnonymous) {
             assertThat(levels[levelIdx], matchesRegex("\\b[0-9a-f]{8}\\b(?:-[0-9a-f]{4}){3}-\\b[0-9a-f]{12}\\b"));
             levelIdx++;
         } else {
-            assertEquals(actual, "wk", levels[levelIdx]);
-            levelIdx++;
             if (consumerProperties.isUseGroupNameInQueueName()) {
                 assertEquals(groupName, levels[levelIdx]);
                 levelIdx++;
             }
         }
 
-        assertEquals("plain", levels[levelIdx]);
-        levelIdx++;
+        if (consumerProperties.isUseDestinationEncodingInQueueName()) {
+            assertEquals("plain", levels[levelIdx]);
+            levelIdx++;
+        }
 
         String transformedDestination;
         if (destination.contains("*") || destination.contains(">")) {
@@ -170,22 +179,25 @@ public class SolaceProvisioningUtilQueueNameTest {
         assertEquals("error", levels[levelIdx]);
         levelIdx++;
 
-        if (isAnonymous) {
-            assertEquals("an", levels[levelIdx]);
+        if (consumerProperties.isUseFamiliarityInQueueName()) {
+            assertEquals(actual, isAnonymous ? "an" : "wk", levels[levelIdx]);
             levelIdx++;
+        }
+
+        if (isAnonymous) {
             assertThat(levels[levelIdx], matchesRegex("\\b[0-9a-f]{8}\\b(?:-[0-9a-f]{4}){3}-\\b[0-9a-f]{12}\\b"));
             levelIdx++;
         } else {
-            assertEquals("wk", levels[levelIdx]);
-            levelIdx++;
             if (consumerProperties.isUseGroupNameInErrorQueueName()) {
                 assertEquals(groupName, levels[levelIdx]);
                 levelIdx++;
             }
         }
 
-        assertEquals("plain", levels[levelIdx]);
-        levelIdx++;
+        if (consumerProperties.isUseDestinationEncodingInQueueName()) {
+            assertEquals("plain", levels[levelIdx]);
+            levelIdx++;
+        }
 
         String transformedDestination;
         if (destination.contains("*") || destination.contains(">")) {

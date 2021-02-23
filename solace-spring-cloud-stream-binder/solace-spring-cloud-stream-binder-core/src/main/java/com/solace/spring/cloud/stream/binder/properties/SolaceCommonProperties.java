@@ -3,11 +3,14 @@ package com.solace.spring.cloud.stream.binder.properties;
 import com.solacesystems.jcsmp.EndpointProperties;
 
 public class SolaceCommonProperties {
-	private String queueNamePrefix = "scst";
 	private boolean provisionDurableQueue = true;
 	private boolean provisionSubscriptionsToDurableQueue = true;
 
 	// Queue Properties -------
+	private String queueNamePrefix = "scst";
+	private boolean useFamiliarityInQueueName = true;
+	private boolean useDestinationEncodingInQueueName = true;
+
 	private int queueAccessType = EndpointProperties.ACCESSTYPE_NONEXCLUSIVE;
 	private int queuePermission = EndpointProperties.PERMISSION_CONSUME;
 	private Integer queueDiscardBehaviour = null;
@@ -16,14 +19,6 @@ public class SolaceCommonProperties {
 	private Integer queueQuota = null;
 	private Boolean queueRespectsMsgTtl = null;
 	// ------------------------
-
-	public String getQueueNamePrefix() {
-		return queueNamePrefix;
-	}
-
-	public void setQueueNamePrefix(String queueNamePrefix) {
-		this.queueNamePrefix = queueNamePrefix;
-	}
 
 	public boolean isProvisionDurableQueue() {
 		return provisionDurableQueue;
@@ -39,6 +34,30 @@ public class SolaceCommonProperties {
 
 	public void setProvisionSubscriptionsToDurableQueue(boolean provisionSubscriptionsToDurableQueue) {
 		this.provisionSubscriptionsToDurableQueue = provisionSubscriptionsToDurableQueue;
+	}
+
+	public String getQueueNamePrefix() {
+		return queueNamePrefix;
+	}
+
+	public void setQueueNamePrefix(String queueNamePrefix) {
+		this.queueNamePrefix = queueNamePrefix;
+	}
+
+	public boolean isUseFamiliarityInQueueName() {
+		return useFamiliarityInQueueName;
+	}
+
+	public void setUseFamiliarityInQueueName(boolean useFamiliarityInQueueName) {
+		this.useFamiliarityInQueueName = useFamiliarityInQueueName;
+	}
+
+	public boolean isUseDestinationEncodingInQueueName() {
+		return useDestinationEncodingInQueueName;
+	}
+
+	public void setUseDestinationEncodingInQueueName(boolean useDestinationEncodingInQueueName) {
+		this.useDestinationEncodingInQueueName = useDestinationEncodingInQueueName;
 	}
 
 	public int getQueueAccessType() {

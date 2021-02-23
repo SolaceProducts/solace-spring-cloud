@@ -85,18 +85,20 @@ public class SolaceProvisioningUtil {
 
 		errorQueueName.append(QUEUE_NAME_SEGMENT_ERROR).append(QUEUE_NAME_DELIM);
 
+		if (properties.isUseFamiliarityInQueueName()) {
+			if (isAnonymous) {
+				groupQueueName.append(QueueNameFamiliarity.ANON.getLabel()).append(QUEUE_NAME_DELIM);
+				errorQueueName.append(QueueNameFamiliarity.ANON.getLabel()).append(QUEUE_NAME_DELIM);
+			} else {
+				groupQueueName.append(QueueNameFamiliarity.WELL_KNOWN.getLabel()).append(QUEUE_NAME_DELIM);
+				errorQueueName.append(QueueNameFamiliarity.WELL_KNOWN.getLabel()).append(QUEUE_NAME_DELIM);
+			}
+		}
+
 		if (isAnonymous) {
-			groupQueueName.append(QueueNameFamiliarity.ANON.getLabel())
-					.append(QUEUE_NAME_DELIM)
-					.append(physicalGroupName)
-					.append(QUEUE_NAME_DELIM);
-			errorQueueName.append(QueueNameFamiliarity.ANON.getLabel())
-					.append(QUEUE_NAME_DELIM)
-					.append(physicalGroupName)
-					.append(QUEUE_NAME_DELIM);
+			groupQueueName.append(physicalGroupName).append(QUEUE_NAME_DELIM);
+			errorQueueName.append(physicalGroupName).append(QUEUE_NAME_DELIM);
 		} else {
-			groupQueueName.append(QueueNameFamiliarity.WELL_KNOWN.getLabel()).append(QUEUE_NAME_DELIM);
-			errorQueueName.append(QueueNameFamiliarity.WELL_KNOWN.getLabel()).append(QUEUE_NAME_DELIM);
 			if (useGroupName) {
 				groupQueueName.append(physicalGroupName).append(QUEUE_NAME_DELIM);
 			}
@@ -105,13 +107,14 @@ public class SolaceProvisioningUtil {
 			}
 		}
 
+		if (properties.isUseDestinationEncodingInQueueName()) {
+			groupQueueName.append(QueueNameDestinationEncoding.PLAIN.getLabel()).append(QUEUE_NAME_DELIM);
+			errorQueueName.append(QueueNameDestinationEncoding.PLAIN.getLabel()).append(QUEUE_NAME_DELIM);
+		}
+
 		String encodedDestination = replaceTopicWildCards(topicName, "_");
-		groupQueueName.append(QueueNameDestinationEncoding.PLAIN.getLabel())
-				.append(QUEUE_NAME_DELIM)
-				.append(encodedDestination);
-		errorQueueName.append(QueueNameDestinationEncoding.PLAIN.getLabel())
-				.append(QUEUE_NAME_DELIM)
-				.append(encodedDestination);
+		groupQueueName.append(encodedDestination);
+		errorQueueName.append(encodedDestination);
 
 		return new QueueNames(groupQueueName.toString(), errorQueueName.toString(), physicalGroupName);
 	}
