@@ -23,12 +23,12 @@ jobs:
         if: ${{ github.event_name != 'pull_request' }}
         run: mvn clean verify -Pit
         env:
-          SOLACE_JAVA_MSG_VPN: ${{secrets.SOLACE_JAVA_MSG_VPN}}
-          SOLACE_JAVA_CLIENT_USERNAME: ${{secrets.SOLACE_JAVA_CLIENT_USERNAME}}
-          SOLACE_JAVA_CLIENT_PASSWORD: ${{secrets.SOLACE_JAVA_CLIENT_PASSWORD}}
-          SOLACE_JAVA_HOST: ${{secrets.SOLACE_JAVA_HOST}}
-          TEST_SOLACE_MGMT_HOST: ${{secrets.TEST_SOLACE_MGMT_HOST}}
-          TEST_SOLACE_MGMT_USERNAME: ${{secrets.TEST_SOLACE_MGMT_USERNAME}}
-          TEST_SOLACE_MGMT_PASSWORD: $${{secrets.TEST_SOLACE_MGMT_PASSWORD}}
+          SOLACE_JAVA_MSG_VPN: ${{ secrets.SOLACE_JAVA_MSG_VPN }}
+          SOLACE_JAVA_CLIENT_USERNAME: ${{ secrets.SOLACE_JAVA_CLIENT_USERNAME }}
+          SOLACE_JAVA_CLIENT_PASSWORD: ${{ secrets.SOLACE_JAVA_CLIENT_PASSWORD }}
+          SOLACE_JAVA_HOST: ${{ secrets.SOLACE_JAVA_HOST }}
+          TEST_SOLACE_MGMT_HOST: ${{ secrets.TEST_SOLACE_MGMT_HOST }}
+          TEST_SOLACE_MGMT_USERNAME: ${{ secrets.TEST_SOLACE_MGMT_USERNAME }}
+          TEST_SOLACE_MGMT_PASSWORD: ${{ secrets.TEST_SOLACE_MGMT_PASSWORD }}
       - name: Verify Integration Test Support was not changed
         run: ./solace-integration-test-support/scripts/validate_submodule_not_changed.sh
