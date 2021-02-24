@@ -617,7 +617,7 @@ Though note that there are few limitations:
 . `concurrency` &gt; 1 is not supported for exclusive queues.
 . `concurrency` &gt; 1 is not supported for consumer bindings which are a part of anonymous consumer groups.
 . `concurrency` &gt; 1 is ignored for polled consumers.
-. Setting `provisionDurableQueue` to `false` disables endpoint configuration validation. Meaning that point 1 cannot validated. In this scenario, it is the developer's responsibility to ensure that `concurrency` is properly configured.
+. Setting `provisionDurableQueue` to `false` disables endpoint configuration validation. Meaning that point 1 cannot be validated. In this scenario, it is the developer's responsibility to ensure that point 1 is followed.
 
 == Manual Message Acknowledgment
 
