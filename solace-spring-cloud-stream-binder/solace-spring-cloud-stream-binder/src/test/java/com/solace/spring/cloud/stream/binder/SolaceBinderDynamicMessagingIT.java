@@ -3,8 +3,9 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
-import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredSpringRunner;
+import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import org.apache.commons.lang.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -33,10 +34,10 @@ import static org.junit.Assert.fail;
 /**
  * All tests regarding messaging which use a dynamic configuration on a message-by-message basis.
  */
-@RunWith(InheritedTestsFilteredSpringRunner.class)
+@RunWith(InheritedTestsFilteredRunner.class)
 @ContextConfiguration(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigFileApplicationContextInitializer.class)
 @IgnoreInheritedTests
-public class SolaceBinderDynamicMessagingTest extends SolaceBinderTestBase {
+public class SolaceBinderDynamicMessagingIT extends SolaceBinderITBase {
 	@Test
 	public void testTargetDestination() throws Exception {
 		SolaceTestBinder binder = getBinder();
@@ -45,15 +46,16 @@ public class SolaceBinderDynamicMessagingTest extends SolaceBinderTestBase {
 		DirectChannel moduleInputChannel0 = createBindableChannel("input0", new BindingProperties());
 		DirectChannel moduleInputChannel1 = createBindableChannel("input1", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String destination1 = String.format("foo%s1", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String destination1 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		Binding<MessageChannel> consumerBinding0 = binder.bindConsumer(
-				destination0, "testTargetDestination", moduleInputChannel0, createConsumerProperties());
+				destination0, group0, moduleInputChannel0, createConsumerProperties());
 		Binding<MessageChannel> consumerBinding1 = binder.bindConsumer(
-				destination1, "testTargetDestination", moduleInputChannel1, createConsumerProperties());
+				destination1, group0, moduleInputChannel1, createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -96,25 +98,26 @@ public class SolaceBinderDynamicMessagingTest extends SolaceBinderTestBase {
 		DirectChannel moduleInputChannel1 = createBindableChannel("input1", new BindingProperties());
 		DirectChannel moduleInputChannel2 = createBindableChannel("input2", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String destination1 = String.format("foo%s1", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String destination1 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 		String prefix0 = String.format("prefix%s0", getDestinationNameDelimiter());
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties0 = createConsumerProperties();
-		consumerProperties0.getExtension().setPrefix(prefix0);
+		consumerProperties0.getExtension().setQueueNamePrefix(prefix0);
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties2 = createConsumerProperties();
-		consumerProperties2.getExtension().setPrefix(prefix0);
+		consumerProperties2.getExtension().setQueueNamePrefix(prefix0);
 
 		Binding<MessageChannel> consumerBinding0 = binder.bindConsumer(
-				destination0, "testTargetDestinationWithStaticPrefix", moduleInputChannel0, consumerProperties0);
+				destination0, group0, moduleInputChannel0, consumerProperties0);
 		Binding<MessageChannel> consumerBinding1 = binder.bindConsumer(
-				destination1, "testTargetDestinationWithStaticPrefix", moduleInputChannel1, createConsumerProperties());
+				destination1, group0, moduleInputChannel1, createConsumerProperties());
 		Binding<MessageChannel> consumerBinding2 = binder.bindConsumer(
-				destination1, "testTargetDestinationWithStaticPrefix", moduleInputChannel2, consumerProperties2);
+				destination1, group0, moduleInputChannel2, consumerProperties2);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -145,7 +148,7 @@ public class SolaceBinderDynamicMessagingTest extends SolaceBinderTestBase {
 		softly.assertThat(latch1.await(10, TimeUnit.SECONDS))
 				.as("Expected %s to get msg", consumerBinding1.getBindingName()).isTrue();
 		softly.assertThat(latch2.await(10, TimeUnit.SECONDS))
-				.as("Didn't expect %s to get msg", consumerBinding2.getBindingName()).isFalse();
+				.as("Expected %s to get msg", consumerBinding2.getBindingName()).isTrue();
 		softly.assertAll();
 
 		producerBinding.unbind();
@@ -164,30 +167,31 @@ public class SolaceBinderDynamicMessagingTest extends SolaceBinderTestBase {
 		DirectChannel moduleInputChannel2 = createBindableChannel("input2", new BindingProperties());
 		DirectChannel moduleInputChannel3 = createBindableChannel("input3", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
-		String destination1 = String.format("foo%s1", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String destination1 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
 		String prefix0 = String.format("prefix%s0", getDestinationNameDelimiter());
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties0 = createConsumerProperties();
-		consumerProperties0.getExtension().setPrefix(prefix0);
+		consumerProperties0.getExtension().setQueueNamePrefix(prefix0);
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties2 = createConsumerProperties();
-		consumerProperties2.getExtension().setPrefix(prefix0);
+		consumerProperties2.getExtension().setQueueNamePrefix(prefix0);
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties3 = createConsumerProperties();
-		consumerProperties2.getExtension().setPrefix(prefix0 + prefix0);
+		consumerProperties2.getExtension().setQueueNamePrefix(prefix0 + prefix0);
 
 		Binding<MessageChannel> consumerBinding0 = binder.bindConsumer(
-				destination0, "testTargetDestinationWithPrefixAndStaticPrefix", moduleInputChannel0, consumerProperties0);
+				destination0, group0, moduleInputChannel0, consumerProperties0);
 		Binding<MessageChannel> consumerBinding1 = binder.bindConsumer(
-				destination1, "testTargetDestinationWithPrefixAndStaticPrefix", moduleInputChannel1, createConsumerProperties());
+				destination1, group0, moduleInputChannel1, createConsumerProperties());
 		Binding<MessageChannel> consumerBinding2 = binder.bindConsumer(
-				destination1, "testTargetDestinationWithPrefixAndStaticPrefix", moduleInputChannel2, consumerProperties2);
+				destination1, group0, moduleInputChannel2, consumerProperties2);
 		Binding<MessageChannel> consumerBinding3 = binder.bindConsumer(
-				destination1, "testTargetDestinationWithPrefixAndStaticPrefix", moduleInputChannel3, consumerProperties3);
+				destination1, group0, moduleInputChannel3, consumerProperties3);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -240,12 +244,12 @@ public class SolaceBinderDynamicMessagingTest extends SolaceBinderTestBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, "testTargetDestinationWithEmptyString", moduleInputChannel, createConsumerProperties());
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -273,12 +277,12 @@ public class SolaceBinderDynamicMessagingTest extends SolaceBinderTestBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, "testTargetDestinationWithWhitespace", moduleInputChannel, createConsumerProperties());
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -306,12 +310,12 @@ public class SolaceBinderDynamicMessagingTest extends SolaceBinderTestBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, "testTargetDestinationWithNull", moduleInputChannel, createConsumerProperties());
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
@@ -338,7 +342,7 @@ public class SolaceBinderDynamicMessagingTest extends SolaceBinderTestBase {
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 
-		String destination0 = String.format("foo%s0", getDestinationNameDelimiter());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, createProducerProperties());

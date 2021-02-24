@@ -2,34 +2,33 @@ package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solacesystems.jcsmp.EndpointProperties;
 
+import java.util.concurrent.TimeUnit;
+
 public class SolaceConsumerProperties extends SolaceCommonProperties {
-	private String anonymousGroupPostfix = "anon";
 	private int polledConsumerWaitTimeInMillis = 100;
-	private boolean requeueRejected = false;
+	private long flowPreRebindWaitTimeout = TimeUnit.SECONDS.toMillis(10);
 
 	private String[] queueAdditionalSubscriptions = new String[0];
+	private boolean useGroupNameInQueueName = true;
 
-	// DMQ Properties ---------
-	private boolean autoBindDmq = false;
-	private boolean provisionDmq = true;
+	// Error Queue Properties ---------
+	private boolean autoBindErrorQueue = false;
+	private boolean provisionErrorQueue = true;
+	private String errorQueueNameOverride = null;
+	private boolean useGroupNameInErrorQueueName = true;
+	private long errorQueueMaxDeliveryAttempts = 3;
 
-	private int dmqAccessType = EndpointProperties.ACCESSTYPE_NONEXCLUSIVE;
-	private int dmqPermission = EndpointProperties.PERMISSION_CONSUME;
-	private Integer dmqDiscardBehaviour = null;
-	private Integer dmqMaxMsgRedelivery = null;
-	private Integer dmqMaxMsgSize = null;
-	private Integer dmqQuota = null;
-	private Boolean dmqRespectsMsgTtl = null;
-	private Long republishedMsgTtl = null;
+	private int errorQueueAccessType = EndpointProperties.ACCESSTYPE_NONEXCLUSIVE;
+	private int errorQueuePermission = EndpointProperties.PERMISSION_CONSUME;
+	private Integer errorQueueDiscardBehaviour = null;
+	private Integer errorQueueMaxMsgRedelivery = null;
+	private Integer errorQueueMaxMsgSize = null;
+	private Integer errorQueueQuota = null;
+	private Boolean errorQueueRespectsMsgTtl = null;
+
+	private Boolean errorMsgDmqEligible = null;
+	private Long errorMsgTtl = null;
 	// ------------------------
-
-	public String getAnonymousGroupPostfix() {
-		return anonymousGroupPostfix;
-	}
-
-	public void setAnonymousGroupPostfix(String anonymousGroupPostfix) {
-		this.anonymousGroupPostfix = anonymousGroupPostfix;
-	}
 
 	public int getPolledConsumerWaitTimeInMillis() {
 		return polledConsumerWaitTimeInMillis;
@@ -39,12 +38,12 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.polledConsumerWaitTimeInMillis = polledConsumerWaitTimeInMillis;
 	}
 
-	public boolean isRequeueRejected() {
-		return requeueRejected;
+	public long getFlowPreRebindWaitTimeout() {
+		return flowPreRebindWaitTimeout;
 	}
 
-	public void setRequeueRejected(boolean requeueRejected) {
-		this.requeueRejected = requeueRejected;
+	public void setFlowPreRebindWaitTimeout(long flowPreRebindWaitTimeout) {
+		this.flowPreRebindWaitTimeout = flowPreRebindWaitTimeout;
 	}
 
 	public String[] getQueueAdditionalSubscriptions() {
@@ -55,83 +54,123 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.queueAdditionalSubscriptions = queueAdditionalSubscriptions;
 	}
 
-	public boolean isAutoBindDmq() {
-		return autoBindDmq;
+	public boolean isUseGroupNameInQueueName() {
+		return useGroupNameInQueueName;
 	}
 
-	public void setAutoBindDmq(boolean autoBindDmq) {
-		this.autoBindDmq = autoBindDmq;
+	public void setUseGroupNameInQueueName(boolean useGroupNameInQueueName) {
+		this.useGroupNameInQueueName = useGroupNameInQueueName;
 	}
 
-	public boolean isProvisionDmq() {
-		return provisionDmq;
+	public boolean isAutoBindErrorQueue() {
+		return autoBindErrorQueue;
 	}
 
-	public void setProvisionDmq(boolean provisionDmq) {
-		this.provisionDmq = provisionDmq;
+	public void setAutoBindErrorQueue(boolean autoBindErrorQueue) {
+		this.autoBindErrorQueue = autoBindErrorQueue;
 	}
 
-	public int getDmqAccessType() {
-		return dmqAccessType;
+	public boolean isProvisionErrorQueue() {
+		return provisionErrorQueue;
 	}
 
-	public void setDmqAccessType(int dmqAccessType) {
-		this.dmqAccessType = dmqAccessType;
+	public void setProvisionErrorQueue(boolean provisionErrorQueue) {
+		this.provisionErrorQueue = provisionErrorQueue;
 	}
 
-	public int getDmqPermission() {
-		return dmqPermission;
+	public String getErrorQueueNameOverride() {
+		return errorQueueNameOverride;
 	}
 
-	public void setDmqPermission(int dmqPermission) {
-		this.dmqPermission = dmqPermission;
+	public void setErrorQueueNameOverride(String errorQueueNameOverride) {
+		this.errorQueueNameOverride = errorQueueNameOverride;
 	}
 
-	public Integer getDmqDiscardBehaviour() {
-		return dmqDiscardBehaviour;
+	public boolean isUseGroupNameInErrorQueueName() {
+		return useGroupNameInErrorQueueName;
 	}
 
-	public void setDmqDiscardBehaviour(Integer dmqDiscardBehaviour) {
-		this.dmqDiscardBehaviour = dmqDiscardBehaviour;
+	public void setUseGroupNameInErrorQueueName(boolean useGroupNameInErrorQueueName) {
+		this.useGroupNameInErrorQueueName = useGroupNameInErrorQueueName;
 	}
 
-	public Integer getDmqMaxMsgRedelivery() {
-		return dmqMaxMsgRedelivery;
+	public long getErrorQueueMaxDeliveryAttempts() {
+		return errorQueueMaxDeliveryAttempts;
 	}
 
-	public void setDmqMaxMsgRedelivery(Integer dmqMaxMsgRedelivery) {
-		this.dmqMaxMsgRedelivery = dmqMaxMsgRedelivery;
+	public void setErrorQueueMaxDeliveryAttempts(long errorQueueMaxDeliveryAttempts) {
+		this.errorQueueMaxDeliveryAttempts = errorQueueMaxDeliveryAttempts;
 	}
 
-	public Integer getDmqMaxMsgSize() {
-		return dmqMaxMsgSize;
+	public int getErrorQueueAccessType() {
+		return errorQueueAccessType;
 	}
 
-	public void setDmqMaxMsgSize(Integer dmqMaxMsgSize) {
-		this.dmqMaxMsgSize = dmqMaxMsgSize;
+	public void setErrorQueueAccessType(int errorQueueAccessType) {
+		this.errorQueueAccessType = errorQueueAccessType;
 	}
 
-	public Integer getDmqQuota() {
-		return dmqQuota;
+	public int getErrorQueuePermission() {
+		return errorQueuePermission;
 	}
 
-	public void setDmqQuota(Integer dmqQuota) {
-		this.dmqQuota = dmqQuota;
+	public void setErrorQueuePermission(int errorQueuePermission) {
+		this.errorQueuePermission = errorQueuePermission;
 	}
 
-	public Boolean getDmqRespectsMsgTtl() {
-		return dmqRespectsMsgTtl;
+	public Integer getErrorQueueDiscardBehaviour() {
+		return errorQueueDiscardBehaviour;
 	}
 
-	public void setDmqRespectsMsgTtl(Boolean dmqRespectsMsgTtl) {
-		this.dmqRespectsMsgTtl = dmqRespectsMsgTtl;
+	public void setErrorQueueDiscardBehaviour(Integer errorQueueDiscardBehaviour) {
+		this.errorQueueDiscardBehaviour = errorQueueDiscardBehaviour;
 	}
 
-	public Long getRepublishedMsgTtl() {
-		return republishedMsgTtl;
+	public Integer getErrorQueueMaxMsgRedelivery() {
+		return errorQueueMaxMsgRedelivery;
 	}
 
-	public void setRepublishedMsgTtl(Long republishedMsgTtl) {
-		this.republishedMsgTtl = republishedMsgTtl;
+	public void setErrorQueueMaxMsgRedelivery(Integer errorQueueMaxMsgRedelivery) {
+		this.errorQueueMaxMsgRedelivery = errorQueueMaxMsgRedelivery;
+	}
+
+	public Integer getErrorQueueMaxMsgSize() {
+		return errorQueueMaxMsgSize;
+	}
+
+	public void setErrorQueueMaxMsgSize(Integer errorQueueMaxMsgSize) {
+		this.errorQueueMaxMsgSize = errorQueueMaxMsgSize;
+	}
+
+	public Integer getErrorQueueQuota() {
+		return errorQueueQuota;
+	}
+
+	public void setErrorQueueQuota(Integer errorQueueQuota) {
+		this.errorQueueQuota = errorQueueQuota;
+	}
+
+	public Boolean getErrorQueueRespectsMsgTtl() {
+		return errorQueueRespectsMsgTtl;
+	}
+
+	public void setErrorQueueRespectsMsgTtl(Boolean errorQueueRespectsMsgTtl) {
+		this.errorQueueRespectsMsgTtl = errorQueueRespectsMsgTtl;
+	}
+
+	public Boolean getErrorMsgDmqEligible() {
+		return errorMsgDmqEligible;
+	}
+
+	public void setErrorMsgDmqEligible(Boolean errorMsgDmqEligible) {
+		this.errorMsgDmqEligible = errorMsgDmqEligible;
+	}
+
+	public Long getErrorMsgTtl() {
+		return errorMsgTtl;
+	}
+
+	public void setErrorMsgTtl(Long errorMsgTtl) {
+		this.errorMsgTtl = errorMsgTtl;
 	}
 }

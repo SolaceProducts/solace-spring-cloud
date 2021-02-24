@@ -1,7 +1,6 @@
 package com.solace.spring.cloud.stream.binder.provisioning;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceCommonProperties;
-import com.solace.spring.cloud.stream.binder.util.SolaceProvisioningUtil;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.InvalidOperationException;
@@ -25,7 +24,7 @@ import org.springframework.cloud.stream.provisioning.ProvisioningProvider;
 import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -34,8 +33,7 @@ import java.util.stream.Collectors;
 public class SolaceQueueProvisioner
 		implements ProvisioningProvider<ExtendedConsumerProperties<SolaceConsumerProperties>,ExtendedProducerProperties<SolaceProducerProperties>> {
 
-	private JCSMPSession jcsmpSession;
-	private Map<String, Set<String>> queueToTopicBindings = new HashMap<>();
+	private final JCSMPSession jcsmpSession;
 
 	private static final Log logger = LogFactory.getLog(SolaceQueueProvisioner.class);
 
@@ -66,11 +64,9 @@ public class SolaceQueueProvisioner
 			Queue queue = provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning);
 
 			addSubscriptionToQueue(queue, topicName, properties.getExtension());
-			trackQueueToTopicBinding(queue.getName(), topicName);
 
 			for (String extraTopic : requiredGroupsExtraSubs.getOrDefault(groupName, new String[0])) {
 				addSubscriptionToQueue(queue, extraTopic, properties.getExtension());
-				trackQueueToTopicBinding(queue.getName(), extraTopic);
 			}
 		}
 
@@ -101,7 +97,9 @@ public class SolaceQueueProvisioner
 		String topicName = SolaceProvisioningUtil.getTopicName(name, properties.getExtension());
 		boolean isAnonQueue = SolaceProvisioningUtil.isAnonQueue(group);
 		boolean isDurableQueue = SolaceProvisioningUtil.isDurableQueue(group);
-		String queueName = SolaceProvisioningUtil.getQueueName(name, group, properties.getExtension(), isAnonQueue);
+		SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(name, group,
+				properties.getExtension(), isAnonQueue);
+		String groupQueueName = queueNames.getConsumerGroupQueueName();
 
 		EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
 		boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
@@ -121,20 +119,20 @@ public class SolaceQueueProvisioner
 		}
 
 		logger.info(isAnonQueue ?
-				String.format("Creating anonymous (temporary) queue %s", queueName) :
-				String.format("Creating %s queue %s for consumer group %s", isDurableQueue ? "durable" : "temporary", queueName, group));
-		Queue queue = provisionQueue(queueName, isDurableQueue, endpointProperties, doDurableQueueProvisioning);
-		trackQueueToTopicBinding(queue.getName(), topicName);
+				String.format("Creating anonymous (temporary) queue %s", groupQueueName) :
+				String.format("Creating %s queue %s for consumer group %s", isDurableQueue ? "durable" : "temporary", groupQueueName, group));
+		Queue queue = provisionQueue(groupQueueName, isDurableQueue, endpointProperties, doDurableQueueProvisioning);
 
-		for (String additionalSubscription : properties.getExtension().getQueueAdditionalSubscriptions()) {
-			trackQueueToTopicBinding(queue.getName(), additionalSubscription);
+		Set<String> topicSubscriptions = new HashSet<>(Collections.singletonList(topicName));
+		topicSubscriptions.addAll(Arrays.asList(properties.getExtension().getQueueAdditionalSubscriptions()));
+
+		String errorQueueName = null;
+		if (properties.getExtension().isAutoBindErrorQueue()) {
+			errorQueueName = provisionErrorQueue(queueNames.getErrorQueueName(), properties.getExtension()).getName();
 		}
 
-		if (properties.getExtension().isAutoBindDmq()) {
-			provisionDMQ(queueName, properties.getExtension());
-		}
-
-		return new SolaceConsumerDestination(queue.getName());
+		return new SolaceConsumerDestination(queue.getName(), name, queueNames.getPhysicalGroupName(), !isDurableQueue,
+				errorQueueName, topicSubscriptions);
 	}
 
 	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties,
@@ -152,7 +150,7 @@ public class SolaceQueueProvisioner
 				if (doDurableProvisioning) {
 					jcsmpSession.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
 				} else {
-					logger.warn(String.format(
+					logger.info(String.format(
 							"%s provisioning is disabled, %s will not be provisioned nor will its configuration be validated",
 							durableQueueType, name));
 				}
@@ -174,6 +172,11 @@ public class SolaceQueueProvisioner
 			logger.info(String.format("Connected test consumer flow to queue %s, closing it", name));
 		} catch (JCSMPException e) {
 			String msg = String.format("Failed to connect test consumer flow to queue %s", name);
+
+			if (isDurable && !doDurableProvisioning) {
+				msg += ". Provisioning is disabled, queue was not provisioned nor was its configuration validated.";
+			}
+
 			if (e instanceof InvalidOperationException && !isDurable) {
 				msg += ". If the Solace client is not capable of creating temporary queues, consider assigning this consumer to a group?";
 			}
@@ -184,11 +187,10 @@ public class SolaceQueueProvisioner
 		return queue;
 	}
 
-	private void provisionDMQ(String queueName, SolaceConsumerProperties properties) {
-		String dmqName = SolaceProvisioningUtil.getDMQName(queueName);
-		logger.info(String.format("Provisioning DMQ %s", dmqName));
-		EndpointProperties endpointProperties = SolaceProvisioningUtil.getDMQEndpointProperties(properties);
-		provisionQueue(dmqName, true, endpointProperties, properties.isProvisionDmq(), "DMQ");
+	private Queue provisionErrorQueue(String errorQueueName, SolaceConsumerProperties properties) {
+		logger.info(String.format("Provisioning error queue %s", errorQueueName));
+		EndpointProperties endpointProperties = SolaceProvisioningUtil.getErrorQueueEndpointProperties(properties);
+		return provisionQueue(errorQueueName, true, endpointProperties, properties.isProvisionErrorQueue(), "Error Queue");
 	}
 
 	public void addSubscriptionToQueue(Queue queue, String topicName, SolaceCommonProperties properties) {
@@ -206,7 +208,7 @@ public class SolaceQueueProvisioner
 				jcsmpSession.addSubscription(queue, topic, JCSMPSession.WAIT_FOR_CONFIRM);
 			} catch (JCSMPErrorResponseException e) {
 				if (e.getSubcodeEx() == JCSMPErrorResponseSubcodeEx.SUBSCRIPTION_ALREADY_PRESENT) {
-					logger.warn(String.format(
+					logger.info(String.format(
 							"Queue %s is already subscribed to topic %s, SUBSCRIPTION_ALREADY_PRESENT error will be ignored...",
 							queue.getName(), topicName));
 				} else {
@@ -218,16 +220,5 @@ public class SolaceQueueProvisioner
 			logger.warn(msg, e);
 			throw new ProvisioningException(msg, e);
 		}
-	}
-
-	public Set<String> getTrackedTopicsForQueue(String queueName) {
-		return queueToTopicBindings.get(queueName);
-	}
-
-	private void trackQueueToTopicBinding(String queueName, String topicName) {
-		if (! queueToTopicBindings.containsKey(queueName)) {
-			queueToTopicBindings.put(queueName, new HashSet<>());
-		}
-		queueToTopicBindings.get(queueName).add(topicName);
 	}
 }

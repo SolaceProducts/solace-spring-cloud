@@ -2,11 +2,25 @@ package com.solace.spring.cloud.stream.binder.provisioning;
 
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 
-class SolaceConsumerDestination implements ConsumerDestination {
-	private String queueName;
+import java.util.Set;
+import java.util.StringJoiner;
 
-	SolaceConsumerDestination(String queueName) {
+public class SolaceConsumerDestination implements ConsumerDestination {
+	private final String bindingDestinationName;
+	private final String physicalGroupName;
+	private final String queueName;
+	private final boolean isTemporary;
+	private final String errorQueueName;
+	private final Set<String> subscriptions;
+
+	SolaceConsumerDestination(String queueName, String bindingDestinationName, String physicalGroupName,
+							  boolean isTemporary, String errorQueueName, Set<String> subscriptions) {
+		this.bindingDestinationName = bindingDestinationName;
+		this.physicalGroupName = physicalGroupName;
 		this.queueName = queueName;
+		this.isTemporary = isTemporary;
+		this.errorQueueName = errorQueueName;
+		this.subscriptions = subscriptions;
 	}
 
 	@Override
@@ -14,11 +28,34 @@ class SolaceConsumerDestination implements ConsumerDestination {
 		return queueName;
 	}
 
+	public String getBindingDestinationName() {
+		return bindingDestinationName;
+	}
+
+	public String getPhysicalGroupName() {
+		return physicalGroupName;
+	}
+
+	public boolean isTemporary() {
+		return isTemporary;
+	}
+
+	public String getErrorQueueName() {
+		return errorQueueName;
+	}
+
+	public Set<String> getSubscriptions() {
+		return subscriptions;
+	}
+
 	@Override
 	public String toString() {
-		final StringBuffer sb = new StringBuffer("SolaceConsumerDestination{");
-		sb.append("queueName='").append(queueName).append('\'');
-		sb.append('}');
-		return sb.toString();
+		return new StringJoiner(", ", SolaceConsumerDestination.class.getSimpleName() + "[", "]")
+				.add("bindingDestinationName='" + bindingDestinationName + "'")
+				.add("physicalGroupName='" + physicalGroupName + "'")
+				.add("queueName='" + queueName + "'")
+				.add("isTemporary=" + isTemporary)
+				.add("errorQueueName='" + errorQueueName + "'")
+				.toString();
 	}
 }
