@@ -1,4 +1,4 @@
-[![Actions Status](https://github.com/SolaceDev/solace-spring-cloud/workflows/build/badge.svg?branch=master)](https://github.com/SolaceDev/solace-spring-cloud/actions?query=workflow%3Abuild+branch%3Amaster)
+[![Actions Status](https://github.com/SolaceProducts/solace-spring-cloud/workflows/build/badge.svg?branch=master)](https://github.com/SolaceProducts/solace-spring-cloud/actions?query=workflow%3Abuild+branch%3Amaster)
 
 # Solace Spring Cloud
 
