@@ -227,6 +227,7 @@ public class XMLMessageMapper {
 		for (Map.Entry<String,Object> header : headers.entrySet()) {
 			if (header.getKey().equalsIgnoreCase(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK) ||
 					header.getKey().equalsIgnoreCase(BinderHeaders.TARGET_DESTINATION) ||
+					header.getKey().equalsIgnoreCase(SolaceBinderHeaders.CONFIRM_CORRELATION) ||
 					SolaceHeaderMeta.META.containsKey(header.getKey()) ||
 					SolaceBinderHeaderMeta.META.containsKey(header.getKey())) {
 				continue;

@@ -1,7 +1,9 @@
 package com.solace.spring.cloud.stream.binder.outbound;
 
+import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
+import com.solace.spring.cloud.stream.binder.util.CorrelationData;
 import com.solace.spring.cloud.stream.binder.util.ErrorChannelSendingCorrelationKey;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
@@ -72,6 +74,17 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		} catch (IllegalArgumentException e) {
 			throw handleMessagingException(correlationKey,
 					String.format("Unable to parse header %s", BinderHeaders.TARGET_DESTINATION), e);
+		}
+
+		try {
+			CorrelationData correlationData = message.getHeaders().get(SolaceBinderHeaders.CONFIRM_CORRELATION, CorrelationData.class);
+			if (correlationData != null) {
+				correlationData.setMessage(message);
+				correlationKey.setConfirmCorrelation(correlationData);
+			}
+		} catch (IllegalArgumentException e) {
+			throw handleMessagingException(correlationKey,
+					String.format("Unable to parse header %s", SolaceBinderHeaders.CONFIRM_CORRELATION), e);
 		}
 
 		XMLMessage xmlMessage = xmlMessageMapper.map(message, properties.getHeaderExclusions(),

@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder.util;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.integration.support.ErrorMessageUtils;
@@ -15,6 +16,7 @@ public class ErrorChannelSendingCorrelationKey {
 	private final MessageChannel errorChannel;
 	private final ErrorMessageStrategy errorMessageStrategy;
 	private XMLMessage rawMessage;
+	private CorrelationData confirmCorrelation;
 
 	private static final Log logger = LogFactory.getLog(ErrorChannelSendingCorrelationKey.class);
 
@@ -35,6 +37,14 @@ public class ErrorChannelSendingCorrelationKey {
 
 	public void setRawMessage(XMLMessage rawMessage) {
 		this.rawMessage = rawMessage;
+	}
+
+	public CorrelationData getConfirmCorrelation() {
+		return confirmCorrelation;
+	}
+
+	public void setConfirmCorrelation(CorrelationData confirmCorrelation) {
+		this.confirmCorrelation = confirmCorrelation;
 	}
 
 	/**
