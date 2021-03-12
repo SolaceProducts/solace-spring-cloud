@@ -350,6 +350,9 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.SERIALIZED_PAYLOAD:
 					assertNull(xmlMessage.getProperties().get(header.getKey()));
 					break;
+				case SolaceBinderHeaders.CONFIRM_CORRELATION:
+					assertNull(xmlMessage.getProperties().get(header.getKey()));
+					break;
 				default:
 					fail(String.format("no test for header %s", header.getKey()));
 			}
@@ -981,6 +984,9 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceBinderHeaders.SERIALIZED_PAYLOAD:
 					metadata.putBoolean(header.getKey(), false);
+					break;
+				case SolaceBinderHeaders.CONFIRM_CORRELATION:
+					metadata.putString(header.getKey(), "random_string");
 					break;
 				default:
 					fail(String.format("no test for header %s", header.getKey()));

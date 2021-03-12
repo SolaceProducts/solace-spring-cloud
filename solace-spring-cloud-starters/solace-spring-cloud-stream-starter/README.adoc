@@ -545,6 +545,12 @@ TIP: Use link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream
 | Default Value
 | Description
 
+| solace_scst_confirmCorrelation
+| CorrelationData
+| Write
+|
+| A CorrelationData instance for messaging confirmations
+
 | solace_scst_messageVersion
 | Integer
 | Read
@@ -655,7 +661,7 @@ For each acknowledgement status, the binder will perform the following actions:
 | REJECT
 | If `autoBindErrorQueue` is `true`, then republish the message onto the error queue and `ACCEPT` it. Otherwise, if the consumer is in a defined consumer group, invoke `REQUEUE`. Otherwise, the consumer is in an anonymous group, and the message will be discarded.
 
-Refer to <<Failed Message Error Handling>> for more info.
+Refer to <<Failed Consumer Message Error Handling>> for more info.
 
 | REQUEUE
 | If the consumer is in a defined consumer group, rebind the consumer flow. Otherwise, a `SolaceAcknowledgmentException` will be thrown.
@@ -708,7 +714,7 @@ public class MyMessageBuilder {
 
 Also, this header is cleared by the message's producer before it is sent off to the message broker. So you should attach the target destination to your message payload if you want to get that information on the consumer-side.
 
-== Failed Message Error Handling
+== Failed Consumer Message Error Handling
 
 The Spring cloud stream framework already provides a number of application-internal reprocessing strategies for failed messages during message consumption such as. You can read more about that https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#spring-cloud-stream-overview-error-handling[here]:
 
@@ -746,6 +752,43 @@ Error Queues should not be used with anonymous consumer groups.
 
 Since the names of anonymous consumer groups, and in turn the name of their would-be Error Queues, are randomly generated at runtime, it would provide little value to create bindings to these Error Queues because of their unpredictable naming and temporary existence. Also, your environment will be polluted with orphaned Error Queues whenever these consumers rebind.
 ====
+
+== Failed Producer Message Error Handling
+
+By default, asynchronous producer errors aren't handled by the framework. Producer error channels can be enabled using the link:https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_producer_properties[`errorChannelEnabled` producer config option].
+
+Beyond that, this binder also supports using a `Future` to wait for publish confirmations. See <<Publisher Confirms>> for more info.
+
+== Publisher Confirmations
+
+For each message you can create a new link:../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/util/CorrelationData.java[`CorrelationData`] instance and set it as the value of your message's `SolaceBinderHeaders.CONFIRM_CORRELATION` header.
+
+NOTE: `CorrelationData` can be extended to add more correlation info. The `SolaceBinderHeaders.CONFIRM_CORRELATION` header is not reflected in the actual message published to the broker.
+
+Now using `CorrelationData.getFuture().get()`, you can wait for a publish acknowledgment from the broker. If the publish failed, then this future will throw an exception.
+
+For example:
+[source,java]
+----
+@Autowired
+private StreamBridge streamBridge;
+
+public void send(String payload, long timeout, TimeUnit unit) {
+    CorrelationData correlationData = new CorrelationData();
+    Message<SensorReading> message = MessageBuilder.withPayload(payload)
+            .setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
+            .build();
+
+    streamBridge.send("output-destination", message);
+
+    try {
+        correlationData.getFuture().get(timeout, unit);
+        // Do success logic
+    } catch (InterruptedException | ExecutionException | TimeoutException e) {
+        // Do failure logic
+    }
+}
+----
 
 == Resources
 

@@ -1,5 +1,7 @@
 package com.solace.spring.cloud.stream.binder.messaging;
 
+import com.solace.spring.cloud.stream.binder.util.CorrelationData;
+
 import org.springframework.messaging.Message;
 
 /**
@@ -57,4 +59,12 @@ public final class SolaceBinderHeaders {
 	 * <p>The encoding algorithm used to encode the headers indicated by {@link #SERIALIZED_HEADERS}.</p>
 	 */
 	public static final String SERIALIZED_HEADERS_ENCODING = PREFIX + "serializedHeadersEncoding";
+
+	/**
+	 * <p><b>Acceptable Value Type:</b> {@link CorrelationData}</p>
+	 * <p><b>Access:</b> Write</p>
+	 * <br>
+	 * <p>A CorrelationData instance for messaging confirmations.</p>
+	 */
+	public static final String CONFIRM_CORRELATION = PREFIX + "confirmCorrelation";
 }
