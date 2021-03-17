@@ -6,8 +6,11 @@ import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
+import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
+import org.springframework.messaging.MessagingException;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -37,7 +40,13 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 
 		@Override
 		public void responseReceivedEx(Object correlationKey) {
-			if (correlationKey instanceof ErrorQueueRepublishCorrelationKey) {
+			if (correlationKey instanceof ErrorChannelSendingCorrelationKey) {
+				ErrorChannelSendingCorrelationKey key = (ErrorChannelSendingCorrelationKey) correlationKey;
+				logger.debug("Producer received response for message " + StaticMessageHeaderAccessor.getId(key.getInputMessage()));
+				if (key.getConfirmCorrelation() != null) {
+					key.getConfirmCorrelation().success();
+				}
+			} else if (correlationKey instanceof ErrorQueueRepublishCorrelationKey) {
 				ErrorQueueRepublishCorrelationKey key = (ErrorQueueRepublishCorrelationKey) correlationKey;
 				try {
 					key.handleSuccess();
@@ -65,7 +74,11 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 				String msg = String.format("Producer received error for message %s (Spring message %s) at %s",
 						messageId, springMessageId, timestamp);
 				logger.warn(msg, cause);
-				key.send(msg, cause);
+				MessagingException messagingException = key.send(msg, cause);
+
+				if (key.getConfirmCorrelation() != null) {
+					key.getConfirmCorrelation().failed(messagingException);
+				}
 			} else if (correlationKey instanceof ErrorQueueRepublishCorrelationKey) {
 				ErrorQueueRepublishCorrelationKey key = (ErrorQueueRepublishCorrelationKey) correlationKey;
 				try {
