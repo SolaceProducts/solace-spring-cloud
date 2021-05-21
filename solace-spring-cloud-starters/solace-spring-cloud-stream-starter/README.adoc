@@ -761,7 +761,7 @@ Beyond that, this binder also supports using a `Future` to wait for publish conf
 
 == Publisher Confirmations
 
-For each message you can create a new link:../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/util/CorrelationData.java[`CorrelationData`] instance and set it as the value of your message's `SolaceBinderHeaders.CONFIRM_CORRELATION` header.
+For each message you can create a new link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/util/CorrelationData.java[`CorrelationData`] instance and set it as the value of your message's `SolaceBinderHeaders.CONFIRM_CORRELATION` header.
 
 NOTE: `CorrelationData` can be extended to add more correlation info. The `SolaceBinderHeaders.CONFIRM_CORRELATION` header is not reflected in the actual message published to the broker.
 
