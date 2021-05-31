@@ -37,6 +37,9 @@ public class SolaceQueueProvisioner
 
 	private static final Log logger = LogFactory.getLog(SolaceQueueProvisioner.class);
 
+	private static final int MAX_QUEUE_LENGTH = 200;
+	private static final int MAX_TEMP_QUEUE_LENGTH = MAX_QUEUE_LENGTH - 57; // 57 == temp queue prefix length
+
 	public SolaceQueueProvisioner(JCSMPSession jcsmpSession) {
 		this.jcsmpSession = jcsmpSession;
 	}
@@ -148,6 +151,13 @@ public class SolaceQueueProvisioner
 			if (isDurable) {
 				queue = JCSMPFactory.onlyInstance().createQueue(name);
 				if (doDurableProvisioning) {
+					if (name.length() > MAX_QUEUE_LENGTH) {
+						logger.info(String.format(
+								"Queue name \"%s\" is to long and will be truncated",
+								name));
+						name = name.substring(0, MAX_QUEUE_LENGTH);
+					}
+
 					jcsmpSession.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
 				} else {
 					logger.info(String.format(
@@ -156,6 +166,12 @@ public class SolaceQueueProvisioner
 				}
 			} else {
 				// EndpointProperties will be applied during consumer creation
+				if (name.length() > MAX_TEMP_QUEUE_LENGTH) {
+					logger.info(String.format(
+							"Queue name \"%s\" is to long and will be truncated",
+							name));
+					name = name.substring(0, MAX_TEMP_QUEUE_LENGTH);
+				}
 				queue = jcsmpSession.createTemporaryQueue(name);
 			}
 		} catch (JCSMPException e) {
