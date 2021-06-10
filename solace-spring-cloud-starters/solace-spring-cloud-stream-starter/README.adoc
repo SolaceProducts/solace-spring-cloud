@@ -173,7 +173,7 @@ When set to `true`, the familiarity modifier, `wk`/`an`, is included in the gene
 Default: `true` +
 See: <<Generated Queue Name Syntax>>
 
-useDestinationEncodingInQueue::
+useDestinationEncodingInQueueName::
 When set to `true`, the destination encoding (`plain`), is included in the generated queue name.
 +
 Default: `true` +
@@ -357,7 +357,7 @@ When set to `true`, the familiarity modifier, `wk`/`an`, is included in the gene
 Default: `true` +
 See: <<Generated Queue Name Syntax>>
 
-useDestinationEncodingInQueue::
+useDestinationEncodingInQueueName::
 When set to `true`, the destination encoding (`plain`), is included in the generated queue name.
 +
 Default: `true` +
