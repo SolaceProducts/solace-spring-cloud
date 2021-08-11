@@ -18,7 +18,7 @@ public final class SolaceHeaders {
 	static final String PREFIX = "solace_";
 
 	/**
-	 * <p><b>Acceptable Value Type:</b> {@link ReplicationGroupMessageId}</p>
+	 * <p><b>Acceptable Value Type:</b> {@link String}</p>
 	 * <p><b>Access:</b> Read/Write</p>
 	 * <br>
 	 * <p>The message ID (a string for an application-specific message identifier).</p>
@@ -93,7 +93,7 @@ public final class SolaceHeaders {
 	public static final String PRIORITY = PREFIX + "priority";
 
 	/**
-	 * <p><b>Acceptable Value Type:</b> {@link String}</p>
+	 * <p><b>Acceptable Value Type:</b> {@link ReplicationGroupMessageId}</p>
 	 * <p><b>Access:</b> Read</p>
 	 * <br>
 	 * <p>The replication group message ID (Specifies a Replication Group Message ID as a replay start location.).</p>
