@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.messaging;
 
 import com.solacesystems.jcsmp.Destination;
+import com.solacesystems.jcsmp.ReplicationGroupMessageId;
 import org.springframework.messaging.Message;
 
 /**
