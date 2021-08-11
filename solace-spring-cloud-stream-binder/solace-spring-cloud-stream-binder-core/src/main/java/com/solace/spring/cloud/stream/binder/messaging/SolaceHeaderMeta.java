@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.messaging;
 
 import com.solacesystems.jcsmp.Destination;
+import com.solacesystems.jcsmp.ReplicationGroupMessageId;
 import com.solacesystems.jcsmp.XMLMessage;
 
 import java.util.Map;
@@ -22,6 +23,7 @@ public class SolaceHeaderMeta<T> implements HeaderMeta<T> {
 			{SolaceHeaders.PRIORITY, new SolaceHeaderMeta<>(Integer.class, XMLMessage::getPriority, XMLMessage::setPriority)},
 			{SolaceHeaders.RECEIVE_TIMESTAMP, new SolaceHeaderMeta<>(Long.class, XMLMessage::getReceiveTimestamp, null)},
 			{SolaceHeaders.REDELIVERED, new SolaceHeaderMeta<>(Boolean.class, XMLMessage::getRedelivered, null)},
+			{SolaceHeaders.REPLICATION_GROUP_MESSAGE_ID, new SolaceHeaderMeta<>(ReplicationGroupMessageId.class, XMLMessage::getReplicationGroupMessageId, null)},
 			{SolaceHeaders.REPLY_TO, new SolaceHeaderMeta<>(Destination.class, XMLMessage::getReplyTo, XMLMessage::setReplyTo)},
 			{SolaceHeaders.SENDER_ID, new SolaceHeaderMeta<>(String.class, XMLMessage::getSenderId, XMLMessage::setSenderId)},
 			{SolaceHeaders.SENDER_TIMESTAMP, new SolaceHeaderMeta<>(Long.class, XMLMessage::getSenderTimestamp, XMLMessage::setSenderTimestamp)},
