@@ -1,5 +1,5 @@
 = Spring Cloud Stream Binder for Solace PubSub+
-:revnumber: 3.1.0
+:revnumber: 3.2.0
 :toc: preamble
 :icons: font
 :scst-version: 3.1.1
@@ -494,6 +494,11 @@ This is the `JMSType` header field if publishing/consuming to/from JMS.
 | Boolean
 | Read
 | Indicates if the message has been delivered by the broker to the API before.
+
+| solace_replicationGroupMessageId
+| ReplicationGroupMessageId
+| Read
+| Specifies a Replication Group Message ID as a replay start location.
 
 | solace_replyTo
 | Destination

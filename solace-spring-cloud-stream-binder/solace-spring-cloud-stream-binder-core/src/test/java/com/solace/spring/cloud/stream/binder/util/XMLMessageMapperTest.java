@@ -15,6 +15,7 @@ import com.solacesystems.jcsmp.BytesMessage;
 import com.solacesystems.jcsmp.DeliveryMode;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.MapMessage;
+import com.solacesystems.jcsmp.ReplicationGroupMessageId;
 import com.solacesystems.jcsmp.SDTException;
 import com.solacesystems.jcsmp.SDTMap;
 import com.solacesystems.jcsmp.SDTStream;
@@ -322,6 +323,9 @@ public class XMLMessageMapperTest {
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : nonWriteableHeaders) {
 			switch (header.getKey()) {
+				case SolaceHeaders.REPLICATION_GROUP_MESSAGE_ID:
+					assertNull(xmlMessage.getReplicationGroupMessageId());
+					break;
 				case SolaceHeaders.DESTINATION:
 					assertNull(xmlMessage.getDestination());
 					break;
@@ -861,6 +865,9 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.REDELIVERED:
 					Mockito.when(xmlMessage.getRedelivered()).thenReturn(!defaultXmlMessage.getRedelivered());
 					break;
+				case SolaceHeaders.REPLICATION_GROUP_MESSAGE_ID:
+					Mockito.when(xmlMessage.getReplicationGroupMessageId()).thenReturn(Mockito.mock(ReplicationGroupMessageId.class));
+					break;
 				case SolaceHeaders.REPLY_TO:
 					Mockito.when(xmlMessage.getReplyTo())
 							.thenReturn(JCSMPFactory.onlyInstance().createQueue(header.getKey()));
@@ -931,6 +938,9 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceHeaders.REDELIVERED:
 					assertEquals(xmlMessage.getRedelivered(), actualValue);
+					break;
+				case SolaceHeaders.REPLICATION_GROUP_MESSAGE_ID:
+					assertEquals(xmlMessage.getReplicationGroupMessageId(), actualValue);
 					break;
 				case SolaceHeaders.REPLY_TO:
 					assertEquals(xmlMessage.getReplyTo(), actualValue);

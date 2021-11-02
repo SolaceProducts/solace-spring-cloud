@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.messaging;
 
 import com.solacesystems.jcsmp.Destination;
+import com.solacesystems.jcsmp.ReplicationGroupMessageId;
 import org.springframework.messaging.Message;
 
 /**
@@ -91,6 +92,15 @@ public final class SolaceHeaders {
 	 * <p>Priority value in the range of 0–255, or -1 if it is not set.</p>
 	 */
 	public static final String PRIORITY = PREFIX + "priority";
+
+	/**
+	 * <p><b>Acceptable Value Type:</b> {@link ReplicationGroupMessageId}</p>
+	 * <p><b>Access:</b> Read</p>
+	 * <br>
+	 * <p>The replication group message ID (Specifies a Replication Group Message ID as a replay start location.).</p>
+	 */
+
+	public static final String REPLICATION_GROUP_MESSAGE_ID = PREFIX + "replicationGroupMessageId";
 
 	/**
 	 * <p><b>Acceptable Value Type:</b> {@link Long}</p>
