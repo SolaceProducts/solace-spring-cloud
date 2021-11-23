@@ -20,6 +20,7 @@ public class SolaceHeaderMeta<T> implements HeaderMeta<T> {
 			{SolaceHeaders.DMQ_ELIGIBLE, new SolaceHeaderMeta<>(Boolean.class, XMLMessage::isDMQEligible, XMLMessage::setDMQEligible, true)},
 			{SolaceHeaders.EXPIRATION, new SolaceHeaderMeta<>(Long.class, XMLMessage::getExpiration, XMLMessage::setExpiration)},
 			{SolaceHeaders.HTTP_CONTENT_ENCODING, new SolaceHeaderMeta<>(String.class, XMLMessage::getHTTPContentEncoding, XMLMessage::setHTTPContentEncoding)},
+			{SolaceHeaders.IS_REPLY, new SolaceHeaderMeta<>(Boolean.class, XMLMessage::isReplyMessage, XMLMessage::setAsReplyMessage)},
 			{SolaceHeaders.PRIORITY, new SolaceHeaderMeta<>(Integer.class, XMLMessage::getPriority, XMLMessage::setPriority)},
 			{SolaceHeaders.RECEIVE_TIMESTAMP, new SolaceHeaderMeta<>(Long.class, XMLMessage::getReceiveTimestamp, null)},
 			{SolaceHeaders.REDELIVERED, new SolaceHeaderMeta<>(Boolean.class, XMLMessage::getRedelivered, null)},

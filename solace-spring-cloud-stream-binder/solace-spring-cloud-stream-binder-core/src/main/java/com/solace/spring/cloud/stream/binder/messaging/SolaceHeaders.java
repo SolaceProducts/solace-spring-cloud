@@ -86,6 +86,14 @@ public final class SolaceHeaders {
 	public static final String HTTP_CONTENT_ENCODING = PREFIX + "httpContentEncoding";
 
 	/**
+	 * <p><b>Acceptable Value Type:</b> {@link Boolean}</p>
+	 * <p><b>Access:</b> Read/Write</p>
+	 * <br>
+	 * <p>Indicates that this message is a reply</p>
+	 */
+	public static final String IS_REPLY = PREFIX + "isReply";
+
+	/**
 	 * <p><b>Acceptable Value Type:</b> {@link Integer}</p>
 	 * <p><b>Access:</b> Read/Write</p>
 	 * <br>

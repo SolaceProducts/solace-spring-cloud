@@ -223,6 +223,9 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.DMQ_ELIGIBLE:
 					value = !(Boolean) ((SolaceHeaderMeta<?>) header.getValue()).getDefaultValueOverride();
 					break;
+				case SolaceHeaders.IS_REPLY:
+					value = true; //The opposite of what a Solace message defaults to
+					break;
 				case SolaceHeaders.EXPIRATION:
 				case SolaceHeaders.SENDER_TIMESTAMP:
 				case SolaceHeaders.SEQUENCE_NUMBER:
@@ -266,6 +269,9 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceHeaders.EXPIRATION:
 					assertEquals(expectedValue, xmlMessage.getExpiration());
+					break;
+				case SolaceHeaders.IS_REPLY:
+					assertEquals(expectedValue, xmlMessage.isReplyMessage());
 					break;
 				case SolaceHeaders.HTTP_CONTENT_ENCODING:
 					assertEquals(expectedValue, xmlMessage.getHTTPContentEncoding());
@@ -424,6 +430,9 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.DMQ_ELIGIBLE:
 					assertTrue(xmlMessage.isDMQEligible());
 					break;
+				case SolaceHeaders.IS_REPLY:
+					assertFalse(xmlMessage.isReplyMessage());
+					break;
 				default:
 					fail(String.format("no test for header %s", header.getKey()));
 			}
@@ -561,6 +570,9 @@ public class XMLMessageMapperTest {
 			case SolaceHeaders.DMQ_ELIGIBLE:
 				value = !(Boolean) ((SolaceHeaderMeta<?>) header.getValue()).getDefaultValueOverride();
 				break;
+			case SolaceHeaders.IS_REPLY:
+				value = true; //The opposite of what a Solace message defaults to
+				break;
 			case SolaceHeaders.EXPIRATION:
 			case SolaceHeaders.SENDER_TIMESTAMP:
 			case SolaceHeaders.SEQUENCE_NUMBER:
@@ -611,6 +623,9 @@ public class XMLMessageMapperTest {
 				break;
 			case SolaceHeaders.HTTP_CONTENT_ENCODING:
 				assertEquals(expectedValue, xmlMessage.getHTTPContentEncoding());
+				break;
+			case SolaceHeaders.IS_REPLY:
+				assertEquals(expectedValue, xmlMessage.isReplyMessage());
 				break;
 			case SolaceHeaders.PRIORITY:
 				assertEquals(expectedValue, xmlMessage.getPriority());
@@ -853,6 +868,9 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.EXPIRATION:
 					Mockito.when(xmlMessage.getExpiration()).thenReturn(RandomUtils.nextLong());
 					break;
+				case SolaceHeaders.IS_REPLY:
+					Mockito.when(xmlMessage.isReplyMessage()).thenReturn(!defaultXmlMessage.isReplyMessage());
+					break;
 				case SolaceHeaders.HTTP_CONTENT_ENCODING:
 					Mockito.when(xmlMessage.getHTTPContentEncoding()).thenReturn(header.getKey());
 					break;
@@ -929,6 +947,9 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceHeaders.HTTP_CONTENT_ENCODING:
 					assertEquals(xmlMessage.getHTTPContentEncoding(), actualValue);
+					break;
+				case SolaceHeaders.IS_REPLY:
+					assertEquals(xmlMessage.isReplyMessage(), actualValue);
 					break;
 				case SolaceHeaders.PRIORITY:
 					assertEquals(xmlMessage.getPriority(), actualValue);
