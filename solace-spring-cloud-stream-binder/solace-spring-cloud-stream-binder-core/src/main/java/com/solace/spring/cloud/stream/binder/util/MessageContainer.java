@@ -18,7 +18,6 @@ public class MessageContainer {
 		this.message = message;
 		this.flowReceiverReferenceId = flowReceiverReferenceId;
 		this.staleFlag = staleFlag;
-		message.isReplyMessage();
 	}
 
 	public UUID getId() {
