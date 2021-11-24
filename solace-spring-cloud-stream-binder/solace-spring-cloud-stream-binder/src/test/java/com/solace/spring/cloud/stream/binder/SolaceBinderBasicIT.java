@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
@@ -9,16 +10,26 @@ import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueMsg;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueTxFlow;
+import com.solacesystems.jcsmp.BytesMessage;
+import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
+import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.FlowReceiver;
+import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPInterruptedException;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.JCSMPStreamingPublishEventHandler;
 import com.solacesystems.jcsmp.PropertyMismatchException;
 import com.solacesystems.jcsmp.Queue;
+import com.solacesystems.jcsmp.TextMessage;
+import com.solacesystems.jcsmp.Topic;
+import com.solacesystems.jcsmp.XMLMessageConsumer;
+import com.solacesystems.jcsmp.XMLMessageListener;
+import com.solacesystems.jcsmp.XMLMessageProducer;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.Assume;
@@ -62,6 +73,7 @@ import static com.solace.spring.cloud.stream.binder.test.util.ValuePoller.poll;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 import static org.hamcrest.Matchers.is;
+import static org.junit.Assert.assertNotNull;
 
 /**
  * Runs all basic Spring Cloud Stream Binder functionality tests
@@ -1075,5 +1087,86 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 					destination0, group0, moduleInputChannel, createConsumerProperties());
 			consumerBinding.unbind();
 		}
+	}
+
+	@Test
+	public void testRequestReply() throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+
+		String requestQueue = RandomStringUtils.randomAlphanumeric(10);
+		String replyTopic = RandomStringUtils.randomAlphanumeric(10);
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(replyTopic, moduleOutputChannel, createProducerProperties());
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(requestQueue, "boo", moduleInputChannel, createConsumerProperties());
+
+		final String PROCESSED_SUFFIX = "_PROCESSED";
+		String expectedCorrelationId = "theCorrelationId";
+
+		SoftAssertions softly = new SoftAssertions();
+
+		//Prepare the Replier
+		moduleInputChannel.subscribe(request -> {
+			String reqCorrelationId = request.getHeaders().get(SolaceHeaders.CORRELATION_ID, String.class);
+			Destination reqReplyTo = request.getHeaders().get(SolaceHeaders.REPLY_TO, Destination.class);
+			String reqPayload = (String) request.getPayload();
+
+			logger.info(String.format("Received request with correlationId [ %s ], replyTo [ %s ], payload [ %s ]",
+					reqCorrelationId, reqReplyTo, reqPayload));
+
+			softly.assertThat(reqCorrelationId).isEqualTo(expectedCorrelationId);
+			softly.assertThat(reqReplyTo.getName()).isEqualTo(replyTopic);
+
+			//Send reply message
+			Message springMessage = MessageBuilder
+					.withPayload(reqPayload + PROCESSED_SUFFIX)
+					.setHeader(SolaceHeaders.IS_REPLY, true)
+					.setHeader(SolaceHeaders.CORRELATION_ID, reqCorrelationId)
+					.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+					.build();
+			moduleOutputChannel.send(springMessage);
+		});
+
+		//Prepare the Requestor (need a producer and a consumer)
+		XMLMessageProducer producer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishEventHandler() {
+			@Override
+			public void responseReceived(String messageID) {
+				System.out.println("Request sent successfully");
+			}
+
+			@Override
+			public void handleError(String messageID, JCSMPException e, long timestamp) {
+			}
+		});
+		Topic replyDest = JCSMPFactory.onlyInstance().createTopic(replyTopic);
+		jcsmpSession.addSubscription(replyDest);
+		XMLMessageConsumer consumer = jcsmpSession.getMessageConsumer((XMLMessageListener) null);
+		consumer.start();
+
+		TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		String requestPayload = "This is the request";
+		textMessage.setText(requestPayload);
+		textMessage.setCorrelationId(expectedCorrelationId);
+		textMessage.setReplyTo(replyDest);
+
+		//Send request and await for a reply
+		producer.send(textMessage, JCSMPFactory.onlyInstance().createTopic(requestQueue));
+		BytesXMLMessage replyMsg = consumer.receive(10000);
+		assertNotNull("Did not receive a reply within allotted time", replyMsg);
+
+		softly.assertThat(replyMsg.getCorrelationId()).isEqualTo(expectedCorrelationId);
+		softly.assertThat(replyMsg.isReplyMessage()).isTrue();
+		String replyPayload = new String(((BytesMessage) replyMsg).getData());
+		softly.assertThat(replyPayload).isEqualTo(requestPayload + PROCESSED_SUFFIX);
+
+		softly.assertAll();
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+		consumer.close();
+		producer.close();
+		jcsmpSession.removeSubscription(replyDest);
 	}
 }
