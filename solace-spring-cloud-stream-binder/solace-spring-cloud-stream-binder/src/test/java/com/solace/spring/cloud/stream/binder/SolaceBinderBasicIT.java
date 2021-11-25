@@ -25,6 +25,7 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishEventHandler;
 import com.solacesystems.jcsmp.PropertyMismatchException;
 import com.solacesystems.jcsmp.Queue;
+import com.solacesystems.jcsmp.Requestor;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessageConsumer;
@@ -35,6 +36,7 @@ import org.assertj.core.api.SoftAssertions;
 import org.junit.Assume;
 import org.junit.Test;
 import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
+import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
@@ -1090,17 +1092,16 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testRequestReply() throws Exception {
+	public void testRequestReplyWithRequestor() throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
 
-		String requestQueue = RandomStringUtils.randomAlphanumeric(10);
-		String replyTopic = RandomStringUtils.randomAlphanumeric(10);
+		String requestDestination = RandomStringUtils.randomAlphanumeric(10);
 
-		Binding<MessageChannel> producerBinding = binder.bindProducer(replyTopic, moduleOutputChannel, createProducerProperties());
-		Binding<MessageChannel> consumerBinding = binder.bindConsumer(requestQueue, "boo", moduleInputChannel, createConsumerProperties());
+		Binding<MessageChannel> producerBinding = binder.bindProducer("willBeOverridden", moduleOutputChannel, createProducerProperties());
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(requestDestination, "boo", moduleInputChannel, createConsumerProperties());
 
 		final String PROCESSED_SUFFIX = "_PROCESSED";
 		String expectedCorrelationId = "theCorrelationId";
@@ -1117,13 +1118,13 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 					reqCorrelationId, reqReplyTo, reqPayload));
 
 			softly.assertThat(reqCorrelationId).isEqualTo(expectedCorrelationId);
-			softly.assertThat(reqReplyTo.getName()).isEqualTo(replyTopic);
 
 			//Send reply message
 			Message springMessage = MessageBuilder
 					.withPayload(reqPayload + PROCESSED_SUFFIX)
 					.setHeader(SolaceHeaders.IS_REPLY, true)
 					.setHeader(SolaceHeaders.CORRELATION_ID, reqCorrelationId)
+					.setHeader(BinderHeaders.TARGET_DESTINATION, reqReplyTo.getName())
 					.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 					.build();
 			moduleOutputChannel.send(springMessage);
@@ -1140,20 +1141,17 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 			public void handleError(String messageID, JCSMPException e, long timestamp) {
 			}
 		});
-		Topic replyDest = JCSMPFactory.onlyInstance().createTopic(replyTopic);
-		jcsmpSession.addSubscription(replyDest);
 		XMLMessageConsumer consumer = jcsmpSession.getMessageConsumer((XMLMessageListener) null);
 		consumer.start();
 
-		TextMessage textMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		TextMessage requestMsg = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 		String requestPayload = "This is the request";
-		textMessage.setText(requestPayload);
-		textMessage.setCorrelationId(expectedCorrelationId);
-		textMessage.setReplyTo(replyDest);
+		requestMsg.setText(requestPayload);
+		requestMsg.setCorrelationId(expectedCorrelationId);
 
 		//Send request and await for a reply
-		producer.send(textMessage, JCSMPFactory.onlyInstance().createTopic(requestQueue));
-		BytesXMLMessage replyMsg = consumer.receive(10000);
+		Requestor requestor = jcsmpSession.createRequestor();
+		BytesXMLMessage replyMsg = requestor.request(requestMsg, 10000, JCSMPFactory.onlyInstance().createTopic(requestDestination));
 		assertNotNull("Did not receive a reply within allotted time", replyMsg);
 
 		softly.assertThat(replyMsg.getCorrelationId()).isEqualTo(expectedCorrelationId);
@@ -1167,6 +1165,5 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		consumerBinding.unbind();
 		consumer.close();
 		producer.close();
-		jcsmpSession.removeSubscription(replyDest);
 	}
 }
