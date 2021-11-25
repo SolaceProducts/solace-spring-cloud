@@ -89,7 +89,7 @@ public final class SolaceHeaders {
 	 * <p><b>Acceptable Value Type:</b> {@link Boolean}</p>
 	 * <p><b>Access:</b> Read/Write</p>
 	 * <br>
-	 * <p>Indicates that this message is a reply</p>
+	 * <p>Indicates whether this message is a reply</p>
 	 */
 	public static final String IS_REPLY = PREFIX + "isReply";
 
