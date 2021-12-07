@@ -1,32 +1,92 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solacesystems.jcsmp.EndpointProperties;
+import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.concurrent.TimeUnit;
 
+@ConfigurationProperties("spring.cloud.stream.solace.default.consumer")
 public class SolaceConsumerProperties extends SolaceCommonProperties {
+	/**
+	 * Maximum wait time for polled consumers to receive a message from their consumer group queue.
+	 */
 	private int polledConsumerWaitTimeInMillis = 100;
+	/**
+	 * The maximum time to wait for all unacknowledged messages to be acknowledged before a flow receiver rebind.
+	 * Will wait forever if set to a value less than 0.
+	 */
 	private long flowPreRebindWaitTimeout = TimeUnit.SECONDS.toMillis(10);
 
+	/**
+	 * An array of additional topic subscriptions to be applied on the consumer group queue.
+	 * These subscriptions may also contain wildcards.
+	 * The prefix property is not applied on these subscriptions.
+	 */
 	private String[] queueAdditionalSubscriptions = new String[0];
+	/**
+	 * Whether to include the group name in the queue name for non-anonymous consumer groups.
+	 */
 	private boolean useGroupNameInQueueName = true;
 
 	// Error Queue Properties ---------
+	/**
+	 * Whether to automatically create a durable error queue to which messages will be republished when message processing failures are encountered.
+	 * Only applies once all internal retries have been exhausted.
+	 */
 	private boolean autoBindErrorQueue = false;
+	/**
+	 * Whether to provision durable queues for error queues when autoBindErrorQueue is true.
+	 * This should only be set to false if you have externally pre-provisioned the required queue on the message broker.
+	 */
 	private boolean provisionErrorQueue = true;
+	/**
+	 * A custom error queue name.
+	 */
 	private String errorQueueNameOverride = null;
+	/**
+	 * Whether to include the group name in the error queue name for non-anonymous consumer groups.
+	 */
 	private boolean useGroupNameInErrorQueueName = true;
+	/**
+	 * Maximum number of attempts to send a failed message to the error queue.
+	 * When all delivery attempts have been exhausted, the failed message will be requeued.
+	 */
 	private long errorQueueMaxDeliveryAttempts = 3;
-
+	/**
+	 * Access type for the error queue.
+	 */
 	private int errorQueueAccessType = EndpointProperties.ACCESSTYPE_NONEXCLUSIVE;
+	/**
+	 * Permissions for the error queue.
+	 */
 	private int errorQueuePermission = EndpointProperties.PERMISSION_CONSUME;
+	/**
+	 * If specified, whether to notify sender if a message fails to be enqueued to the error queue.
+	 */
 	private Integer errorQueueDiscardBehaviour = null;
+	/**
+	 * Sets the maximum message redelivery count on the error queue. (Zero means retry forever).
+	 */
 	private Integer errorQueueMaxMsgRedelivery = null;
+	/**
+	 * Maximum message size for the error queue.
+	 */
 	private Integer errorQueueMaxMsgSize = null;
+	/**
+	 * Message spool quota for the error queue.
+	 */
 	private Integer errorQueueQuota = null;
+	/**
+	 * Whether the error queue respects Message TTL.
+	 */
 	private Boolean errorQueueRespectsMsgTtl = null;
-
+	/**
+	 * The eligibility for republished messages to be moved to a Dead Message Queue.
+	 */
 	private Boolean errorMsgDmqEligible = null;
+	/**
+	 * The number of milliseconds before republished messages are discarded or moved to a Dead Message Queue.
+	 */
 	private Long errorMsgTtl = null;
 	// ------------------------
 
