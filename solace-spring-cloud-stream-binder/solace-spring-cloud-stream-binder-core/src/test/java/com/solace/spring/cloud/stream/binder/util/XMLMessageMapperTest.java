@@ -326,9 +326,6 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.REPLICATION_GROUP_MESSAGE_ID:
 					assertNull(xmlMessage.getReplicationGroupMessageId());
 					break;
-				case SolaceHeaders.DELIVERY_COUNT:
-					assertNull(xmlMessage.getDeliveryCount());
-					break;
 				case SolaceHeaders.DESTINATION:
 					assertNull(xmlMessage.getDestination());
 					break;
@@ -842,9 +839,6 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.CORRELATION_ID:
 					Mockito.when(xmlMessage.getCorrelationId()).thenReturn(header.getKey());
 					break;
-				case SolaceHeaders.DELIVERY_COUNT:
-					Mockito.when(xmlMessage.getDeliveryCount()).thenReturn(RandomUtils.nextInt());
-					break;
 				case SolaceHeaders.DESTINATION:
 					Mockito.when(xmlMessage.getDestination())
 							.thenReturn(JCSMPFactory.onlyInstance().createQueue(header.getKey()));
@@ -920,9 +914,6 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceHeaders.CORRELATION_ID:
 					assertEquals(xmlMessage.getCorrelationId(), actualValue);
-					break;				
-				case SolaceHeaders.DELIVERY_COUNT:
-					assertEquals(xmlMessage.getDeliveryCount(), actualValue);
 					break;
 				case SolaceHeaders.DESTINATION:
 					assertEquals(xmlMessage.getDestination(), actualValue);
