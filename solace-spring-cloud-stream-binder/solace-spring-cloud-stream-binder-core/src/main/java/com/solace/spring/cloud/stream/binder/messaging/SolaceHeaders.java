@@ -45,6 +45,14 @@ public final class SolaceHeaders {
 	public static final String CORRELATION_ID = PREFIX + "correlationId";
 
 	/**
+	 * <p><b>Acceptable Value Type:</b> {@link Integer}</p>
+	 * <p><b>Access:</b> Read</p>
+	 * <br>
+	 * <p>The number of times the message has been delivered.</p>
+	 */
+	public static final String DELIVERY_COUNT = PREFIX + "deliveryCount";
+
+	/**
 	 * <p><b>Acceptable Value Type:</b> {@link Destination}</p>
 	 * <p><b>Access:</b> Read</p>
 	 * <br>
