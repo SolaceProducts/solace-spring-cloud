@@ -63,10 +63,10 @@ public class SolaceQueueProvisioner
 			boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
 			Queue queue = provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning);
 
-			addSubscriptionToQueue(queue, topicName, properties.getExtension());
+			addSubscriptionToQueue(queue, topicName, properties.getExtension(), true);
 
 			for (String extraTopic : requiredGroupsExtraSubs.getOrDefault(groupName, new String[0])) {
-				addSubscriptionToQueue(queue, extraTopic, properties.getExtension());
+				addSubscriptionToQueue(queue, extraTopic, properties.getExtension(), false);
 			}
 		}
 
@@ -94,7 +94,6 @@ public class SolaceQueueProvisioner
 					"Provisioning will continue under the assumption that it is disabled...");
 		}
 
-		String topicName = SolaceProvisioningUtil.getTopicName(name, properties.getExtension());
 		boolean isAnonQueue = SolaceProvisioningUtil.isAnonQueue(group);
 		boolean isDurableQueue = SolaceProvisioningUtil.isDurableQueue(group);
 		SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(name, group,
@@ -123,8 +122,7 @@ public class SolaceQueueProvisioner
 				String.format("Creating %s queue %s for consumer group %s", isDurableQueue ? "durable" : "temporary", groupQueueName, group));
 		Queue queue = provisionQueue(groupQueueName, isDurableQueue, endpointProperties, doDurableQueueProvisioning);
 
-		Set<String> topicSubscriptions = new HashSet<>(Collections.singletonList(topicName));
-		topicSubscriptions.addAll(Arrays.asList(properties.getExtension().getQueueAdditionalSubscriptions()));
+		Set<String> additionalSubscriptions = new HashSet<>(Arrays.asList(properties.getExtension().getQueueAdditionalSubscriptions()));
 
 		String errorQueueName = null;
 		if (properties.getExtension().isAutoBindErrorQueue()) {
@@ -132,7 +130,7 @@ public class SolaceQueueProvisioner
 		}
 
 		return new SolaceConsumerDestination(queue.getName(), name, queueNames.getPhysicalGroupName(), !isDurableQueue,
-				errorQueueName, topicSubscriptions);
+				errorQueueName, additionalSubscriptions);
 	}
 
 	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties,
@@ -193,11 +191,24 @@ public class SolaceQueueProvisioner
 		return provisionQueue(errorQueueName, true, endpointProperties, properties.isProvisionErrorQueue(), "Error Queue");
 	}
 
-	public void addSubscriptionToQueue(Queue queue, String topicName, SolaceCommonProperties properties) {
+	public void addSubscriptionToQueue(Queue queue, String topicName, SolaceCommonProperties properties, boolean isDestinationSubscription) {
 		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topicName));
 
-		if (queue.isDurable() && !properties.isProvisionSubscriptionsToDurableQueue()) {
+		if (!isDestinationSubscription && queue.isDurable() && !properties.isProvisionSubscriptionsToDurableQueue()) {
 			logger.warn(String.format("Adding subscriptions to durable queues was disabled, queue %s will not be subscribed to topic %s",
+					queue.getName(), topicName));
+			return;
+		}
+
+		//This condition is for backward compatibility and will be removed when the deprecated property provisionSubscriptionsToDurableQueue is removed
+		if (isDestinationSubscription && queue.isDurable() && properties.isAddDestinationAsSubscriptionToQueue() && !properties.isProvisionSubscriptionsToDurableQueue()) {
+			logger.warn(String.format("Adding subscription subscription to durable was disabled, queue %s will not be subscribed to topic %s",
+					queue.getName(), topicName));
+			return;
+		}
+
+		if (isDestinationSubscription && !properties.isAddDestinationAsSubscriptionToQueue()) {
+			logger.warn(String.format("Adding destination subscription was disabled, queue %s will not be subscribed to topic %s",
 					queue.getName(), topicName));
 			return;
 		}

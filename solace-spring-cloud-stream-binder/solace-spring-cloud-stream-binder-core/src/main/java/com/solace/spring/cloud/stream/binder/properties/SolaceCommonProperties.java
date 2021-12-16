@@ -4,7 +4,12 @@ import com.solacesystems.jcsmp.EndpointProperties;
 
 public class SolaceCommonProperties {
 	private boolean provisionDurableQueue = true;
+	@Deprecated
 	private boolean provisionSubscriptionsToDurableQueue = true;
+	/**
+	 * Whether to add the Destination as a subscription to queue during provisioning.
+	 */
+	private boolean addDestinationAsSubscriptionToQueue = true;
 
 	// Queue Properties -------
 	private String queueNamePrefix = "scst";
@@ -34,6 +39,14 @@ public class SolaceCommonProperties {
 
 	public void setProvisionSubscriptionsToDurableQueue(boolean provisionSubscriptionsToDurableQueue) {
 		this.provisionSubscriptionsToDurableQueue = provisionSubscriptionsToDurableQueue;
+	}
+
+	public boolean isAddDestinationAsSubscriptionToQueue() {
+		return addDestinationAsSubscriptionToQueue;
+	}
+
+	public void setAddDestinationAsSubscriptionToQueue(boolean addDestinationAsSubscriptionToQueue) {
+		this.addDestinationAsSubscriptionToQueue = addDestinationAsSubscriptionToQueue;
 	}
 
 	public String getQueueNamePrefix() {
