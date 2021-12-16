@@ -7,7 +7,7 @@ public class SolaceCommonProperties {
 	@Deprecated
 	private boolean provisionSubscriptionsToDurableQueue = true;
 	/**
-	 * Whether to add the Destination as a subscription to queue during provisioning.
+	 * Whether to add the destination topic as a queue subscription during provisioning.
 	 */
 	private boolean addDestinationAsSubscriptionToQueue = true;
 
