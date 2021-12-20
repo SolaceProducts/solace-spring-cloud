@@ -430,9 +430,6 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.DMQ_ELIGIBLE:
 					assertTrue(xmlMessage.isDMQEligible());
 					break;
-				case SolaceHeaders.IS_REPLY:
-					assertFalse(xmlMessage.isReplyMessage());
-					break;
 				default:
 					fail(String.format("no test for header %s", header.getKey()));
 			}
