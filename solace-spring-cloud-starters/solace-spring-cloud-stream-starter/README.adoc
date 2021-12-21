@@ -480,6 +480,11 @@ This is the `JMSType` header field if publishing/consuming to/from JMS.
 | Read/Write
 | The HTTP content encoding header value from interaction with an HTTP client.
 
+| solace_isReply
+| Boolean
+| Read/Write
+| Indicates whether this message is a reply.
+
 | solace_priority
 | Integer
 | Read/Write
