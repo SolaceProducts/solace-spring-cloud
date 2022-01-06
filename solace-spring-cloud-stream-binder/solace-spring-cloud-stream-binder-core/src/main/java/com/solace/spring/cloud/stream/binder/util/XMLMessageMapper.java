@@ -209,14 +209,13 @@ public class XMLMessageMapper {
 
 		MessageBuilder<?> builder = new DefaultMessageBuilderFactory()
 				.withPayload(payload)
-				.setExpirationDate(3L)
 				.copyHeaders(map(metadata))
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgmentCallback)
 				.setHeaderIfAbsent(MessageHeaders.CONTENT_TYPE, xmlMessage.getHTTPContentType())
 				.setHeaderIfAbsent(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, new AtomicInteger(0));
 
 		if (isNullPayload) {
-			logger.info("Null payload detected, setting header " + SolaceBinderHeaders.NULL_PAYLOAD);
+			logger.info("Null payload detected, setting Spring header " + SolaceBinderHeaders.NULL_PAYLOAD);
 			builder.setHeader(SolaceBinderHeaders.NULL_PAYLOAD, isNullPayload);
 		}
 
