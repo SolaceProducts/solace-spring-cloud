@@ -320,7 +320,7 @@ public class XMLMessageMapperTest {
 		assertNotEquals("Test header set was empty", 0, nonWriteableHeaders.size());
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : nonWriteableHeaders) {
-			// Doesn't matter what we said the values to
+			// Doesn't matter what we set the values to
 			messageBuilder.setHeader(header.getKey(), new Object());
 		}
 
@@ -363,6 +363,8 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.CONFIRM_CORRELATION:
 					assertNull(xmlMessage.getProperties().get(header.getKey()));
 					break;
+				case SolaceBinderHeaders.NULL_PAYLOAD:
+					break; //Nothing to check as this property is not set on the xmLMessage
 				default:
 					fail(String.format("no test for header %s", header.getKey()));
 			}
@@ -981,6 +983,9 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.MESSAGE_VERSION:
 					assertEquals(xmlMessage.getProperties().get(header.getKey()), actualValue);
 					break;
+				case SolaceBinderHeaders.NULL_PAYLOAD:
+					assertNull(actualValue);
+					break;
 				default:
 					fail(String.format("no test for header %s", header.getKey()));
 			}
@@ -1071,7 +1076,14 @@ public class XMLMessageMapperTest {
 		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : readableLocalHeaders) {
-			fail(String.format("no test for header %s", header.getKey()));
+			Object actualValue = springMessage.getHeaders().get(header.getKey());
+			switch (header.getKey()) {
+				case SolaceBinderHeaders.NULL_PAYLOAD:
+					assertNull(actualValue);
+					break;
+				default:
+					fail(String.format("no test for header %s", header.getKey()));
+			}
 		}
 
 		SDTMap filteredMetadata = JCSMPFactory.onlyInstance().createMap();
@@ -1106,11 +1118,12 @@ public class XMLMessageMapperTest {
 		validateSpringMessage(springMessage, xmlMessage);
 	}
 
-	@Test(expected = SolaceMessageConversionException.class)
-	public void testFailMapXMLMessageToSpringMessage_WithNullPayload() {
+	@Test
+	public void testMapXMLMessageToSpringMessage_WithNullPayload() {
 		BytesMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		assertTrue((boolean) springMessage.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD));
 	}
 
 	@Test
