@@ -7,7 +7,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-@ConfigurationProperties("spring.cloud.stream.solace.default.producer")
+import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties.DEFAULTS_PREFIX;
+
+@SuppressWarnings("ConfigurationProperties")
+@ConfigurationProperties(DEFAULTS_PREFIX + ".producer")
 public class SolaceProducerProperties extends SolaceCommonProperties {
 	/**
 	 * A mapping of required consumer groups to arrays of additional topic subscriptions to be applied on each consumer group’s queue.

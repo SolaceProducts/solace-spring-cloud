@@ -10,7 +10,7 @@ import java.util.Map;
 public class SolaceExtendedBindingProperties
 		extends AbstractExtendedBindingProperties<SolaceConsumerProperties,SolaceProducerProperties,SolaceBindingProperties> {
 
-	private static final String DEFAULTS_PREFIX = "spring.cloud.stream.solace.default";
+	protected static final String DEFAULTS_PREFIX = "spring.cloud.stream.solace.default";
 
 	@Override
 	public String getDefaultsPrefix() {

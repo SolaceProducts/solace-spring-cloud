@@ -5,7 +5,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.concurrent.TimeUnit;
 
-@ConfigurationProperties("spring.cloud.stream.solace.default.consumer")
+import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties.DEFAULTS_PREFIX;
+
+@SuppressWarnings("ConfigurationProperties")
+@ConfigurationProperties(DEFAULTS_PREFIX + ".consumer")
 public class SolaceConsumerProperties extends SolaceCommonProperties {
 	/**
 	 * Maximum wait time for polled consumers to receive a message from their consumer group queue.
