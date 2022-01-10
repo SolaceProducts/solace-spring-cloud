@@ -195,20 +195,20 @@ public class SolaceQueueProvisioner
 		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topicName));
 
 		if (!isDestinationSubscription && queue.isDurable() && !properties.isProvisionSubscriptionsToDurableQueue()) {
-			logger.warn(String.format("Adding subscriptions to durable queues was disabled, queue %s will not be subscribed to topic %s",
+			logger.warn(String.format("Provision subscriptions to durable queues was disabled, queue %s will not be subscribed to topic %s",
 					queue.getName(), topicName));
 			return;
 		}
 
 		//This condition is for backward compatibility and will be removed when the deprecated property provisionSubscriptionsToDurableQueue is removed
 		if (isDestinationSubscription && queue.isDurable() && properties.isAddDestinationAsSubscriptionToQueue() && !properties.isProvisionSubscriptionsToDurableQueue()) {
-			logger.warn(String.format("Adding subscription subscription to durable was disabled, queue %s will not be subscribed to topic %s",
+			logger.warn(String.format("Provision subscriptions to durable queue was disabled, queue %s will not be subscribed to topic %s",
 					queue.getName(), topicName));
 			return;
 		}
 
 		if (isDestinationSubscription && !properties.isAddDestinationAsSubscriptionToQueue()) {
-			logger.warn(String.format("Adding destination subscription was disabled, queue %s will not be subscribed to topic %s",
+			logger.warn(String.format("Adding destination as subscription was disabled, queue %s will not be subscribed to topic %s",
 					queue.getName(), topicName));
 			return;
 		}
