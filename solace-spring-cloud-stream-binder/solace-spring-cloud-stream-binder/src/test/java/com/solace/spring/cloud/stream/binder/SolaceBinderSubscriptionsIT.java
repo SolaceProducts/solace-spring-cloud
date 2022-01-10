@@ -7,9 +7,9 @@ import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil
 import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
 import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
-import com.solace.test.integration.semp.v2.config.ApiException;
-import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueueResponse;
-import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueueSubscription;
+import com.solace.test.integration.semp.v2.SempV2Api;
+import com.solace.test.integration.semp.v2.monitor.ApiException;
+import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueSubscription;
 import org.apache.commons.lang.RandomStringUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -89,7 +89,7 @@ public class SolaceBinderSubscriptionsIT extends SolaceBinderITBase {
 
         String queueName = binder.getConsumerQueueName(consumerBinding);
         //Retrieve subscriptions from broker and validate they are correct
-        assertActualSubscriptionsAreCorrect(queueName, expectedQueueSubscriptions);
+        SubscriptionChecker.assertActualSubscriptionsAreCorrect(sempV2Api, msgVpnName, queueName, expectedQueueSubscriptions);
 
         consumerBinding.unbind();
     }
@@ -116,7 +116,7 @@ public class SolaceBinderSubscriptionsIT extends SolaceBinderITBase {
         Binding<MessageChannel> producerBinding = binder.bindProducer(destination, moduleOutputChannel, producerProperties);
 
         String queueName = SolaceProvisioningUtil.getQueueName(destination, group0, producerProperties.getExtension());
-        assertActualSubscriptionsAreCorrect(queueName, expectedQueueSubscriptions);
+        SubscriptionChecker.assertActualSubscriptionsAreCorrect(sempV2Api, msgVpnName, queueName, expectedQueueSubscriptions);
 
         producerBinding.unbind();
     }
@@ -141,20 +141,23 @@ public class SolaceBinderSubscriptionsIT extends SolaceBinderITBase {
 
         //Retrieve subscriptions from broker and validate they are correct
         String queueName = binder.getConsumerQueueName(consumerBinding);
-        assertActualSubscriptionsAreCorrect(queueName, expectedQueueSubscriptions);
+        SubscriptionChecker.assertActualSubscriptionsAreCorrect(sempV2Api, msgVpnName, queueName, expectedQueueSubscriptions);
 
         consumerBinding.unbind();
     }
 
-    private void assertActualSubscriptionsAreCorrect(String queueName, String[] expectedQueueSubscriptions) throws ApiException {
-        List<ConfigMsgVpnQueueSubscription> actualSubscriptions =
-                sempV2Api.config().getMsgVpnQueueSubscriptions(msgVpnName, queueName, null, null, null, null).getData();
-        List<String> expectedSubscriptions = Arrays.asList(expectedQueueSubscriptions);
+    static class SubscriptionChecker {
 
-        for (ConfigMsgVpnQueueSubscription actualSubscription : actualSubscriptions) {
-            assertTrue("Unexpected subscription: " + actualSubscription, expectedSubscriptions.contains(actualSubscription.getSubscriptionTopic()));
+        public static void assertActualSubscriptionsAreCorrect(SempV2Api sempV2Api, String msgVpnName, String queueName, String[] expectedQueueSubscriptions) throws ApiException {
+            List<MonitorMsgVpnQueueSubscription> actualSubscriptions =
+                    sempV2Api.monitor().getMsgVpnQueueSubscriptions(msgVpnName, queueName, null, null, null, null).getData();
+            List<String> expectedSubscriptions = Arrays.asList(expectedQueueSubscriptions);
+
+            for (MonitorMsgVpnQueueSubscription actualSubscription : actualSubscriptions) {
+                assertTrue("Unexpected subscription: " + actualSubscription, expectedSubscriptions.contains(actualSubscription.getSubscriptionTopic()));
+            }
+            //Make sure no subscriptions are missing
+            assertEquals("Some subscriptions are missing", expectedSubscriptions.size(), actualSubscriptions.size());
         }
-        //Make sure no subscriptions are missing
-        assertEquals("Some subscriptions are missing", expectedSubscriptions.size(), actualSubscriptions.size());
     }
 }
