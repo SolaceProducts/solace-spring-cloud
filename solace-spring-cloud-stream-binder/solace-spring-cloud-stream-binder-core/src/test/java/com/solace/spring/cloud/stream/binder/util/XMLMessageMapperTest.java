@@ -358,13 +358,10 @@ public class XMLMessageMapperTest {
 					assertEquals("base64", xmlMessage.getProperties().getString(header.getKey()));
 					break;
 				case SolaceBinderHeaders.SERIALIZED_PAYLOAD:
-					assertNull(xmlMessage.getProperties().get(header.getKey()));
-					break;
 				case SolaceBinderHeaders.CONFIRM_CORRELATION:
+				case SolaceBinderHeaders.NULL_PAYLOAD:
 					assertNull(xmlMessage.getProperties().get(header.getKey()));
 					break;
-				case SolaceBinderHeaders.NULL_PAYLOAD:
-					break; //Nothing to check as this property is not set on the xmLMessage
 				default:
 					fail(String.format("no test for header %s", header.getKey()));
 			}
@@ -1057,7 +1054,7 @@ public class XMLMessageMapperTest {
 				.filter(h -> h.getValue().isReadable())
 				.filter(h -> HeaderMeta.Scope.LOCAL.equals(h.getValue().getScope()))
 				.collect(Collectors.toSet());
-//		assertNotEquals("Test header set was empty", 0, readableLocalHeaders.size());
+		assertNotEquals("Test header set was empty", 0, readableLocalHeaders.size());
 
 		TextMessage xmlMessage = Mockito.mock(TextMessage.class);
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();

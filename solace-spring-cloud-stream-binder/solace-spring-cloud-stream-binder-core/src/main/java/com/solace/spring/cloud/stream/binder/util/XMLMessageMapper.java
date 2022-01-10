@@ -215,7 +215,9 @@ public class XMLMessageMapper {
 				.setHeaderIfAbsent(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, new AtomicInteger(0));
 
 		if (isNullPayload) {
-			logger.info("Null payload detected, setting Spring header " + SolaceBinderHeaders.NULL_PAYLOAD);
+			if (logger.isDebugEnabled()) {
+				logger.debug("Null payload detected, setting Spring header " + SolaceBinderHeaders.NULL_PAYLOAD);
+			}
 			builder.setHeader(SolaceBinderHeaders.NULL_PAYLOAD, isNullPayload);
 		}
 
