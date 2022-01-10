@@ -157,15 +157,16 @@ Default: `true` +
 See: <<Generated Queue Name Syntax>>
 
 addDestinationAsSubscriptionToQueue::
-Whether to add the destination topic as a queue subscription during provisioning.
+Whether to add the Destination as a subscription to queue during provisioning.
 +
 Default: `true`
 
 provisionSubscriptionsToDurableQueue::
 Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum) on the consumer group's queue on the message broker. This property also applies to topics added by the `queueAdditionalSubscriptions` property.
-Since version 2.3.0, this property is deprecated in favor of addDestinationAsSubscriptionToQueue.
 +
 Default: `true`
++
+WARNING: **Deprecated:** Since version 2.3.0, this property is deprecated in favor of `addDestinationAsSubscriptionToQueue`.
 
 queueNamePrefix::
 Naming prefix for all queues.
@@ -347,15 +348,16 @@ Default: `true` +
 See: <<Generated Queue Name Syntax>>
 
 addDestinationAsSubscriptionToQueue::
-Whether to add the destination topic as a queue subscription during provisioning.
+Whether to add the Destination as a subscription to queue during provisioning.
 +
 Default: `true`
 
 provisionSubscriptionsToDurableQueue::
 Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum) on the consumer group's queue on the message broker. This property also applies to topics added by the `queueAdditionalSubscriptions` property.
-Since version 2.3.0, this property is deprecated in favor of addDestinationAsSubscriptionToQueue.
 +
 Default: `true`
++
+WARNING: **Deprecated:** Since version 2.3.0, this property is deprecated in favor of `addDestinationAsSubscriptionToQueue`.
 
 queueNamePrefix::
 Naming prefix for all queues.

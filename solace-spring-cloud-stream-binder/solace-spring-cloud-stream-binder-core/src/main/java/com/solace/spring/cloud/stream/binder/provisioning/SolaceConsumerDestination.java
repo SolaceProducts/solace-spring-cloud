@@ -11,16 +11,16 @@ public class SolaceConsumerDestination implements ConsumerDestination {
 	private final String queueName;
 	private final boolean isTemporary;
 	private final String errorQueueName;
-	private final Set<String> subscriptions;
+	private final Set<String> additionalSubscriptions;
 
 	SolaceConsumerDestination(String queueName, String bindingDestinationName, String physicalGroupName,
-							  boolean isTemporary, String errorQueueName, Set<String> subscriptions) {
+							  boolean isTemporary, String errorQueueName, Set<String> additionalSubscriptions) {
 		this.bindingDestinationName = bindingDestinationName;
 		this.physicalGroupName = physicalGroupName;
 		this.queueName = queueName;
 		this.isTemporary = isTemporary;
 		this.errorQueueName = errorQueueName;
-		this.subscriptions = subscriptions;
+		this.additionalSubscriptions = additionalSubscriptions;
 	}
 
 	@Override
@@ -44,8 +44,8 @@ public class SolaceConsumerDestination implements ConsumerDestination {
 		return errorQueueName;
 	}
 
-	public Set<String> getSubscriptions() {
-		return subscriptions;
+	public Set<String> getAdditionalSubscriptions() {
+		return additionalSubscriptions;
 	}
 
 	@Override

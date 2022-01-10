@@ -233,7 +233,7 @@ public class SolaceMessageChannelBinder
 			provisioningProvider.addSubscriptionToQueue(queue, destination.getBindingDestinationName(), properties.getExtension(), true);
 
 			//Process additional subscriptions
-			for (String subscription : destination.getSubscriptions()) {
+			for (String subscription : destination.getAdditionalSubscriptions()) {
 				provisioningProvider.addSubscriptionToQueue(queue, subscription, properties.getExtension(), false);
 			}
 		};
