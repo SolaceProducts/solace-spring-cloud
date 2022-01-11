@@ -193,11 +193,18 @@ public class XMLMessageMapper {
 			throw exception;
 		}
 
-		if (payload == null) {
-			String msg = String.format("XMLMessage %s has no payload", xmlMessage.getMessageId());
-			SolaceMessageConversionException exception = new SolaceMessageConversionException(msg);
-			logger.warn(msg, exception);
-			throw exception;
+		boolean isNullPayload = payload == null;
+		if (isNullPayload) {
+			//Set empty payload equivalent to null
+			if (xmlMessage instanceof BytesMessage) {
+				payload = new byte[0];
+			} else if (xmlMessage instanceof TextMessage || xmlMessage instanceof XMLContentMessage) {
+				payload = "";
+			} else if (xmlMessage instanceof MapMessage) {
+				payload = JCSMPFactory.onlyInstance().createMap();
+			} else if (xmlMessage instanceof StreamMessage) {
+				payload = JCSMPFactory.onlyInstance().createStream();
+			}
 		}
 
 		MessageBuilder<?> builder = new DefaultMessageBuilderFactory()
@@ -206,6 +213,13 @@ public class XMLMessageMapper {
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgmentCallback)
 				.setHeaderIfAbsent(MessageHeaders.CONTENT_TYPE, xmlMessage.getHTTPContentType())
 				.setHeaderIfAbsent(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, new AtomicInteger(0));
+
+		if (isNullPayload) {
+			if (logger.isDebugEnabled()) {
+				logger.debug("Null payload detected, setting Spring header " + SolaceBinderHeaders.NULL_PAYLOAD);
+			}
+			builder.setHeader(SolaceBinderHeaders.NULL_PAYLOAD, isNullPayload);
+		}
 
 		for (Map.Entry<String, SolaceHeaderMeta<?>> header : SolaceHeaderMeta.META.entrySet()) {
 			if (!header.getValue().isReadable()) {

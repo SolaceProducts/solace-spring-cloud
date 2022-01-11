@@ -67,4 +67,12 @@ public final class SolaceBinderHeaders {
 	 * <p>A CorrelationData instance for messaging confirmations.</p>
 	 */
 	public static final String CONFIRM_CORRELATION = PREFIX + "confirmCorrelation";
+
+	/**
+	 * <p><b>Acceptable Value Type:</b> {@link Boolean}</p>
+	 * <p><b>Access:</b> Read</p>
+	 * <br>
+	 * <p>Present and true to indicate when the PubSub+ message payload was null.</p>
+	 */
+	public static final String NULL_PAYLOAD = PREFIX + "nullPayload";
 }

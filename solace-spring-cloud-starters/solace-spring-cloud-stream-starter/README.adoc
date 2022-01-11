@@ -567,6 +567,12 @@ TIP: Use link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream
 | 1
 | A static number set by the publisher to indicate the Spring Cloud Stream Solace message version.
 
+| solace_scst_nullPayload
+| Boolean
+| Read
+|
+| Present and true to indicate when the PubSub+ message payload was null.
+
 | solace_scst_serializedPayload
 | Boolean
 | Internal Binder Use Only
@@ -723,6 +729,12 @@ public class MyMessageBuilder {
 <2> Apply the prefix to the target destination header.
 
 Also, this header is cleared by the message's producer before it is sent off to the message broker. So you should attach the target destination to your message payload if you want to get that information on the consumer-side.
+
+== Empty Payload VS Null Payload
+
+Spring messages can't contain null payloads, however, message handlers can differentiate between null payloads and empty payloads by looking at the `solace_scst_nullPayload` header. The binder adds the `solace_scst_nullPayload` header when a Solace message with null payload is consumed from the wire. When that is the case, the binder sets the Spring message's payload to a null equivalent payload. Null equivalent payloads are one of the following: empty byte[], empty String, empty SDTMap, or empty SDTStream.
+
+NOTE: Applications can't differentiate between null payloads and empty payloads when consuming bytes messages or XML-content messages from the wire. This is because Solace always converts empty payloads to null payloads when those message types are published.
 
 == Failed Consumer Message Error Handling
 
