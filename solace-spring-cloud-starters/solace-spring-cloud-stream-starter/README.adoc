@@ -166,7 +166,7 @@ Whether to add topic subscriptions to durable queues for non-anonymous consumer 
 +
 Default: `true`
 +
-WARNING: **Deprecated:** Since version 2.3.0, this property is deprecated in favor of `addDestinationAsSubscriptionToQueue`.
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `addDestinationAsSubscriptionToQueue`.
 
 queueNamePrefix::
 Naming prefix for all queues.
@@ -357,7 +357,7 @@ Whether to add topic subscriptions to durable queues for non-anonymous consumer 
 +
 Default: `true`
 +
-WARNING: **Deprecated:** Since version 2.3.0, this property is deprecated in favor of `addDestinationAsSubscriptionToQueue`.
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `addDestinationAsSubscriptionToQueue`.
 
 queueNamePrefix::
 Naming prefix for all queues.

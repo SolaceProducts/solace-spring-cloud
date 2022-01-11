@@ -74,7 +74,7 @@ public class SolaceCommonProperties {
 		this.provisionDurableQueue = provisionDurableQueue;
 	}
 
-	@DeprecatedConfigurationProperty(reason = "Since version 2.3.0, this property is deprecated in favor of addDestinationAsSubscriptionToQueue.")
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of addDestinationAsSubscriptionToQueue.")
 	public boolean isProvisionSubscriptionsToDurableQueue() {
 		return provisionSubscriptionsToDurableQueue;
 	}
