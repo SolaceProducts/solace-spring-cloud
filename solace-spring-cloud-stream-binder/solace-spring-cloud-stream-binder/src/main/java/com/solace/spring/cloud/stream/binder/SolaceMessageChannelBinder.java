@@ -230,8 +230,11 @@ public class SolaceMessageChannelBinder
 	private Consumer<Queue> getConsumerPostStart(SolaceConsumerDestination destination,
 												 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		return (queue) -> {
-			for (String topic : destination.getSubscriptions()) {
-				provisioningProvider.addSubscriptionToQueue(queue, topic, properties.getExtension());
+			provisioningProvider.addSubscriptionToQueue(queue, destination.getBindingDestinationName(), properties.getExtension(), true);
+
+			//Process additional subscriptions
+			for (String subscription : destination.getAdditionalSubscriptions()) {
+				provisioningProvider.addSubscriptionToQueue(queue, subscription, properties.getExtension(), false);
 			}
 		};
 	}

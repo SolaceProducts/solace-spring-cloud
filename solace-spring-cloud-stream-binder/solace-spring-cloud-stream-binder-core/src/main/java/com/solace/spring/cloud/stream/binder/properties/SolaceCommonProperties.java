@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solacesystems.jcsmp.EndpointProperties;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
 public class SolaceCommonProperties {
 	/**
@@ -8,12 +9,18 @@ public class SolaceCommonProperties {
 	 * This should only be set to false if you have externally pre-provisioned the required queue on the message broker.
 	 */
 	private boolean provisionDurableQueue = true;
+
 	/**
 	 * Whether to add topic subscriptions to durable queues for non-anonymous consumer groups.
 	 * This should only be set to false if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum)
 	 * on the consumer group’s queue on the message broker. This property also applies to topics added by the queueAdditionalSubscriptions property.
 	 */
+  @Deprecated
 	private boolean provisionSubscriptionsToDurableQueue = true;
+	/**
+	 * Whether to add the Destination as a subscription to queue during provisioning.
+	 */
+	private boolean addDestinationAsSubscriptionToQueue = true;
 
 	// Queue Properties -------
 	/**
@@ -67,12 +74,21 @@ public class SolaceCommonProperties {
 		this.provisionDurableQueue = provisionDurableQueue;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of addDestinationAsSubscriptionToQueue.")
 	public boolean isProvisionSubscriptionsToDurableQueue() {
 		return provisionSubscriptionsToDurableQueue;
 	}
 
 	public void setProvisionSubscriptionsToDurableQueue(boolean provisionSubscriptionsToDurableQueue) {
 		this.provisionSubscriptionsToDurableQueue = provisionSubscriptionsToDurableQueue;
+	}
+
+	public boolean isAddDestinationAsSubscriptionToQueue() {
+		return addDestinationAsSubscriptionToQueue;
+	}
+
+	public void setAddDestinationAsSubscriptionToQueue(boolean addDestinationAsSubscriptionToQueue) {
+		this.addDestinationAsSubscriptionToQueue = addDestinationAsSubscriptionToQueue;
 	}
 
 	public String getQueueNamePrefix() {
