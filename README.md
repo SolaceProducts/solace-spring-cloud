@@ -108,7 +108,7 @@ For more information about Spring Boot Auto-Configuration and Starters try these
 - [GitHub Tutorial - Master Spring Boot Auto-Configuration](//github.com/snicoll-demos/spring-boot-master-auto-configuration)
 
 For more information about Cloud Foundry and the Solace PubSub+ service these resources:
-- [Solace PubSub+ for Pivotal Cloud Foundry](http://docs.pivotal.io/solace-messaging/)
+- [Solace PubSub+ for VMware Tanzu](http://docs.pivotal.io/solace-messaging/)
 - [Cloud Foundry Documentation](http://docs.cloudfoundry.org/)
 - For an introduction to Cloud Foundry: https://www.cloudfoundry.org/
 

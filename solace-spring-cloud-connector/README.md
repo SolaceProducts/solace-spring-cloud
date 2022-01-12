@@ -52,9 +52,9 @@ session.connect();
 
 ## Spring Applications
 
-The Spring Cloud Auto-Configure Java, JMS and JNDI tutorials in the [Solace PubSub+ with Pivotal Cloud Foundry Getting Started Samples](https://dev.solace.com/samples/solace-samples-cloudfoundry-java/) provide easy integration into Spring applications.
+The Spring Cloud Auto-Configure Java, JMS and JNDI tutorials in the [Solace PubSub+ with VMware Tanzu Getting Started Samples](https://tutorials.solace.dev/tanzu) provide easy integration into Spring applications.
 
-Above example for the Solace PubSub+ API for Java (JCSMP) would be further simplified as follows: here Spring creates a SpringJCSMPFactory with all the properties set and all that is required is to autowire this into your application. Check out the [tutorial](https://dev.solace.com/samples/solace-samples-cloudfoundry-java/spring-cloud-autoconf-java/) for further details.
+Above example for the Solace PubSub+ API for Java (JCSMP) would be further simplified as follows: here Spring creates a SpringJCSMPFactory with all the properties set and all that is required is to autowire this into your application. Check out the [tutorial](https://tutorials.solace.dev/tanzu/spring-cloud-autoconf-java/) for further details.
 
 ```java
 @Autowired
@@ -93,7 +93,7 @@ compile("com.solace.cloud.cloudfoundry:solace-spring-cloud-connector:4.3.5")
 ## Resources
 
 For more information about Cloud Foundry and the Solace PubSub+ service these resources:
-- [Solace PubSub+ for Pivotal Cloud Foundry](http://docs.pivotal.io/solace-messaging/)
+- [Solace PubSub+ for VMware Tanzu](http://docs.pivotal.io/solace-messaging/)
 - [Cloud Foundry Documentation](http://docs.cloudfoundry.org/)
 - For an introduction to Cloud Foundry: https://www.cloudfoundry.org/
 
