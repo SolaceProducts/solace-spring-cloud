@@ -130,7 +130,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 				swallowStaleException(e1, bytesXMLMessage);
 			}
 		} finally {
-			if (needHolder) {
+			if (needHolder || needAttributes) {
 				attributesHolder.remove();
 			}
 		}
