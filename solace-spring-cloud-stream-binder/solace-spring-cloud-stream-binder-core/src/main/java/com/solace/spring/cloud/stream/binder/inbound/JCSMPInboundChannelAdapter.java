@@ -236,11 +236,11 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		return listener;
 	}
 
-	private class SolaceRetryListener implements RetryListener {
+	private final class SolaceRetryListener implements RetryListener {
 
-		private String queueName;
+		private final String queueName;
 
-		public SolaceRetryListener(String queueName) {
+		private SolaceRetryListener(String queueName) {
 			this.queueName = queueName;
 		}
 
