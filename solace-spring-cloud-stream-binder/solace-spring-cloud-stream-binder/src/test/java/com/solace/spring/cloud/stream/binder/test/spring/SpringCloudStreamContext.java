@@ -1,24 +1,16 @@
-package com.solace.spring.cloud.stream.binder;
+package com.solace.spring.cloud.stream.binder.test.spring;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
-import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
-import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
-import com.solace.spring.cloud.stream.binder.test.util.SolaceExternalResourceHandler;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
-import com.solace.test.integration.semp.v2.SempV2Api;
-import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPTransportException;
-import com.solacesystems.jcsmp.SpringJCSMPFactory;
-import org.assertj.core.api.SoftAssertions;
-import org.assertj.core.api.SoftAssertionsProvider;
-import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Rule;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.Binding;
+import org.springframework.cloud.stream.binder.DefaultPollableMessageSource;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.binder.PartitionCapableBinderTests;
@@ -30,9 +22,8 @@ import org.springframework.integration.channel.DirectChannel;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
-import org.springframework.test.context.junit4.rules.SpringClassRule;
-import org.springframework.test.context.junit4.rules.SpringMethodRule;
 
+import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
@@ -40,50 +31,22 @@ import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * <p>Base class for all Solace Spring Cloud Stream Binder test classes.
- *
- * <p>Typically, you'll want to filter out all inherited test cases from
- * the parent class {@link PartitionCapableBinderTests PartitionCapableBinderTests}.
- * To do this, run your test class with the
- * {@link InheritedTestsFilteredRunner InheritedTestsFilteredSpringRunner} runner
- * along with the {@link IgnoreInheritedTests @IgnoreInheritedTests} annotation.
- */
-public abstract class SolaceBinderITBase
-		extends PartitionCapableBinderTests<SolaceTestBinder, ExtendedConsumerProperties<SolaceConsumerProperties>,
-		ExtendedProducerProperties<SolaceProducerProperties>> {
-	@ClassRule
-	public static final SpringClassRule springClassRule = new SpringClassRule();
+public class SpringCloudStreamContext extends PartitionCapableBinderTests<SolaceTestBinder,
+		ExtendedConsumerProperties<SolaceConsumerProperties>, ExtendedProducerProperties<SolaceProducerProperties>>
+		implements ExtensionContext.Store.CloseableResource {
+	private static final Logger LOGGER = LoggerFactory.getLogger(SpringCloudStreamContext.class);
+	private JCSMPSession jcsmpSession;
 
-	@Rule
-	public final SpringMethodRule springMethodRule = new SpringMethodRule();
-
-	@Autowired
-	private SpringJCSMPFactory springJCSMPFactory;
-
-	@Value("${test.solace.mgmt.host:#{null}}")
-	private String solaceMgmtHost;
-
-	@Value("${test.solace.mgmt.username:#{null}}")
-	private String solaceMgmtUsername;
-
-	@Value("${test.solace.mgmt.password:#{null}}")
-	private String solaceMgmtPassword;
-
-	JCSMPSession jcsmpSession;
-	SempV2Api sempV2Api;
-	String msgVpnName;
-
-	static SolaceExternalResourceHandler externalResource = new SolaceExternalResourceHandler();
-
-	@Before
-	public void setupSempV2Api() {
-		assertThat(solaceMgmtHost).as("test.solace.mgmt.host cannot be blank").isNotBlank();
-		assertThat(solaceMgmtUsername).as("test.solace.mgmt.username cannot be blank").isNotBlank();
-		assertThat(solaceMgmtPassword).as("test.solace.mgmt.password cannot be blank").isNotBlank();
-		sempV2Api = new SempV2Api(solaceMgmtHost, solaceMgmtUsername, solaceMgmtPassword);
+	public SpringCloudStreamContext(JCSMPSession jcsmpSession) {
+		this.jcsmpSession = Objects.requireNonNull(jcsmpSession);
 	}
 
+	/**
+	 * Should only be used by subclasses.
+	 */
+	protected SpringCloudStreamContext() {
+		this.jcsmpSession = null;
+	}
 
 	@Override
 	protected boolean usesExplicitRouting() {
@@ -96,30 +59,23 @@ public abstract class SolaceBinderITBase
 	}
 
 	@Override
-	protected SolaceTestBinder getBinder() throws Exception {
-		if (testBinder == null || jcsmpSession.isClosed()) {
-			if (testBinder != null) {
-				logger.info(String.format("Will recreate %s since %s is closed",
-						testBinder.getClass().getSimpleName(), jcsmpSession.getClass().getSimpleName()));
-				testBinder.getBinder().destroy();
-				testBinder = null;
+	public SolaceTestBinder getBinder() {
+		if (testBinder == null) {
+			if (jcsmpSession == null || jcsmpSession.isClosed()) {
+				throw new IllegalStateException("JCSMPSession cannot be null or closed");
 			}
-
-			logger.info(String.format("Getting new %s instance", SolaceTestBinder.class.getSimpleName()));
-			jcsmpSession = externalResource.getActiveSession(springJCSMPFactory);
-			msgVpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 			testBinder = new SolaceTestBinder(jcsmpSession);
 		}
 		return testBinder;
 	}
 
 	@Override
-	protected ExtendedConsumerProperties<SolaceConsumerProperties> createConsumerProperties() {
+	public ExtendedConsumerProperties<SolaceConsumerProperties> createConsumerProperties() {
 		return new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
 	}
 
 	@Override
-	protected ExtendedProducerProperties<SolaceProducerProperties> createProducerProperties() {
+	public ExtendedProducerProperties<SolaceProducerProperties> createProducerProperties(TestInfo testInfo) {
 		return new ExtendedProducerProperties<>(new SolaceProducerProperties());
 	}
 
@@ -128,26 +84,41 @@ public abstract class SolaceBinderITBase
 		return null;
 	}
 
-	public void retryAssert(SoftAssertionsProvider.ThrowingRunnable assertRun) throws InterruptedException {
-		retryAssert(assertRun, 10, TimeUnit.SECONDS);
+	@Override
+	public void binderBindUnbindLatency() throws InterruptedException {
+		super.binderBindUnbindLatency();
 	}
 
-	@SuppressWarnings("BusyWait")
-	public void retryAssert(SoftAssertionsProvider.ThrowingRunnable assertRun, long timeout, TimeUnit unit)
-			throws InterruptedException {
-		final long expiry = System.currentTimeMillis() + unit.toMillis(timeout);
-		SoftAssertions softAssertions;
-		do {
-			softAssertions = new SoftAssertions();
-			softAssertions.check(assertRun);
-			if (!softAssertions.wasSuccess()) {
-				Thread.sleep(500);
-			}
-		} while (!softAssertions.wasSuccess() && System.currentTimeMillis() < expiry);
-		softAssertions.assertAll();
+	@Override
+	public DirectChannel createBindableChannel(String channelName, BindingProperties bindingProperties) throws Exception {
+		return super.createBindableChannel(channelName, bindingProperties);
 	}
 
-	<T extends AbstractSubscribableChannel> T createChannel(String channelName, Class<T> type,
+	@Override
+	public DirectChannel createBindableChannel(String channelName, BindingProperties bindingProperties, boolean inputChannel) throws Exception {
+		return super.createBindableChannel(channelName, bindingProperties, inputChannel);
+	}
+
+	@Override
+	public DefaultPollableMessageSource createBindableMessageSource(String bindingName, BindingProperties bindingProperties) throws Exception {
+		return super.createBindableMessageSource(bindingName, bindingProperties);
+	}
+
+	@Override
+	public String getDestinationNameDelimiter() {
+		return super.getDestinationNameDelimiter();
+	}
+
+	@Override
+	public void close() {
+		if (testBinder != null) {
+			LOGGER.info("Destroying binder");
+			testBinder.getBinder().destroy();
+			testBinder = null;
+		}
+	}
+
+	public <T extends AbstractSubscribableChannel> T createChannel(String channelName, Class<T> type,
 															MessageHandler messageHandler)
 			throws IllegalAccessException, InstantiationException {
 		T channel;
@@ -162,14 +133,30 @@ public abstract class SolaceBinderITBase
 		return channel;
 	}
 
+	public JCSMPSession getJcsmpSession() {
+		return jcsmpSession;
+	}
+
+	/**
+	 * Should only be used by subclasses.
+	 */
+	protected void setJcsmpSession(JCSMPSession jcsmpSession) {
+		this.jcsmpSession = jcsmpSession;
+	}
+
+
+	public <T> ConsumerInfrastructureUtil<T> createConsumerInfrastructureUtil(Class<T> type) {
+		return new ConsumerInfrastructureUtil<>(type);
+	}
+
 	/**
 	 * Utility class that abstracts away the differences between asynchronous and polled consumer-related operations.
 	 * @param <T> The channel type
 	 */
-	class ConsumerInfrastructureUtil<T> {
+	public class ConsumerInfrastructureUtil<T> {
 		private final Class<T> type;
 
-		public ConsumerInfrastructureUtil(Class<T> type) {
+		private ConsumerInfrastructureUtil(Class<T> type) {
 			this.type = type;
 		}
 
@@ -212,9 +199,9 @@ public abstract class SolaceBinderITBase
 		public void sendAndSubscribe(T inputChannel, DirectChannel outputChannel, Message<?> message,
 									 Consumer<Message<?>> fnc, int numMessagesToReceive) throws InterruptedException {
 			sendAndSubscribe(inputChannel, outputChannel, message, (msg, callback) -> {
-					fnc.accept(msg);
-					callback.run();
-				}, numMessagesToReceive);
+				fnc.accept(msg);
+				callback.run();
+			}, numMessagesToReceive);
 		}
 
 		public void sendAndSubscribe(T inputChannel, DirectChannel outputChannel, Message<?> message,
@@ -240,13 +227,13 @@ public abstract class SolaceBinderITBase
 				for (int i = 0; latch.getCount() > 0 && i < 100; i ++) {
 					boolean gotMessage = false;
 					for (int j = 0; latch.getCount() > 0 && !gotMessage && j < 100; j++) {
-						logger.info(String.format("Poll: %s, latch count: %s", (i * 100) + j, latch.getCount()));
+						LOGGER.info(String.format("Poll: %s, latch count: %s", (i * 100) + j, latch.getCount()));
 						try {
 							gotMessage = pollableSource.poll(msg -> fnc.accept(msg, latch::countDown));
 						} catch (MessagingException e) {
 							if (e.getCause() instanceof JCSMPTransportException &&
 									e.getCause().getMessage().contains("was closed while in receive")) {
-								logger.info(String.format("Absorbing %s", JCSMPTransportException.class));
+								LOGGER.info(String.format("Absorbing %s", JCSMPTransportException.class));
 							} else {
 								throw e;
 							}

@@ -9,7 +9,6 @@ import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,15 +18,18 @@ import javax.annotation.PostConstruct;
 @Configuration
 @EnableConfigurationProperties({ SolaceExtendedBindingProperties.class })
 public class SolaceMessageChannelBinderConfiguration {
-	@Autowired
-	private JCSMPProperties jcsmpProperties;
-
-	@Autowired
-	private SolaceExtendedBindingProperties solaceExtendedBindingProperties;
+	private final JCSMPProperties jcsmpProperties;
+	private final SolaceExtendedBindingProperties solaceExtendedBindingProperties;
 
 	private JCSMPSession jcsmpSession;
 
 	private static final Log logger = LogFactory.getLog(SolaceMessageChannelBinderConfiguration.class);
+
+	public SolaceMessageChannelBinderConfiguration(JCSMPProperties jcsmpProperties,
+												   SolaceExtendedBindingProperties solaceExtendedBindingProperties) {
+		this.jcsmpProperties = jcsmpProperties;
+		this.solaceExtendedBindingProperties = solaceExtendedBindingProperties;
+	}
 
 	@PostConstruct
 	private void initSession() throws JCSMPException {

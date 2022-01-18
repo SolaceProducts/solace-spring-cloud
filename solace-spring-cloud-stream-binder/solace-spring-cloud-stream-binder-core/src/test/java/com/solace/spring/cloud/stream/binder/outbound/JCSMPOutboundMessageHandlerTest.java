@@ -16,10 +16,9 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
@@ -29,21 +28,20 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.MessageBuilder;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@Timeout(value = 10)
 public class JCSMPOutboundMessageHandlerTest {
-
-	@Rule
-	public Timeout globalTimeout = new Timeout(10, TimeUnit.SECONDS);
 
 	private JCSMPOutboundMessageHandler messageHandler;
 	private JCSMPStreamingPublishCorrelatingEventHandler pubEventHandler;
 	private ArgumentCaptor<XMLMessage> xmlMessageCaptor;
 	private final MessageChannel errChannel = Mockito.mock(MessageChannel.class);
 
-	@Before
+	@BeforeEach
 	public void init() throws JCSMPException {
 		JCSMPSession session = Mockito.mock(JCSMPSession.class);
 		XMLMessageProducer messageProducer = Mockito.mock(XMLMessageProducer.class);
@@ -93,14 +91,14 @@ public class JCSMPOutboundMessageHandlerTest {
 		pubEventHandler.handleErrorEx(createCorrelationKey(correlationData, msg), new JCSMPException("ooooops"), 1111);
 
 		ExecutionException exception = assertThrows(ExecutionException.class, () -> correlationData.getFuture().get(100, TimeUnit.MILLISECONDS));
-		assertTrue(exception instanceof ExecutionException);
+		assertNotNull(exception);
 		assertTrue(exception.getCause() instanceof MessagingException);
 		assertTrue(exception.getCause().getCause() instanceof JCSMPException);
 		assertEquals("ooooops", exception.getCause().getCause().getMessage());
 	}
 
 	@Test()
-	public void test_responseReceived_withOutTimeout() throws ExecutionException, InterruptedException, TimeoutException {
+	public void test_responseReceived_withOutTimeout() {
 		CorrelationData correlationData = new CorrelationData();
 		messageHandler.handleMessage(getMessage(correlationData));
 
@@ -151,7 +149,7 @@ public class JCSMPOutboundMessageHandlerTest {
 		return (ErrorChannelSendingCorrelationKey) xmlMessageCaptor.getValue().getCorrelationKey();
 	}
 
-	private ErrorChannelSendingCorrelationKey createCorrelationKey(CorrelationData correlationData, Message msg) {
+	private ErrorChannelSendingCorrelationKey createCorrelationKey(CorrelationData correlationData, Message<?> msg) {
 		ErrorChannelSendingCorrelationKey key = new ErrorChannelSendingCorrelationKey(
 				msg,
 				Mockito.mock(MessageChannel.class),

@@ -5,7 +5,10 @@ import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
+import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
+import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueMsg;
@@ -22,20 +25,26 @@ import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPInterruptedException;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.JCSMPStreamingPublishEventHandler;
+import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import com.solacesystems.jcsmp.PropertyMismatchException;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.Requestor;
 import com.solacesystems.jcsmp.TextMessage;
-import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessageConsumer;
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
-import org.junit.Assume;
-import org.junit.Test;
-import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.parallel.Execution;
+import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
@@ -55,7 +64,7 @@ import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.SubscribableChannel;
 import org.springframework.messaging.support.ErrorMessage;
-import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.MimeTypeUtils;
 
 import java.util.HashMap;
@@ -71,33 +80,43 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
 import static com.solace.spring.cloud.stream.binder.test.util.ValuePoller.poll;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 import static org.hamcrest.Matchers.is;
-import static org.junit.Assert.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 /**
  * Runs all basic Spring Cloud Stream Binder functionality tests
  * inherited by {@link PartitionCapableBinderTests PartitionCapableBinderTests}
  * along with basic tests specific to the Solace Spring Cloud Stream Binder.
  */
-@ContextConfiguration(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigFileApplicationContextInitializer.class)
-public class SolaceBinderBasicIT extends SolaceBinderITBase {
-	// NOT YET SUPPORTED ---------------------------------
-	@Override
-	public void testPartitionedModuleJava() {
-		Assume.assumeTrue("Partitioning not currently supported", false);
+@SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
+		initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(PubSubPlusExtension.class)
+@Execution(ExecutionMode.SAME_THREAD) // parent tests define static destinations
+public class SolaceBinderBasicIT extends SpringCloudStreamContext {
+	private static final Logger logger = LoggerFactory.getLogger(SolaceBinderBasicIT.class);
+
+	@BeforeEach
+	void setUp(JCSMPSession jcsmpSession) {
+		setJcsmpSession(jcsmpSession);
 	}
 
+	// NOT YET SUPPORTED ---------------------------------
 	@Override
-	public void testPartitionedModuleSpEL() {
-		Assume.assumeTrue("Partitioning not currently supported", false);
+	@Test
+	@Execution(ExecutionMode.SAME_THREAD)
+	@Disabled("Partitioning is not supported")
+	public void testPartitionedModuleSpEL(TestInfo testInfo) throws Exception {
+		super.testPartitionedModuleSpEL(testInfo);
 	}
 	// ---------------------------------------------------
 
 	@Test
-	public void testSendAndReceiveBad() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testSendAndReceiveBad(SoftAssertions softly, TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -106,7 +125,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
 				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
@@ -117,7 +136,6 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 
 		binderBindUnbindLatency();
 
-		SoftAssertions softly = new SoftAssertions();
 		final CountDownLatch latch = new CountDownLatch(consumerProperties.getMaxAttempts());
 		moduleInputChannel.subscribe(msg -> {
 			long expectedDeliveryAttempt = consumerProperties.getMaxAttempts() - latch.getCount() + 1;
@@ -130,13 +148,13 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 
 		moduleOutputChannel.send(message);
 		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
-		softly.assertAll();
 		producerBinding.unbind();
 		consumerBinding.unbind();
 	}
 
 	@Test
-	public void testProducerErrorChannel() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testProducerErrorChannel(JCSMPSession jcsmpSession, TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -144,7 +162,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String destination0EC = String.format("%s%serrors", destination0, getDestinationNameDelimiter());
 
-		ExtendedProducerProperties<SolaceProducerProperties> producerProps = createProducerProperties();
+		ExtendedProducerProperties<SolaceProducerProperties> producerProps = createProducerProperties(testInfo);
 		producerProps.setErrorChannelEnabled(true);
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProps);
 
@@ -183,7 +201,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testConsumerRequeue() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testConsumerRequeue(TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -192,7 +211,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
@@ -225,7 +244,9 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testConsumerErrorQueueRepublish() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testConsumerErrorQueueRepublish(JCSMPSession jcsmpSession, SempV2Api sempV2Api, TestInfo testInfo)
+			throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -237,7 +258,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
@@ -284,7 +305,9 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testAnonConsumerDiscard() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testAnonConsumerDiscard(JCSMPSession jcsmpSession, SempV2Api sempV2Api, TestInfo testInfo)
+			throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -293,7 +316,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
@@ -350,7 +373,9 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testAnonConsumerErrorQueueRepublish() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testAnonConsumerErrorQueueRepublish(JCSMPSession jcsmpSession, SempV2Api sempV2Api, TestInfo testInfo)
+			throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -359,7 +384,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
@@ -409,7 +434,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testPolledConsumer() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testPolledConsumer(TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -418,7 +444,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
 				destination0, "testPolledConsumer", moduleInputChannel, createConsumerProperties());
 
@@ -442,7 +468,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testPolledConsumerRequeue() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testPolledConsumerRequeue(TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -451,7 +478,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
@@ -478,7 +505,9 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testPolledConsumerErrorQueueRepublish() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testPolledConsumerErrorQueueRepublish(JCSMPSession jcsmpSession, SempV2Api sempV2Api, TestInfo testInfo)
+			throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -490,7 +519,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
@@ -541,7 +570,9 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testPolledAnonConsumerDiscard() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testPolledAnonConsumerDiscard(JCSMPSession jcsmpSession, SempV2Api sempV2Api, TestInfo testInfo)
+			throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -550,7 +581,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
@@ -606,7 +637,9 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testPolledAnonConsumerErrorQueueRepublish() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testPolledAnonConsumerErrorQueueRepublish(JCSMPSession jcsmpSession, SempV2Api sempV2Api,
+														  TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -615,7 +648,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
@@ -669,7 +702,9 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testFailProducerProvisioningOnRequiredQueuePropertyChange() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testFailProducerProvisioningOnRequiredQueuePropertyChange(JCSMPSession jcsmpSession, TestInfo testInfo)
+			throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
@@ -679,7 +714,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-				.getQueueName(destination0, group0, createProducerProperties().getExtension()));
+				.getQueueName(destination0, group0, createProducerProperties(testInfo).getExtension()));
 
 		logger.info(String.format("Pre-provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
 				queue.getName(), endpointProperties.getAccessType(), defaultAccessType));
@@ -688,7 +723,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 		Binding<MessageChannel> producerBinding;
 		try {
-			ExtendedProducerProperties<SolaceProducerProperties> bindingProducerProperties = createProducerProperties();
+			ExtendedProducerProperties<SolaceProducerProperties> bindingProducerProperties = createProducerProperties(
+					testInfo);
 			bindingProducerProperties.setRequiredGroups(group0);
 			producerBinding = binder.bindProducer(destination0, moduleOutputChannel, bindingProducerProperties);
 			producerBinding.unbind();
@@ -703,7 +739,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testFailConsumerProvisioningOnQueuePropertyChange() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testFailConsumerProvisioningOnQueuePropertyChange(JCSMPSession jcsmpSession) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
@@ -737,7 +774,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testFailConsumerProvisioningOnErrorQueuePropertyChange() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testFailConsumerProvisioningOnErrorQueuePropertyChange(JCSMPSession jcsmpSession) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
@@ -772,7 +810,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testConsumerAdditionalSubscriptions() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testConsumerAdditionalSubscriptions(TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel0 = createBindableChannel("output0", new BindingProperties());
@@ -784,9 +823,9 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String wildcardDestination1 = destination1.substring(0, destination1.length() - 1) + "*";
 
 		Binding<MessageChannel> producerBinding0 = binder.bindProducer(
-				destination0, moduleOutputChannel0, createProducerProperties());
+				destination0, moduleOutputChannel0, createProducerProperties(testInfo));
 		Binding<MessageChannel> producerBinding1 = binder.bindProducer(
-				destination1, moduleOutputChannel1, createProducerProperties());
+				destination1, moduleOutputChannel1, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.getExtension()
@@ -821,7 +860,8 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testProducerAdditionalSubscriptions() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testProducerAdditionalSubscriptions(TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel0 = createBindableChannel("output0", new BindingProperties());
@@ -833,7 +873,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String wildcardDestination1 = destination1.substring(0, destination1.length() - 1) + "*";
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
-		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties();
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties(testInfo);
 		Map<String,String[]> groupsAdditionalSubs = new HashMap<>();
 		groupsAdditionalSubs.put(group0, new String[]{wildcardDestination1});
 		producerProperties.setRequiredGroups(group0);
@@ -842,7 +882,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		Binding<MessageChannel> producerBinding0 = binder.bindProducer(
 				destination0, moduleOutputChannel0, producerProperties);
 		Binding<MessageChannel> producerBinding1 = binder.bindProducer(
-				destination1, moduleOutputChannel1, createProducerProperties());
+				destination1, moduleOutputChannel1, createProducerProperties(testInfo));
 
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
 				destination0, group0, moduleInputChannel, createConsumerProperties());
@@ -873,7 +913,9 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testConsumerReconnect() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testConsumerReconnect(JCSMPSession jcsmpSession, SempV2Api sempV2Api, SoftAssertions softly,
+									  TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -883,7 +925,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
 				destination0, group0, moduleInputChannel, createConsumerProperties());
 
@@ -896,7 +938,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		moduleInputChannel.subscribe(message1 -> {
 			numMsgsConsumed.incrementAndGet();
 			String payload = new String((byte[]) message1.getPayload());
-			logger.info(String.format("Received message %s", payload));
+			logger.trace(String.format("Received message %s", payload));
 			uniquePayloadsReceived.add(payload);
 		});
 
@@ -908,7 +950,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 				Message<?> message = MessageBuilder.withPayload(payload.getBytes())
 						.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 						.build();
-				logger.info(String.format("Sending message %s", payload));
+				logger.trace(String.format("Sending message %s", payload));
 				try {
 					moduleOutputChannel.send(message);
 					numMsgsSent += 1;
@@ -954,21 +996,21 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 				.getMsgVpnQueue(vpnName, queue0, null)
 				.getData();
 
-		SoftAssertions softly = new SoftAssertions();
 		softly.assertThat(queueState.getDisabledBindFailureCount()).isGreaterThan(0);
 		softly.assertThat(uniquePayloadsReceived.size()).isEqualTo(numMsgsSent);
 		// -2 margin of error. Redelivered messages might be untracked if it's consumer was shutdown before it could
 		// be added to the consumed msg count.
 		softly.assertThat(numMsgsConsumed.get() - queueState.getRedeliveredMsgCount())
 				.isBetween((long)numMsgsSent-2, (long)numMsgsSent);
-		softly.assertAll();
 
 		producerBinding.unbind();
 		consumerBinding.unbind();
 	}
 
 	@Test
-	public void testConsumerRebind() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testConsumerRebind(JCSMPSession jcsmpSession, SempV2Api sempV2Api, SoftAssertions softly,
+								   TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -978,7 +1020,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
 				destination0, group0, moduleInputChannel, createConsumerProperties());
 
@@ -991,7 +1033,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		moduleInputChannel.subscribe(message1 -> {
 			numMsgsConsumed.incrementAndGet();
 			String payload = new String((byte[]) message1.getPayload());
-			logger.info(String.format("Received message %s", payload));
+			logger.trace(String.format("Received message %s", payload));
 			uniquePayloadsReceived.add(payload);
 		});
 
@@ -1003,7 +1045,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 				Message<?> message = MessageBuilder.withPayload(payload.getBytes())
 						.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 						.build();
-				logger.info(String.format("Sending message %s", payload));
+				logger.trace(String.format("Sending message %s", payload));
 				try {
 					moduleOutputChannel.send(message);
 					numMsgsSent += 1;
@@ -1051,48 +1093,19 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 				.getData()
 				.getRedeliveredMsgCount();
 
-		SoftAssertions softly = new SoftAssertions();
 		softly.assertThat(uniquePayloadsReceived.size()).isEqualTo(numMsgsSent);
 		// -2 margin of error. Redelivered messages might be untracked if it's consumer was shutdown before it could
 		// be added to the consumed msg count.
 		softly.assertThat(numMsgsConsumed.get() - redeliveredMsgs).isBetween((long)numMsgsSent-2, (long)numMsgsSent);
-		softly.assertAll();
 
 		producerBinding.unbind();
 		consumerBinding.unbind();
 	}
 
 	@Test
-	public void testBinderDestroy() throws Exception {
-		SolaceTestBinder binder = getBinder();
-
-		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
-
-		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		String group0 = RandomStringUtils.randomAlphanumeric(10);
-
-		binder.bindConsumer(destination0, group0, moduleInputChannel, createConsumerProperties());
-
-		binderBindUnbindLatency();
-
-		try {
-			logger.info("Destroy binder");
-			binder.getBinder().destroy();
-			Thread.sleep(3000);
-
-			//TODO Implement Test: Intercept InboundXMLMessageListener to check for any error
-
-		} finally {
-			binder = getBinder(); // Refresh binder instance if successfully destroyed
-			logger.info("Rebinding consumer so that we can properly clean it up");
-			Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-					destination0, group0, moduleInputChannel, createConsumerProperties());
-			consumerBinding.unbind();
-		}
-	}
-
-	@Test
-	public void testRequestReplyWithRequestor() throws Exception {
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testRequestReplyWithRequestor(JCSMPSession jcsmpSession, SoftAssertions softly,
+											  TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -1100,13 +1113,13 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 
 		String requestDestination = RandomStringUtils.randomAlphanumeric(10);
 
-		Binding<MessageChannel> producerBinding = binder.bindProducer("willBeOverridden", moduleOutputChannel, createProducerProperties());
-		Binding<MessageChannel> consumerBinding = binder.bindConsumer(requestDestination, "boo", moduleInputChannel, createConsumerProperties());
+		Binding<MessageChannel> producerBinding = binder.bindProducer("willBeOverridden", moduleOutputChannel,
+				createProducerProperties(testInfo));
+		Binding<MessageChannel> consumerBinding = binder.bindConsumer(requestDestination, "boo",
+				moduleInputChannel, createConsumerProperties());
 
 		final String PROCESSED_SUFFIX = "_PROCESSED";
 		String expectedCorrelationId = "theCorrelationId";
-
-		SoftAssertions softly = new SoftAssertions();
 
 		//Prepare the Replier
 		moduleInputChannel.subscribe(request -> {
@@ -1120,7 +1133,7 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 			softly.assertThat(reqCorrelationId).isEqualTo(expectedCorrelationId);
 
 			//Send reply message
-			Message springMessage = MessageBuilder
+			Message<?> springMessage = MessageBuilder
 					.withPayload(reqPayload + PROCESSED_SUFFIX)
 					.setHeader(SolaceHeaders.IS_REPLY, true)
 					.setHeader(SolaceHeaders.CORRELATION_ID, reqCorrelationId)
@@ -1131,15 +1144,14 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		});
 
 		//Prepare the Requestor (need a producer and a consumer)
-		XMLMessageProducer producer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishEventHandler() {
+		XMLMessageProducer producer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
 			@Override
-			public void responseReceived(String messageID) {
-				System.out.println("Request sent successfully");
+			public void responseReceivedEx(Object o) {
+				logger.info("Request sent successfully");
 			}
 
 			@Override
-			public void handleError(String messageID, JCSMPException e, long timestamp) {
-			}
+			public void handleErrorEx(Object o, JCSMPException e, long l) {}
 		});
 		XMLMessageConsumer consumer = jcsmpSession.getMessageConsumer((XMLMessageListener) null);
 		consumer.start();
@@ -1152,14 +1164,12 @@ public class SolaceBinderBasicIT extends SolaceBinderITBase {
 		//Send request and await for a reply
 		Requestor requestor = jcsmpSession.createRequestor();
 		BytesXMLMessage replyMsg = requestor.request(requestMsg, 10000, JCSMPFactory.onlyInstance().createTopic(requestDestination));
-		assertNotNull("Did not receive a reply within allotted time", replyMsg);
+		assertNotNull(replyMsg, "Did not receive a reply within allotted time");
 
 		softly.assertThat(replyMsg.getCorrelationId()).isEqualTo(expectedCorrelationId);
 		softly.assertThat(replyMsg.isReplyMessage()).isTrue();
 		String replyPayload = new String(((BytesMessage) replyMsg).getData());
 		softly.assertThat(replyPayload).isEqualTo(requestPayload + PROCESSED_SUFFIX);
-
-		softly.assertAll();
 
 		producerBinding.unbind();
 		consumerBinding.unbind();

@@ -3,15 +3,17 @@ package com.solace.spring.cloud.stream.binder.util;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
-import com.solace.spring.cloud.stream.binder.ITBase;
 import com.solace.spring.cloud.stream.binder.messaging.HeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
+import com.solace.spring.cloud.stream.binder.test.util.SerializableFoo;
+import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solacesystems.jcsmp.BytesMessage;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
+import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import com.solacesystems.jcsmp.MapMessage;
 import com.solacesystems.jcsmp.SDTMap;
@@ -24,19 +26,20 @@ import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jms.SolConnectionFactory;
 import com.solacesystems.jms.SolJmsUtility;
-import org.apache.commons.lang.RandomStringUtils;
-import org.apache.commons.lang.math.RandomUtils;
+import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.assertj.core.api.SoftAssertions;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.integration.support.DefaultMessageBuilderFactory;
 import org.springframework.integration.support.MessageBuilder;
 import org.springframework.messaging.Message;
-import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.SerializationUtils;
 
 import javax.jms.Connection;
@@ -55,13 +58,14 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ContextConfiguration(classes = SolaceJavaAutoConfiguration.class,
-		initializers = ConfigFileApplicationContextInitializer.class)
-public class JmsCompatibilityIT extends ITBase {
+@SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
+		initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(PubSubPlusExtension.class)
+public class JmsCompatibilityIT {
 	private String topicName;
 	private Connection jmsConnection;
 	private Session jmsSession;
@@ -74,8 +78,8 @@ public class JmsCompatibilityIT extends ITBase {
 	private static final Log logger = LogFactory.getLog(JmsCompatibilityIT.class);
 	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
-	@Before
-	public void setup() throws Exception {
+	@BeforeEach
+	public void setup(JCSMPSession jcsmpSession) throws Exception {
 		topicName = RandomStringUtils.randomAlphabetic(10);
 
 		SolConnectionFactory solConnectionFactory = SolJmsUtility.createConnectionFactory();
@@ -90,17 +94,6 @@ public class JmsCompatibilityIT extends ITBase {
 
 		jcsmpTopic = JCSMPFactory.onlyInstance().createTopic(topicName);
 		jcsmpProducer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-
-			@Override
-			public void handleError(String s, JCSMPException e, long l) {
-				//never called
-			}
-
-			@Override
-			public void responseReceived(String s) {
-				//never called
-			}
-
 			@Override
 			public void responseReceivedEx(Object key) {
 				logger.debug("Got message with key: " + key);
@@ -113,7 +106,7 @@ public class JmsCompatibilityIT extends ITBase {
 		});
 	}
 
-	@After
+	@AfterEach
 	public void cleanup() throws Exception {
 		if (jmsConnection != null) {
 			jmsConnection.stop();
@@ -141,7 +134,7 @@ public class JmsCompatibilityIT extends ITBase {
 	}
 
 	@Test
-	public void testBinderHeaders() throws Exception {
+	public void testBinderHeaders(SoftAssertions softly) throws Exception {
 		MessageBuilder<SerializableFoo> springMessageBuilder = new DefaultMessageBuilderFactory()
 				.withPayload(new SerializableFoo("abc", "def"));
 
@@ -151,7 +144,7 @@ public class JmsCompatibilityIT extends ITBase {
 			Object value;
 			try {
 				if (Number.class.isAssignableFrom(type)) {
-					value = type.getConstructor(String.class).newInstance("" + RandomUtils.nextInt(100));
+					value = type.getConstructor(String.class).newInstance("" + RandomUtils.nextInt(0, 100));
 				} else if (Boolean.class.isAssignableFrom(type)) {
 					value = true;
 				} else if (String.class.isAssignableFrom(type)) {
@@ -168,7 +161,6 @@ public class JmsCompatibilityIT extends ITBase {
 
 		XMLMessage jcsmpMessage = xmlMessageMapper.map(springMessageBuilder.build(), null, false);
 
-		SoftAssertions softly = new SoftAssertions();
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
 		jmsConsumer.setMessageListener(msg -> {
@@ -205,11 +197,10 @@ public class JmsCompatibilityIT extends ITBase {
 
 		assertTrue(latch.await(1, TimeUnit.MINUTES));
 		assertNull(exceptionAtomicReference.get());
-		softly.assertAll();
 	}
 
 	@Test
-	public void testSerializedHeaders() throws Exception {
+	public void testSerializedHeaders(SoftAssertions softly) throws Exception {
 		final String headerName = "abc";
 		final SerializableFoo headerValue = new SerializableFoo("Abc", "def");
 
@@ -218,7 +209,6 @@ public class JmsCompatibilityIT extends ITBase {
 				.setHeader(headerName, headerValue)
 				.build(), null, false);
 
-		SoftAssertions softly = new SoftAssertions();
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
 		jmsConsumer.setMessageListener(msg -> {
@@ -253,11 +243,10 @@ public class JmsCompatibilityIT extends ITBase {
 
 		assertTrue(latch.await(1, TimeUnit.MINUTES));
 		assertNull(exceptionAtomicReference.get());
-		softly.assertAll();
 	}
 
 	@Test
-	public void testPayloadFromSpringToJms() throws Exception {
+	public void testPayloadFromSpringToJms(SoftAssertions softly) throws Exception {
 		List<Message<?>> messages = new ArrayList<>();
 
 		{
@@ -283,7 +272,6 @@ public class JmsCompatibilityIT extends ITBase {
 		}
 
 		Set<Class<? extends XMLMessage>> processedMessageTypes = new HashSet<>();
-		SoftAssertions softly = new SoftAssertions();
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(messages.size());
 		jmsConsumer.setMessageListener(msg -> {
@@ -325,12 +313,11 @@ public class JmsCompatibilityIT extends ITBase {
 
 		assertTrue(latch.await(1, TimeUnit.MINUTES));
 		assertNull(exceptionAtomicReference.get());
-		softly.assertAll();
 		assertEquals(messages.size(), processedMessageTypes.size());
 	}
 
 	@Test
-	public void testPayloadFromJmsToSpring() throws Exception {
+	public void testPayloadFromJmsToSpring(JCSMPSession jcsmpSession, SoftAssertions softly) throws Exception {
 		List<javax.jms.Message> messages = new ArrayList<>();
 
 		{
@@ -352,7 +339,6 @@ public class JmsCompatibilityIT extends ITBase {
 		XMLMessageConsumer messageConsumer = null;
 		try {
 			Set<Class<? extends XMLMessage>> processedMessageTypes = new HashSet<>();
-			SoftAssertions softly = new SoftAssertions();
 			AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 			CountDownLatch latch = new CountDownLatch(messages.size());
 			messageConsumer = jcsmpSession.getMessageConsumer(new XMLMessageListener() {
@@ -394,7 +380,6 @@ public class JmsCompatibilityIT extends ITBase {
 
 			assertTrue(latch.await(1, TimeUnit.MINUTES));
 			assertNull(exceptionAtomicReference.get());
-			softly.assertAll();
 			assertEquals(messages.size(), processedMessageTypes.size());
 		} finally {
 			if (messageConsumer != null) messageConsumer.close();
@@ -402,10 +387,9 @@ public class JmsCompatibilityIT extends ITBase {
 	}
 
 	@Test
-	public void testSerializedPayloadFromSpringToJms() throws Exception {
+	public void testSerializedPayloadFromSpringToJms(SoftAssertions softly) throws Exception {
 		final SerializableFoo payload = new SerializableFoo("Abc", "def");
 
-		SoftAssertions softly = new SoftAssertions();
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
 		jmsConsumer.setMessageListener(msg -> {
@@ -432,18 +416,17 @@ public class JmsCompatibilityIT extends ITBase {
 
 		assertTrue(latch.await(1, TimeUnit.MINUTES));
 		assertNull(exceptionAtomicReference.get());
-		softly.assertAll();
 	}
 
 	@Test
-	public void testSerializedPayloadFromJmsToSpring() throws Exception {
+	public void testSerializedPayloadFromJmsToSpring(JCSMPSession jcsmpSession, SoftAssertions softly)
+			throws Exception {
 		SerializableFoo payload = new SerializableFoo("test", "test");
 		ObjectMessage message = jmsSession.createObjectMessage(payload);
 		message.setBooleanProperty(SolaceBinderHeaders.SERIALIZED_PAYLOAD, true);
 
 		XMLMessageConsumer messageConsumer = null;
 		try {
-			SoftAssertions softly = new SoftAssertions();
 			AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 			CountDownLatch latch = new CountDownLatch(1);
 			messageConsumer = jcsmpSession.getMessageConsumer(new XMLMessageListener() {
@@ -471,7 +454,6 @@ public class JmsCompatibilityIT extends ITBase {
 
 			assertTrue(latch.await(1, TimeUnit.MINUTES));
 			assertNull(exceptionAtomicReference.get());
-			softly.assertAll();
 		} finally {
 			if (messageConsumer != null) messageConsumer.close();
 		}

@@ -1,7 +1,8 @@
 package com.solace.spring.cloud.stream.binder.util;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
-import com.solace.spring.cloud.stream.binder.ITBase;
+import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
+import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solacesystems.jcsmp.Consumer;
 import com.solacesystems.jcsmp.EndpointProperties;
@@ -12,15 +13,15 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
-import org.apache.commons.lang.RandomStringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
-import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
-import org.springframework.test.context.ContextConfiguration;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -29,52 +30,45 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.contains;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ContextConfiguration(classes = SolaceJavaAutoConfiguration.class,
-		initializers = ConfigFileApplicationContextInitializer.class)
-public class RetryableAckRebindTaskIT extends ITBase {
+@SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
+		initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(PubSubPlusExtension.class)
+public class RetryableAckRebindTaskIT {
 	private RetryableTaskService taskService;
-	private String vpnName;
-	private Queue queue;
 	private FlowReceiverContainer flowReceiverContainer;
 	private XMLMessageProducer producer;
 
 	private static final Log logger = LogFactory.getLog(RetryableAckRebindTaskIT.class);
 
-	@Before
-	public void setUp() throws Exception {
-		vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+	@BeforeEach
+	public void setUp(JCSMPSession jcsmpSession, Queue queue) throws Exception {
 		taskService = Mockito.spy(new RetryableTaskService());
-		queue = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(20));
-		jcsmpSession.provision(queue, new EndpointProperties(), JCSMPSession.WAIT_FOR_CONFIRM);
 		flowReceiverContainer = Mockito.spy(new FlowReceiverContainer(jcsmpSession, queue.getName(),
 				new EndpointProperties()));
 		flowReceiverContainer.bind();
 		producer = jcsmpSession.getMessageProducer(new JCSMPSessionProducerManager.CloudStreamEventHandler());
 	}
 
-	@After
-	public void tearDown() throws Exception {
+	@AfterEach
+	public void tearDown() {
 		if (flowReceiverContainer != null) {
 			Optional.ofNullable(flowReceiverContainer.getFlowReceiverReference())
 					.map(FlowReceiverContainer.FlowReceiverReference::get)
 					.ifPresent(Consumer::close);
 		}
-
-		if (jcsmpSession != null && !jcsmpSession.isClosed()) {
-			jcsmpSession.deprovision(queue, JCSMPSession.WAIT_FOR_CONFIRM);
-		}
 	}
 
 	@Test
-	public void testRun() throws Exception {
+	public void testRun(Queue queue) throws Exception {
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
 		RetryableAckRebindTask task = new RetryableAckRebindTask(flowReceiverContainer, messageContainer, taskService);
@@ -90,7 +84,7 @@ public class RetryableAckRebindTaskIT extends ITBase {
 	}
 
 	@Test
-	public void testReturnNull() throws Exception {
+	public void testReturnNull(Queue queue) throws Exception {
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
 		RetryableAckRebindTask task = new RetryableAckRebindTask(flowReceiverContainer, messageContainer, taskService);
@@ -105,7 +99,7 @@ public class RetryableAckRebindTaskIT extends ITBase {
 	}
 
 	@Test
-	public void testReturnNullAndAcknowledged() throws Exception {
+	public void testReturnNullAndAcknowledged(Queue queue) throws Exception {
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = Mockito.spy(flowReceiverContainer.receive(5000));
 		RetryableAckRebindTask task = new RetryableAckRebindTask(flowReceiverContainer, messageContainer, taskService);
@@ -122,7 +116,7 @@ public class RetryableAckRebindTaskIT extends ITBase {
 	}
 
 	@Test
-	public void testFail() throws Exception {
+	public void testFail(Queue queue) throws Exception {
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
 		RetryableAckRebindTask task = new RetryableAckRebindTask(flowReceiverContainer, messageContainer, taskService);
@@ -137,7 +131,7 @@ public class RetryableAckRebindTaskIT extends ITBase {
 	}
 
 	@Test
-	public void testStale() throws Exception {
+	public void testStale(Queue queue) throws Exception {
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = Mockito.spy(flowReceiverContainer.receive(5000));
 		RetryableAckRebindTask task = new RetryableAckRebindTask(flowReceiverContainer, messageContainer, taskService);
@@ -151,7 +145,8 @@ public class RetryableAckRebindTaskIT extends ITBase {
 	}
 
 	@Test
-	public void testFailAndStale() throws Exception {
+	public void testFailAndStale(JCSMPProperties jcsmpProperties, Queue queue, SempV2Api sempV2Api) throws Exception {
+		String vpnName = jcsmpProperties.getStringProperty(JCSMPProperties.VPN_NAME);
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
 		RetryableAckRebindTask task = new RetryableAckRebindTask(flowReceiverContainer, messageContainer, taskService);
@@ -186,7 +181,7 @@ public class RetryableAckRebindTaskIT extends ITBase {
 	}
 
 	@Test
-	public void testFailWhenUnbound() throws Exception {
+	public void testFailWhenUnbound(Queue queue) throws Exception {
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = Mockito.spy(flowReceiverContainer.receive(5000));
 		RetryableAckRebindTask task = new RetryableAckRebindTask(flowReceiverContainer, messageContainer, taskService);
@@ -209,7 +204,7 @@ public class RetryableAckRebindTaskIT extends ITBase {
 	}
 
 	@Test
-	public void testEquals() throws Exception {
+	public void testEquals(Queue queue) throws Exception {
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
 		RetryableAckRebindTask task1 = new RetryableAckRebindTask(flowReceiverContainer, messageContainer, taskService);

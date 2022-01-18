@@ -3,7 +3,7 @@ package com.solace.spring.cloud.stream.binder.util;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.TextMessage;
 import org.assertj.core.api.SoftAssertions;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.channel.DirectChannel;
@@ -34,7 +34,7 @@ public class ErrorChannelSendingCorrelationKeyTest {
 	}
 
 	@Test
-	public void testErrorChannel() {
+	public void testErrorChannel(SoftAssertions softly) {
 		Message<?> message = MessageBuilder.withPayload("test").build();
 		DirectChannel errorChannel = new DirectChannel();
 		ErrorChannelSendingCorrelationKey key = new ErrorChannelSendingCorrelationKey(message, errorChannel,
@@ -43,7 +43,6 @@ public class ErrorChannelSendingCorrelationKeyTest {
 		String description = "some failure";
 		Exception cause = new RuntimeException("test");
 
-		SoftAssertions softly = new SoftAssertions();
 		errorChannel.subscribe(msg -> {
 			softly.assertThat(msg).isInstanceOf(ErrorMessage.class);
 			ErrorMessage errorMsg = (ErrorMessage) msg;
@@ -58,25 +57,22 @@ public class ErrorChannelSendingCorrelationKeyTest {
 		assertThat(exception).hasMessageStartingWith(description);
 		assertThat(exception).hasCause(cause);
 		assertThat(exception.getFailedMessage()).isEqualTo(message);
-		softly.assertAll();
 	}
 
 	@SuppressWarnings("ThrowableNotThrown")
 	@Test
-	public void testRawMessageHeader() {
+	public void testRawMessageHeader(SoftAssertions softly) {
 		Message<?> message = MessageBuilder.withPayload("test").build();
 		DirectChannel errorChannel = new DirectChannel();
 		ErrorChannelSendingCorrelationKey key = new ErrorChannelSendingCorrelationKey(message, errorChannel,
 				errorMessageStrategy);
 		key.setRawMessage(JCSMPFactory.onlyInstance().createMessage(TextMessage.class));
 
-		SoftAssertions softly = new SoftAssertions();
 		errorChannel.subscribe(msg -> {
 			softly.assertThat(msg.getHeaders()).containsKey(IntegrationMessageHeaderAccessor.SOURCE_DATA);
 			softly.assertThat((Object) StaticMessageHeaderAccessor.getSourceData(msg)).isEqualTo(key.getRawMessage());
 		});
 
 		key.send("some failure", new RuntimeException("test"));
-		softly.assertAll();
 	}
 }

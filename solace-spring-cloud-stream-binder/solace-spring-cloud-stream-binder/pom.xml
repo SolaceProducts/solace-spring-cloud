@@ -57,15 +57,15 @@
         </dependency>
 
         <dependency>
-            <groupId>org.junit.vintage</groupId>
-            <artifactId>junit-vintage-engine</artifactId>
-            <version>5.7.1</version>
+            <groupId>org.junit-pioneer</groupId>
+            <artifactId>junit-pioneer</artifactId>
+            <version>1.5.0</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>com.solace.test.integration</groupId>
-            <artifactId>solace-semp-v2-client</artifactId>
+            <artifactId>pubsubplus-junit-jupiter</artifactId>
             <version>${solace.integration.test.support.version}</version>
             <scope>test</scope>
         </dependency>

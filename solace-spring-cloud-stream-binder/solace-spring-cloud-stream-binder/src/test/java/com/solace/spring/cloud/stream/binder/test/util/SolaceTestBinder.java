@@ -43,10 +43,9 @@ public class SolaceTestBinder
 	private final Map<String, String> bindingNameToErrorQueueName = new HashMap<>();
 	private static final Log logger = LogFactory.getLog(SolaceTestBinder.class);
 
-	public SolaceTestBinder(JCSMPSession jcsmpSession) throws Exception {
+	public SolaceTestBinder(JCSMPSession jcsmpSession) {
 		this.applicationContext = new AnnotationConfigApplicationContext(Config.class);
 		this.jcsmpSession = jcsmpSession;
-		jcsmpSession.connect();
 		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, new SolaceQueueProvisioner(jcsmpSession));
 		binder.setApplicationContext(this.applicationContext);
 		this.setPollableConsumerBinder(binder);
@@ -154,7 +153,6 @@ public class SolaceTestBinder
 				throw new RuntimeException(e);
 			}
 		}
-		jcsmpSession.closeSession();
 	}
 
 	@Configuration

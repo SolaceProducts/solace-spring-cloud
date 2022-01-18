@@ -1,22 +1,21 @@
 package com.solace.spring.cloud.stream.binder.messaging;
 
+import com.solace.spring.cloud.stream.binder.test.junit.param.provider.SolaceSpringHeaderArgumentsProvider;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessage;
-import org.apache.commons.lang.RandomStringUtils;
-import org.apache.commons.lang.math.RandomUtils;
+import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.springframework.messaging.MessageHeaders;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -33,40 +32,23 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.CoreMatchers.startsWithIgnoringCase;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
-@RunWith(Parameterized.class)
 public class SolaceHeadersTest {
-	@Parameterized.Parameter
-	public String parameterSetName; // Only used for parameter set naming
-
-	@Parameterized.Parameter(1)
-	public Class<?> headersClass;
-
-	@Parameterized.Parameter(2)
-	public Map<String, ? extends HeaderMeta<?>> headersMeta;
-
 	private static final Log logger = LogFactory.getLog(SolaceHeadersTest.class);
 
-	@Parameterized.Parameters(name = "{0}")
-	public static Collection<?> headerSets() {
-		return Arrays.asList(new Object[][]{
-				{SolaceHeaders.class.getSimpleName(), SolaceHeaders.class, SolaceHeaderMeta.META},
-				{SolaceBinderHeaders.class.getSimpleName(), SolaceBinderHeaders.class, SolaceBinderHeaderMeta.META}
-		});
-	}
-
-	@Test
-	public void testPrefix() throws Exception {
-		Field field = getPrefixField();
-		assertEquals(String.format("%s is not a String", field.getName()), String.class, field.getType());
-		assertTrue(String.format("%s is not static", field.getName()), Modifier.isStatic(field.getModifiers()));
-		assertTrue(String.format("%s is not final", field.getName()), Modifier.isFinal(field.getModifiers()));
+	@ParameterizedTest
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.ClassesOnly.class)
+	public void testPrefix(Class<?> headersClass) throws Exception {
+		Field field = getPrefixField(headersClass);
+		assertEquals(String.class, field.getType(), String.format("%s is not a String", field.getName()));
+		assertTrue(Modifier.isStatic(field.getModifiers()), String.format("%s is not static", field.getName()));
+		assertTrue(Modifier.isFinal(field.getModifiers()), String.format("%s is not final", field.getName()));
 		assertThat((String) field.get(null), startsWith(SolaceHeaders.PREFIX));
 		assertTrue(((String) field.get(null)).matches("[a-z][a-z_]+_"));
 
@@ -75,76 +57,83 @@ public class SolaceHeadersTest {
 		}
 	}
 
-	@Test
-	public void testFieldDeclaration() {
-		for (Field field : getAllHeaderFields()) {
-			assertEquals(String.format("%s is not a String", field.getName()), String.class, field.getType());
-			assertTrue(String.format("%s is not final", field.getName()), Modifier.isFinal(field.getModifiers()));
+	@ParameterizedTest
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.ClassesOnly.class)
+	public void testFieldDeclaration(Class<?> headersClass) {
+		for (Field field : getAllHeaderFields(headersClass)) {
+			assertEquals(String.class, field.getType(), String.format("%s is not a String", field.getName()));
+			assertTrue(Modifier.isFinal(field.getModifiers()), String.format("%s is not final", field.getName()));
 		}
 	}
 
-	@Test
-	public void testFieldNameSyntax() throws Exception {
-		for (Field field : getAllHeaderFields()) {
-			assertTrue(String.format("%s name does not have proper syntax", field.getName()),
-					field.getName().matches("[A-Z][A-Z_]+[A-Z]"));
+	@ParameterizedTest
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.ClassesOnly.class)
+	public void testFieldNameSyntax(Class<?> headersClass) throws Exception {
+		for (Field field : getAllHeaderFields(headersClass)) {
+			assertTrue(field.getName().matches("[A-Z][A-Z_]+[A-Z]"),
+					String.format("%s name does not have proper syntax", field.getName()));
 
 			assertThat(String.format("%s name should not start with prefix", field.getName()),
-					field.getName(), not(startsWithIgnoringCase((String) getPrefixField().get(null))));
+					field.getName(), not(startsWithIgnoringCase((String) getPrefixField(headersClass).get(null))));
 
 			String noPrefixHeader = ((String) field.get(null))
-					.substring(((String) getPrefixField().get(null)).length());
-			assertEquals(String.format(
+					.substring(((String) getPrefixField(headersClass).get(null)).length());
+			assertEquals(camelCaseToSnakeCase(noPrefixHeader).toUpperCase(), field.getName(), String.format(
 					"%s name should be the prefix-trimmed, fully-capitalized, '_'-delimited version of %s",
-					field.getName(), field.get(null)),
-					camelCaseToSnakeCase(noPrefixHeader).toUpperCase(), field.getName());
+					field.getName(), field.get(null)));
 		}
 	}
 
-	@Test
-	public void testHeaderSyntax() throws Exception {
-		for (String header : getAllHeaders()) {
-			String prefix = (String) getPrefixField().get(null);
+	@ParameterizedTest
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.ClassesOnly.class)
+	public void testHeaderSyntax(Class<?> headersClass) throws Exception {
+		for (String header : getAllHeaders(headersClass)) {
+			String prefix = (String) getPrefixField(headersClass).get(null);
 			assertThat(header, startsWith(prefix));
-			assertTrue(String.format("%s does not have proper syntax", header),
-					header.matches(prefix + "[a-z][a-zA-Z]+"));
+			assertTrue(header.matches(prefix + "[a-z][a-zA-Z]+"),
+					String.format("%s does not have proper syntax", header));
 		}
 	}
 
-	@Test
-	public void testUniqueHeaders() {
-		List<String> headers = getAllHeaders();
-		assertEquals(String.join(", ", headers) + " does not have unique values",
-				headers.stream().distinct().count(), headers.size());
+	@ParameterizedTest
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.ClassesOnly.class)
+	public void testUniqueHeaders(Class<?> headersClass) {
+		List<String> headers = getAllHeaders(headersClass);
+		assertEquals(headers.stream().distinct().count(), headers.size(),
+				String.join(", ", headers) + " does not have unique values");
 	}
 
-	@Test
-	public void testHeadersHaveMetaObjects() {
-		List<String> headers = getAllHeaders();
+	@ParameterizedTest(name = "[{index}] {0}")
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.class)
+	public void testHeadersHaveMetaObjects(Class<?> headersClass, Map<String, ? extends HeaderMeta<?>> headersMeta) {
+		List<String> headers = getAllHeaders(headersClass);
 		assertEquals(headersMeta.size(), headers.size());
 		for (String header : headers) {
 			assertThat(headersMeta.keySet(), hasItem(header));
 		}
 	}
 
-	@Test
-	public void testValidMeta() {
+	@ParameterizedTest
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.MetaOnly.class)
+	public void testValidMeta(Map<String, ? extends HeaderMeta<?>> headersMeta) {
 		headersMeta.values()
 				.forEach(m -> {
 					assertNotNull(m.getType());
-					assertFalse(String.format("primitives not supported by %s", MessageHeaders.class.getSimpleName()),
-							m.getType().isPrimitive());
+					assertFalse(m.getType().isPrimitive(),
+							String.format("primitives not supported by %s", MessageHeaders.class.getSimpleName()));
 				});
 	}
 
-	@Test
-	public void testUniqueMetaNames() {
-		assertEquals(String.join(", ", headersMeta.keySet()) + " does not have unique values",
-				headersMeta.keySet().size(), headersMeta.keySet().stream().distinct().count());
+	@ParameterizedTest
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.MetaOnly.class)
+	public void testUniqueMetaNames(Map<String, ? extends HeaderMeta<?>> headersMeta) {
+		assertEquals(headersMeta.keySet().size(), headersMeta.keySet().stream().distinct().count(),
+				String.join(", ", headersMeta.keySet()) + " does not have unique values");
 	}
 
-	@Test
-	public void testMetaReadActions() {
+	@ParameterizedTest(name = "[{index}] {0}")
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.class)
+	public void testMetaReadActions(Class<?> headersClass, Map<String, ? extends HeaderMeta<?>> headersMeta) {
 		if (!(headersClass.equals(SolaceHeaders.class))) {
 			logger.info(String.format("Test does not apply to %s", headersClass.getSimpleName()));
 			return;
@@ -161,8 +150,10 @@ public class SolaceHeadersTest {
 		}
 	}
 
-	@Test
-	public void testMetaWriteActions() throws Exception {
+	@ParameterizedTest(name = "[{index}] {0}")
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.class)
+	public void testMetaWriteActions(Class<?> headersClass, Map<String, ? extends HeaderMeta<?>> headersMeta)
+			throws Exception {
 		if (!(headersClass.equals(SolaceHeaders.class))) {
 			logger.info(String.format("Test does not apply to %s", headersClass.getSimpleName()));
 			return;
@@ -179,7 +170,7 @@ public class SolaceHeadersTest {
 			Object value;
 			try {
 				if (Number.class.isAssignableFrom(type)) {
-					value = type.getConstructor(String.class).newInstance("" + RandomUtils.nextInt(100));
+					value = type.getConstructor(String.class).newInstance("" + RandomUtils.nextInt(0, 100));
 				} else if (Boolean.class.isAssignableFrom(type)) {
 					value = true;
 				} else if (String.class.isAssignableFrom(type)) {
@@ -207,11 +198,12 @@ public class SolaceHeadersTest {
 		}
 
 		logger.info("Message Dump:\n" + xmlMessage.dump(XMLMessage.MSGDUMP_FULL));
-		logger.info("Message String:\n" + xmlMessage.toString());
+		logger.info("Message String:\n" + xmlMessage);
 	}
 
-	@Test
-	public void testDefaultValueOverride() {
+	@ParameterizedTest(name = "[{index}] {0}")
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.class)
+	public void testDefaultValueOverride(Class<?> headersClass, Map<String, ? extends HeaderMeta<?>> headersMeta) {
 		if (!(headersClass.equals(SolaceHeaders.class))) {
 			logger.info(String.format("Test does not apply to %s", headersClass.getSimpleName()));
 			return;
@@ -231,8 +223,8 @@ public class SolaceHeadersTest {
 			Object value = headerMeta.getValue().getDefaultValueOverride();
 
 			if (headerMeta.getValue().isReadable()) {
-				assertNotEquals("Overridden default value is the same as the original default value",
-						headerMeta.getValue().getReadAction().apply(xmlMessage), value);
+				assertNotEquals(headerMeta.getValue().getReadAction().apply(xmlMessage), value,
+						"Overridden default value is the same as the original default value");
 			}
 
 
@@ -248,11 +240,13 @@ public class SolaceHeadersTest {
 		}
 
 		logger.info("Message Dump:\n" + xmlMessage.dump(XMLMessage.MSGDUMP_FULL));
-		logger.info("Message String:\n" + xmlMessage.toString());
+		logger.info("Message String:\n" + xmlMessage);
 	}
 
-	@Test
-	public void testFailMetaWriteActionsWithInvalidType() {
+	@ParameterizedTest(name = "[{index}] {0}")
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.class)
+	public void testFailMetaWriteActionsWithInvalidType(Class<?> headersClass,
+														Map<String, ? extends HeaderMeta<?>> headersMeta) {
 		if (!(headersClass.equals(SolaceHeaders.class))) {
 			logger.info(String.format("Test does not apply to %s", headersClass.getSimpleName()));
 			return;
@@ -274,9 +268,10 @@ public class SolaceHeadersTest {
 		}
 	}
 
-	@Test
-	public void testNameJmsCompatibility() {
-		for (String headerName : getAllHeaders()) {
+	@ParameterizedTest(name = "[{index}] {0}")
+	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.class)
+	public void testNameJmsCompatibility(Class<?> headersClass, Map<String, ? extends HeaderMeta<?>> headersMeta) {
+		for (String headerName : getAllHeaders(headersClass)) {
 			assertTrue(Character.isJavaIdentifierStart(headerName.charAt(0)));
 			for (int i = 1; i < headerName.length(); i++) {
 				assertTrue(Character.isJavaIdentifierPart(headerName.charAt(i)));
@@ -313,19 +308,19 @@ public class SolaceHeadersTest {
 		}
 	}
 
-	private Field getPrefixField() throws NoSuchFieldException {
+	private Field getPrefixField(Class<?> headersClass) throws NoSuchFieldException {
 		return headersClass.getDeclaredField("PREFIX");
 	}
 
-	private List<Field> getAllHeaderFields() {
+	private List<Field> getAllHeaderFields(Class<?> headersClass) {
 		return Arrays.stream(headersClass.getDeclaredFields())
 				.filter(f -> Modifier.isPublic(f.getModifiers()))
 				.filter(f -> Modifier.isStatic(f.getModifiers()))
 				.collect(Collectors.toList());
 	}
 
-	private List<String> getAllHeaders() {
-		return getAllHeaderFields().stream().map(f -> {
+	private List<String> getAllHeaders(Class<?> headersClass) {
+		return getAllHeaderFields(headersClass).stream().map(f -> {
 					try {
 						return (String) f.get(null);
 					} catch (IllegalAccessException e) {
