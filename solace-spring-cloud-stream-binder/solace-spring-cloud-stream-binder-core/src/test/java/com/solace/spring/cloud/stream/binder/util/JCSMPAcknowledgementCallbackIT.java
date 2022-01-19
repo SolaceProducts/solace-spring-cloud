@@ -2,6 +2,8 @@ package com.solace.spring.cloud.stream.binder.util;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
+import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
@@ -47,6 +49,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
 		initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(ExecutorServiceExtension.class)
 @ExtendWith(PubSubPlusExtension.class)
 @Timeout(value = 1, unit = TimeUnit.MINUTES)
 public class JCSMPAcknowledgementCallbackIT {
@@ -344,7 +347,8 @@ public class JCSMPAcknowledgementCallbackIT {
 	}
 
 	@Test
-	public void testRequeueDelegateWhileRebinding(JCSMPSession jcsmpSession, Queue queue, SempV2Api sempV2Api)
+	public void testRequeueDelegateWhileRebinding(JCSMPSession jcsmpSession, Queue queue, SempV2Api sempV2Api,
+												  @ExecSvc(poolSize = 1) ExecutorService executorService)
 			throws Exception {
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
@@ -358,43 +362,38 @@ public class JCSMPAcknowledgementCallbackIT {
 		assertNotNull(messageContainer);
 		AcknowledgmentCallback acknowledgmentCallback = acknowledgementCallbackFactory.createCallback(messageContainer);
 
-		ExecutorService executorService = Executors.newSingleThreadExecutor();
-		try {
-			Future<UUID> rebindFuture = executorService.submit(() ->
-					flowReceiverContainer.rebind(messageContainer.getFlowReceiverReferenceId()));
-			Thread.sleep(1000);
-			assertFalse(rebindFuture.isDone());
+		Future<UUID> rebindFuture = executorService.submit(() ->
+				flowReceiverContainer.rebind(messageContainer.getFlowReceiverReferenceId()));
+		Thread.sleep(1000);
+		assertFalse(rebindFuture.isDone());
 
-			Mockito.doReturn(null).doCallRealMethod().when(flowReceiverContainer)
-					.acknowledgeRebind(messageContainer, true);
+		Mockito.doReturn(null).doCallRealMethod().when(flowReceiverContainer)
+				.acknowledgeRebind(messageContainer, true);
 
-			logger.info(String.format("Acknowledging message container %s", messageContainer.getId()));
-			acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
-			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-			Mockito.verify(retryableTaskService)
-					.submit(new RetryableAckRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
-			Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+		logger.info(String.format("Acknowledging message container %s", messageContainer.getId()));
+		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+		Mockito.verify(retryableTaskService)
+				.submit(new RetryableAckRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
-			logger.info(String.format("Verifying message container %s hasn't been ack'd", messageContainer.getId()));
-			assertFalse(rebindFuture.isDone());
-			assertThat(messageContainer.isAcknowledged()).isTrue();
-			assertThat(messageContainer.isStale()).isFalse();
-			validateNumEnqueuedMessages(sempV2Api, queue.getName(), 2);
-			validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
-			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
+		logger.info(String.format("Verifying message container %s hasn't been ack'd", messageContainer.getId()));
+		assertFalse(rebindFuture.isDone());
+		assertThat(messageContainer.isAcknowledged()).isTrue();
+		assertThat(messageContainer.isStale()).isFalse();
+		validateNumEnqueuedMessages(sempV2Api, queue.getName(), 2);
+		validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
+		validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
 
-			flowReceiverContainer.acknowledge(blockingContainer);
-			Thread.sleep(TimeUnit.SECONDS.toMillis(5)); // rebind task retry interval
-			assertNotNull(rebindFuture.get(1, TimeUnit.MINUTES));
+		flowReceiverContainer.acknowledge(blockingContainer);
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5)); // rebind task retry interval
+		assertNotNull(rebindFuture.get(1, TimeUnit.MINUTES));
 
-			// Message was redelivered
-			logger.info("Verifying message was redelivered");
-			validateNumRedeliveredMessages(sempV2Api, queue.getName(), 1);
-			validateQueueBindSuccesses(sempV2Api, queue.getName(), 2);
-			validateNumEnqueuedMessages(sempV2Api, queue.getName(), 1);
-		} finally {
-			executorService.shutdownNow();
-		}
+		// Message was redelivered
+		logger.info("Verifying message was redelivered");
+		validateNumRedeliveredMessages(sempV2Api, queue.getName(), 1);
+		validateQueueBindSuccesses(sempV2Api, queue.getName(), 2);
+		validateNumEnqueuedMessages(sempV2Api, queue.getName(), 1);
 	}
 
 	@ParameterizedTest

@@ -1,10 +1,12 @@
 package com.solace.spring.cloud.stream.binder.util;
 
+import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
+import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
@@ -13,6 +15,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+@ExtendWith(ExecutorServiceExtension.class)
 public class UnsignedCounterBarrierTest {
 	@Test
 	public void testIncrement() {
@@ -96,58 +99,47 @@ public class UnsignedCounterBarrierTest {
 	}
 
 	@Test
-	public void testResetTriggersConcurrentAwaitEmpty() throws Exception {
+	public void testResetTriggersConcurrentAwaitEmpty(@ExecSvc ExecutorService executorService) throws Exception {
 		UnsignedCounterBarrier unsignedCounterBarrier = new UnsignedCounterBarrier(5);
 		int concurrency = 5;
 
-		ExecutorService executorService = Executors.newFixedThreadPool(concurrency);
-		try {
-			ArrayList<Future<Boolean>> futures = new ArrayList<>(concurrency);
-			for (int i = 0; i < concurrency; i++) {
-				futures.add(executorService.submit(() -> unsignedCounterBarrier.awaitEmpty(-1, TimeUnit.DAYS)));
-			}
-			executorService.shutdown();
+		ArrayList<Future<Boolean>> futures = new ArrayList<>(concurrency);
+		for (int i = 0; i < concurrency; i++) {
+			futures.add(executorService.submit(() -> unsignedCounterBarrier.awaitEmpty(-1, TimeUnit.DAYS)));
+		}
+		executorService.shutdown();
 
-			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
-			for (Future<?> future : futures) {
-				assertFalse(future.isDone());
-			}
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		for (Future<?> future : futures) {
+			assertFalse(future.isDone());
+		}
 
-			unsignedCounterBarrier.reset();
-			for (Future<Boolean> future : futures) {
-				assertTrue(future.get(1, TimeUnit.MINUTES));
-			}
-		} finally {
-			executorService.shutdownNow();
+		unsignedCounterBarrier.reset();
+		for (Future<Boolean> future : futures) {
+			assertTrue(future.get(1, TimeUnit.MINUTES));
 		}
 	}
 
 	@Test
-	public void testConcurrentAwaitEmpty() throws Exception {
+	public void testConcurrentAwaitEmpty(@ExecSvc ExecutorService executorService) throws Exception {
 		UnsignedCounterBarrier unsignedCounterBarrier = new UnsignedCounterBarrier();
 		unsignedCounterBarrier.increment();
 
 		int concurrency = 5;
+		ArrayList<Future<Boolean>> futures = new ArrayList<>(concurrency);
+		for (int i = 0; i < concurrency; i++) {
+			futures.add(executorService.submit(() -> unsignedCounterBarrier.awaitEmpty(-1, TimeUnit.DAYS)));
+		}
+		executorService.shutdown();
 
-		ExecutorService executorService = Executors.newFixedThreadPool(concurrency);
-		try {
-			ArrayList<Future<Boolean>> futures = new ArrayList<>(concurrency);
-			for (int i = 0; i < concurrency; i++) {
-				futures.add(executorService.submit(() -> unsignedCounterBarrier.awaitEmpty(-1, TimeUnit.DAYS)));
-			}
-			executorService.shutdown();
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		for (Future<?> future : futures) {
+			assertFalse(future.isDone());
+		}
 
-			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
-			for (Future<?> future : futures) {
-				assertFalse(future.isDone());
-			}
-
-			unsignedCounterBarrier.decrement();
-			for (Future<Boolean> future : futures) {
-				assertTrue(future.get(1, TimeUnit.MINUTES));
-			}
-		} finally {
-			executorService.shutdownNow();
+		unsignedCounterBarrier.decrement();
+		for (Future<Boolean> future : futures) {
+			assertTrue(future.get(1, TimeUnit.MINUTES));
 		}
 	}
 

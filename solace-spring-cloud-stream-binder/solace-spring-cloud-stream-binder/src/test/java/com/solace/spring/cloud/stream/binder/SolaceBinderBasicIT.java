@@ -7,6 +7,8 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
+import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
@@ -75,7 +77,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -95,6 +96,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  */
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
 		initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(ExecutorServiceExtension.class)
 @ExtendWith(PubSubPlusExtension.class)
 @Execution(ExecutionMode.SAME_THREAD) // parent tests define static destinations
 public class SolaceBinderBasicIT extends SpringCloudStreamContext {
@@ -916,6 +918,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 	@RetryingTest(maxAttempts = 10, onExceptions = AssertionError.class) // flaky when ran in parallel
 	@Execution(ExecutionMode.SAME_THREAD)
 	public void testConsumerReconnect(JCSMPSession jcsmpSession, SempV2Api sempV2Api, SoftAssertions softly,
+									  @ExecSvc(poolSize = 1) ExecutorService executor,
 									  TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
@@ -943,7 +946,6 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 			uniquePayloadsReceived.add(payload);
 		});
 
-		ExecutorService executor = Executors.newSingleThreadExecutor();
 		Future<Integer> future = executor.submit(() -> {
 			int numMsgsSent = 0;
 			while (!Thread.currentThread().isInterrupted()) {
@@ -1011,6 +1013,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 	@RetryingTest(maxAttempts = 10, onExceptions = AssertionError.class) // flaky when ran in parallel
 	@Execution(ExecutionMode.SAME_THREAD)
 	public void testConsumerRebind(JCSMPSession jcsmpSession, SempV2Api sempV2Api, SoftAssertions softly,
+								   @ExecSvc(poolSize = 1) ExecutorService executor,
 								   TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
@@ -1038,7 +1041,6 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 			uniquePayloadsReceived.add(payload);
 		});
 
-		ExecutorService executor = Executors.newSingleThreadExecutor();
 		Future<Integer> future = executor.submit(() -> {
 			int numMsgsSent = 0;
 			while (!Thread.currentThread().isInterrupted()) {

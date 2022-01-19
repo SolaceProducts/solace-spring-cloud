@@ -3,10 +3,12 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
-import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext.ConsumerInfrastructureUtil;
-import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
+import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
+import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.monitor.ApiException;
@@ -20,6 +22,7 @@ import com.solacesystems.jcsmp.Queue;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -44,7 +47,6 @@ import org.springframework.util.MimeTypeUtils;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -56,6 +58,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
 		initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(ExecutorServiceExtension.class)
 public class SolaceBinderClientAckIT<T> {
 	private static final Logger logger = LoggerFactory.getLogger(SolaceBinderClientAckIT.class);
 
@@ -270,6 +273,7 @@ public class SolaceBinderClientAckIT<T> {
 	@ParameterizedTest
 	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
 	public void testAsyncAccept(Class<T> channelType, SempV2Api sempV2Api, SpringCloudStreamContext context,
+								@ExecSvc(poolSize = 1, scheduled = true) ScheduledExecutorService executorService,
 								TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = context.getBinder();
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
@@ -291,37 +295,34 @@ public class SolaceBinderClientAckIT<T> {
 		context.binderBindUnbindLatency();
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
-		ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
-		try {
-			consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
-					(msg, callback) -> {
-						logger.info("Received message");
-						AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
-						Objects.requireNonNull(ackCallback).noAutoAck();
-						executorService.schedule(() -> {
-							validateNumEnqueuedMessages(context, sempV2Api, queueName, 1);
-							logger.info("Async acknowledging message");
-							AckUtils.accept(ackCallback);
-							callback.run();
-						}, 2, TimeUnit.SECONDS);
-					});
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
+				(msg, callback) -> {
+					logger.info("Received message");
+					AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
+					Objects.requireNonNull(ackCallback).noAutoAck();
+					executorService.schedule(() -> {
+						validateNumEnqueuedMessages(context, sempV2Api, queueName, 1);
+						logger.info("Async acknowledging message");
+						AckUtils.accept(ackCallback);
+						callback.run();
+					}, 2, TimeUnit.SECONDS);
+				});
 
-			// Give some time for failed message to ack
-			Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+		// Give some time for failed message to ack
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
-			validateNumEnqueuedMessages(context, sempV2Api, queueName, 0);
+		validateNumEnqueuedMessages(context, sempV2Api, queueName, 0);
 
-			producerBinding.unbind();
-			consumerBinding.unbind();
-		} finally {
-			executorService.shutdownNow();
-		}
+		producerBinding.unbind();
+		consumerBinding.unbind();
 	}
 
 	@ParameterizedTest
 	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
 	public void testAsyncReject(Class<T> channelType, SempV2Api sempV2Api, SpringCloudStreamContext context,
-								SoftAssertions softly, TestInfo testInfo) throws Exception {
+								SoftAssertions softly,
+								@ExecSvc(poolSize = 1, scheduled = true) ScheduledExecutorService executorService,
+								TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = context.getBinder();
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
 
@@ -342,46 +343,43 @@ public class SolaceBinderClientAckIT<T> {
 		context.binderBindUnbindLatency();
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
-		ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
-		try {
-			AtomicBoolean wasRedelivered = new AtomicBoolean(false);
-			consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
-					(msg, callback) -> {
-						Boolean redelivered = msg.getHeaders().get(SolaceHeaders.REDELIVERED, Boolean.class);
-						softly.assertThat(redelivered).isNotNull();
-						if (redelivered) {
-							wasRedelivered.set(true);
+		AtomicBoolean wasRedelivered = new AtomicBoolean(false);
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
+				(msg, callback) -> {
+					Boolean redelivered = msg.getHeaders().get(SolaceHeaders.REDELIVERED, Boolean.class);
+					softly.assertThat(redelivered).isNotNull();
+					if (redelivered) {
+						wasRedelivered.set(true);
+						callback.run();
+					} else {
+						AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
+						Objects.requireNonNull(ackCallback).noAutoAck();
+						executorService.schedule(() -> {
+							validateNumEnqueuedMessages(context, sempV2Api, queueName, 1);
+							AckUtils.reject(ackCallback);
 							callback.run();
-						} else {
-							AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
-							Objects.requireNonNull(ackCallback).noAutoAck();
-							executorService.schedule(() -> {
-								validateNumEnqueuedMessages(context, sempV2Api, queueName, 1);
-								AckUtils.reject(ackCallback);
-								callback.run();
-							}, 2, TimeUnit.SECONDS);
-						}
-					}, 2);
-			softly.assertAll();
-			assertThat(wasRedelivered.get()).isTrue();
+						}, 2, TimeUnit.SECONDS);
+					}
+				}, 2);
+		softly.assertAll();
+		assertThat(wasRedelivered.get()).isTrue();
 
-			// Give some time for failed message to ack
-			Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+		// Give some time for failed message to ack
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
-			validateNumEnqueuedMessages(context, sempV2Api, queueName, 0);
-			validateNumRedeliveredMessages(context, sempV2Api, queueName, 1);
+		validateNumEnqueuedMessages(context, sempV2Api, queueName, 0);
+		validateNumRedeliveredMessages(context, sempV2Api, queueName, 1);
 
-			producerBinding.unbind();
-			consumerBinding.unbind();
-		} finally {
-			executorService.shutdownNow();
-		}
+		producerBinding.unbind();
+		consumerBinding.unbind();
 	}
 
 	@ParameterizedTest
 	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
 	public void testAsyncRejectWithErrorQueue(Class<T> channelType, JCSMPSession jcsmpSession, SempV2Api sempV2Api,
-											  SpringCloudStreamContext context, TestInfo testInfo)
+											  SpringCloudStreamContext context,
+											  @ExecSvc(poolSize = 1, scheduled = true) ScheduledExecutorService executorService,
+											  TestInfo testInfo)
 			throws Exception {
 		SolaceTestBinder binder = context.getBinder();
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
@@ -409,47 +407,43 @@ public class SolaceBinderClientAckIT<T> {
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(binder.getConsumerErrorQueueName(consumerBinding));
 
-		ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
+				(msg, callback) -> {
+					AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
+					Objects.requireNonNull(ackCallback).noAutoAck();
+					executorService.schedule(() -> {
+						validateNumEnqueuedMessages(context, sempV2Api, queueName, 1);
+						AckUtils.reject(ackCallback);
+						callback.run();
+					}, 2, TimeUnit.SECONDS);
+				});
+
+		final ConsumerFlowProperties errorQueueFlowProperties = new ConsumerFlowProperties();
+		errorQueueFlowProperties.setEndpoint(errorQueue);
+		errorQueueFlowProperties.setStartState(true);
+		FlowReceiver flowReceiver = null;
 		try {
-			consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
-					(msg, callback) -> {
-						AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
-						Objects.requireNonNull(ackCallback).noAutoAck();
-						executorService.schedule(() -> {
-							validateNumEnqueuedMessages(context, sempV2Api, queueName, 1);
-							AckUtils.reject(ackCallback);
-							callback.run();
-						}, 2, TimeUnit.SECONDS);
-					});
-
-			final ConsumerFlowProperties errorQueueFlowProperties = new ConsumerFlowProperties();
-			errorQueueFlowProperties.setEndpoint(errorQueue);
-			errorQueueFlowProperties.setStartState(true);
-			FlowReceiver flowReceiver = null;
-			try {
-				flowReceiver = jcsmpSession.createFlow(null, errorQueueFlowProperties);
-				assertThat(flowReceiver.receive((int) TimeUnit.SECONDS.toMillis(10))).isNotNull();
-			} finally {
-				if (flowReceiver != null) {
-					flowReceiver.close();
-				}
-			}
-
-			// Give some time for the message to actually ack off the original queue
-			Thread.sleep(TimeUnit.SECONDS.toMillis(3));
-
-			validateNumEnqueuedMessages(context, sempV2Api, queueName, 0);
-
-			producerBinding.unbind();
-			consumerBinding.unbind();
+			flowReceiver = jcsmpSession.createFlow(null, errorQueueFlowProperties);
+			assertThat(flowReceiver.receive((int) TimeUnit.SECONDS.toMillis(10))).isNotNull();
 		} finally {
-			executorService.shutdownNow();
+			if (flowReceiver != null) {
+				flowReceiver.close();
+			}
 		}
+
+		// Give some time for the message to actually ack off the original queue
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+
+		validateNumEnqueuedMessages(context, sempV2Api, queueName, 0);
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
 	}
 
 	@ParameterizedTest
 	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
 	public void testAsyncRequeue(Class<T> channelType, SempV2Api sempV2Api, SpringCloudStreamContext context,
+								 @ExecSvc(poolSize = 1, scheduled = true) ScheduledExecutorService executorService,
 								 TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = context.getBinder();
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
@@ -471,39 +465,34 @@ public class SolaceBinderClientAckIT<T> {
 		context.binderBindUnbindLatency();
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
-		ScheduledExecutorService executorService = Executors.newSingleThreadScheduledExecutor();
-		try {
-			AtomicBoolean wasRedelivered = new AtomicBoolean(false);
-			consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
-					(msg, callback) -> {
-						Boolean redelivered = msg.getHeaders().get(SolaceHeaders.REDELIVERED, Boolean.class);
-						assertThat(redelivered).isNotNull();
-						if (redelivered) {
-							wasRedelivered.set(true);
+		AtomicBoolean wasRedelivered = new AtomicBoolean(false);
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, moduleOutputChannel, message,
+				(msg, callback) -> {
+					Boolean redelivered = msg.getHeaders().get(SolaceHeaders.REDELIVERED, Boolean.class);
+					assertThat(redelivered).isNotNull();
+					if (redelivered) {
+						wasRedelivered.set(true);
+						callback.run();
+					} else {
+						AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
+						Objects.requireNonNull(ackCallback).noAutoAck();
+						executorService.schedule(() -> {
+							validateNumEnqueuedMessages(context, sempV2Api, queueName, 1);
+							AckUtils.requeue(ackCallback);
 							callback.run();
-						} else {
-							AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
-							Objects.requireNonNull(ackCallback).noAutoAck();
-							executorService.schedule(() -> {
-								validateNumEnqueuedMessages(context, sempV2Api, queueName, 1);
-								AckUtils.requeue(ackCallback);
-								callback.run();
-							}, 2, TimeUnit.SECONDS);
-						}
-					}, 2);
-			assertThat(wasRedelivered.get()).isTrue();
+						}, 2, TimeUnit.SECONDS);
+					}
+				}, 2);
+		assertThat(wasRedelivered.get()).isTrue();
 
-			// Give some time for failed message to ack
-			Thread.sleep(TimeUnit.SECONDS.toMillis(3));
+		// Give some time for failed message to ack
+		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
-			validateNumEnqueuedMessages(context, sempV2Api, queueName, 0);
-			validateNumRedeliveredMessages(context, sempV2Api, queueName, 1);
+		validateNumEnqueuedMessages(context, sempV2Api, queueName, 0);
+		validateNumRedeliveredMessages(context, sempV2Api, queueName, 1);
 
-			producerBinding.unbind();
-			consumerBinding.unbind();
-		} finally {
-			executorService.shutdownNow();
-		}
+		producerBinding.unbind();
+		consumerBinding.unbind();
 	}
 
 	@ParameterizedTest
