@@ -42,6 +42,7 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junitpioneer.jupiter.RetryingTest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
@@ -912,8 +913,8 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		consumerBinding.unbind();
 	}
 
-	@Test
-	@Execution(ExecutionMode.CONCURRENT)
+	@RetryingTest(maxAttempts = 10, onExceptions = AssertionError.class) // flaky when ran in parallel
+	@Execution(ExecutionMode.SAME_THREAD)
 	public void testConsumerReconnect(JCSMPSession jcsmpSession, SempV2Api sempV2Api, SoftAssertions softly,
 									  TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
@@ -1007,8 +1008,8 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		consumerBinding.unbind();
 	}
 
-	@Test
-	@Execution(ExecutionMode.CONCURRENT)
+	@RetryingTest(maxAttempts = 10, onExceptions = AssertionError.class) // flaky when ran in parallel
+	@Execution(ExecutionMode.SAME_THREAD)
 	public void testConsumerRebind(JCSMPSession jcsmpSession, SempV2Api sempV2Api, SoftAssertions softly,
 								   TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
