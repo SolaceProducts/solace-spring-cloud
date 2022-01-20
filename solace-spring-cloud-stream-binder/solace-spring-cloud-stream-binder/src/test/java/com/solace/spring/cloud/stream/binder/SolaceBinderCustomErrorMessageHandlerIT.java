@@ -4,10 +4,12 @@ import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
-import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
-import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
+import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
+import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
+import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.FlowReceiver;
@@ -16,11 +18,14 @@ import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.XMLMessage;
-import org.apache.commons.lang.RandomStringUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
@@ -42,51 +47,61 @@ import org.springframework.messaging.MessageHandlingException;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.ErrorMessage;
-import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.MimeTypeUtils;
 
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * All tests regarding custom channel-specific error message handlers
  * (i.e. overriding {@link SolaceErrorMessageHandler}).
  */
-@RunWith(InheritedTestsFilteredRunner.class)
-@ContextConfiguration(classes = SolaceJavaAutoConfiguration.class,
-		initializers = ConfigFileApplicationContextInitializer.class)
-@IgnoreInheritedTests
-public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase {
+@SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
+		initializers = ConfigDataApplicationContextInitializer.class)
+public class SolaceBinderCustomErrorMessageHandlerIT {
+	private static final Logger logger = LoggerFactory.getLogger(SolaceBinderCustomErrorMessageHandlerIT.class);
+
+	@RegisterExtension
+	static final PubSubPlusExtension PUBSUBPLUS_EXTENSION = new PubSubPlusExtension();
+
+	@RegisterExtension
+	static final SpringCloudStreamExtension SCST_EXTENSION = new SpringCloudStreamExtension(PUBSUBPLUS_EXTENSION);
+
 	@Test
-	public void testConsumerOverrideErrorMessageHandler() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testConsumerOverrideErrorMessageHandler(JCSMPSession jcsmpSession,
+														SempV2Api sempV2Api,
+														SpringCloudStreamContext context,
+														SoftAssertions softly,
+														TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
-				getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
+				context.getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
 		final CountDownLatch errorLatch = new CountDownLatch(1);
-		SoftAssertions softly = new SoftAssertions();
-		createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			applyErrorMessageAssertions(msg, softly, true);
 			errorLatch.countDown();
 		});
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
 		consumerProperties.setMaxAttempts(1);
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
 				destination0, group0, moduleInputChannel, consumerProperties);
@@ -95,7 +110,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -128,28 +143,31 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 	}
 
 	@Test
-	public void testConsumerOverrideErrorMessageHandlerThrowException() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testConsumerOverrideErrorMessageHandlerThrowException(JCSMPSession jcsmpSession,
+																	  SempV2Api sempV2Api,
+																	  SpringCloudStreamContext context,
+																	  TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
-				getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
+				context.getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
-		createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			throw new RuntimeException("test");
 		});
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
 		consumerProperties.setMaxAttempts(1);
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
@@ -159,7 +177,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -201,28 +219,31 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 	}
 
 	@Test
-	public void testConsumerOverrideErrorMessageHandlerThrowRequeueException() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testConsumerOverrideErrorMessageHandlerThrowRequeueException(JCSMPSession jcsmpSession,
+																			 SempV2Api sempV2Api,
+																			 SpringCloudStreamContext context,
+																			 TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
-				getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
+				context.getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
-		createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			throw new RequeueCurrentMessageException("test");
 		});
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
 		consumerProperties.setMaxAttempts(1);
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
@@ -232,7 +253,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -267,23 +288,26 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 	}
 
 	@Test
-	public void testConsumerOverrideErrorMessageHandlerThrowExceptionAndStale() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testConsumerOverrideErrorMessageHandlerThrowExceptionAndStale(JCSMPSession jcsmpSession,
+																			  SempV2Api sempV2Api,
+																			  SpringCloudStreamContext context,
+																			  SoftAssertions softly,
+																			  TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
-				getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
+				context.getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
 		CountDownLatch continueLatch = new CountDownLatch(1);
 		CountDownLatch errorStartLatch = new CountDownLatch(1);
-		SoftAssertions softly = new SoftAssertions();
-		createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			errorStartLatch.countDown();
 			try {
@@ -295,9 +319,9 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 		});
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
 		consumerProperties.setMaxAttempts(1);
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 		consumerProperties.getExtension().setFlowPreRebindWaitTimeout(0);
@@ -312,7 +336,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -371,31 +395,34 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 	}
 
 	@Test
-	public void testConsumerOverrideRetryableErrorMessageHandler() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testConsumerOverrideRetryableErrorMessageHandler(JCSMPSession jcsmpSession,
+																 SempV2Api sempV2Api,
+																 SpringCloudStreamContext context,
+																 SoftAssertions softly,
+																 TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
-				getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
+				context.getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
 		final CountDownLatch errorLatch = new CountDownLatch(1);
-		SoftAssertions softly = new SoftAssertions();
-		createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			applyErrorMessageAssertions(msg, softly, true);
 			errorLatch.countDown();
 		});
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
 		consumerProperties.setMaxAttempts(3);
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
 				destination0, group0, moduleInputChannel, consumerProperties);
@@ -404,7 +431,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -437,28 +464,31 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 	}
 
 	@Test
-	public void testConsumerOverrideRetryableErrorMessageHandlerThrowException() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testConsumerOverrideRetryableErrorMessageHandlerThrowException(JCSMPSession jcsmpSession,
+																			   SempV2Api sempV2Api,
+																			   SpringCloudStreamContext context,
+																			   TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
-				getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
+				context.getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
-		createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			throw new RuntimeException("test");
 		});
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
 		consumerProperties.setMaxAttempts(3);
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
@@ -468,7 +498,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -510,28 +540,31 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 	}
 
 	@Test
-	public void testConsumerOverrideRetryableErrorMessageHandlerThrowRequeueException() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testConsumerOverrideRetryableErrorMessageHandlerThrowRequeueException(JCSMPSession jcsmpSession,
+																					  SempV2Api sempV2Api,
+																					  SpringCloudStreamContext context,
+																					  TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
-				getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
+				context.getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
-		createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			throw new RequeueCurrentMessageException("test");
 		});
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
 		consumerProperties.setMaxAttempts(3);
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
@@ -541,7 +574,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -576,37 +609,40 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 	}
 
 	@Test
-	public void testConsumerOverridePollableErrorMessageHandler() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testConsumerOverridePollableErrorMessageHandler(JCSMPSession jcsmpSession,
+																SempV2Api sempV2Api,
+																SpringCloudStreamContext context,
+																SoftAssertions softly,
+																TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
-				getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
+				context.getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		PollableSource<MessageHandler> moduleInputChannel = context.createBindableMessageSource("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
 		final CountDownLatch errorLatch = new CountDownLatch(1);
-		SoftAssertions softly = new SoftAssertions();
-		createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			applyErrorMessageAssertions(msg, softly, true);
 			errorLatch.countDown();
 		});
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
-				destination0, group0, moduleInputChannel, createConsumerProperties());
+				destination0, group0, moduleInputChannel, context.createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -641,28 +677,31 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 	}
 
 	@Test
-	public void testConsumerOverridePollableErrorMessageHandlerThrowException() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testConsumerOverridePollableErrorMessageHandlerThrowException(JCSMPSession jcsmpSession,
+																			  SempV2Api sempV2Api,
+																			  SpringCloudStreamContext context,
+																			  TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
-				getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
+				context.getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		PollableSource<MessageHandler> moduleInputChannel = context.createBindableMessageSource("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
-		createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			throw new RuntimeException("test");
 		});
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
 				destination0, group0, moduleInputChannel, consumerProperties);
@@ -671,7 +710,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -714,28 +753,33 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 	}
 
 	@Test
-	public void testConsumerOverridePollableErrorMessageHandlerThrowRequeueException() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testConsumerOverridePollableErrorMessageHandlerThrowRequeueException(JCSMPSession jcsmpSession,
+																					 SempV2Api sempV2Api,
+																					 SpringCloudStreamContext context,
+																					 SoftAssertions softly,
+																					 TestInfo testInfo)
+			throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + group0 +
-				getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
+				context.getDestinationNameDelimiter() + "errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		PollableSource<MessageHandler> moduleInputChannel = context.createBindableMessageSource("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
-		createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			throw new RequeueCurrentMessageException("test");
 		});
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
 				destination0, group0, moduleInputChannel, consumerProperties);
@@ -744,7 +788,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -759,7 +803,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 			});
 		}
 
-		SoftAssertions softly = new SoftAssertions();
 		boolean gotSuccessMessage = false;
 		for (int i = 0; !gotSuccessMessage && i < 100; i++) {
 			gotSuccessMessage = moduleInputChannel.poll(msg -> {
@@ -787,28 +830,28 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 	}
 
 	@Test
-	public void testPublisherErrorMessageHandler() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testPublisherErrorMessageHandler(SpringCloudStreamContext context, SoftAssertions softly,
+												 TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + "errors";
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
 
-		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties();
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
 		producerProperties.setErrorChannelEnabled(true);
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel,
 				producerProperties);
 
 		final CountDownLatch errorLatch = new CountDownLatch(1);
-		SoftAssertions softly = new SoftAssertions();
-		createChannel(errorDestination0, PublishSubscribeChannel.class, msg -> {
+		context.createChannel(errorDestination0, PublishSubscribeChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			applyErrorMessageAssertions(msg, softly, false);
 			errorLatch.countDown();
 		});
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		assertThrows(MessagingException.class, () -> moduleOutputChannel.send(
 				MessageBuilder.withPayload("foo".getBytes())
@@ -816,34 +859,35 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 						.setHeader(BinderHeaders.TARGET_DESTINATION, new Object()) // force a publish error
 						.build()));
 		assertThat(errorLatch.await(10, TimeUnit.SECONDS)).isTrue();
-		softly.assertAll();
 
 		producerBinding.unbind();
 	}
 
 	@Test
-	public void testPublisherAsyncErrorMessageHandler() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testPublisherAsyncErrorMessageHandler(JCSMPSession jcsmpSession,
+													  SpringCloudStreamContext context,
+													  SoftAssertions softly,
+													  TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + "errors";
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
 
-		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties();
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
 		producerProperties.setErrorChannelEnabled(true);
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel,
 				producerProperties);
 
 		final CountDownLatch errorLatch = new CountDownLatch(1);
-		SoftAssertions softly = new SoftAssertions();
-		createChannel(errorDestination0, PublishSubscribeChannel.class, msg -> {
+		context.createChannel(errorDestination0, PublishSubscribeChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			applyErrorMessageAssertions(msg, softly, true);
 			errorLatch.countDown();
 		});
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(10));
 
@@ -858,7 +902,6 @@ public class SolaceBinderCustomErrorMessageHandlerIT extends SolaceBinderITBase 
 					.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 					.build());
 			assertThat(errorLatch.await(10, TimeUnit.SECONDS)).isTrue();
-			softly.assertAll();
 		} finally {
 			jcsmpSession.deprovision(queue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
 		}

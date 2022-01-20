@@ -21,7 +21,7 @@
         <repoName>SolaceProducts</repoName>
 
         <!-- This is the version of Spring Cloud we have targeted for this build -->
-        <spring.cloud.version>2020.0.1</spring.cloud.version>
+        <spring.cloud.version>2021.0.0</spring.cloud.version>
 
         <!-- Legacy Support for the Spring Cloud Connectors project -->
         <spring.cloud.connectors.version>2.2.13.RELEASE</spring.cloud.connectors.version>
@@ -33,12 +33,12 @@
 
         <!-- Override spring-boot version from solace-spring-boot to latest patch version -->
         <!-- Remove this if the next version of solace-spring-boot works fine -->
-        <spring.boot.version>2.4.3</spring.boot.version>
+        <spring.boot.version>2.6.2</spring.boot.version>
 
         <solace.spring.cloud.connector.version>4.3.6-SNAPSHOT</solace.spring.cloud.connector.version>
         <solace.spring.cloud.stream-starter.version>3.2.2-SNAPSHOT</solace.spring.cloud.stream-starter.version>
 
-        <solace.integration.test.support.version>0.2.0</solace.integration.test.support.version>
+        <solace.integration.test.support.version>0.8.0</solace.integration.test.support.version>
         <solace.integration.test.support.fetch_checkout.skip>false</solace.integration.test.support.fetch_checkout.skip>
         <solace.integration.test.support.install.skip>true</solace.integration.test.support.install.skip>
     </properties>

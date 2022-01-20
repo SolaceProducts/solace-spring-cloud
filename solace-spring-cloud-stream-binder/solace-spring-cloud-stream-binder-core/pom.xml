@@ -51,15 +51,8 @@
         </dependency>
 
         <dependency>
-            <groupId>org.junit.vintage</groupId>
-            <artifactId>junit-vintage-engine</artifactId>
-            <version>5.7.1</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
             <groupId>com.solace.test.integration</groupId>
-            <artifactId>solace-semp-v2-client</artifactId>
+            <artifactId>pubsubplus-junit-jupiter</artifactId>
             <version>${solace.integration.test.support.version}</version>
             <scope>test</scope>
         </dependency>
@@ -97,17 +90,12 @@
         </dependency>
     </dependencies>
 
-    <profiles>
-        <profile>
-            <id>it</id>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-failsafe-plugin</artifactId>
-                    </plugin>
-                </plugins>
-            </build>
-        </profile>
-    </profiles>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

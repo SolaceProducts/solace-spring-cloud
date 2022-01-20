@@ -3,71 +3,76 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
-import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
-import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
+import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
+import com.solace.spring.cloud.stream.binder.test.junit.param.provider.JCSMPMessageTypeArgumentsProvider;
+import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
-import com.solacesystems.jcsmp.*;
+import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
+import com.solacesystems.jcsmp.BytesMessage;
+import com.solacesystems.jcsmp.JCSMPException;
+import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solacesystems.jcsmp.MapMessage;
+import com.solacesystems.jcsmp.Message;
+import com.solacesystems.jcsmp.SDTMap;
+import com.solacesystems.jcsmp.SDTStream;
+import com.solacesystems.jcsmp.StreamMessage;
+import com.solacesystems.jcsmp.TextMessage;
+import com.solacesystems.jcsmp.XMLContentMessage;
+import com.solacesystems.jcsmp.XMLMessage;
+import com.solacesystems.jcsmp.XMLMessageProducer;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
+import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ArgumentsSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.messaging.MessageChannel;
-import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@RunWith(Parameterized.class)
-@Parameterized.UseParametersRunnerFactory(InheritedTestsFilteredRunner.ParameterizedRunnerFactory.class)
-@ContextConfiguration(classes = SolaceJavaAutoConfiguration.class,
-        initializers = ConfigFileApplicationContextInitializer.class)
-@IgnoreInheritedTests
-public class SolaceBinderNullPayloadIT extends SolaceBinderITBase {
+@SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
+        initializers = ConfigDataApplicationContextInitializer.class)
+public class SolaceBinderNullPayloadIT {
+    private static final Logger logger = LoggerFactory.getLogger(SolaceBinderNullPayloadIT.class);
 
-    @Parameterized.Parameter(0)
-    public Class messageType;
+    @RegisterExtension
+    static final PubSubPlusExtension PUBSUBPLUS_EXTENSION = new PubSubPlusExtension();
 
-    @Parameterized.Parameters(name = "{0}")
-    public static Collection<?> headerSets() {
-        return Arrays.asList(new Object[][]{
-                { TextMessage.class },
-                { BytesMessage.class },
-                { XMLContentMessage.class },
-                { MapMessage.class },
-                { StreamMessage.class }
-        });
-    }
+    @RegisterExtension
+    static final SpringCloudStreamExtension SCST_EXTENSION = new SpringCloudStreamExtension(PUBSUBPLUS_EXTENSION);
 
-    @Test
-    public void testNullPayload() throws Exception {
-        SolaceTestBinder binder = getBinder();
+    @ParameterizedTest
+    @ArgumentsSource(JCSMPMessageTypeArgumentsProvider.class)
+    public void testNullPayload(Class<? extends Message> messageType, JCSMPSession jcsmpSession,
+                                SpringCloudStreamContext context, SoftAssertions softly) throws Exception {
+        SolaceTestBinder binder = context.getBinder();
 
-        DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+        DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
         String dest = RandomStringUtils.randomAlphanumeric(10);
         String group = RandomStringUtils.randomAlphanumeric(10);
 
-        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
         Binding<MessageChannel> consumerBinding = binder.bindConsumer(dest, group, moduleInputChannel, consumerProperties);
-
-        SoftAssertions softly = new SoftAssertions();
 
         final CountDownLatch latch = new CountDownLatch(1);
         moduleInputChannel.subscribe(msg -> {
             logger.info(String.format("Received message %s", msg));
 
             softly.assertThat(msg.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD)).isNotNull();
-            softly.assertThat((boolean) msg.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD)).isTrue();
+            softly.assertThat(msg.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD, Boolean.class)).isTrue();
 
             if (messageType == BytesMessage.class) {
                 softly.assertThat(msg.getPayload() instanceof byte[]).isTrue();
@@ -85,12 +90,12 @@ public class SolaceBinderNullPayloadIT extends SolaceBinderITBase {
             latch.countDown();
         });
 
-        XMLMessageProducer producer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishEventHandler() {
+        XMLMessageProducer producer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
             @Override
-            public void handleError(String s, JCSMPException e, long l) {}
+            public void responseReceivedEx(Object o) {}
 
             @Override
-            public void responseReceived(String s) {}
+            public void handleErrorEx(Object o, JCSMPException e, long l) {}
         });
 
         XMLMessage solMsg = JCSMPFactory.onlyInstance().createMessage(messageType);
@@ -101,24 +106,23 @@ public class SolaceBinderNullPayloadIT extends SolaceBinderITBase {
         assertThat(latch.await(30, TimeUnit.SECONDS)).isTrue();
         TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
 
-        softly.assertAll();
         consumerBinding.unbind();
         producer.close();
     }
 
-    @Test
-    public void testEmptyPayload() throws Exception {
-        SolaceTestBinder binder = getBinder();
+    @ParameterizedTest
+    @ArgumentsSource(JCSMPMessageTypeArgumentsProvider.class)
+    public void testEmptyPayload(Class<? extends Message> messageType, JCSMPSession jcsmpSession,
+                                 SpringCloudStreamContext context, SoftAssertions softly) throws Exception {
+        SolaceTestBinder binder = context.getBinder();
 
-        DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+        DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
         String dest = RandomStringUtils.randomAlphanumeric(10);
         String group = RandomStringUtils.randomAlphanumeric(10);
 
-        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
         Binding<MessageChannel> consumerBinding = binder.bindConsumer(dest, group, moduleInputChannel, consumerProperties);
-
-        SoftAssertions softly = new SoftAssertions();
 
         final CountDownLatch latch = new CountDownLatch(1);
         moduleInputChannel.subscribe(msg -> {
@@ -127,7 +131,7 @@ public class SolaceBinderNullPayloadIT extends SolaceBinderITBase {
             if (messageType == BytesMessage.class) {
                 //LIMITATION: BytesMessage doesn't support EMPTY payloads since publishing byte[0] is received as a null payload
                 softly.assertThat(msg.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD)).isNotNull();
-                softly.assertThat((boolean) msg.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD)).isTrue();
+                softly.assertThat(msg.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD, Boolean.class)).isTrue();
 
                 softly.assertThat(msg.getPayload() instanceof byte[]).isTrue();
                 softly.assertThat(((byte[]) msg.getPayload()).length).isEqualTo(0);
@@ -146,7 +150,7 @@ public class SolaceBinderNullPayloadIT extends SolaceBinderITBase {
             } else if (messageType == XMLContentMessage.class) {
                 //LIMITATION: XMLContentMessage doesn't support EMPTY payloads since publishing "" is received as a null payload
                 softly.assertThat(msg.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD)).isNotNull();
-                softly.assertThat((boolean) msg.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD)).isTrue();
+                softly.assertThat(msg.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD, Boolean.class)).isTrue();
 
                 softly.assertThat(msg.getPayload() instanceof String).isTrue();
                 softly.assertThat(msg.getPayload()).isEqualTo("");
@@ -154,12 +158,12 @@ public class SolaceBinderNullPayloadIT extends SolaceBinderITBase {
             latch.countDown();
         });
 
-        XMLMessageProducer producer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishEventHandler() {
+        XMLMessageProducer producer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
             @Override
-            public void handleError(String s, JCSMPException e, long l) {}
+            public void responseReceivedEx(Object o) {}
 
             @Override
-            public void responseReceived(String s) {}
+            public void handleErrorEx(Object o, JCSMPException e, long l) {}
         });
 
         XMLMessage solMsg = JCSMPFactory.onlyInstance().createMessage(messageType);
@@ -181,7 +185,6 @@ public class SolaceBinderNullPayloadIT extends SolaceBinderITBase {
         assertThat(latch.await(30, TimeUnit.SECONDS)).isTrue();
         TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
 
-        softly.assertAll();
         consumerBinding.unbind();
         producer.close();
     }

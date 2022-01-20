@@ -1,35 +1,25 @@
 package com.solace.spring.cloud.stream.binder.provisioning;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.matchesRegex;
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@RunWith(Parameterized.class)
 public class SolaceProvisioningUtilQueueNameTest {
+    private static final Logger LOGGER = LoggerFactory.getLogger(SolaceProvisioningUtilQueueNameTest.class);
 
-    private final String destination;
-    private final String groupName;
-    private final boolean isAnonymous;
-    private final SolaceConsumerProperties consumerProperties;
-
-    private static final Log logger = LogFactory.getLog(SolaceProvisioningUtilQueueNameTest.class);
-
-    @Parameters(name = "dest: {0}, group: {1}, prefix: {2}, useGroup: {3}, useGroupInEQ: {4}, useFamiliarity: {5}, useDestEnc: {6}")
-    public static Collection<Object[]> data() {
+    public static Stream<Arguments> arguments() {
         List<List<Object>> testCases = new ArrayList<>();
 
         // destination
@@ -84,7 +74,7 @@ public class SolaceProvisioningUtilQueueNameTest {
             testCases.addAll(dupeList);
         }
 
-        return testCases.stream().map(List::toArray).collect(Collectors.toList());
+        return testCases.stream().map(List::toArray).map(Arguments::of);
     }
 
     private static List<List<Object>> deepClone(List<List<Object>> input) {
@@ -95,30 +85,18 @@ public class SolaceProvisioningUtilQueueNameTest {
         return cloned;
     }
 
-    public SolaceProvisioningUtilQueueNameTest(String destination, String groupName, String prefix, boolean useGroupName,
-                                               boolean useGroupNameInErrorQueue, boolean useFamiliarity,
-                                               boolean useDestinationEncoding) {
-        this.destination = destination;
-        this.groupName = groupName;
-        this.isAnonymous = groupName == null;
+    @ParameterizedTest(name = "[{index}] dest={0} group={1} prefix={2} useGroup={3} useGroupInEQ={4} useFamiliarity={5} useDestEnc={6}")
+    @MethodSource("arguments")
+    public void getQueueName(String destination, String groupName, String prefix, boolean useGroupName,
+                             boolean useGroupNameInErrorQueue, boolean useFamiliarity,
+                             boolean useDestinationEncoding) {
+        SolaceConsumerProperties consumerProperties = createConsumerProperties(prefix, useGroupName,
+                useGroupNameInErrorQueue, useFamiliarity, useDestinationEncoding);
+        boolean isAnonymous = groupName == null;
 
-        this.consumerProperties = new SolaceConsumerProperties();
-        if (prefix != null) {
-            this.consumerProperties.setQueueNamePrefix(prefix);
-        } else {
-            assertEquals("scst", this.consumerProperties.getQueueNamePrefix());
-        }
-        this.consumerProperties.setUseGroupNameInQueueName(useGroupName);
-        this.consumerProperties.setUseGroupNameInErrorQueueName(useGroupNameInErrorQueue);
-        this.consumerProperties.setUseFamiliarityInQueueName(useFamiliarity);
-        this.consumerProperties.setUseDestinationEncodingInQueueName(useDestinationEncoding);
-    }
-
-    @Test
-    public void getQueueName() {
         String actual = SolaceProvisioningUtil.getQueueNames(destination, groupName, consumerProperties, isAnonymous)
                 .getConsumerGroupQueueName();
-        logger.info("Testing Queue Name: " + actual);
+        LOGGER.info("Testing Queue Name: {}", actual);
 
         int levelIdx = 0;
         String[] levels = actual.split("/");
@@ -129,7 +107,7 @@ public class SolaceProvisioningUtilQueueNameTest {
         }
 
         if (consumerProperties.isUseFamiliarityInQueueName()) {
-            assertEquals(actual, isAnonymous ? "an" : "wk", levels[levelIdx]);
+            assertEquals(isAnonymous ? "an" : "wk", levels[levelIdx]);
             levelIdx++;
         }
 
@@ -161,12 +139,19 @@ public class SolaceProvisioningUtilQueueNameTest {
         }
     }
 
-    @Test
-    public void getErrorQueueName() {
+    @ParameterizedTest(name = "[{index}] dest={0} group={1} prefix={2} useGroup={3} useGroupInEQ={4} useFamiliarity={5} useDestEnc={6}")
+    @MethodSource("arguments")
+    public void getErrorQueueName(String destination, String groupName, String prefix, boolean useGroupName,
+                                  boolean useGroupNameInErrorQueue, boolean useFamiliarity,
+                                  boolean useDestinationEncoding) {
+        SolaceConsumerProperties consumerProperties = createConsumerProperties(prefix, useGroupName,
+                useGroupNameInErrorQueue, useFamiliarity, useDestinationEncoding);
+        boolean isAnonymous = groupName == null;
+
         String actual = SolaceProvisioningUtil.getQueueNames(destination, groupName, consumerProperties, isAnonymous)
                 .getErrorQueueName();
 
-        logger.info("Testing Error Queue Name: " + actual);
+        LOGGER.info("Testing Error Queue Name: {}", actual);
 
         int levelIdx = 0;
         String[] levels = actual.split("/");
@@ -180,7 +165,7 @@ public class SolaceProvisioningUtilQueueNameTest {
         levelIdx++;
 
         if (consumerProperties.isUseFamiliarityInQueueName()) {
-            assertEquals(actual, isAnonymous ? "an" : "wk", levels[levelIdx]);
+            assertEquals(isAnonymous ? "an" : "wk", levels[levelIdx]);
             levelIdx++;
         }
 
@@ -210,5 +195,21 @@ public class SolaceProvisioningUtilQueueNameTest {
             assertEquals(destinationLevel, levels[levelIdx]);
             levelIdx++;
         }
+    }
+
+    private SolaceConsumerProperties createConsumerProperties(String prefix, boolean useGroupName,
+                                                              boolean useGroupNameInErrorQueue, boolean useFamiliarity,
+                                                              boolean useDestinationEncoding) {
+        SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+        if (prefix != null) {
+            consumerProperties.setQueueNamePrefix(prefix);
+        } else {
+            assertEquals("scst", consumerProperties.getQueueNamePrefix());
+        }
+        consumerProperties.setUseGroupNameInQueueName(useGroupName);
+        consumerProperties.setUseGroupNameInErrorQueueName(useGroupNameInErrorQueue);
+        consumerProperties.setUseFamiliarityInQueueName(useFamiliarity);
+        consumerProperties.setUseDestinationEncodingInQueueName(useDestinationEncoding);
+        return consumerProperties;
     }
 }

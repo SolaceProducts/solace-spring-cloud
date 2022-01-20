@@ -1,0 +1,2 @@
+com.solace.spring.cloud.stream.binder.test.junit.extension.pubsubplus.provider.PubSubPlusSpringProvider
+com.solace.test.integration.junit.jupiter.extension.pubsubplus.provider.PubSubPlusFileProvider

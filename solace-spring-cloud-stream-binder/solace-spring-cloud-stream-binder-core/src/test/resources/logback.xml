@@ -3,4 +3,5 @@
     <include resource="org/springframework/boot/logging/logback/base.xml" />
     <logger name="CONSOLE" level="INFO" />
     <logger name="com.solace.spring.cloud.stream.binder" level="DEBUG"/>
+    <logger name="com.solace.spring.cloud.stream.binder.test" level="INFO"/>
 </configuration>

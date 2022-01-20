@@ -11,6 +11,7 @@ import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.test.util.SerializableFoo;
 import com.solacesystems.jcsmp.BytesMessage;
 import com.solacesystems.jcsmp.DeliveryMode;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -23,16 +24,15 @@ import com.solacesystems.jcsmp.StreamMessage;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLContentMessage;
 import com.solacesystems.jcsmp.XMLMessage;
-import org.apache.commons.lang.RandomStringUtils;
-import org.apache.commons.lang.math.RandomUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.hamcrest.CoreMatchers;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AcknowledgmentCallback;
@@ -43,6 +43,7 @@ import org.springframework.messaging.MessageHeaders;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.util.SerializationUtils;
+import org.testcontainers.shaded.org.apache.commons.lang.math.RandomUtils;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
@@ -67,16 +68,17 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.instanceOf;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@ExtendWith(MockitoExtension.class)
 public class XMLMessageMapperTest {
 	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 	private final ObjectWriter objectWriter = OBJECT_MAPPER.writer();
@@ -84,11 +86,6 @@ public class XMLMessageMapperTest {
 
 	@Spy
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
-
-	@Before
-	public void setupMockito() {
-		MockitoAnnotations.initMocks(this);
-	}
 
 	private static final Log logger = LogFactory.getLog(XMLMessageMapperTest.class);
 	private static final Set<String> JMS_INVALID_HEADER_NAMES = new HashSet<>(Arrays.asList("~ab;c", "NULL",
@@ -208,7 +205,7 @@ public class XMLMessageMapperTest {
 				.flatMap(h -> h)
 				.filter(h -> h.getValue().isWritable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, writeableHeaders.size());
+		assertNotEquals(0, writeableHeaders.size(), "Test header set was empty");
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
 			Object value;
@@ -317,7 +314,7 @@ public class XMLMessageMapperTest {
 				.flatMap(h -> h)
 				.filter(h -> !h.getValue().isWritable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, nonWriteableHeaders.size());
+		assertNotEquals(0, nonWriteableHeaders.size(), "Test header set was empty");
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : nonWriteableHeaders) {
 			// Doesn't matter what we set the values to
@@ -416,7 +413,7 @@ public class XMLMessageMapperTest {
 				.filter(h -> h.getValue().isWritable())
 				.filter(h -> h.getValue().hasOverriddenDefaultValue())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, overriddenWriteableHeaders.size());
+		assertNotEquals(0, overriddenWriteableHeaders.size(), "Test header set was empty");
 
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory()
 				.withPayload("")
@@ -437,10 +434,11 @@ public class XMLMessageMapperTest {
 		validateXMLMessage(xmlMessage, testSpringMessage);
 	}
 
-	@Test(expected = SolaceMessageConversionException.class)
+	@Test
 	public void testFailMapSpringMessageToXMLMessage_InvalidPayload() {
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(new Object()).build();
-		xmlMessageMapper.map(testSpringMessage, null, false);
+		assertThrows(SolaceMessageConversionException.class, () -> xmlMessageMapper.map(testSpringMessage,
+				null, false));
 	}
 
 	@Test
@@ -451,7 +449,7 @@ public class XMLMessageMapperTest {
 				.flatMap(h -> h)
 				.filter(h -> h.getValue().isWritable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, writeableHeaders.size());
+		assertNotEquals(0, writeableHeaders.size(), "Test header set was empty");
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
 			Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload("")
@@ -551,7 +549,7 @@ public class XMLMessageMapperTest {
 				.flatMap(h -> h)
 				.filter(h -> h.getValue().isWritable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, writeableHeaders.size());
+		assertNotEquals(0, writeableHeaders.size(), "Test header set was empty");
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
 			Object value;
@@ -832,7 +830,7 @@ public class XMLMessageMapperTest {
 				.flatMap(h -> h)
 				.filter(h -> h.getValue().isReadable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, readableHeaders.size());
+		assertNotEquals(0, readableHeaders.size(), "Test header set was empty");
 
 		XMLMessage defaultXmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 		TextMessage xmlMessage = Mockito.mock(TextMessage.class); // Some properties are read-only. Need to mock
@@ -999,7 +997,7 @@ public class XMLMessageMapperTest {
 				.flatMap(h -> h)
 				.filter(h -> !h.getValue().isReadable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, nonReadableHeaders.size());
+		assertNotEquals(0, nonReadableHeaders.size(), "Test header set was empty");
 
 		TextMessage xmlMessage = Mockito.mock(TextMessage.class);
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
@@ -1054,7 +1052,7 @@ public class XMLMessageMapperTest {
 				.filter(h -> h.getValue().isReadable())
 				.filter(h -> HeaderMeta.Scope.LOCAL.equals(h.getValue().getScope()))
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, readableLocalHeaders.size());
+		assertNotEquals(0, readableLocalHeaders.size(), "Test header set was empty");
 
 		TextMessage xmlMessage = Mockito.mock(TextMessage.class);
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
@@ -1120,7 +1118,7 @@ public class XMLMessageMapperTest {
 		BytesMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
 		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
-		assertTrue((boolean) springMessage.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD));
+		assertEquals(Boolean.TRUE, springMessage.getHeaders().get(SolaceBinderHeaders.NULL_PAYLOAD, Boolean.class));
 	}
 
 	@Test

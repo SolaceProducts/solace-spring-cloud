@@ -1,8 +1,9 @@
 package com.solace.spring.cloud.stream.binder.util;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
-import com.solace.spring.cloud.stream.binder.ITBase;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
+import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solacesystems.jcsmp.Consumer;
 import com.solacesystems.jcsmp.EndpointProperties;
@@ -13,74 +14,46 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
-import org.apache.commons.lang.RandomStringUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
-import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
-import org.springframework.test.context.ContextConfiguration;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
-import java.util.Arrays;
-import java.util.Collection;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@RunWith(Parameterized.class)
-@ContextConfiguration(classes = SolaceJavaAutoConfiguration.class,
-		initializers = ConfigFileApplicationContextInitializer.class)
-public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
-	@Parameterized.Parameter
-	public String parameterSetName; // Only used for parameter set naming
-
-	@Parameterized.Parameter(1)
-	public boolean isDurable;
-
-	private String vpnName;
-	private Queue queue;
+@SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
+		initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(PubSubPlusExtension.class)
+public class ErrorQueueRepublishCorrelationKeyIT {
 	private Queue errorQueue;
 	private XMLMessageProducer producer;
-	private FlowReceiverContainer flowReceiverContainer;
+	private final AtomicReference<FlowReceiverContainer> flowReceiverContainerReference = new AtomicReference<>();
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
 	private RetryableTaskService retryableTaskService;
 
 	private static final Log logger = LogFactory.getLog(ErrorQueueRepublishCorrelationKeyIT.class);
 
-	@Parameterized.Parameters(name = "{0}")
-	public static Collection<?> headerSets() {
-		return Arrays.asList(new Object[][]{
-				{"Durable", true},
-				{"Temporary", false}
-		});
-	}
-
-	@Before
-	public void setUp() throws Exception {
-		vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+	@BeforeEach
+	public void setUp(JCSMPSession jcsmpSession) throws Exception {
 		retryableTaskService = Mockito.spy(new RetryableTaskService());
-
-		if (isDurable) {
-			queue = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(20));
-			jcsmpSession.provision(queue, new EndpointProperties(), JCSMPSession.WAIT_FOR_CONFIRM);
-		} else {
-			queue = jcsmpSession.createTemporaryQueue(RandomStringUtils.randomAlphanumeric(20));
-		}
-
-		flowReceiverContainer = Mockito.spy(new FlowReceiverContainer(jcsmpSession, queue.getName(),
-				new EndpointProperties()));
-		flowReceiverContainer.bind();
 
 		String producerManagerKey = UUID.randomUUID().toString();
 		JCSMPSessionProducerManager producerManager = new JCSMPSessionProducerManager(jcsmpSession);
@@ -93,66 +66,83 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 		jcsmpSession.provision(errorQueue, new EndpointProperties(), JCSMPSession.WAIT_FOR_CONFIRM);
 	}
 
-	@After
-	public void tearDown() throws Exception {
+	@AfterEach
+	public void tearDown(JCSMPSession jcsmpSession) throws Exception {
 		if (producer != null) {
 			producer.close();
 		}
 
-		if (flowReceiverContainer != null) {
-			Optional.ofNullable(flowReceiverContainer.getFlowReceiverReference())
-					.map(FlowReceiverContainer.FlowReceiverReference::get)
-					.ifPresent(Consumer::close);
-		}
+		Optional.ofNullable(flowReceiverContainerReference.getAndSet(null))
+				.map(FlowReceiverContainer::getFlowReceiverReference)
+				.map(FlowReceiverContainer.FlowReceiverReference::get)
+				.ifPresent(Consumer::close);
 
 		if (jcsmpSession != null && !jcsmpSession.isClosed()) {
-			if (isDurable) {
-				jcsmpSession.deprovision(queue, JCSMPSession.WAIT_FOR_CONFIRM);
-			}
 			jcsmpSession.deprovision(errorQueue, JCSMPSession.WAIT_FOR_CONFIRM);
 		}
 	}
 
-	@Test
-	public void testHandleSuccess() throws Exception {
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testHandleSuccess(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue) throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
-		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer, isDurable);
 
 		key.handleSuccess();
 		assertTrue(messageContainer.isAcknowledged());
 	}
 
-	@Test
-	public void testHandleSuccessStale() throws Exception {
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testHandleSuccessStale(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue)
+			throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = Mockito.spy(flowReceiverContainer.receive(5000));
 		Mockito.when(messageContainer.isStale()).thenReturn(true);
-		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer, isDurable);
 
 		assertThrows(SolaceStaleMessageException.class, key::handleSuccess);
 		assertEquals(0, key.getErrorQueueDeliveryAttempt());
 	}
 
-	@Test
-	public void testHandleError() throws Exception {
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testHandleError(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue, SempV2Api sempV2Api)
+			throws Exception {
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
-		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer, isDurable);
 
 		key.handleError(false);
 
 		Mockito.verify(errorQueueInfrastructure, Mockito.times(1)).send(messageContainer, key);
 		assertEquals(1, key.getErrorQueueDeliveryAttempt());
-		validateNumEnqueuedMessages(queue, 0);
-		validateNumEnqueuedMessages(errorQueue, 1);
+		validateNumEnqueuedMessages(vpnName, queue, 0, sempV2Api);
+		validateNumEnqueuedMessages(vpnName, errorQueue, 1, sempV2Api);
 	}
 
-	@Test
-	public void testHandleErrorRetry() throws Exception {
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testHandleErrorRetry(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue,
+									 SempV2Api sempV2Api) throws Exception {
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
-		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer, isDurable);
 
 		Mockito.doAnswer(invocation -> {
 			if (key.getErrorQueueDeliveryAttempt() < errorQueueInfrastructure.getMaxDeliveryAttempts()) {
@@ -167,15 +157,21 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 		int maxDeliveryAttempts = Math.toIntExact(errorQueueInfrastructure.getMaxDeliveryAttempts());
 		Mockito.verify(errorQueueInfrastructure, Mockito.times(maxDeliveryAttempts)).send(messageContainer, key);
 		assertEquals(maxDeliveryAttempts, key.getErrorQueueDeliveryAttempt());
-		validateNumEnqueuedMessages(queue, 0);
-		validateNumEnqueuedMessages(errorQueue, 1);
+		validateNumEnqueuedMessages(vpnName, queue, 0, sempV2Api);
+		validateNumEnqueuedMessages(vpnName, errorQueue, 1, sempV2Api);
 	}
 
-	@Test
-	public void testHandleErrorAsyncRetry() throws Exception {
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testHandleErrorAsyncRetry(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue,
+										  SempV2Api sempV2Api) throws Exception {
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
-		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer, isDurable);
 
 		logger.info(String.format("Shutting down ingress for queue %s", errorQueue.getName()));
 		sempV2Api.config().updateMsgVpnQueue(vpnName, errorQueue.getName(),
@@ -207,15 +203,21 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 		int maxDeliveryAttempts = Math.toIntExact(errorQueueInfrastructure.getMaxDeliveryAttempts());
 		Mockito.verify(errorQueueInfrastructure, Mockito.times(maxDeliveryAttempts)).send(messageContainer, key);
 		assertEquals(maxDeliveryAttempts, key.getErrorQueueDeliveryAttempt());
-		validateNumEnqueuedMessages(queue, 0);
-		validateNumEnqueuedMessages(errorQueue, 1);
+		validateNumEnqueuedMessages(vpnName, queue, 0, sempV2Api);
+		validateNumEnqueuedMessages(vpnName, errorQueue, 1, sempV2Api);
 	}
 
-	@Test
-	public void testHandleErrorRequeueFallback() throws Exception {
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testHandleErrorRequeueFallback(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue,
+											   SempV2Api sempV2Api) throws Exception {
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
-		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer, isDurable);
 
 		Mockito.doThrow(new JCSMPException("test")).when(errorQueueInfrastructure).send(messageContainer, key);
 
@@ -224,25 +226,31 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 		int maxDeliveryAttempts = Math.toIntExact(errorQueueInfrastructure.getMaxDeliveryAttempts());
 		Mockito.verify(errorQueueInfrastructure, Mockito.times(maxDeliveryAttempts)).send(messageContainer, key);
 		assertEquals(maxDeliveryAttempts, key.getErrorQueueDeliveryAttempt());
-		validateNumEnqueuedMessages(errorQueue, 0);
+		validateNumEnqueuedMessages(vpnName, errorQueue, 0, sempV2Api);
 
 		if (isDurable) {
-			validateNumEnqueuedMessages(queue, 1);
+			validateNumEnqueuedMessages(vpnName, queue, 1, sempV2Api);
 			Mockito.verify(flowReceiverContainer).acknowledgeRebind(messageContainer, true);
 			assertEquals((Long) 2L, sempV2Api.monitor()
 					.getMsgVpnQueue(vpnName, queue.getName(), null)
 					.getData()
 					.getBindSuccessCount());
 		} else {
-			validateNumEnqueuedMessages(queue, 0);
+			validateNumEnqueuedMessages(vpnName, queue, 0, sempV2Api);
 		}
 	}
 
-	@Test
-	public void testHandleErrorRequeueFallbackSkipSync() throws Exception {
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testHandleErrorRequeueFallbackSkipSync(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue,
+													   SempV2Api sempV2Api) throws Exception {
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
-		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer, isDurable);
 
 		Mockito.doThrow(new JCSMPException("test")).when(errorQueueInfrastructure).send(messageContainer, key);
 
@@ -251,10 +259,10 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 		int maxDeliveryAttempts = Math.toIntExact(errorQueueInfrastructure.getMaxDeliveryAttempts());
 		Mockito.verify(errorQueueInfrastructure, Mockito.times(maxDeliveryAttempts)).send(messageContainer, key);
 		assertEquals(maxDeliveryAttempts, key.getErrorQueueDeliveryAttempt());
-		validateNumEnqueuedMessages(errorQueue, 0);
+		validateNumEnqueuedMessages(vpnName, errorQueue, 0, sempV2Api);
 
 		if (isDurable) {
-			validateNumEnqueuedMessages(queue, 1);
+			validateNumEnqueuedMessages(vpnName, queue, 1, sempV2Api);
 			Mockito.verify(retryableTaskService)
 					.submit(new RetryableAckRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
 			Mockito.verify(flowReceiverContainer).acknowledgeRebind(messageContainer, true);
@@ -263,15 +271,21 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 					.getData()
 					.getBindSuccessCount()));
 		} else {
-			validateNumEnqueuedMessages(queue, 0);
+			validateNumEnqueuedMessages(vpnName, queue, 0, sempV2Api);
 		}
 	}
 
-	@Test
-	public void testHandleErrorRequeueFallbackFail() throws Exception {
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testHandleErrorRequeueFallbackFail(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue,
+												   SempV2Api sempV2Api) throws Exception {
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
-		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer, isDurable);
 
 		Mockito.doThrow(new JCSMPException("test")).when(errorQueueInfrastructure).send(messageContainer, key);
 		Mockito.doThrow(new JCSMPException("test")).doCallRealMethod().when(flowReceiverContainer)
@@ -282,10 +296,10 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 		int maxDeliveryAttempts = Math.toIntExact(errorQueueInfrastructure.getMaxDeliveryAttempts());
 		Mockito.verify(errorQueueInfrastructure, Mockito.times(maxDeliveryAttempts)).send(messageContainer, key);
 		assertEquals(maxDeliveryAttempts, key.getErrorQueueDeliveryAttempt());
-		validateNumEnqueuedMessages(errorQueue, 0);
+		validateNumEnqueuedMessages(vpnName, errorQueue, 0, sempV2Api);
 
 		if (isDurable) {
-			validateNumEnqueuedMessages(queue, 1);
+			validateNumEnqueuedMessages(vpnName, queue, 1, sempV2Api);
 			Mockito.verify(retryableTaskService)
 					.submit(new RetryableAckRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
 			Mockito.verify(flowReceiverContainer, Mockito.times(2))
@@ -295,22 +309,38 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 					.getData()
 					.getBindSuccessCount()));
 		} else {
-			validateNumEnqueuedMessages(queue, 0);
+			validateNumEnqueuedMessages(vpnName, queue, 0, sempV2Api);
 		}
 	}
 
-	@Test
-	public void testHandleErrorStale() throws Exception {
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testHandleErrorStale(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue)
+			throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = Mockito.spy(flowReceiverContainer.receive(5000));
 		Mockito.when(messageContainer.isStale()).thenReturn(true);
-		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer, isDurable);
 
 		assertThrows(SolaceStaleMessageException.class, () -> key.handleError(false));
 		assertEquals(0, key.getErrorQueueDeliveryAttempt());
 	}
 
-	private ErrorQueueRepublishCorrelationKey createKey(MessageContainer messageContainer) {
+	private FlowReceiverContainer createFlowReceiverContainer(JCSMPSession jcsmpSession, Queue queue)
+			throws JCSMPException {
+		if (flowReceiverContainerReference.compareAndSet(null, Mockito.spy(new FlowReceiverContainer(
+				jcsmpSession, queue.getName(), new EndpointProperties())))) {
+			flowReceiverContainerReference.get().bind();
+		}
+		return flowReceiverContainerReference.get();
+	}
+
+	private ErrorQueueRepublishCorrelationKey createKey(MessageContainer messageContainer,
+														FlowReceiverContainer flowReceiverContainer,
+														boolean isDurable) {
 		return new ErrorQueueRepublishCorrelationKey(errorQueueInfrastructure,
 				messageContainer,
 				flowReceiverContainer,
@@ -318,7 +348,8 @@ public class ErrorQueueRepublishCorrelationKeyIT extends ITBase {
 				retryableTaskService);
 	}
 
-	private void validateNumEnqueuedMessages(Queue queue, int expectedCount) throws InterruptedException {
+	private void validateNumEnqueuedMessages(String vpnName, Queue queue, int expectedCount, SempV2Api sempV2Api)
+			throws InterruptedException {
 		retryAssert(() -> assertThat(sempV2Api.monitor()
 				.getMsgVpnQueueMsgs(vpnName, queue.getName(), null, null, null, null)
 				.getData())

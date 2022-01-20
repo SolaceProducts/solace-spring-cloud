@@ -71,6 +71,32 @@ If it shouldn't be inherited by the BOM, it doesn't go here.
 - solace-spring-cloud-parent  
 This POM defines common properties and dependencies for the Solace Spring Cloud projects.
 
+### Running the Tests
+
+Run the following command to run all the unit and integration tests:
+
+```shell
+mvn clean verify
+```
+
+#### Run Tests With An External Broker
+
+By default, the tests requires for Docker to be installed on the host machine so that they can auto-provision a PubSub+ broker. Otherwise, the following environment variables can be set to direct the tests to use an external broker:
+
+```
+SOLACE_JAVA_HOST=tcp://localhost:55555
+SOLACE_JAVA_CLIENT_USERNAME=default
+SOLACE_JAVA_CLIENT_PASSWORD=default
+SOLACE_JAVA_MSG_VPN=default
+TEST_SOLACE_MGMT_HOST=http://localhost:8080
+TEST_SOLACE_MGMT_USERNAME=admin
+TEST_SOLACE_MGMT_PASSWORD=admin
+```
+
+#### Parallel Test Execution
+
+Parallel test execution is enabled by default. Add the `-Djunit.jupiter.execution.parallel.enabled=false` option to your command to disable parallel test execution.
+
 ## Release Process
 
 1. Update `solace-spring-boot-bom` to latest released version
