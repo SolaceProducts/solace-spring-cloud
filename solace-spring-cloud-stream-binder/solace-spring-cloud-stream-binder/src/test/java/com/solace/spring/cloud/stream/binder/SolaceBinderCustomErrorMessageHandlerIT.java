@@ -4,9 +4,9 @@ import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
-import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
-import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
+import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
+import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
@@ -22,7 +22,7 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
@@ -64,14 +64,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
  */
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
 		initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(PubSubPlusExtension.class)
+@ExtendWith(SpringCloudStreamExtension.class)
 public class SolaceBinderCustomErrorMessageHandlerIT {
 	private static final Logger logger = LoggerFactory.getLogger(SolaceBinderCustomErrorMessageHandlerIT.class);
-
-	@RegisterExtension
-	static final PubSubPlusExtension PUBSUBPLUS_EXTENSION = new PubSubPlusExtension();
-
-	@RegisterExtension
-	static final SpringCloudStreamExtension SCST_EXTENSION = new SpringCloudStreamExtension(PUBSUBPLUS_EXTENSION);
 
 	@Test
 	public void testConsumerOverrideErrorMessageHandler(JCSMPSession jcsmpSession,

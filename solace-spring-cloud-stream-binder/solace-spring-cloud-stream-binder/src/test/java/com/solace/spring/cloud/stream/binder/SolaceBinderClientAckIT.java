@@ -23,7 +23,6 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.api.extension.RegisterExtension;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
@@ -58,15 +57,11 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
 		initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(PubSubPlusExtension.class)
+@ExtendWith(SpringCloudStreamExtension.class)
 @ExtendWith(ExecutorServiceExtension.class)
 public class SolaceBinderClientAckIT<T> {
 	private static final Logger logger = LoggerFactory.getLogger(SolaceBinderClientAckIT.class);
-
-	@RegisterExtension
-	static final PubSubPlusExtension PUBSUBPLUS_EXTENSION = new PubSubPlusExtension();
-
-	@RegisterExtension
-	static final SpringCloudStreamExtension SCST_EXTENSION = new SpringCloudStreamExtension(PUBSUBPLUS_EXTENSION);
 
 	@ParameterizedTest
 	@ValueSource(classes = {DirectChannel.class, PollableSource.class})

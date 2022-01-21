@@ -9,7 +9,7 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.Binding;
@@ -35,12 +35,9 @@ import static org.junit.jupiter.api.Assertions.fail;
  * All tests regarding messaging which use a dynamic configuration on a message-by-message basis.
  */
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(PubSubPlusExtension.class)
+@ExtendWith(SpringCloudStreamExtension.class)
 public class SolaceBinderDynamicMessagingIT {
-	@RegisterExtension
-	static final PubSubPlusExtension PUBSUBPLUS_EXTENSION = new PubSubPlusExtension();
-
-	@RegisterExtension
-	static final SpringCloudStreamExtension SCST_EXTENSION = new SpringCloudStreamExtension(PUBSUBPLUS_EXTENSION);
 
 	@Test
 	public void testTargetDestination(SpringCloudStreamContext context, SoftAssertions softly,

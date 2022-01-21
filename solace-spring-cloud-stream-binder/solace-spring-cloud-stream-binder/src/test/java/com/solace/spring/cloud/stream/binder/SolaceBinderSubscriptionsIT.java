@@ -4,9 +4,9 @@ import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
-import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
-import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
+import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
+import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.monitor.ApiException;
@@ -14,7 +14,7 @@ import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueSubsc
 import com.solacesystems.jcsmp.JCSMPProperties;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
@@ -45,15 +45,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
         initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(PubSubPlusExtension.class)
+@ExtendWith(SpringCloudStreamExtension.class)
 public class SolaceBinderSubscriptionsIT {
     public static final String DESTINATION = "destination";
     public static final String[] ADDITIONAL_SUBSCRIPTIONS = new String[]{"addSub1", "addSub2"};
-
-    @RegisterExtension
-    static final PubSubPlusExtension PUBSUBPLUS_EXTENSION = new PubSubPlusExtension();
-
-    @RegisterExtension
-    static final SpringCloudStreamExtension SCST_EXTENSION = new SpringCloudStreamExtension(PUBSUBPLUS_EXTENSION);
 
     @CartesianTest
     public void testConsumerWITHAddDestinationAsSubscriptionANDProvisionSubscriptionsToDurableQueue(
