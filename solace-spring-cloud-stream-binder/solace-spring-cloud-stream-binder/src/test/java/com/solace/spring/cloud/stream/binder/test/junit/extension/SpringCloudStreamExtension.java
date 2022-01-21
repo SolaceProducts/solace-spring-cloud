@@ -9,14 +9,12 @@ import org.junit.jupiter.api.extension.ExtensionContext.Namespace;
 import org.junit.jupiter.api.extension.ParameterContext;
 import org.junit.jupiter.api.extension.ParameterResolutionException;
 import org.junit.jupiter.api.extension.ParameterResolver;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class SpringCloudStreamExtension implements AfterEachCallback, BeforeEachCallback, ParameterResolver {
 	private static final Namespace NAMESPACE = Namespace.create(SpringCloudStreamContext.class);
-	private final PubSubPlusExtension pubSubPlusExtension;
-
-	public SpringCloudStreamExtension(PubSubPlusExtension pubSubPlusExtension) {
-		this.pubSubPlusExtension = pubSubPlusExtension;
-	}
+	private static final Logger LOGGER = LoggerFactory.getLogger(SpringCloudStreamExtension.class);
 
 	@Override
 	public void afterEach(ExtensionContext context) {
@@ -48,9 +46,10 @@ public class SpringCloudStreamExtension implements AfterEachCallback, BeforeEach
 		Class<?> paramType = parameterContext.getParameter().getType();
 		if (SpringCloudStreamContext.class.isAssignableFrom(paramType)) {
 			return extensionContext.getStore(NAMESPACE).getOrComputeIfAbsent(SpringCloudStreamContext.class,
-					c -> {
+					key -> {
+						LOGGER.info("Creating {}", SpringCloudStreamContext.class.getSimpleName());
 						SpringCloudStreamContext context = new SpringCloudStreamContext(
-								pubSubPlusExtension.getJCSMPSession(extensionContext));
+								PubSubPlusExtension.getJCSMPSession(extensionContext));
 						context.before();
 						return context;
 					},

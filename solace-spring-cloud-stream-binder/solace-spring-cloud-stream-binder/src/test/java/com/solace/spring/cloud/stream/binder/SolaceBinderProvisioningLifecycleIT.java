@@ -5,9 +5,9 @@ import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
-import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
-import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
+import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
+import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.spring.cloud.stream.binder.test.util.ThrowingFunction;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
@@ -33,7 +33,7 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
-import org.junit.jupiter.api.extension.RegisterExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junitpioneer.jupiter.RetryingTest;
@@ -84,13 +84,10 @@ import static org.hamcrest.Matchers.is;
  * All tests which modify the default provisioning lifecycle.
  */
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(PubSubPlusExtension.class)
+@ExtendWith(SpringCloudStreamExtension.class)
 public class SolaceBinderProvisioningLifecycleIT {
 	private static final Logger logger = LoggerFactory.getLogger(SolaceBinderProvisioningLifecycleIT.class);
-	@RegisterExtension
-	static final PubSubPlusExtension PUBSUBPLUS_EXTENSION = new PubSubPlusExtension();
-
-	@RegisterExtension
-	static final SpringCloudStreamExtension SCST_EXTENSION = new SpringCloudStreamExtension(PUBSUBPLUS_EXTENSION);
 
 	@Test
 	public void testConsumerProvisionDurableQueue(JCSMPSession jcsmpSession, SpringCloudStreamContext context,
