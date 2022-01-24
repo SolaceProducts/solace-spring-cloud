@@ -31,6 +31,12 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 */
 	private boolean useGroupNameInQueueName = true;
 
+	/**
+	 * A SpEL expression for creating the consumer group’s queue name.
+	 * Modifying this can cause naming conflicts between the queue names of consumer groups.
+	 */
+	private String queueNameExpression = "(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + (isAnonymous ? group + '/' : (properties.solace.useGroupNameInQueueName ? group + '/' : '')) + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')";
+
 	// Error Queue Properties ---------
 	/**
 	 * Whether to automatically create a durable error queue to which messages will be republished when message processing failures are encountered.
@@ -42,6 +48,11 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * This should only be set to false if you have externally pre-provisioned the required queue on the message broker.
 	 */
 	private boolean provisionErrorQueue = true;
+	/**
+	 * A SpEL expression for creating the error queue’s name.
+	 * Modifying this can cause naming conflicts between the error queue names.
+	 */
+	private String errorQueueNameExpression = "(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + 'error/' + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + (isAnonymous ? group + '/' : (properties.solace.useGroupNameInErrorQueueName ? group + '/' : '')) + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')";
 	/**
 	 * A custom error queue name.
 	 */
@@ -125,6 +136,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.useGroupNameInQueueName = useGroupNameInQueueName;
 	}
 
+	public String getQueueNameExpression() {
+		return queueNameExpression;
+	}
+
+	public void setQueueNameExpression(String queueNameExpression) {
+		this.queueNameExpression = queueNameExpression;
+	}
+
 	public boolean isAutoBindErrorQueue() {
 		return autoBindErrorQueue;
 	}
@@ -139,6 +158,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setProvisionErrorQueue(boolean provisionErrorQueue) {
 		this.provisionErrorQueue = provisionErrorQueue;
+	}
+
+	public String getErrorQueueNameExpression() {
+		return errorQueueNameExpression;
+	}
+
+	public void setErrorQueueNameExpression(String errorQueueNameExpression) {
+		this.errorQueueNameExpression = errorQueueNameExpression;
 	}
 
 	public String getErrorQueueNameOverride() {

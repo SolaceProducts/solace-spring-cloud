@@ -15,7 +15,7 @@ public class SolaceCommonProperties {
 	 * This should only be set to false if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum)
 	 * on the consumer group’s queue on the message broker. This property also applies to topics added by the queueAdditionalSubscriptions property.
 	 */
-  @Deprecated
+	@Deprecated
 	private boolean provisionSubscriptionsToDurableQueue = true;
 	/**
 	 * Whether to add the Destination as a subscription to queue during provisioning.

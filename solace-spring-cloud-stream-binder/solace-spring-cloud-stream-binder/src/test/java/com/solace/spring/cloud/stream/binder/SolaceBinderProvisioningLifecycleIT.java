@@ -105,7 +105,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getQueueNames(destination0, group0, consumerProperties, false)
 				.getConsumerGroupQueueName());
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
@@ -163,7 +163,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 		consumerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(false);
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-				.getQueueName(destination0, group0, producerProperties.getExtension()));
+				.getQueueName(destination0, group0, producerProperties));
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
 
@@ -215,7 +215,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getQueueNames(destination0, group0, consumerProperties, false)
 				.getConsumerGroupQueueName());
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
@@ -390,7 +390,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 
 		String errorQueueName = SolaceProvisioningUtil
-				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getQueueNames(destination0, group0, consumerProperties, false)
 				.getErrorQueueName();
 		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
 
@@ -971,7 +971,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
 
 		String queue0 = SolaceProvisioningUtil
-				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getQueueNames(destination0, group0, consumerProperties, false)
 				.getConsumerGroupQueueName();
 
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
@@ -1117,7 +1117,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 			ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
 			consumerFlowProperties.setStartState(true);
 			consumerFlowProperties.setEndpoint(JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-					.getQueueName(topic0, group0, producerProperties.getExtension())));
+					.getQueueName(topic0, group0, producerProperties)));
 			flowReceiver = jcsmpSession.createFlow(new XMLMessageListener() {
 				@Override
 				public void onReceive(BytesXMLMessage bytesXMLMessage) {

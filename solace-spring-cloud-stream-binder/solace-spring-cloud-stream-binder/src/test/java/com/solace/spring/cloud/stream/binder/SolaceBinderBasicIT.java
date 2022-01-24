@@ -717,7 +717,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-				.getQueueName(destination0, group0, createProducerProperties(testInfo).getExtension()));
+				.getQueueName(destination0, group0, createProducerProperties(testInfo)));
 
 		logger.info(String.format("Pre-provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
 				queue.getName(), endpointProperties.getAccessType(), defaultAccessType));
@@ -753,7 +753,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-				.getQueueNames(destination0, group0, createConsumerProperties().getExtension(), false)
+				.getQueueNames(destination0, group0, createConsumerProperties(), false)
 				.getConsumerGroupQueueName());
 
 		logger.info(String.format("Pre-provisioning queue %s with AccessType %s to conflict with defaultAccessType %s",
@@ -788,7 +788,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setAccessType((defaultAccessType + 1) % 2);
 		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-				.getQueueNames(destination0, group0, createConsumerProperties().getExtension(), false)
+				.getQueueNames(destination0, group0, createConsumerProperties(), false)
 				.getErrorQueueName());
 
 		logger.info(String.format("Pre-provisioning error queue %s with AccessType %s to conflict with defaultAccessType %s",

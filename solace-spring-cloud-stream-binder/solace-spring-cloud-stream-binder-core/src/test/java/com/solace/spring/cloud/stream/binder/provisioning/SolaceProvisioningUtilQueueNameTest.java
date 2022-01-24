@@ -6,6 +6,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -94,7 +95,7 @@ public class SolaceProvisioningUtilQueueNameTest {
                 useGroupNameInErrorQueue, useFamiliarity, useDestinationEncoding);
         boolean isAnonymous = groupName == null;
 
-        String actual = SolaceProvisioningUtil.getQueueNames(destination, groupName, consumerProperties, isAnonymous)
+        String actual = SolaceProvisioningUtil.getQueueNames(destination, groupName, new ExtendedConsumerProperties<>(consumerProperties), isAnonymous)
                 .getConsumerGroupQueueName();
         LOGGER.info("Testing Queue Name: {}", actual);
 
@@ -148,7 +149,7 @@ public class SolaceProvisioningUtilQueueNameTest {
                 useGroupNameInErrorQueue, useFamiliarity, useDestinationEncoding);
         boolean isAnonymous = groupName == null;
 
-        String actual = SolaceProvisioningUtil.getQueueNames(destination, groupName, consumerProperties, isAnonymous)
+        String actual = SolaceProvisioningUtil.getQueueNames(destination, groupName, new ExtendedConsumerProperties<>(consumerProperties), isAnonymous)
                 .getErrorQueueName();
 
         LOGGER.info("Testing Error Queue Name: {}", actual);
