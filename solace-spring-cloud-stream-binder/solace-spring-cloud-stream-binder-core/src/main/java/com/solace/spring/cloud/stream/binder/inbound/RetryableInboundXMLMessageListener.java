@@ -3,10 +3,7 @@ package com.solace.spring.cloud.stream.binder.inbound;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
-import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
-import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
 import com.solacesystems.jcsmp.BytesXMLMessage;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
@@ -16,15 +13,12 @@ import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.retry.RecoveryCallback;
-import org.springframework.retry.RetryCallback;
-import org.springframework.retry.RetryContext;
-import org.springframework.retry.RetryListener;
 import org.springframework.retry.support.RetryTemplate;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-class RetryableInboundXMLMessageListener extends InboundXMLMessageListener implements RetryListener {
+class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 	private final RetryTemplate retryTemplate;
 	private final RecoveryCallback<?> recoveryCallback;
 
@@ -46,8 +40,10 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener imple
 
 	@Override
 	void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) throws SolaceAcknowledgmentException {
-		Message<?> message = retryTemplate.execute((context) -> createMessage(bytesXMLMessage, acknowledgmentCallback),
-				(context) -> {
+		Message<?> message = retryTemplate.execute((context) -> {
+			attributesHolder.set(context);
+			return createMessage(bytesXMLMessage, acknowledgmentCallback);
+		}, (context) -> {
 			recoveryCallback.recover(context);
 			AckUtils.autoAck(acknowledgmentCallback);
 			return null;
@@ -58,6 +54,7 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener imple
 		}
 
 		retryTemplate.execute((context) -> {
+			attributesHolder.set(context);
 			sendToConsumer(message, bytesXMLMessage);
 			AckUtils.autoAck(acknowledgmentCallback);
 			return null;
@@ -66,35 +63,5 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener imple
 			AckUtils.autoAck(acknowledgmentCallback);
 			return toReturn;
 		});
-	}
-
-	@Override
-	public <T, E extends Throwable> boolean open(RetryContext retryContext, RetryCallback<T, E> retryCallback) {
-		if (recoveryCallback != null) {
-			attributesHolder.set(retryContext);
-		}
-		return true;
-	}
-
-	@Override
-	public <T, E extends Throwable> void close(RetryContext retryContext, RetryCallback<T, E> retryCallback,
-											   Throwable throwable) {
-		attributesHolder.remove();
-	}
-
-	@Override
-	public <T, E extends Throwable> void onError(RetryContext retryContext, RetryCallback<T, E> retryCallback,
-												 Throwable throwable) {
-		logger.warn(String.format("Failed to consume a message from destination %s - attempt %s",
-				consumerDestination.getName(),
-				retryContext.getRetryCount()));
-		for (Throwable nestedThrowable : ExceptionUtils.getThrowableList(throwable)) {
-			if (nestedThrowable instanceof SolaceMessageConversionException ||
-					nestedThrowable instanceof SolaceStaleMessageException) {
-				// Do not retry if these exceptions are thrown
-				retryContext.setExhaustedOnly();
-				break;
-			}
-		}
 	}
 }

@@ -2,15 +2,13 @@ package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
-import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
-import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
-import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
-import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
+import com.solace.spring.cloud.stream.binder.util.*;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.core.AttributeAccessor;
@@ -19,6 +17,9 @@ import org.springframework.integration.endpoint.MessageProducerSupport;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessagingException;
 import org.springframework.retry.RecoveryCallback;
+import org.springframework.retry.RetryCallback;
+import org.springframework.retry.RetryContext;
+import org.springframework.retry.RetryListener;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
 
@@ -110,6 +111,10 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			logger.warn(msg, e);
 			flowReceivers.forEach(FlowReceiverContainer::unbind);
 			throw new MessagingException(msg, e);
+		}
+
+		if (retryTemplate != null) {
+			retryTemplate.registerListener(new SolaceRetryListener(queueName));
 		}
 
 		executorService = Executors.newFixedThreadPool(this.concurrency);
@@ -215,7 +220,6 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					remoteStopFlag,
 					attributesHolder
 			);
-			retryTemplate.registerListener(retryableMessageListener);
 			listener = retryableMessageListener;
 		} else {
 			listener = new BasicInboundXMLMessageListener(
@@ -230,5 +234,38 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			);
 		}
 		return listener;
+	}
+
+	private final class SolaceRetryListener implements RetryListener {
+
+		private final String queueName;
+
+		private SolaceRetryListener(String queueName) {
+			this.queueName = queueName;
+		}
+
+		@Override
+		public <T, E extends Throwable> boolean open(RetryContext context, RetryCallback<T, E> callback) {
+			return true;
+		}
+
+		@Override
+		public <T, E extends Throwable> void close(RetryContext context, RetryCallback<T, E> callback, Throwable throwable) {
+
+		}
+
+		@Override
+		public <T, E extends Throwable> void onError(RetryContext context, RetryCallback<T, E> callback, Throwable throwable) {
+			logger.warn(String.format("Failed to consume a message from destination %s - attempt %s",
+					queueName, context.getRetryCount()));
+			for (Throwable nestedThrowable : ExceptionUtils.getThrowableList(throwable)) {
+				if (nestedThrowable instanceof SolaceMessageConversionException ||
+						nestedThrowable instanceof SolaceStaleMessageException) {
+					// Do not retry if these exceptions are thrown
+					context.setExhaustedOnly();
+					break;
+				}
+			}
+		}
 	}
 }
