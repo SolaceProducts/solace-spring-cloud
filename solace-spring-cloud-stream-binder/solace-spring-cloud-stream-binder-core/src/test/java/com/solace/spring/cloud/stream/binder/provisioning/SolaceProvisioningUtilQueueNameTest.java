@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.provisioning;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -212,5 +213,112 @@ public class SolaceProvisioningUtilQueueNameTest {
         consumerProperties.setUseFamiliarityInQueueName(useFamiliarity);
         consumerProperties.setUseDestinationEncodingInQueueName(useDestinationEncoding);
         return consumerProperties;
+    }
+
+    @Test
+    public void testDefaultQueueNameExpressionsWithPrefixAndGroupAndDestinationContainingWhitespaces() {
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
+        consumerProperties.getExtension().setQueueNamePrefix("    aQueueNamePrefixWithSpaces    ");
+
+        String destination = "  destination/with/spaces      ";
+        String group = "    aGroupWithSpaces    ";
+
+        SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(destination, group, consumerProperties, group == null);
+
+        assertEquals("aQueueNamePrefixWithSpaces/wk/aGroupWithSpaces/plain/destination/with/spaces", queueNames.getConsumerGroupQueueName());
+        assertEquals("aQueueNamePrefixWithSpaces/error/wk/aGroupWithSpaces/plain/destination/with/spaces", queueNames.getErrorQueueName());
+    }
+
+    @Test
+    public void testDefaultQueueNameExpressionsWithGroupAsWhiteSpacesOnlyGeneratesAGroup() {
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
+
+        String destination = "simple/destination";
+        String group = "    ";
+
+        SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil
+                .getQueueNames(destination, group, consumerProperties, SolaceProvisioningUtil.isAnonQueue(group));
+
+        assertThat(queueNames.getConsumerGroupQueueName(), matchesRegex("scst\\/an\\/\\b[0-9a-f]{8}\\b(?:-[0-9a-f]{4}){3}-\\b[0-9a-f]{12}\\b\\/plain\\/simple\\/destination"));
+        assertThat(queueNames.getErrorQueueName(), matchesRegex("scst\\/error\\/an\\/\\b[0-9a-f]{8}\\b(?:-[0-9a-f]{4}){3}-\\b[0-9a-f]{12}\\b\\/plain\\/simple\\/destination"));
+    }
+
+    @Test
+    public void testDefaultQueueNameExpressionsWithGroupAsNullGeneratesAGroup() {
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
+
+        String destination = "simple/destination";
+        String group = null;
+
+        SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil
+                .getQueueNames(destination, group, consumerProperties, SolaceProvisioningUtil.isAnonQueue(group));
+
+        assertThat(queueNames.getConsumerGroupQueueName(), matchesRegex("scst\\/an\\/\\b[0-9a-f]{8}\\b(?:-[0-9a-f]{4}){3}-\\b[0-9a-f]{12}\\b\\/plain\\/simple\\/destination"));
+        assertThat(queueNames.getErrorQueueName(), matchesRegex("scst\\/error\\/an\\/\\b[0-9a-f]{8}\\b(?:-[0-9a-f]{4}){3}-\\b[0-9a-f]{12}\\b\\/plain\\/simple\\/destination"));
+    }
+
+    @Test
+    public void testQueueNameExpressionWithStaticValue() {
+        SolaceConsumerProperties consumerProperties = createConsumerProperties(null, true, true, true, true);
+        //The escaped single quote '' resolves to a single quote in the actual queue name
+        consumerProperties.setQueueNameExpression("'My/Static.QueueName-_''>*!@#$%^&()+='");
+
+        String actual = SolaceProvisioningUtil
+                .getQueueNames("unused/destination", "unusedGroup", new ExtendedConsumerProperties<>(consumerProperties), true)
+                .getConsumerGroupQueueName();
+        assertEquals("My/Static.QueueName-_'>*!@#$%^&()+=", actual);
+    }
+
+    @Test
+    public void testQueueNameExpressionWithSolaceProperties() {
+        SolaceConsumerProperties consumerProperties = createConsumerProperties("myCustomPrefix", true, true, true, true);
+        consumerProperties.setQueueMaxMsgRedelivery(5);
+
+        consumerProperties.setQueueNameExpression("properties.solace.queueNamePrefix + '_' + properties.solace.useGroupNameInQueueName + '_' + properties.solace.queueMaxMsgRedelivery + '_' + properties.solace.errorQueueNameOverride");
+
+        String actual = SolaceProvisioningUtil
+                .getQueueNames("unused/destination", "unusedGroup", new ExtendedConsumerProperties<>(consumerProperties), false)
+                .getConsumerGroupQueueName();
+        assertEquals("myCustomPrefix_true_5_null", actual);
+    }
+
+    @Test
+    public  void testQueueNameExpressionWithLongFormSolaceProperties() {
+        SolaceConsumerProperties consumerProperties = createConsumerProperties("myCustomPrefix", true, true, true, true);
+        consumerProperties.setQueueMaxMsgRedelivery(5);
+
+        consumerProperties.setQueueNameExpression("properties.spring.extension.queueNamePrefix + '_' + properties.spring.extension.useGroupNameInQueueName + '_' + properties.spring.extension.queueMaxMsgRedelivery + '_' + properties.spring.extension.errorQueueNameOverride");
+
+        String actual = SolaceProvisioningUtil
+                .getQueueNames("unused/destination", "unusedGroup", new ExtendedConsumerProperties<>(consumerProperties), false)
+                .getConsumerGroupQueueName();
+        assertEquals("myCustomPrefix_true_5_null", actual);
+    }
+
+    @Test
+    public  void testQueueNameExpressionWithSpringProperties() {
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
+        consumerProperties.setMaxAttempts(22);
+        consumerProperties.setAutoStartup(true);
+        consumerProperties.setDefaultRetryable(false);
+        consumerProperties.getExtension().setQueueNameExpression("properties.spring.maxAttempts + '_' + properties.spring.autoStartup + '_' + properties.spring.defaultRetryable");
+
+        String actual = SolaceProvisioningUtil
+                .getQueueNames("simple/destination", "groupName", consumerProperties, false)
+                .getConsumerGroupQueueName();
+        assertEquals("22_true_false", actual);
+    }
+
+    @Test
+    public  void testErrorQueueNameExpressionWithSolaceAndSpringProperties() {
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
+        consumerProperties.setMaxAttempts(10);
+        consumerProperties.getExtension().setQueueMaxMsgRedelivery(11);
+        consumerProperties.getExtension().setErrorQueueNameExpression("properties.spring.maxAttempts + '_' + properties.solace.queueMaxMsgRedelivery + '_' + properties.spring.extension.errorQueueNameOverride");
+
+        String actual = SolaceProvisioningUtil
+                .getQueueNames("unused/destination", "unusedGroup", consumerProperties, false)
+                .getErrorQueueName();
+        assertEquals("10_11_null", actual);
     }
 }
