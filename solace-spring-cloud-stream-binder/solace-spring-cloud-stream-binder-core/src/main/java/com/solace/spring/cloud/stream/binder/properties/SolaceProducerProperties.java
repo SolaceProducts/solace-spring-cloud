@@ -20,7 +20,6 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 	private String queueNameExpression = "(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + group + '/' + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')";
 
 	/**
-	 * TODO: Use this property
 	 * A mapping of required consumer groups to queue name SpEL expressions.
 	 * By default, queueNameExpression will be used to generate a required group’s queue name if it isn’t specified within this configuration option.
 	 * Modifying this can cause naming conflicts between the queue names of consumer groups.
@@ -47,6 +46,14 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 
 	public void setQueueNameExpression(String queueNameExpression) {
 		this.queueNameExpression = queueNameExpression;
+	}
+
+	public Map<String, String> getQueueNameExpressionsForRequiredGroups() {
+		return queueNameExpressionsForRequiredGroups;
+	}
+
+	public void setQueueNameExpressionsForRequiredGroups(Map<String, String> queueNameExpressionsForRequiredGroups) {
+		this.queueNameExpressionsForRequiredGroups = queueNameExpressionsForRequiredGroups;
 	}
 
 	public Map<String, String[]> getQueueAdditionalSubscriptions() {

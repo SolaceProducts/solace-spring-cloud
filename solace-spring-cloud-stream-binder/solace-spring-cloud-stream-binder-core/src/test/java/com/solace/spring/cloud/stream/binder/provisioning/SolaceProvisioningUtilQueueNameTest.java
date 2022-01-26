@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.provisioning;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -9,11 +10,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
+import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.provisioning.ProvisioningException;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Stream;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -326,6 +326,18 @@ public class SolaceProvisioningUtilQueueNameTest {
     }
 
     @Test
+    public void testErrorQueueNameOverrideTakesPrecedenceOverErrorQueueNameExpression() {
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
+        consumerProperties.getExtension().setErrorQueueNameOverride("ErrorQueueNameOverride");
+        consumerProperties.getExtension().setErrorQueueNameExpression("'AnErrorQueueNameExpression'");
+
+        String actual = SolaceProvisioningUtil
+                .getQueueNames("unused/destination", "unusedGroup", consumerProperties, false)
+                .getErrorQueueName();
+        assertEquals("ErrorQueueNameOverride", actual);
+    }
+
+    @Test
     public void testInvalidQueueNameExpression() {
         String invalidExpression = "This is an invalid expression";
         ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
@@ -337,5 +349,22 @@ public class SolaceProvisioningUtilQueueNameTest {
             Assertions.assertThat(e).isInstanceOf(ProvisioningException.class);
             Assertions.assertThat(e.getMessage()).contains("Failed to evaluate Spring expression: " + invalidExpression);
         }
+    }
+
+    @Test
+    public void testQueueNameExpressionsForRequiredGroups() {
+        String group1 = "group1_hasOverride";
+        String group2 = "group2_noOverride";
+
+        ExtendedProducerProperties<SolaceProducerProperties> producerProperties = new ExtendedProducerProperties<>(new SolaceProducerProperties());
+        producerProperties.setRequiredGroups(group1, group2);
+        producerProperties.getExtension().setQueueNameExpression("'DefaultQueueNameExpression'");
+
+        Map<String, String> queueNameExpressionsForRequiredGroups = new HashMap<>();
+        queueNameExpressionsForRequiredGroups.put(group1, "'ExpressionOverrideForGroup1'");
+        producerProperties.getExtension().setQueueNameExpressionsForRequiredGroups(queueNameExpressionsForRequiredGroups);
+
+        assertEquals("ExpressionOverrideForGroup1", SolaceProvisioningUtil.getQueueName("unused/destination", group1, producerProperties));
+        assertEquals("DefaultQueueNameExpression", SolaceProvisioningUtil.getQueueName("unused/destination", group2, producerProperties));
     }
 }

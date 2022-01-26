@@ -55,7 +55,8 @@ public class SolaceProvisioningUtil {
 	}
 
 	public static String getQueueName(String topicName, String groupName, ExtendedProducerProperties<SolaceProducerProperties> properties) {
-		return resolveQueueNameExpression(properties.getExtension().getQueueNameExpression(), new ExpressionContextRoot(groupName, topicName, properties));
+		String queueNameExpression = properties.getExtension().getQueueNameExpressionsForRequiredGroups().getOrDefault(groupName, properties.getExtension().getQueueNameExpression());
+		return resolveQueueNameExpression(queueNameExpression, new ExpressionContextRoot(groupName, topicName, properties));
 	}
 
 	public static QueueNames getQueueNames(String topicName, String groupName,

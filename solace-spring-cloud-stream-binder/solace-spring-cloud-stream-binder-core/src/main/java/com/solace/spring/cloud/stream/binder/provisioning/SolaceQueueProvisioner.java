@@ -24,7 +24,6 @@ import org.springframework.cloud.stream.provisioning.ProvisioningProvider;
 import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -57,7 +56,7 @@ public class SolaceQueueProvisioner
 		Map<String,String[]> requiredGroupsExtraSubs = properties.getExtension().getQueueAdditionalSubscriptions();
 
 		for (String groupName : requiredGroups) {
-			String queueName = SolaceProvisioningUtil.getQueueName(name, groupName, properties);
+			String queueName = SolaceProvisioningUtil.getQueueName(topicName, groupName, properties);
 			logger.info(String.format("Creating durable queue %s for required consumer group %s", queueName, groupName));
 			EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
 			boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
