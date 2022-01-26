@@ -173,18 +173,24 @@ Naming prefix for all queues.
 +
 Default: `"scst"` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression`.
 
 useFamiliarityInQueueName::
 When set to `true`, the familiarity modifier, `wk`/`an`, is included in the generated queue name.
 +
 Default: `true` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression`.
 
 useDestinationEncodingInQueueName::
 When set to `true`, the destination encoding (`plain`), is included in the generated queue name.
 +
 Default: `true` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression`.
 
 useGroupNameInQueueName::
 Whether to include the `group` name in the queue name for non-anonymous consumer groups.
@@ -193,6 +199,8 @@ Default: `true` +
 See: <<Generated Queue Name Syntax>>
 +
 IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will consume from the same queue regardless of their configured `group` names.
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression`.
 
 queueAccessType::
 Access type for the consumer group queue.
@@ -264,6 +272,8 @@ A custom error queue name.
 +
 Default: `null` +
 See: <<Generated Error Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `errorQueueNameExpression`.
 
 useGroupNameInErrorQueueName::
 Whether to include the `group` name in the error queue name for non-anonymous consumer groups.
@@ -272,6 +282,8 @@ Default: `true` +
 See: <<Generated Error Queue Name Syntax>>
 +
 IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will republish failed messages to the same error queue regardless of their configured `group` names.
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `errorQueueNameExpression`.
 
 errorQueueMaxDeliveryAttempts::
 Maximum number of attempts to send a failed message to the error queue. When all delivery attempts have been exhausted, the failed message will be requeued.
@@ -364,18 +376,24 @@ Naming prefix for all queues.
 +
 Default: `"scst"` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression`.
 
 useFamiliarityInQueueName::
 When set to `true`, the familiarity modifier, `wk`/`an`, is included in the generated queue name.
 +
 Default: `true` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression`.
 
 useDestinationEncodingInQueueName::
 When set to `true`, the destination encoding (`plain`), is included in the generated queue name.
 +
 Default: `true` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression`.
 
 queueAccessType::
 Access type for the required consumer group queue.

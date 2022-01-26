@@ -26,14 +26,17 @@ public class SolaceCommonProperties {
 	/**
 	 * Naming prefix for all queues.
 	 */
+	@Deprecated
 	private String queueNamePrefix = "scst";
 	/**
 	 * When set to true, the familiarity modifier, wk/an, is included in the generated queue name.
 	 */
+	@Deprecated
 	private boolean useFamiliarityInQueueName = true;
 	/**
 	 * When set to true, the destination encoding (plain), is included in the generated queue name.
 	 */
+	@Deprecated
 	private boolean useDestinationEncodingInQueueName = true;
 
 	/**

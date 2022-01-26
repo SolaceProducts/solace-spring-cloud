@@ -29,6 +29,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	/**
 	 * Whether to include the group name in the queue name for non-anonymous consumer groups.
 	 */
+	@Deprecated
 	private boolean useGroupNameInQueueName = true;
 
 	/**
@@ -56,10 +57,12 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	/**
 	 * A custom error queue name.
 	 */
+	@Deprecated
 	private String errorQueueNameOverride = null;
 	/**
 	 * Whether to include the group name in the error queue name for non-anonymous consumer groups.
 	 */
+	@Deprecated
 	private boolean useGroupNameInErrorQueueName = true;
 	/**
 	 * Maximum number of attempts to send a failed message to the error queue.
