@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.provisioning;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -8,6 +9,7 @@ import org.junit.jupiter.params.provider.MethodSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
+import org.springframework.cloud.stream.provisioning.ProvisioningException;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -17,6 +19,7 @@ import java.util.stream.Stream;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.matchesRegex;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class SolaceProvisioningUtilQueueNameTest {
     private static final Logger LOGGER = LoggerFactory.getLogger(SolaceProvisioningUtilQueueNameTest.class);
@@ -283,7 +286,7 @@ public class SolaceProvisioningUtilQueueNameTest {
     }
 
     @Test
-    public  void testQueueNameExpressionWithLongFormSolaceProperties() {
+    public void testQueueNameExpressionWithLongFormSolaceProperties() {
         SolaceConsumerProperties consumerProperties = createConsumerProperties("myCustomPrefix", true, true, true, true);
         consumerProperties.setQueueMaxMsgRedelivery(5);
 
@@ -296,7 +299,7 @@ public class SolaceProvisioningUtilQueueNameTest {
     }
 
     @Test
-    public  void testQueueNameExpressionWithSpringProperties() {
+    public void testQueueNameExpressionWithSpringProperties() {
         ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
         consumerProperties.setMaxAttempts(22);
         consumerProperties.setAutoStartup(true);
@@ -310,7 +313,7 @@ public class SolaceProvisioningUtilQueueNameTest {
     }
 
     @Test
-    public  void testErrorQueueNameExpressionWithSolaceAndSpringProperties() {
+    public void testErrorQueueNameExpressionWithSolaceAndSpringProperties() {
         ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
         consumerProperties.setMaxAttempts(10);
         consumerProperties.getExtension().setQueueMaxMsgRedelivery(11);
@@ -320,5 +323,19 @@ public class SolaceProvisioningUtilQueueNameTest {
                 .getQueueNames("unused/destination", "unusedGroup", consumerProperties, false)
                 .getErrorQueueName();
         assertEquals("10_11_null", actual);
+    }
+
+    @Test
+    public void testInvalidQueueNameExpression() {
+        String invalidExpression = "This is an invalid expression";
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
+        consumerProperties.getExtension().setQueueNameExpression(invalidExpression);
+        try {
+            SolaceProvisioningUtil.getQueueNames("unused/destination", "unusedGroup", consumerProperties, false);
+            fail("Expected expression evaluation to fail");
+        } catch (Exception e) {
+            Assertions.assertThat(e).isInstanceOf(ProvisioningException.class);
+            Assertions.assertThat(e.getMessage()).contains("Failed to evaluate Spring expression: " + invalidExpression);
+        }
     }
 }

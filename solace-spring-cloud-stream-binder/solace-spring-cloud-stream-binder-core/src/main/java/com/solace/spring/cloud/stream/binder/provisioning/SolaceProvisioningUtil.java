@@ -6,6 +6,7 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties
 import com.solacesystems.jcsmp.EndpointProperties;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
+import org.springframework.cloud.stream.provisioning.ProvisioningException;
 import org.springframework.expression.*;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
@@ -76,10 +77,14 @@ public class SolaceProvisioningUtil {
 	}
 
 	private static String resolveQueueNameExpression(String expression, ExpressionContextRoot root) {
-		EvaluationContext evaluationContext = new StandardEvaluationContext(root);
-		ExpressionParser parser = new SpelExpressionParser();
-		Expression queueNameExp = parser.parseExpression(expression);
-		return (String) queueNameExp.getValue(evaluationContext);
+		try {
+			EvaluationContext evaluationContext = new StandardEvaluationContext(root);
+			ExpressionParser parser = new SpelExpressionParser();
+			Expression queueNameExp = parser.parseExpression(expression);
+			return (String) queueNameExp.getValue(evaluationContext);
+		} catch (ExpressionException e) {
+			throw new ProvisioningException(String.format("Failed to evaluate Spring expression: %s", expression), e);
+		}
 	}
 
 	public static class QueueNames {

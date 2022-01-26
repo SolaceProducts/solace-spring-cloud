@@ -79,6 +79,7 @@ import static com.solace.spring.cloud.stream.binder.test.util.ValuePoller.poll;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
 import static org.hamcrest.Matchers.is;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * All tests which modify the default provisioning lifecycle.
@@ -1827,5 +1828,26 @@ public class SolaceBinderProvisioningLifecycleIT {
 
 		producerBinding.unbind();
 		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testConsumerProvisionWithQueueNameExpressionResolvingToWhiteSpaces(SpringCloudStreamContext context) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
+
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(50);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.getExtension().setQueueNameExpression("'   '");
+
+		try {
+			binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
+			fail("Expected provisioning to fail due to empty queue name");
+		} catch (Exception e) {
+			assertThat(e).isInstanceOf(ProvisioningException.class);
+			assertEquals("The name of the queue to provision is invalid. At least one character is required. Current value is '   '", e.getMessage());
+		}
 	}
 }
