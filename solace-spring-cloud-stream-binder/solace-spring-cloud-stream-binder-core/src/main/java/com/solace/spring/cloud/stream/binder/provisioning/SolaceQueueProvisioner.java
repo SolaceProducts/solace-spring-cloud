@@ -156,7 +156,7 @@ public class SolaceQueueProvisioner
 				// EndpointProperties will be applied during consumer creation
 				queue = jcsmpSession.createTemporaryQueue(name);
 			}
-		} catch (JCSMPException e) {
+		} catch (Exception e) {
 			String action = isDurable ? "provision durable" : "create temporary";
 			String msg = String.format("Failed to %s queue %s", action, name);
 			logger.warn(msg, e);

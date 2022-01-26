@@ -1847,7 +1847,30 @@ public class SolaceBinderProvisioningLifecycleIT {
 			fail("Expected provisioning to fail due to empty queue name");
 		} catch (Exception e) {
 			assertThat(e).isInstanceOf(ProvisioningException.class);
-			assertEquals("The name of the queue to provision is invalid. At least one character is required. Current value is '   '", e.getMessage());
+			assertThat(e.getMessage()).containsIgnoringCase("The name of the queue to provision is invalid. At least one character is required. Current value is '   '");
+		}
+	}
+
+	@Test
+	public void testConsumerProvisionWithQueueNameTooLong(SpringCloudStreamContext context) throws Exception {
+		int MAX_QUEUE_NAME_LENGTH = 200;
+		SolaceTestBinder binder = context.getBinder();
+
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(50);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		String longQueueName = RandomStringUtils.randomAlphanumeric(MAX_QUEUE_NAME_LENGTH + 1);
+		consumerProperties.getExtension().setQueueNameExpression("'" + longQueueName + "'");
+
+		try {
+			binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
+			fail("Expected provisioning to fail due to queue name exceeding number of allowed characters");
+		} catch (Exception e) {
+			assertThat(e.getCause()).isInstanceOf(IllegalArgumentException.class);
+			assertEquals("Queue name \"" + longQueueName + "\" must have a maximum length of 200", e.getCause().getMessage());
 		}
 	}
 }

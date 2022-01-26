@@ -226,7 +226,8 @@ public class SolaceProvisioningUtilQueueNameTest {
         String destination = "  destination/with/spaces      ";
         String group = "    aGroupWithSpaces    ";
 
-        SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(destination, group, consumerProperties, group == null);
+        SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(destination, group, consumerProperties,
+                SolaceProvisioningUtil.isAnonQueue(group));
 
         assertEquals("aQueueNamePrefixWithSpaces/wk/aGroupWithSpaces/plain/destination/with/spaces", queueNames.getConsumerGroupQueueName());
         assertEquals("aQueueNamePrefixWithSpaces/error/wk/aGroupWithSpaces/plain/destination/with/spaces", queueNames.getErrorQueueName());

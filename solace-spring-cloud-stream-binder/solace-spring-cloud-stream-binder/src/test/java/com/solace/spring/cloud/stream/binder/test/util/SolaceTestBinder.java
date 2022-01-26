@@ -146,7 +146,14 @@ public class SolaceTestBinder
 		for (String queueName : queues) {
 			try {
 				logger.info(String.format("De-provisioning queue %s", queueName));
-				Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName);
+				Queue queue;
+				try {
+					queue = JCSMPFactory.onlyInstance().createQueue(queueName);
+				} catch (Exception e) {
+					//This is possible as we eagerly add queues to cleanup in preBindCaptureConsumerResources()
+					logger.info(String.format("Skipping de-provisioning as queue name is invalid; queue was never provisioned", queueName));
+					continue;
+				}
 				jcsmpSession.deprovision(queue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
 			} catch (JCSMPException e) {
 				throw new RuntimeException(e);
