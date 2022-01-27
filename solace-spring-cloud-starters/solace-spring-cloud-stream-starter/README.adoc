@@ -168,6 +168,14 @@ Default: `true`
 +
 WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `addDestinationAsSubscriptionToQueue`.
 
+queueNameExpression::
+A SpEL expression for creating the consumer group’s queue name.
++
+Default: `"(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + (isAnonymous ? group.trim() + '/' : (properties.solace.useGroupNameInQueueName ? group.trim() + '/' : '')) + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')"` +
+See: <<Generated Queue Name Syntax>>
++
+WARNING: Modifying this can cause naming conflicts between the queue names of consumer groups.
+
 queueNamePrefix::
 Naming prefix for all queues.
 +
@@ -266,6 +274,14 @@ Whether to provision durable queues for error queues when `autoBindErrorQueue` i
 +
 Default: `true` +
 See: <<Generated Error Queue Name Syntax>>
+
+errorQueueNameExpression::
+A SpEL expression for creating the error queue’s name.
++
+Default: `"(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + 'error/' + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + (isAnonymous ? group.trim() + '/' : (properties.solace.useGroupNameInErrorQueueName ? group.trim() + '/' : '')) + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')";"` +
+See: <<Generated Error Queue Name Syntax>>
++
+WARNING: Modifying this can cause naming conflicts between the error queue names.
 
 errorQueueNameOverride::
 A custom error queue name.
@@ -370,6 +386,24 @@ Whether to add topic subscriptions to durable queues for non-anonymous consumer 
 Default: `true`
 +
 WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `addDestinationAsSubscriptionToQueue`.
+
+queueNameExpression::
+A SpEL expression for creating the consumer group’s queue name.
++
+Default: `"(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + group + '/' + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')"` +
+See: <<Generated Queue Name Syntax>>
++
+WARNING: Modifying this can cause naming conflicts between the queue names of consumer groups.
+
+queueNameExpressionsForRequiredGroups::
+A mapping of required consumer groups to queue name SpEL expressions.
++
+By default, queueNameExpression will be used to generate a required group’s queue name if it isn’t specified within this configuration option.
++
+Default: `Empty Map<String, String>` +
+See: <<Generated Queue Name Syntax>>
++
+WARNING: Modifying this can cause naming conflicts between the queue names of consumer groups.
 
 queueNamePrefix::
 Naming prefix for all queues.
@@ -631,20 +665,42 @@ By default, generated consumer group queue names have the following form:
 ----
 <prefix>/<familiarity-modifier>/<group>/<destination-encoding>/<encoded-destination>
 ----
+The `queueNameExpression` property's default Spring Expression conforms to the above format, however, users can provide any valid Spring Expression in order to generate custom queue names. Valid expressions evaluate against the following context:
+[cols="1m,1", options="header"]
+|===
+| Level
+| Description
 
-prefix::
+| destination
+| The binding’s destination name.
+
+| group
+| The binding’s consumer group name.
+
+| isAnonymous
+| Indicates whether the consumer is an anonymous consumer group
+
+| properties.solace
+| The configured Solace binding properties.
+
+| properties.spring
+| The configured Spring binding properties.
+|===
+WARNING: The expression evaluation context is subject to change and should not be used other than to customize queue names.
+
+prefix (deprecated)::
 A static prefix as indicated by the `queueNamePrefix` configuration option.
 
-familiarity-modifier::
+familiarity-modifier (deprecated)::
 Indicates the durability of the consumer group (`wk` for well-known or `an` for anonymous). Can be enabled/disabled with the `useFamiliarityInQueueName` config option.
 
-group::
+group (deprecated)::
 The consumer `group` name. Can be enabled/disabled for consumers with the `useGroupNameInQueueName` consumer config option.
 
-destination-encoding::
+destination-encoding (deprecated)::
 Indicates the encoding scheme used to encode the destination in the queue name (currently only `plain` is supported). Can be enabled/disabled with the `useDestinationEncodingInQueueName` config option.
 
-encoded-destination::
+encoded-destination (deprecated)::
 The encoded `destination` as per `<destination-encoding>`.
 
 === Generated Error Queue Name Syntax
@@ -655,9 +711,11 @@ By default, generated error queue names have the following form:
 <prefix>/error/<familiarity-modifier>/<group>/<destination-encoding>/<encoded-destination>
 ----
 
+The `errorQueueNameExpression` property's default Spring Expression conforms to the above format. Users can provide any valid Spring Expression in order to generate custom error queue names using the same evaluation context as described in <<Generated Queue Name Syntax>>.
+
 The definitions of each segment of the error queue matches that from <<Generated Queue Name Syntax>>, with the following exceptions:
 
-group::
+group (deprecated)::
 The consumer `group` name. Can be enabled/disabled with the `useGroupNameInErrorQueueName` consumer config option.
 
 The error queue name can also be manually overridden with the `errorQueueNameOverride` consumer config option.
