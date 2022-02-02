@@ -59,11 +59,17 @@ public class FlowReceiverContainer {
 	private TimeUnit rebindWaitTimeoutUnit = TimeUnit.SECONDS;
 
 	private static final Log logger = LogFactory.getLog(FlowReceiverContainer.class);
+	private final SolaceFlowEventHandler eventHandler;
 
 	public FlowReceiverContainer(JCSMPSession session, String queueName, EndpointProperties endpointProperties) {
+		this(session, queueName, endpointProperties, null);
+	}
+
+	public FlowReceiverContainer(JCSMPSession session, String queueName, EndpointProperties endpointProperties, SolaceFlowEventHandler eventHandler) {
 		this.session = session;
 		this.queueName = queueName;
 		this.endpointProperties = endpointProperties;
+		this.eventHandler = eventHandler;
 	}
 
 	/**
@@ -90,7 +96,7 @@ public class FlowReceiverContainer {
 						.setEndpoint(JCSMPFactory.onlyInstance().createQueue(queueName))
 						.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT)
 						.setStartState(true);
-				FlowReceiver flowReceiver = session.createFlow(null, flowProperties, endpointProperties);
+				FlowReceiver flowReceiver = session.createFlow(null, flowProperties, endpointProperties, eventHandler);
 				FlowReceiverReference newFlowReceiverReference = new FlowReceiverReference(flowReceiver);
 				flowReceiverAtomicReference.set(newFlowReceiverReference);
 				bindCondition.signalAll();
@@ -475,6 +481,10 @@ public class FlowReceiverContainer {
 
 	public String getQueueName() {
 		return queueName;
+	}
+
+	public SolaceFlowEventHandler getEventHandler() {
+		return eventHandler;
 	}
 
 	static class FlowReceiverReference {

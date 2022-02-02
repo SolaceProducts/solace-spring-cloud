@@ -145,6 +145,7 @@ public class SolaceHeadersTest {
 
 		for (Map.Entry<String, SolaceHeaderMeta<?>> headerMeta : solaceHeaderMeta.entrySet()) {
 			if (!headerMeta.getValue().isReadable()) continue;
+			if (headerMeta.getKey().equals(SolaceHeaders.DELIVERY_COUNT)) continue;
 			assertThat(headerMeta.getKey(), headerMeta.getValue().getReadAction().apply(xmlMessage),
 					anyOf(instanceOf(headerMeta.getValue().getType()), nullValue()));
 		}

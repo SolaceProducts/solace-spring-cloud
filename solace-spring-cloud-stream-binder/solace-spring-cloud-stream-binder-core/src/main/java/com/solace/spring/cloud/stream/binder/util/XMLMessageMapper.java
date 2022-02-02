@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solacesystems.common.util.ByteArray;
 import com.solacesystems.jcsmp.BytesMessage;
@@ -42,6 +43,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -55,6 +57,7 @@ public class XMLMessageMapper {
 
 	private final ObjectWriter stringSetWriter = OBJECT_MAPPER.writerFor(new TypeReference<Set<String>>(){});
 	private final ObjectReader stringSetReader = OBJECT_MAPPER.readerFor(new TypeReference<Set<String>>(){});
+	private final AtomicBoolean readDeliveryCount = new AtomicBoolean(true);
 
 	public BytesXMLMessage mapError(BytesXMLMessage inputMessage, SolaceConsumerProperties consumerProperties) {
 		BytesXMLMessage errorMessage = JCSMPFactory.onlyInstance().createMessage(inputMessage);
@@ -225,7 +228,16 @@ public class XMLMessageMapper {
 			if (!header.getValue().isReadable()) {
 				continue;
 			}
-			builder.setHeaderIfAbsent(header.getKey(), header.getValue().getReadAction().apply(xmlMessage));
+			if (header.getKey().equals(SolaceHeaders.DELIVERY_COUNT) && !readDeliveryCount.get()) {
+				continue;
+			}
+			try {
+				builder.setHeaderIfAbsent(header.getKey(), header.getValue().getReadAction().apply(xmlMessage));
+			} catch (SolaceDeliveryCountException e) {
+				logger.info(String.format("Failed to retrieve delivery count. Will not re-attempt until flow rebinds or reconnects. Error: %s", e.getMessage()));
+				readDeliveryCount.set(false);
+				continue;
+			}
 		}
 
 		if (setRawMessageHeader) {
@@ -358,6 +370,10 @@ public class XMLMessageMapper {
 
 	private <R> R rethrowableCall(ThrowingSupplier<R> supplier) {
 		return supplier.get();
+	}
+
+	public void resetReadDeliveryCount() {
+		readDeliveryCount.set(true);
 	}
 
 	@FunctionalInterface
