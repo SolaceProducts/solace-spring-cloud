@@ -246,6 +246,19 @@ The maximum time to wait for all unacknowledged messages to be acknowledged befo
 +
 Default: `10000`
 
+batchMaxSize::
+The maximum number of messages per batch. +
+Only applicable when `batchMode` is `true`.
++
+Default: `255`
+
+batchTimeout::
+The maximum wait time in milliseconds to receive a batch of messages. If this timeout is reached, then the messages that have already been received will be used to create the batch. A value of `0` means wait forever. +
+Only applicable when `batchMode` is `true`. +
+This config option takes precedence over `polledConsumerWaitTimeInMillis` when batching is enabled.
++
+Default: `5000`
+
 autoBindErrorQueue::
 Whether to automatically create a durable error queue to which messages will be republished when message processing failures are encountered. Only applies once all internal retries have been exhausted.
 +
@@ -568,6 +581,14 @@ TIP: Use link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream
 | Access
 | Default Value
 | Description
+
+| solace_scst_batchedHeaders
+| List<Map<String, Object>>
+| Read
+|
+| Only applicable when `batchMode` is `true`.
+
+The consolidated list of message headers for a batch of messages where the headers for each payload element is in this list’s corresponding index.
 
 | solace_scst_confirmCorrelation
 | CorrelationData

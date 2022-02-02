@@ -90,7 +90,7 @@ public class SolaceMessageChannelBinder
 		SolaceConsumerDestination solaceDestination = (SolaceConsumerDestination) destination;
 
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(solaceDestination, jcsmpSession,
-				properties.getConcurrency(), taskService, properties.getExtension(),
+				properties.getConcurrency(), properties.isBatchMode(), taskService, properties.getExtension(),
 				getConsumerEndpointProperties(properties));
 
 		adapter.setRemoteStopFlag(consumersRemoteStopFlag);

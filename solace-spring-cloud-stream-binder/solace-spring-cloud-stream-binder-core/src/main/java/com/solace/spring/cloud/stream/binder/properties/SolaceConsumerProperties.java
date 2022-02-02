@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder.properties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+import javax.validation.constraints.Min;
 import java.util.concurrent.TimeUnit;
 
 import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties.DEFAULTS_PREFIX;
@@ -10,6 +11,24 @@ import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBin
 @SuppressWarnings("ConfigurationProperties")
 @ConfigurationProperties(DEFAULTS_PREFIX + ".consumer")
 public class SolaceConsumerProperties extends SolaceCommonProperties {
+	/**
+	 * <p>The maximum number of messages per batch.</p>
+	 * <p>Only applicable when {@code batchMode} is {@code true}.</p>
+	 */
+	@Min(1)
+	private Integer batchMaxSize = 255;
+
+	/**
+	 * <p>The maximum wait time in milliseconds to receive a batch of messages. If this timeout is reached, then the
+	 * messages that have already been received will be used to create the batch. A value of {@code 0} means wait
+	 * forever.</p>
+	 * <p>Only applicable when {@code batchMode} is {@code true}.</p>
+	 * <p>This config option takes precedence over {@link #polledConsumerWaitTimeInMillis} when batching is
+	 * enabled.</p>
+	 */
+	@Min(0)
+	private Integer batchTimeout = 5000;
+
 	/**
 	 * Maximum wait time for polled consumers to receive a message from their consumer group queue.
 	 */
@@ -92,6 +111,23 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 */
 	private Long errorMsgTtl = null;
 	// ------------------------
+
+
+	public Integer getBatchMaxSize() {
+		return batchMaxSize;
+	}
+
+	public void setBatchMaxSize(Integer batchMaxSize) {
+		this.batchMaxSize = batchMaxSize;
+	}
+
+	public Integer getBatchTimeout() {
+		return batchTimeout;
+	}
+
+	public void setBatchTimeout(Integer batchTimeout) {
+		this.batchTimeout = batchTimeout;
+	}
 
 	public int getPolledConsumerWaitTimeInMillis() {
 		return polledConsumerWaitTimeInMillis;

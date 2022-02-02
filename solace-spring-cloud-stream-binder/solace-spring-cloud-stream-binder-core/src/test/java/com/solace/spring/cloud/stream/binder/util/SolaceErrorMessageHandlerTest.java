@@ -1,6 +1,5 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.TextMessage;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,10 +31,10 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testAcknowledgmentCallbackHeader(@Mock JCSMPAcknowledgementCallback acknowledgementCallback) {
+	public void testAcknowledgmentCallbackHeader(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK,
-						Mockito.mock(JCSMPAcknowledgementCallback.class))
+						Mockito.mock(AcknowledgmentCallback.class))
 				.build();
 
 		attributeAccessor.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, inputMessage);
@@ -53,7 +52,7 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testFailedMessageAcknowledgmentCallback(@Mock JCSMPAcknowledgementCallback acknowledgementCallback) {
+	public void testFailedMessageAcknowledgmentCallback(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -67,7 +66,7 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testNoFailedMessage(@Mock JCSMPAcknowledgementCallback acknowledgementCallback) {
+	public void testNoFailedMessage(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
 				new MessagingException("test"),
 				attributeAccessor);
@@ -77,7 +76,7 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testNonMessagingException(@Mock JCSMPAcknowledgementCallback acknowledgementCallback) {
+	public void testNonMessagingException(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -92,7 +91,7 @@ public class SolaceErrorMessageHandlerTest {
 
 	@Test
 	public void testMessagingExceptionContainingDifferentFailedMessage(
-			@Mock JCSMPAcknowledgementCallback acknowledgementCallback) {
+			@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -109,7 +108,7 @@ public class SolaceErrorMessageHandlerTest {
 
 	@Test
 	public void testMessagingExceptionWithNullFailedMessage(
-			@Mock JCSMPAcknowledgementCallback acknowledgementCallback) {
+			@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -124,7 +123,7 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testSourceDataHeader(@Mock JCSMPAcknowledgementCallback acknowledgementCallback) {
+	public void testSourceDataHeader(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -142,7 +141,7 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testStaleException(@Mock JCSMPAcknowledgementCallback acknowledgementCallback) {
+	public void testStaleException(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -156,7 +155,7 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testStaleMessage(@Mock JCSMPAcknowledgementCallback acknowledgementCallback) {
+	public void testStaleMessage(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();

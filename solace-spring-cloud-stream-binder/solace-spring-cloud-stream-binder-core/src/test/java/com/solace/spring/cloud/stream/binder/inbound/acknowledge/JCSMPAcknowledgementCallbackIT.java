@@ -1,13 +1,20 @@
-package com.solace.spring.cloud.stream.binder.util;
+package com.solace.spring.cloud.stream.binder.inbound.acknowledge;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
+import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
+import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
+import com.solace.spring.cloud.stream.binder.util.MessageContainer;
+import com.solace.spring.cloud.stream.binder.util.RetryableAckRebindTask;
+import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
+import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
+import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
-import com.solacesystems.jcsmp.Consumer;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -35,7 +42,6 @@ import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -75,9 +81,7 @@ public class JCSMPAcknowledgementCallbackIT {
 		}
 
 		Optional.ofNullable(flowReceiverContainerReference.getAndSet(null))
-				.map(FlowReceiverContainer::getFlowReceiverReference)
-				.map(FlowReceiverContainer.FlowReceiverReference::get)
-				.ifPresent(Consumer::close);
+				.ifPresent(FlowReceiverContainer::unbind);
 
 		if (closeErrorQueueInfrastructureCallback != null) {
 			closeErrorQueueInfrastructureCallback.run();
