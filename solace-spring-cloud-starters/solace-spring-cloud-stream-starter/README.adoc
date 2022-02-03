@@ -474,7 +474,7 @@ This is the `JMSType` header field if publishing/consuming to/from JMS.
 | Read
 | The number of times the message has been delivered.
 
-This header is only available when `Enable Client Delivery Count` is enabled on the queue. Note that a flow rebind may be necessary after `Enable Client Delivery Count` is turned on.
+Note that, while the Delivery Count feature is in controlled availability, `Enable Client Delivery Count` must be enabled on the queue and that a flow rebind is necessary after `Enable Client Delivery Count` is turned on.
 
 | solace_destination
 | Destination
