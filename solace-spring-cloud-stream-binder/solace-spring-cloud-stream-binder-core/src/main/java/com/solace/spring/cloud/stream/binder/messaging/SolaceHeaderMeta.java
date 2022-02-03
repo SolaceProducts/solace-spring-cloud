@@ -1,6 +1,5 @@
 package com.solace.spring.cloud.stream.binder.messaging;
 
-import com.solace.spring.cloud.stream.binder.util.SolaceDeliveryCountException;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.ReplicationGroupMessageId;
 import com.solacesystems.jcsmp.XMLMessage;
@@ -16,7 +15,7 @@ public class SolaceHeaderMeta<T> implements HeaderMeta<T> {
 			{SolaceHeaders.APPLICATION_MESSAGE_ID, new SolaceHeaderMeta<>(String.class, XMLMessage::getApplicationMessageId, XMLMessage::setApplicationMessageId)},
 			{SolaceHeaders.APPLICATION_MESSAGE_TYPE, new SolaceHeaderMeta<>(String.class, XMLMessage::getApplicationMessageType, XMLMessage::setApplicationMessageType)},
 			{SolaceHeaders.CORRELATION_ID, new SolaceHeaderMeta<>(String.class, XMLMessage::getCorrelationId, XMLMessage::setCorrelationId)},
-			{SolaceHeaders.DELIVERY_COUNT, new SolaceHeaderMeta<>(Integer.class, SolaceHeaderMeta::getDeliveryCount, null)},
+			{SolaceHeaders.DELIVERY_COUNT, new SolaceHeaderMeta<>(Integer.class, XMLMessage::getDeliveryCount, null)},
 			{SolaceHeaders.DESTINATION, new SolaceHeaderMeta<>(Destination.class, XMLMessage::getDestination, null)},
 			{SolaceHeaders.DISCARD_INDICATION, new SolaceHeaderMeta<>(Boolean.class, XMLMessage::getDiscardIndication, null)},
 			{SolaceHeaders.DMQ_ELIGIBLE, new SolaceHeaderMeta<>(Boolean.class, XMLMessage::isDMQEligible, XMLMessage::setDMQEligible, true)},
@@ -92,14 +91,6 @@ public class SolaceHeaderMeta<T> implements HeaderMeta<T> {
 						value.getClass()));
 			}
 		};
-	}
-
-	private static Integer getDeliveryCount(XMLMessage xmlMessage) {
-		try {
-			return xmlMessage.getDeliveryCount();
-		} catch (UnsupportedOperationException e) {
-			throw new SolaceDeliveryCountException(e);
-		}
 	}
 
 	/**

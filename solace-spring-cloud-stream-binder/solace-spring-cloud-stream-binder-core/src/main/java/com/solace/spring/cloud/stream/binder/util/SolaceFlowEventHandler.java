@@ -21,7 +21,7 @@ public class SolaceFlowEventHandler implements FlowEventHandler {
     @Override
     public void handleEvent(Object o, FlowEventArgs flowEventArgs) {
         if (flowEventArgs.getEvent() == FlowEvent.FLOW_RECONNECTED && xmlMessageMapper != null) {
-            xmlMessageMapper.resetReadDeliveryCount();
+            xmlMessageMapper.resetIgnoredProperties();
         }
     }
 

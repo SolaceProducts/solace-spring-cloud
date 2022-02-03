@@ -43,7 +43,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -57,7 +57,7 @@ public class XMLMessageMapper {
 
 	private final ObjectWriter stringSetWriter = OBJECT_MAPPER.writerFor(new TypeReference<Set<String>>(){});
 	private final ObjectReader stringSetReader = OBJECT_MAPPER.readerFor(new TypeReference<Set<String>>(){});
-	private final AtomicBoolean readDeliveryCount = new AtomicBoolean(true);
+	private final Set<String> ignoredHeaderProperties = ConcurrentHashMap.newKeySet();
 
 	public BytesXMLMessage mapError(BytesXMLMessage inputMessage, SolaceConsumerProperties consumerProperties) {
 		BytesXMLMessage errorMessage = JCSMPFactory.onlyInstance().createMessage(inputMessage);
@@ -228,14 +228,14 @@ public class XMLMessageMapper {
 			if (!header.getValue().isReadable()) {
 				continue;
 			}
-			if (header.getKey().equals(SolaceHeaders.DELIVERY_COUNT) && !readDeliveryCount.get()) {
+			if (ignoredHeaderProperties.contains(header.getKey())) {
 				continue;
 			}
 			try {
 				builder.setHeaderIfAbsent(header.getKey(), header.getValue().getReadAction().apply(xmlMessage));
-			} catch (SolaceDeliveryCountException e) {
-				logger.info(String.format("Failed to retrieve delivery count. Will not re-attempt until flow rebinds or reconnects. Error: %s", e.getMessage()));
-				readDeliveryCount.set(false);
+			} catch (UnsupportedOperationException e) {
+				logger.info(String.format("Ignoring Solace header %s. Error: %s", header.getKey(), e.getMessage()));
+				ignoredHeaderProperties.add(header.getKey());
 				continue;
 			}
 		}
@@ -372,8 +372,8 @@ public class XMLMessageMapper {
 		return supplier.get();
 	}
 
-	public void resetReadDeliveryCount() {
-		readDeliveryCount.set(true);
+	public void resetIgnoredProperties() {
+		ignoredHeaderProperties.clear();
 	}
 
 	@FunctionalInterface
