@@ -5,6 +5,7 @@ import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.FlowReceiver;
+import com.solacesystems.jcsmp.InvalidOperationException;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
@@ -36,6 +37,8 @@ public class FlowReceiverContainer {
 	private final EndpointProperties endpointProperties;
 	private final AtomicReference<FlowReceiverReference> flowReceiverAtomicReference = new AtomicReference<>();
 	private final AtomicBoolean isRebinding = new AtomicBoolean(false);
+	//TODO Ensure flag is preserved on rebinds
+	private final AtomicBoolean isPaused = new AtomicBoolean(false);
 
 	/* Ideally we would cache the outgoing message IDs and remove them as they get acknowledged,
 	 * but that has way too much overhead at scale (millions or billions of unacknowledged messages).
@@ -456,6 +459,24 @@ public class FlowReceiverContainer {
 		this.rebindWaitTimeoutUnit = unit;
 	}
 
+	public void pause() {
+		logger.info(String.format("Pausing flow receiver container %s", id));
+		FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+		if (flowReceiverReference != null) {
+			flowReceiverReference.pause();
+			isPaused.set(true);
+		}
+	}
+
+	public void resume() {
+		logger.info(String.format("Resuming flow receiver container %s", id));
+		FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+		if (flowReceiverReference != null) {
+			flowReceiverReference.resume();
+			isPaused.set(false);
+		}
+	}
+
 	/**
 	 * <p>Get the nested {@link FlowReceiver}.</p>
 	 * <p><b>Caution:</b> Instead of using this, consider instead implementing a new function with the required rebind
@@ -514,6 +535,22 @@ public class FlowReceiverContainer {
 
 		public AtomicBoolean getStaleMessagesFlag() {
 			return staleMessagesFlag;
+		}
+
+		public void pause() {
+			flowReceiver.stop();
+		}
+
+		public void resume() {
+			if (flowReceiver != null) {
+				try {
+					flowReceiver.start();
+				} catch (InvalidOperationException e) {
+					logger.info(String.format("Attempted to start flow received container %s but it was closed. Exception: %s", id, e.getMessage()));
+				} catch (Exception e) {
+					logger.warn("BLAH");//TODO
+				}
+			}
 		}
 
 		@Override

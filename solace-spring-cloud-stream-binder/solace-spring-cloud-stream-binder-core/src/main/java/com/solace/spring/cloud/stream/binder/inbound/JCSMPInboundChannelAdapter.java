@@ -13,6 +13,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.context.OrderlyShutdownCapable;
+import org.springframework.integration.core.Pausable;
 import org.springframework.integration.endpoint.MessageProducerSupport;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessagingException;
@@ -24,6 +25,7 @@ import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -33,8 +35,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
-public class JCSMPInboundChannelAdapter extends MessageProducerSupport implements OrderlyShutdownCapable {
+public class JCSMPInboundChannelAdapter extends MessageProducerSupport implements OrderlyShutdownCapable, Pausable {
 	private final String id = UUID.randomUUID().toString();
 	private final SolaceConsumerDestination consumerDestination;
 	private final JCSMPSession jcsmpSession;
@@ -44,6 +47,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final RetryableTaskService taskService;
 	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
 	private final Set<AtomicBoolean> consumerStopFlags;
+	private final Set<Consumer<Boolean>> pauseFns;
 	private Consumer<Queue> postStart;
 	private ExecutorService executorService;
 	private AtomicBoolean remoteStopFlag;
@@ -67,6 +71,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
 		this.consumerStopFlags = new HashSet<>(this.concurrency);
+		this.pauseFns = new HashSet<>(this.concurrency);
 	}
 
 	@Override
@@ -122,6 +127,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 				.map(this::buildListener)
 				.forEach(listener -> {
 					consumerStopFlags.add(listener.getStopFlag());
+					pauseFns.add(listener::setPaused);
 					executorService.submit(listener);
 				});
 		executorService.shutdown(); // All tasks have been submitted
@@ -234,6 +240,20 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			);
 		}
 		return listener;
+	}
+
+	@Override
+	public void pause() {
+		for (Consumer<Boolean> fn : pauseFns) {
+			fn.accept(true);
+		}
+	}
+
+	@Override
+	public void resume() {
+		for (Consumer<Boolean> fn : pauseFns) {
+			fn.accept(false);
+		}
 	}
 
 	private final class SolaceRetryListener implements RetryListener {
