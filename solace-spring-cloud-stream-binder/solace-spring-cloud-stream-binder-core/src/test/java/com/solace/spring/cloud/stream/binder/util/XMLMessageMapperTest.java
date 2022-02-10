@@ -357,6 +357,7 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.SERIALIZED_PAYLOAD:
 				case SolaceBinderHeaders.CONFIRM_CORRELATION:
 				case SolaceBinderHeaders.NULL_PAYLOAD:
+				case SolaceHeaders.DELIVERY_COUNT:
 					assertNull(xmlMessage.getProperties().get(header.getKey()));
 					break;
 				default:
@@ -848,6 +849,9 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.CORRELATION_ID:
 					Mockito.when(xmlMessage.getCorrelationId()).thenReturn(header.getKey());
 					break;
+				case SolaceHeaders.DELIVERY_COUNT:
+					Mockito.when(xmlMessage.getDeliveryCount()).thenThrow(new UnsupportedOperationException("Feature is disabled"));
+					break;
 				case SolaceHeaders.DESTINATION:
 					Mockito.when(xmlMessage.getDestination())
 							.thenReturn(JCSMPFactory.onlyInstance().createQueue(header.getKey()));
@@ -975,6 +979,7 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.USER_DATA:
 					assertEquals(xmlMessage.getUserData(), actualValue);
 					break;
+				case SolaceHeaders.DELIVERY_COUNT:
 				case SolaceBinderHeaders.MESSAGE_VERSION:
 					assertEquals(xmlMessage.getProperties().get(header.getKey()), actualValue);
 					break;
@@ -1023,6 +1028,7 @@ public class XMLMessageMapperTest {
 
 		Mockito.when(xmlMessage.getProperties()).thenReturn(metadata);
 		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
+		Mockito.when(xmlMessage.getDeliveryCount()).thenThrow(new UnsupportedOperationException("Feature is disabled"));
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
@@ -1064,6 +1070,7 @@ public class XMLMessageMapperTest {
 
 		Mockito.when(xmlMessage.getProperties()).thenReturn(metadata);
 		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
+		Mockito.when(xmlMessage.getDeliveryCount()).thenThrow(new UnsupportedOperationException("Feature is disabled"));
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
@@ -1089,6 +1096,18 @@ public class XMLMessageMapperTest {
 		}
 
 		validateSpringMessage(springMessage, xmlMessage, filteredMetadata);
+	}
+
+	@Test
+	public void testMapXMLMessageToSpringMessage_deliveryCountFeatureEnabled() {
+		int deliveryCount = 42;
+		TextMessage xmlMessage = Mockito.mock(TextMessage.class);
+		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
+		Mockito.when(xmlMessage.getDeliveryCount()).thenReturn(deliveryCount);
+
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		assertEquals(deliveryCount, springMessage.getHeaders().get(SolaceHeaders.DELIVERY_COUNT));
 	}
 
 	@Test
@@ -1444,5 +1463,8 @@ public class XMLMessageMapperTest {
 		if (!expectedHeaders.containsKey(MessageHeaders.CONTENT_TYPE)) {
 			assertEquals(xmlMessage.getHTTPContentType(), contentType.toString());
 		}
+
+		//DeliveryCount feature is assumed disabled
+		assertNull(messageHeaders.get(SolaceHeaders.DELIVERY_COUNT));
 	}
 }

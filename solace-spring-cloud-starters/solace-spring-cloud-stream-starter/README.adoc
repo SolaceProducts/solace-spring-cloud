@@ -469,6 +469,13 @@ This is the `JMSType` header field if publishing/consuming to/from JMS.
 | Read/Write
 | The correlation ID.
 
+| solace_deliveryCount
+| Integer
+| Read
+| The number of times the message has been delivered.
+
+Note that, while the Delivery Count feature is in controlled availability, `Enable Client Delivery Count` must be enabled on the queue and consumer bindings may need to be restarted after `Enable Client Delivery Count` is turned on.
+
 | solace_destination
 | Destination
 | Read
