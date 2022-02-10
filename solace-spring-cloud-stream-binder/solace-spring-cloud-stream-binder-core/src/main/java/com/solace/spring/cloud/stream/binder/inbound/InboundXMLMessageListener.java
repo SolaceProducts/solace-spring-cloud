@@ -188,7 +188,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		return stopFlag;
 	}
 
-	public void setPaused(boolean pause) {
+	public void pauseResume(boolean pause) {
 		if (pause) {
 			flowReceiverContainer.pause();
 		} else {

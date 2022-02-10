@@ -22,6 +22,7 @@ import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.context.Lifecycle;
 import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
+import org.springframework.integration.core.Pausable;
 import org.springframework.integration.endpoint.AbstractMessageSource;
 import org.springframework.messaging.MessagingException;
 
@@ -33,7 +34,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle {
+public class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle, Pausable {
 	private final String id = UUID.randomUUID().toString();
 	private final String queueName;
 	private final JCSMPSession jcsmpSession;
@@ -144,9 +145,11 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			}
 
 			try {
-				flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties, new SolaceFlowEventHandler(xmlMessageMapper));
-				flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
-						TimeUnit.MILLISECONDS);
+				if (flowReceiverContainer == null) {
+					flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties, new SolaceFlowEventHandler(xmlMessageMapper));
+					flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
+							TimeUnit.MILLISECONDS);
+				}
 				flowReceiverContainer.bind();
 			} catch (JCSMPException e) {
 				String msg = String.format("Unable to get a message consumer for session %s", jcsmpSession.getSessionName());
@@ -197,5 +200,46 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 	public void setRemoteStopFlag(Supplier<Boolean> remoteStopFlag) {
 		this.remoteStopFlag = remoteStopFlag;
+	}
+
+	@Override
+	public void pause() {
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
+		try {
+			if (!isRunning()) {
+				logger.info(String.format("Can't pause message source %s as it is not running", id));
+				return;
+			}
+			if (flowReceiverContainer != null) {
+				logger.info(String.format("Pausing message source %s", id));
+				flowReceiverContainer.pause();
+			}
+		} finally {
+			writeLock.unlock();
+		}
+	}
+
+	@Override
+	public void resume() {
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
+		try {
+			if (!isRunning()) {
+				logger.info(String.format("Can't resume message source %s as it is not running", id));
+				return;
+			}
+			if (flowReceiverContainer != null) {
+				logger.info(String.format("Resuming message source %s", id));
+				flowReceiverContainer.resume();
+			}
+		} finally {
+			writeLock.unlock();
+		}
+	}
+
+	@Override
+	public boolean isPaused() {
+		return flowReceiverContainer.isPaused();
 	}
 }

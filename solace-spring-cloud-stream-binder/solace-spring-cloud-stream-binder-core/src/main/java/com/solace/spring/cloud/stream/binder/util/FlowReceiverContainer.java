@@ -37,7 +37,6 @@ public class FlowReceiverContainer {
 	private final EndpointProperties endpointProperties;
 	private final AtomicReference<FlowReceiverReference> flowReceiverAtomicReference = new AtomicReference<>();
 	private final AtomicBoolean isRebinding = new AtomicBoolean(false);
-	//TODO Ensure flag is preserved on rebinds
 	private final AtomicBoolean isPaused = new AtomicBoolean(false);
 
 	/* Ideally we would cache the outgoing message IDs and remove them as they get acknowledged,
@@ -78,7 +77,7 @@ public class FlowReceiverContainer {
 	/**
 	 * <p>Create the {@link FlowReceiver} and {@link FlowReceiver#start() starts} it.</p>
 	 * <p>Does nothing if this container is already bound to a {@link FlowReceiver}.</p>
-	 * @return If no flow is bound, return the new flow reference ID. Otherwise return the existing flow reference ID.
+	 * @return If no flow is bound, return the new flow reference ID. Otherwise, return the existing flow reference ID.
 	 * @throws JCSMPException a JCSMP exception
 	 */
 	public UUID bind() throws JCSMPException {
@@ -98,8 +97,9 @@ public class FlowReceiverContainer {
 				final ConsumerFlowProperties flowProperties = new ConsumerFlowProperties()
 						.setEndpoint(JCSMPFactory.onlyInstance().createQueue(queueName))
 						.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT)
-						.setStartState(true);
+						.setStartState(!isPaused.get());
 				FlowReceiver flowReceiver = session.createFlow(null, flowProperties, endpointProperties, eventHandler);
+				logger.info("CAROL: creating flowReceiver with startState=" + !isPaused.get());
 				FlowReceiverReference newFlowReceiverReference = new FlowReceiverReference(flowReceiver);
 				flowReceiverAtomicReference.set(newFlowReceiverReference);
 				bindCondition.signalAll();
@@ -460,21 +460,37 @@ public class FlowReceiverContainer {
 	}
 
 	public void pause() {
-		logger.info(String.format("Pausing flow receiver container %s", id));
-		FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
-		if (flowReceiverReference != null) {
-			flowReceiverReference.pause();
-			isPaused.set(true);
+		Lock readLock = readWriteLock.readLock();
+		readLock.lock();
+		try {
+			logger.info(String.format("Pausing flow receiver container %s", id));
+			FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+			if (flowReceiverReference != null) {
+				flowReceiverReference.pause();
+				isPaused.set(true);
+			}
+		} finally {
+			readLock.unlock();
 		}
 	}
 
 	public void resume() {
-		logger.info(String.format("Resuming flow receiver container %s", id));
-		FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
-		if (flowReceiverReference != null) {
-			flowReceiverReference.resume();
-			isPaused.set(false);
+		Lock readLock = readWriteLock.readLock();
+		readLock.lock();
+		try {
+			logger.info(String.format("Resuming flow receiver container %s", id));
+			FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+			if (flowReceiverReference != null) {
+				flowReceiverReference.resume();
+				isPaused.set(false);
+			}
+		} finally {
+			readLock.unlock();
 		}
+	}
+
+	public boolean isPaused() {
+		return isPaused.get();
 	}
 
 	/**
@@ -538,12 +554,14 @@ public class FlowReceiverContainer {
 		}
 
 		public void pause() {
+			logger.info("CAROL: calling flowReceiver.stop()");
 			flowReceiver.stop();
 		}
 
 		public void resume() {
 			if (flowReceiver != null) {
 				try {
+					logger.info("CAROL: calling flowReceiver.start()");
 					flowReceiver.start();
 				} catch (InvalidOperationException e) {
 					logger.info(String.format("Attempted to start flow received container %s but it was closed. Exception: %s", id, e.getMessage()));
