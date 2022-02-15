@@ -798,7 +798,7 @@ Since the names of anonymous consumer groups, and in turn the name of their woul
 
 == Consumer Bindings Pause/Resume
 
-The Solace binder supports consumer bindings pause and resume. See link:https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#binding_visualization_control[Spring Cloud Stream documentation] to learn how to pause and resume consumer bindings.
+The Solace binder supports pausing and resuming consumer bindings. See link:https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#binding_visualization_control[Spring Cloud Stream documentation] to learn how to pause and resume consumer bindings.
 
 == Failed Producer Message Error Handling
 

@@ -94,12 +94,12 @@ public class FlowReceiverContainer {
 				logger.info(String.format("Flow receiver container %s is already bound to %s", id, existingFlowRefId));
 				return existingFlowRefId;
 			} else {
+				logger.info(String.format("Flow receiver container %s started in state '%s'", id, isPaused.get() ? "Paused" : "Running"));
 				final ConsumerFlowProperties flowProperties = new ConsumerFlowProperties()
 						.setEndpoint(JCSMPFactory.onlyInstance().createQueue(queueName))
 						.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT)
 						.setStartState(!isPaused.get());
 				FlowReceiver flowReceiver = session.createFlow(null, flowProperties, endpointProperties, eventHandler);
-				logger.info("CAROL: creating flowReceiver with startState=" + !isPaused.get());
 				FlowReceiverReference newFlowReceiverReference = new FlowReceiverReference(flowReceiver);
 				flowReceiverAtomicReference.set(newFlowReceiverReference);
 				bindCondition.signalAll();
@@ -554,19 +554,18 @@ public class FlowReceiverContainer {
 		}
 
 		public void pause() {
-			logger.info("CAROL: calling flowReceiver.stop()");
 			flowReceiver.stop();
 		}
 
 		public void resume() {
 			if (flowReceiver != null) {
 				try {
-					logger.info("CAROL: calling flowReceiver.start()");
 					flowReceiver.start();
 				} catch (InvalidOperationException e) {
-					logger.info(String.format("Attempted to start flow received container %s but it was closed. Exception: %s", id, e.getMessage()));
+					//Unlikely to occur as our Pausable implementation returns immediately when consumer binding is not running
+					logger.info(String.format("Attempted to resume flow received container %s but it was closed. Exception: %s", id, e.getMessage()));
 				} catch (Exception e) {
-					logger.warn("BLAH");//TODO
+					logger.error(String.format("Could not resume flow receiver container %s. Exception: %s", id, e.getMessage()));
 				}
 			}
 		}
