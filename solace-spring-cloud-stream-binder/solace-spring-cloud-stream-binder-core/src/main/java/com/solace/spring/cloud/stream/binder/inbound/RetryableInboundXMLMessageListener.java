@@ -24,14 +24,14 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 	RetryableInboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 									   ConsumerDestination consumerDestination,
 									   SolaceConsumerProperties consumerProperties,
-									   boolean batchingEnabled,
+									   @Nullable BatchCollector batchCollector,
 									   Consumer<Message<?>> messageConsumer,
 									   JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
 									   RetryTemplate retryTemplate,
 									   RecoveryCallback<?> recoveryCallback,
 									   @Nullable AtomicBoolean remoteStopFlag,
 									   ThreadLocal<AttributeAccessor> attributesHolder) {
-		super(flowReceiverContainer, consumerDestination, consumerProperties, batchingEnabled, messageConsumer,
+		super(flowReceiverContainer, consumerDestination, consumerProperties, batchCollector, messageConsumer,
 				ackCallbackFactory, remoteStopFlag, attributesHolder, false, true);
 		this.retryTemplate = retryTemplate;
 		this.recoveryCallback = recoveryCallback;

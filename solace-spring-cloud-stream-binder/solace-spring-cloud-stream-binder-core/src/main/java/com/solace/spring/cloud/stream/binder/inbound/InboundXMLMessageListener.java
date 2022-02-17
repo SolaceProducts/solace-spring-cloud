@@ -1,8 +1,8 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
-import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import com.solace.spring.cloud.stream.binder.util.SolaceBatchAcknowledgementException;
@@ -28,9 +28,8 @@ import org.springframework.integration.support.ErrorMessageUtils;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -41,13 +40,11 @@ abstract class InboundXMLMessageListener implements Runnable {
 	final FlowReceiverContainer flowReceiverContainer;
 	final ConsumerDestination consumerDestination;
 	private final SolaceConsumerProperties consumerProperties;
-	private final boolean batchingEnabled;
 	final ThreadLocal<AttributeAccessor> attributesHolder;
-	private final List<MessageContainer> batchedMessages;
+	private final BatchCollector batchCollector;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private final Consumer<Message<?>> messageConsumer;
 	private final JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
-	private long timeSentLastBatch = System.currentTimeMillis();
 	private final boolean needHolder;
 	private final boolean needAttributes;
 	private final AtomicBoolean stopFlag = new AtomicBoolean(false);
@@ -58,7 +55,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 	InboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 							  ConsumerDestination consumerDestination,
 							  SolaceConsumerProperties consumerProperties,
-							  boolean batchingEnabled,
+							  @Nullable BatchCollector batchCollector,
 							  Consumer<Message<?>> messageConsumer,
 							  JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
 							  @Nullable AtomicBoolean remoteStopFlag,
@@ -68,23 +65,26 @@ abstract class InboundXMLMessageListener implements Runnable {
 		this.flowReceiverContainer = flowReceiverContainer;
 		this.consumerDestination = consumerDestination;
 		this.consumerProperties = consumerProperties;
-		this.batchingEnabled = batchingEnabled;
+		this.batchCollector = batchCollector;
 		this.messageConsumer = messageConsumer;
 		this.ackCallbackFactory = ackCallbackFactory;
 		this.remoteStopFlag = () -> remoteStopFlag != null && remoteStopFlag.get();
 		this.attributesHolder = attributesHolder;
 		this.needHolder = needHolder;
 		this.needAttributes = needAttributes;
-		this.batchedMessages = batchingEnabled ? new ArrayList<>(consumerProperties.getBatchMaxSize()) :
-				Collections.emptyList();
 	}
 
 	abstract void handleMessage(Supplier<Message<?>> messageSupplier, Consumer<Message<?>> sendToConsumerHandler,
-								AcknowledgmentCallback acknowledgmentCallback, boolean isBatched) throws SolaceAcknowledgmentException;
+								AcknowledgmentCallback acknowledgmentCallback, boolean isBatched)
+			throws SolaceAcknowledgmentException;
 
 	@Override
 	public void run() {
 		try {
+			if (batchCollector != null) {
+				// So that first batch doesn't timeout early if was delayed between BatchCollector init and polling
+				batchCollector.resetLastSentTimeIfEmpty();
+			}
 			while (keepPolling()) {
 				try {
 					receive();
@@ -107,7 +107,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		MessageContainer messageContainer;
 
 		try {
-			if (batchingEnabled && consumerProperties.getBatchTimeout() > 0) {
+			if (batchCollector != null && consumerProperties.getBatchTimeout() > 0) {
 				messageContainer = flowReceiverContainer.receive(consumerProperties.getBatchTimeout());
 			} else {
 				messageContainer = flowReceiverContainer.receive();
@@ -124,11 +124,11 @@ abstract class InboundXMLMessageListener implements Runnable {
 		}
 
 		try {
-			if (batchingEnabled) {
+			if (batchCollector != null) {
 				if (messageContainer != null) {
-					batchedMessages.add(messageContainer);
+					batchCollector.addToBatch(messageContainer);
 				}
-				processBatchIfNecessary();
+				processBatchIfAvailable();
 			} else if (messageContainer != null) {
 				processMessage(messageContainer);
 			}
@@ -170,28 +170,16 @@ abstract class InboundXMLMessageListener implements Runnable {
 		}
 	}
 
-	private void processBatchIfNecessary() {
-		if (batchedMessages.size() < consumerProperties.getBatchMaxSize()) {
-			long batchTimeDiff = System.currentTimeMillis() - timeSentLastBatch;
-			if (batchedMessages.size() == 0 || consumerProperties.getBatchTimeout() == 0 ||
-					batchTimeDiff < consumerProperties.getBatchTimeout()) {
-				if (logger.isTraceEnabled()) {
-					logger.trace(String.format("Collecting batch... Size: %s, Time since last batch: %s ms",
-							batchedMessages.size(), batchTimeDiff));
-				}
-				return;
-			} else if (logger.isTraceEnabled()) {
-				logger.trace(String.format("Batch timeout reached, processing batch of %s messages...",
-						batchedMessages.size()));
-			}
-		} else if (logger.isTraceEnabled()) {
-			logger.trace(String.format("Max batch size reached, processing batch of %s messages...",
-					batchedMessages.size()));
+	private void processBatchIfAvailable() {
+		Optional<List<MessageContainer>> batchedMessages = batchCollector.collectBatchIfAvailable();
+		if (!batchedMessages.isPresent()) {
+			return;
 		}
 
-		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createBatchCallback(batchedMessages);
+		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createBatchCallback(batchedMessages.get());
 		try {
-			List<BytesXMLMessage> xmlMessages = batchedMessages.stream()
+			List<BytesXMLMessage> xmlMessages = batchedMessages.get()
+					.stream()
 					.map(MessageContainer::getMessage)
 					.collect(Collectors.toList());
 			handleMessage(() -> createBatchMessage(xmlMessages, acknowledgmentCallback),
@@ -228,8 +216,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 				}
 			}
 		} finally {
-			timeSentLastBatch = System.currentTimeMillis();
-			batchedMessages.clear();
+			batchCollector.confirmDelivery();
 		}
 	}
 

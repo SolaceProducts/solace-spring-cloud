@@ -1,11 +1,11 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
-import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
 import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
@@ -22,8 +22,12 @@ import org.springframework.context.Lifecycle;
 import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.endpoint.AbstractMessageSource;
+import org.springframework.lang.Nullable;
+import org.springframework.messaging.Message;
 import org.springframework.messaging.MessagingException;
 
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
@@ -31,11 +35,13 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 public class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle {
 	private final String id = UUID.randomUUID().toString();
 	private final String queueName;
 	private final JCSMPSession jcsmpSession;
+	private final BatchCollector batchCollector;
 	private final RetryableTaskService taskService;
 	private final EndpointProperties endpointProperties;
 	private final boolean hasTemporaryQueue;
@@ -51,11 +57,13 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 	public JCSMPMessageSource(SolaceConsumerDestination destination,
 							  JCSMPSession jcsmpSession,
+							  @Nullable BatchCollector batchCollector,
 							  RetryableTaskService taskService,
 							  ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
 							  EndpointProperties endpointProperties) {
 		this.queueName = destination.getName();
 		this.jcsmpSession = jcsmpSession;
+		this.batchCollector = batchCollector;
 		this.taskService = taskService;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
@@ -85,8 +93,25 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 		MessageContainer messageContainer;
 		try {
-			int timeout = consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis();
-			messageContainer = flowReceiverContainer.receive(timeout);
+			if (batchCollector != null) {
+				int batchTimeout = consumerProperties.getExtension().getBatchTimeout();
+				batchCollector.resetLastSentTimeIfEmpty();
+				do {
+					MessageContainer messageContainerForBatch;
+					if (batchTimeout > 0) {
+						messageContainerForBatch = flowReceiverContainer.receive(batchTimeout);
+					} else {
+						messageContainerForBatch = flowReceiverContainer.receive();
+					}
+					if (messageContainerForBatch != null) {
+						batchCollector.addToBatch(messageContainerForBatch);
+					}
+				} while (!batchCollector.isBatchAvailable());
+				messageContainer = null;
+			} else {
+				int timeout = consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis();
+				messageContainer = flowReceiverContainer.receive(timeout);
+			}
 		} catch (JCSMPException e) {
 			if (!isRunning() || remoteStopFlag.get()) {
 				String msg = String.format("Exception received while consuming a message, but the consumer " +
@@ -111,10 +136,17 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			return null;
 		}
 
-		if (messageContainer == null) return null;
+		if (batchCollector != null) {
+			return processBatchIfAvailable();
+		} else if (messageContainer != null) {
+			return processMessage(messageContainer);
+		} else {
+			return null;
+		}
+	}
 
+	private Message<?> processMessage(MessageContainer messageContainer) {
 		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createCallback(messageContainer);
-
 		try {
 			return xmlMessageMapper.map(messageContainer.getMessage(), acknowledgmentCallback, true);
 		} catch (Exception e) {
@@ -123,6 +155,27 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 					messageContainer.getMessage().getMessageId()));
 			AckUtils.reject(acknowledgmentCallback);
 			return null;
+		}
+	}
+
+	private Message<List<?>> processBatchIfAvailable() {
+		Optional<List<MessageContainer>> batchedMessages = batchCollector.collectBatchIfAvailable();
+		if (!batchedMessages.isPresent()) {
+			return null;
+		}
+
+		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createBatchCallback(batchedMessages.get());
+		try {
+			return xmlMessageMapper.mapBatchMessage(batchedMessages.get()
+					.stream()
+					.map(MessageContainer::getMessage)
+					.collect(Collectors.toList()), acknowledgmentCallback, true);
+		} catch (Exception e) {
+			logger.warn(e, "Message batch cannot be consumed. It will be rejected");
+			AckUtils.reject(acknowledgmentCallback);
+			return null;
+		} finally {
+			batchCollector.confirmDelivery();
 		}
 	}
 

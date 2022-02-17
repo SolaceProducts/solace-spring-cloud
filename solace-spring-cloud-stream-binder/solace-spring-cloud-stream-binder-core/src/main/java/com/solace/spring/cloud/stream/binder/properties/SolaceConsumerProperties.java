@@ -2,6 +2,7 @@ package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solacesystems.jcsmp.EndpointProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.util.Assert;
 
 import javax.validation.constraints.Min;
 import java.util.concurrent.TimeUnit;
@@ -16,7 +17,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * <p>Only applicable when {@code batchMode} is {@code true}.</p>
 	 */
 	@Min(1)
-	private Integer batchMaxSize = 255;
+	private int batchMaxSize = 255;
 
 	/**
 	 * <p>The maximum wait time in milliseconds to receive a batch of messages. If this timeout is reached, then the
@@ -27,7 +28,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * enabled.</p>
 	 */
 	@Min(0)
-	private Integer batchTimeout = 5000;
+	private int batchTimeout = 5000;
 
 	/**
 	 * Maximum wait time for polled consumers to receive a message from their consumer group queue.
@@ -113,19 +114,21 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	// ------------------------
 
 
-	public Integer getBatchMaxSize() {
+	public int getBatchMaxSize() {
 		return batchMaxSize;
 	}
 
-	public void setBatchMaxSize(Integer batchMaxSize) {
+	public void setBatchMaxSize(int batchMaxSize) {
+		Assert.isTrue(batchMaxSize >= 1, "max batch size must be greater than 0");
 		this.batchMaxSize = batchMaxSize;
 	}
 
-	public Integer getBatchTimeout() {
+	public int getBatchTimeout() {
 		return batchTimeout;
 	}
 
-	public void setBatchTimeout(Integer batchTimeout) {
+	public void setBatchTimeout(int batchTimeout) {
+		Assert.isTrue(batchTimeout >= 0, "batch timeout must be greater than or equal to 0");
 		this.batchTimeout = batchTimeout;
 	}
 

@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder;
 
+import com.solace.spring.cloud.stream.binder.inbound.BatchCollector;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
@@ -128,8 +129,12 @@ public class SolaceMessageChannelBinder
 		SolaceConsumerDestination solaceDestination = (SolaceConsumerDestination) destination;
 
 		EndpointProperties endpointProperties = getConsumerEndpointProperties(consumerProperties);
-		JCSMPMessageSource messageSource = new JCSMPMessageSource(solaceDestination, jcsmpSession, taskService,
-				consumerProperties, endpointProperties);
+		JCSMPMessageSource messageSource = new JCSMPMessageSource(solaceDestination,
+				jcsmpSession,
+				consumerProperties.isBatchMode() ? new BatchCollector(consumerProperties.getExtension()) : null,
+				taskService,
+				consumerProperties,
+				endpointProperties);
 
 		messageSource.setRemoteStopFlag(consumersRemoteStopFlag::get);
 		messageSource.setPostStart(getConsumerPostStart(solaceDestination, consumerProperties));

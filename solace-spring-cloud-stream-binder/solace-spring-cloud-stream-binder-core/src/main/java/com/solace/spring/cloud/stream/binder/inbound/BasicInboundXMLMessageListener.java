@@ -26,14 +26,14 @@ public class BasicInboundXMLMessageListener extends InboundXMLMessageListener {
 	BasicInboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 								   ConsumerDestination consumerDestination,
 								   SolaceConsumerProperties consumerProperties,
-								   boolean batchingEnabled,
+								   @Nullable BatchCollector batchCollector,
 								   Consumer<Message<?>> messageConsumer,
 								   JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
 								   BiFunction<Message<?>, RuntimeException, Boolean> errorHandlerFunction,
 								   @Nullable AtomicBoolean remoteStopFlag,
 								   ThreadLocal<AttributeAccessor> attributesHolder,
 								   boolean needHolderAndAttributes) {
-		super(flowReceiverContainer, consumerDestination, consumerProperties, batchingEnabled, messageConsumer,
+		super(flowReceiverContainer, consumerDestination, consumerProperties, batchCollector, messageConsumer,
 				ackCallbackFactory, remoteStopFlag, attributesHolder, needHolderAndAttributes, needHolderAndAttributes);
 		this.errorHandlerFunction = errorHandlerFunction;
 	}
