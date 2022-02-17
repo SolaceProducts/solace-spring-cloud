@@ -7,11 +7,11 @@ import java.util.concurrent.TimeUnit;
 
 public class RetryableAssertions {
 	public static void retryAssert(SoftAssertionsProvider.ThrowingRunnable assertRun) throws InterruptedException {
-		retryAssert(assertRun, 10, TimeUnit.SECONDS);
+		retryAssert(10, TimeUnit.SECONDS, assertRun);
 	}
 
 	@SuppressWarnings("BusyWait")
-	public static void retryAssert(SoftAssertionsProvider.ThrowingRunnable assertRun, long timeout, TimeUnit unit)
+	public static void retryAssert(long timeout, TimeUnit unit, SoftAssertionsProvider.ThrowingRunnable assertRun)
 			throws InterruptedException {
 		final long expiry = System.currentTimeMillis() + unit.toMillis(timeout);
 		SoftAssertions softAssertions;

@@ -36,8 +36,8 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
-import org.junitpioneer.jupiter.RetryingTest;
-import org.opentest4j.AssertionFailedError;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
@@ -49,6 +49,7 @@ import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.cloud.stream.provisioning.ProvisioningException;
+import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.support.MessageBuilder;
 import org.springframework.messaging.Message;
@@ -75,10 +76,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static com.solace.spring.cloud.stream.binder.test.util.ValuePoller.poll;
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
-import static org.hamcrest.Matchers.is;
 
 /**
  * All tests which modify the default provisioning lifecycle.
@@ -629,11 +629,13 @@ public class SolaceBinderProvisioningLifecycleIT {
 		consumerBinding.unbind();
 	}
 
-	@RetryingTest(maxAttempts = 10, onExceptions = AssertionFailedError.class) // flaky when ran in parallel
+	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@ValueSource(booleans = {false, true})
 	@Execution(ExecutionMode.SAME_THREAD)
-	public void testConsumerConcurrency(JCSMPSession jcsmpSession,
+	public void testConsumerConcurrency(boolean batchMode,
 										SempV2Api sempV2Api,
 										SpringCloudStreamContext context,
+										SoftAssertions softly,
 										TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = context.getBinder();
 
@@ -648,11 +650,15 @@ public class SolaceBinderProvisioningLifecycleIT {
 
 		int consumerConcurrency = 3;
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.setBatchMode(batchMode);
 		consumerProperties.setConcurrency(consumerConcurrency);
+		if (!consumerProperties.isBatchMode()) {
+			consumerProperties.getExtension().setBatchMaxSize(1);
+		}
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
 				destination0, group0, moduleInputChannel, consumerProperties);
 
-		int numMsgsPerFlow = 10;
+		int numMsgsPerFlow = 10 * consumerProperties.getExtension().getBatchMaxSize();
 		Set<Message<?>> messages = new HashSet<>();
 		Map<String, Instant> foundPayloads = new HashMap<>();
 		for (int i = 0; i < numMsgsPerFlow * consumerConcurrency; i++) {
@@ -671,11 +677,16 @@ public class SolaceBinderProvisioningLifecycleIT {
 		final CyclicBarrier barrier = new CyclicBarrier(consumerConcurrency);
 		final CountDownLatch latch = new CountDownLatch(numMsgsPerFlow * consumerConcurrency);
 		moduleInputChannel.subscribe(message1 -> {
-			String payload = new String((byte[]) message1.getPayload());
-			synchronized (foundPayloads) {
-				if (!foundPayloads.containsKey(payload)) {
-					logger.error(String.format("Received unexpected message %s", payload));
-					return;
+			@SuppressWarnings("unchecked")
+			List<byte[]> payloads = consumerProperties.isBatchMode() ? (List<byte[]>) message1.getPayload() :
+					Collections.singletonList((byte[]) message1.getPayload());
+			for (byte[] payloadBytes : payloads) {
+				String payload = new String(payloadBytes);
+				synchronized (foundPayloads) {
+					if (!foundPayloads.containsKey(payload)) {
+						softly.fail("Received unexpected message %s", payload);
+						return;
+					}
 				}
 			}
 
@@ -684,7 +695,8 @@ public class SolaceBinderProvisioningLifecycleIT {
 				barrier.await();
 				Thread.sleep(stallIntervalInMillis);
 				timestamp = Instant.now();
-				logger.info(String.format("Received message %s", payload));
+				logger.info("Received message {} (size: {}) (timestamp: {})",
+						StaticMessageHeaderAccessor.getId(message1), payloads.size(), timestamp);
 			} catch (InterruptedException e) {
 				logger.error("Interrupt received", e);
 				return;
@@ -693,30 +705,32 @@ public class SolaceBinderProvisioningLifecycleIT {
 				return;
 			}
 
-			synchronized (foundPayloads) {
-				foundPayloads.put(payload, timestamp);
-			}
+			for (byte[] payloadBytes : payloads) {
+				String payload = new String(payloadBytes);
+				synchronized (foundPayloads) {
+					foundPayloads.put(payload, timestamp);
+				}
 
-			latch.countDown();
+				latch.countDown();
+			}
 		});
 
 		messages.forEach(moduleOutputChannel::send);
 
-		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
-		for (Map.Entry<String, Instant> payloadInstant : foundPayloads.entrySet()) {
-			String payload = payloadInstant.getKey();
-			Instant instant = payloadInstant.getValue();
+		assertThat(latch.await(1, TimeUnit.MINUTES)).isTrue();
+		assertThat(foundPayloads).allSatisfy((payload, instant) -> {
 			assertThat(instant).as("Did not receive message %s", payload).isNotNull();
-			long numMsgsInParallel = foundPayloads.values()
+			assertThat(foundPayloads.values()
 					.stream()
 					// Get "closest" messages with a margin of error of half the stalling interval
-					.filter(instant1 -> Duration.between(instant, instant1).abs().getNano() <=
-							TimeUnit.MILLISECONDS.toNanos(stallIntervalInMillis) / 2)
-					.count();
-			assertThat(numMsgsInParallel).isEqualTo(consumerConcurrency);
-		}
+					.filter(instant1 -> Duration.between(instant, instant1).abs()
+							.minusMillis(stallIntervalInMillis / 2).isNegative())
+					.count())
+					.as("Unexpected number of messages in parallel")
+					.isEqualTo((long) consumerConcurrency * consumerProperties.getExtension().getBatchMaxSize());
+		});
 
-		String msgVpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		String msgVpnName = (String) context.getJcsmpSession().getProperty(JCSMPProperties.VPN_NAME);
 		List<String> txFlowsIds = sempV2Api.monitor().getMsgVpnQueueTxFlows(
 				msgVpnName,
 				queue0,
@@ -727,36 +741,32 @@ public class SolaceBinderProvisioningLifecycleIT {
 				.map(String::valueOf)
 				.collect(Collectors.toList());
 
-		assertThat(txFlowsIds).hasSize(consumerConcurrency);
+		assertThat(txFlowsIds).hasSize(consumerConcurrency).allSatisfy(flowId -> retryAssert(() ->
+				assertThat(sempV2Api.monitor()
+						.getMsgVpnQueueTxFlow(msgVpnName, queue0, flowId, null)
+						.getData()
+						.getAckedMsgCount())
+						.as("Expected all flows to receive exactly %s messages", numMsgsPerFlow)
+						.isEqualTo(numMsgsPerFlow)));
 
-		for (String flowId : txFlowsIds) {
-			assertThat(poll(() -> sempV2Api.monitor().getMsgVpnQueueTxFlow(msgVpnName, queue0, flowId, null).getData().getAckedMsgCount())
-							.until(is((long) numMsgsPerFlow))
-							.execute()
-							.get())
-					.as("Expected all flows to receive exactly %s messages", numMsgsPerFlow)
-					.isEqualTo(numMsgsPerFlow);
-		}
-
-		assertThat(poll(() -> txFlowsIds.stream()
-								.map((ThrowingFunction<String, MonitorMsgVpnQueueTxFlowResponse>)
-										flowId -> sempV2Api.monitor().getMsgVpnQueueTxFlow(msgVpnName, queue0, flowId, null))
-								.mapToLong(r -> r.getData().getAckedMsgCount())
-								.sum())
-						.until(is((long) numMsgsPerFlow * consumerConcurrency))
-						.execute()
-						.get())
+		retryAssert(() -> assertThat(txFlowsIds.stream()
+				.map((ThrowingFunction<String, MonitorMsgVpnQueueTxFlowResponse>)
+						flowId -> sempV2Api.monitor().getMsgVpnQueueTxFlow(msgVpnName, queue0, flowId, null))
+				.mapToLong(r -> r.getData().getAckedMsgCount())
+				.sum())
 				.as("Flows did not receive expected number of messages")
-				.isEqualTo(numMsgsPerFlow * consumerConcurrency);
+				.isEqualTo((long) numMsgsPerFlow * consumerConcurrency));
 
 		producerBinding.unbind();
 		consumerBinding.unbind();
 	}
 
-	@Test
-	public void testPolledConsumerConcurrency(JCSMPSession jcsmpSession,
+	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@ValueSource(booleans = {false, true})
+	public void testPolledConsumerConcurrency(boolean batchMode,
 											  SempV2Api sempV2Api,
 											  SpringCloudStreamContext context,
+											  SoftAssertions softly,
 											  TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = context.getBinder();
 
@@ -772,13 +782,18 @@ public class SolaceBinderProvisioningLifecycleIT {
 		int consumerConcurrency = 2;
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
 		consumerProperties.setConcurrency(consumerConcurrency);
+		consumerProperties.setBatchMode(batchMode);
+		if (!consumerProperties.isBatchMode()) {
+			consumerProperties.getExtension().setBatchMaxSize(1);
+		}
 		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
 				destination0, group0, moduleInputChannel, consumerProperties);
 
-		int numMsgsPerFlow = 2;
+		int numMsgsPerConsumer = 2;
 		Set<Message<?>> messages = new HashSet<>();
 		Map<String, Boolean> foundPayloads = new HashMap<>();
-		for (int i = 0; i < numMsgsPerFlow * consumerConcurrency; i++) {
+		for (int i = 0; i < numMsgsPerConsumer * consumerProperties.getExtension().getBatchMaxSize() *
+				consumerConcurrency; i++) {
 			String payload = "foo-" + i;
 			foundPayloads.put(payload, false);
 			messages.add(MessageBuilder.withPayload(payload.getBytes())
@@ -792,24 +807,31 @@ public class SolaceBinderProvisioningLifecycleIT {
 
 		messages.forEach(moduleOutputChannel::send);
 
-		for (int i = 0; i < 100; i++) {
-			moduleInputChannel.poll(message1 -> {
-				String payload = new String((byte[]) message1.getPayload());
-				logger.info(String.format("Received message %s", payload));
-				synchronized (foundPayloads) {
-					if (foundPayloads.containsKey(payload)) {
-						foundPayloads.put(payload, true);
-					} else {
-						logger.error(String.format("Received unexpected message %s", payload));
+		for (int i = 0; i < numMsgsPerConsumer * consumerConcurrency; i ++) {
+			retryAssert(() -> assertThat(moduleInputChannel.poll(message1 -> {
+				@SuppressWarnings("unchecked")
+				List<byte[]> payloads = consumerProperties.isBatchMode() ? (List<byte[]>) message1.getPayload() :
+						Collections.singletonList((byte[]) message1.getPayload());
+				logger.info("Received message {} (size: {})", StaticMessageHeaderAccessor.getId(message1),
+						payloads.size());
+				for (byte[] payloadBytes : payloads) {
+					String payload = new String(payloadBytes);
+					synchronized (foundPayloads) {
+						if (foundPayloads.containsKey(payload)) {
+							foundPayloads.put(payload, true);
+						} else {
+							softly.fail("Received unexpected message %s", payload);
+						}
 					}
 				}
-			});
+			})).isTrue());
 		}
 
-		foundPayloads.forEach((key, value) ->
-				assertThat(value).as("Did not receive message %s", key).isTrue());
+		assertThat(foundPayloads).allSatisfy((key, value) -> assertThat(value)
+				.as("Did not receive message %s", key)
+				.isTrue());
 
-		String msgVpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		String msgVpnName = (String) context.getJcsmpSession().getProperty(JCSMPProperties.VPN_NAME);
 		List<MonitorMsgVpnQueueTxFlow> txFlows = sempV2Api.monitor().getMsgVpnQueueTxFlows(
 				msgVpnName,
 				queue0,
@@ -819,12 +841,13 @@ public class SolaceBinderProvisioningLifecycleIT {
 				.hasSize(1);
 
 		String flowId = String.valueOf(txFlows.iterator().next().getFlowId());
-		assertThat(poll(() -> sempV2Api.monitor().getMsgVpnQueueTxFlow(msgVpnName, queue0, flowId, null).getData().getAckedMsgCount())
-						.until(is((long) numMsgsPerFlow * consumerConcurrency))
-						.execute()
-						.get())
+		retryAssert(() -> assertThat(sempV2Api.monitor()
+				.getMsgVpnQueueTxFlow(msgVpnName, queue0, flowId, null)
+				.getData()
+				.getAckedMsgCount())
 				.as("Flow %s did not receive expected number of messages", flowId)
-				.isEqualTo(numMsgsPerFlow * consumerConcurrency);
+				.isEqualTo((long) numMsgsPerConsumer * consumerProperties.getExtension().getBatchMaxSize() *
+						consumerConcurrency));
 
 		producerBinding.unbind();
 		consumerBinding.unbind();
