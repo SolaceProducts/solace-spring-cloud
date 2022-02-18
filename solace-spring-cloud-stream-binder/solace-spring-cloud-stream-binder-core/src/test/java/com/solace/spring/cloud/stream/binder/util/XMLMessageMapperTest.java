@@ -329,6 +329,9 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.REPLICATION_GROUP_MESSAGE_ID:
 					assertNull(xmlMessage.getReplicationGroupMessageId());
 					break;
+				case SolaceHeaders.DELIVERY_COUNT:
+					assertThrows(UnsupportedOperationException.class, xmlMessage::getDeliveryCount);
+					break;
 				case SolaceHeaders.DESTINATION:
 					assertNull(xmlMessage.getDestination());
 					break;
@@ -357,7 +360,6 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.SERIALIZED_PAYLOAD:
 				case SolaceBinderHeaders.CONFIRM_CORRELATION:
 				case SolaceBinderHeaders.NULL_PAYLOAD:
-				case SolaceHeaders.DELIVERY_COUNT:
 					assertNull(xmlMessage.getProperties().get(header.getKey()));
 					break;
 				default:
@@ -931,6 +933,10 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.CORRELATION_ID:
 					assertEquals(xmlMessage.getCorrelationId(), actualValue);
 					break;
+				case SolaceHeaders.DELIVERY_COUNT:
+					//For this test, the delivery count feature is disabled
+					assertNull(actualValue);
+					break;
 				case SolaceHeaders.DESTINATION:
 					assertEquals(xmlMessage.getDestination(), actualValue);
 					break;
@@ -979,7 +985,6 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.USER_DATA:
 					assertEquals(xmlMessage.getUserData(), actualValue);
 					break;
-				case SolaceHeaders.DELIVERY_COUNT:
 				case SolaceBinderHeaders.MESSAGE_VERSION:
 					assertEquals(xmlMessage.getProperties().get(header.getKey()), actualValue);
 					break;

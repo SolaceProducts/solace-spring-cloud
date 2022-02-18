@@ -234,7 +234,9 @@ public class XMLMessageMapper {
 			try {
 				builder.setHeaderIfAbsent(header.getKey(), header.getValue().getReadAction().apply(xmlMessage));
 			} catch (UnsupportedOperationException e) {
-				logger.info(String.format("Ignoring Solace header %s. Error: %s", header.getKey(), e.getMessage()));
+				if (logger.isDebugEnabled()) {
+					logger.debug(String.format("Ignoring Solace header %s. Error: %s", header.getKey(), e));
+				}
 				ignoredHeaderProperties.add(header.getKey());
 				continue;
 			}

@@ -3,8 +3,12 @@ package com.solace.spring.cloud.stream.binder.util;
 import com.solacesystems.jcsmp.FlowEvent;
 import com.solacesystems.jcsmp.FlowEventArgs;
 import com.solacesystems.jcsmp.FlowEventHandler;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 public class SolaceFlowEventHandler implements FlowEventHandler {
+
+    private static final Log logger = LogFactory.getLog(SolaceFlowEventHandler.class);
     private XMLMessageMapper xmlMessageMapper;
 
     /**
@@ -21,6 +25,7 @@ public class SolaceFlowEventHandler implements FlowEventHandler {
     @Override
     public void handleEvent(Object o, FlowEventArgs flowEventArgs) {
         if (flowEventArgs.getEvent() == FlowEvent.FLOW_RECONNECTED && xmlMessageMapper != null) {
+            logger.info(String.format("Received flow event %s. Resetting ignored properties.", flowEventArgs.getEvent().name()));
             xmlMessageMapper.resetIgnoredProperties();
         }
     }
