@@ -718,12 +718,12 @@ By default, generated error queue names have the following form:
 <prefix>/error/<familiarity-modifier>/<group>/<destination-encoding>/<encoded-destination>
 ----
 
-The `errorQueueNameExpression` property's default SpEL expression conforms to the above format. Users can provide any valid SpEL expression in order to generate custom error queue names using the same evaluation context as described in <<Generated Queue Name Syntax>>.
-
 The definitions of each segment of the error queue matches that from <<Generated Queue Name Syntax>>, with the following exceptions:
 
 group::
 The consumer `group` name. Can be enabled/disabled with the `useGroupNameInErrorQueueName` (deprecated) consumer config option.
+
+The `errorQueueNameExpression` property's default SpEL expression conforms to the above format. Users can provide any valid SpEL expression in order to generate custom error queue names using the same evaluation context as described in <<Generated Queue Name Syntax>>.
 
 == Consumer Concurrency
 
