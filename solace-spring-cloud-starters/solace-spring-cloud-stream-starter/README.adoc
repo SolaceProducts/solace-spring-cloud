@@ -175,6 +175,8 @@ Default: `"(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties
 See: <<Generated Queue Name Syntax>>
 +
 WARNING: Modifying this can cause naming conflicts between the queue names of consumer groups.
++
+WARNING: While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>, directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
 
 queueNamePrefix::
 Naming prefix for all queues.
@@ -282,6 +284,8 @@ Default: `"(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties
 See: <<Generated Error Queue Name Syntax>>
 +
 WARNING: Modifying this can cause naming conflicts between the error queue names.
++
+WARNING: While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>, directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
 
 errorQueueNameOverride::
 A custom error queue name.
@@ -394,6 +398,8 @@ Default: `"(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties
 See: <<Generated Queue Name Syntax>>
 +
 WARNING: Modifying this can cause naming conflicts between the queue names of consumer groups.
++
+WARNING: While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>, directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
 
 queueNameExpressionsForRequiredGroups::
 A mapping of required consumer groups to queue name SpEL expressions.
@@ -404,6 +410,8 @@ Default: `Empty Map<String, String>` +
 See: <<Generated Queue Name Syntax>>
 +
 WARNING: Modifying this can cause naming conflicts between the queue names of consumer groups.
++
+WARNING: While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>, directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
 
 queueNamePrefix::
 Naming prefix for all queues.
@@ -665,7 +673,22 @@ By default, generated consumer group queue names have the following form:
 ----
 <prefix>/<familiarity-modifier>/<group>/<destination-encoding>/<encoded-destination>
 ----
-The `queueNameExpression` property's default Spring Expression conforms to the above format, however, users can provide any valid Spring Expression in order to generate custom queue names. Valid expressions evaluate against the following context:
+prefix::
+A static prefix as indicated by the `queueNamePrefix` (deprecated) configuration option.
+
+familiarity-modifier::
+Indicates the durability of the consumer group (`wk` for well-known or `an` for anonymous). Can be enabled/disabled with the `useFamiliarityInQueueName` (deprecated) config option.
+
+group::
+The consumer `group` name. Can be enabled/disabled for consumers with the `useGroupNameInQueueName` (deprecated) consumer config option.
+
+destination-encoding::
+Indicates the encoding scheme used to encode the destination in the queue name (currently only `plain` is supported). Can be enabled/disabled with the `useDestinationEncodingInQueueName` (deprecated) config option.
+
+encoded-destination::
+The encoded `destination` as per `<destination-encoding>`.
+
+The `queueNameExpression` property's default SpEL expression conforms to the above format, however, users can provide any valid SpEL expression in order to generate custom queue names. Valid expressions evaluate against the following context:
 [cols="1m,1", options="header"]
 |===
 | Context Variable
@@ -686,22 +709,6 @@ The `queueNameExpression` property's default Spring Expression conforms to the a
 | properties.spring
 | The configured Spring binding properties.
 |===
-WARNING: The expression evaluation context is subject to change and should not be used other than to customize queue names.
-
-prefix (deprecated)::
-A static prefix as indicated by the `queueNamePrefix` configuration option.
-
-familiarity-modifier (deprecated)::
-Indicates the durability of the consumer group (`wk` for well-known or `an` for anonymous). Can be enabled/disabled with the `useFamiliarityInQueueName` config option.
-
-group (deprecated)::
-The consumer `group` name. Can be enabled/disabled for consumers with the `useGroupNameInQueueName` consumer config option.
-
-destination-encoding (deprecated)::
-Indicates the encoding scheme used to encode the destination in the queue name (currently only `plain` is supported). Can be enabled/disabled with the `useDestinationEncodingInQueueName` config option.
-
-encoded-destination (deprecated)::
-The encoded `destination` as per `<destination-encoding>`.
 
 === Generated Error Queue Name Syntax
 
@@ -711,14 +718,14 @@ By default, generated error queue names have the following form:
 <prefix>/error/<familiarity-modifier>/<group>/<destination-encoding>/<encoded-destination>
 ----
 
-The `errorQueueNameExpression` property's default Spring Expression conforms to the above format. Users can provide any valid Spring Expression in order to generate custom error queue names using the same evaluation context as described in <<Generated Queue Name Syntax>>.
+The `errorQueueNameExpression` property's default SpEL expression conforms to the above format. Users can provide any valid SpEL expression in order to generate custom error queue names using the same evaluation context as described in <<Generated Queue Name Syntax>>.
 
 The definitions of each segment of the error queue matches that from <<Generated Queue Name Syntax>>, with the following exceptions:
 
-group (deprecated)::
-The consumer `group` name. Can be enabled/disabled with the `useGroupNameInErrorQueueName` consumer config option.
+group::
+The consumer `group` name. Can be enabled/disabled with the `useGroupNameInErrorQueueName` (deprecated) consumer config option.
 
-The error queue name can also be manually overridden with the `errorQueueNameOverride` consumer config option.
+The error queue name can also be manually overridden with the `errorQueueNameOverride` (deprecated) consumer config option.
 
 == Consumer Concurrency
 

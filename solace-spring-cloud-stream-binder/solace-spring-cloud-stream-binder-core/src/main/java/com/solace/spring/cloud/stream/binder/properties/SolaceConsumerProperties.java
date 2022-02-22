@@ -35,6 +35,8 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	/**
 	 * A SpEL expression for creating the consumer group’s queue name.
 	 * Modifying this can cause naming conflicts between the queue names of consumer groups.
+	 * While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>,
+	 * directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
 	 */
 	private String queueNameExpression = "(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + (isAnonymous ? group?.trim() + '/' : (properties.solace.useGroupNameInQueueName ? group?.trim() + '/' : '')) + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')";
 
@@ -52,6 +54,8 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	/**
 	 * A SpEL expression for creating the error queue’s name.
 	 * Modifying this can cause naming conflicts between the error queue names.
+	 * While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>,
+	 * directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
 	 */
 	private String errorQueueNameExpression = "(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + 'error/' + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + (isAnonymous ? group?.trim() + '/' : (properties.solace.useGroupNameInErrorQueueName ? group?.trim() + '/' : '')) + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')";
 	/**
