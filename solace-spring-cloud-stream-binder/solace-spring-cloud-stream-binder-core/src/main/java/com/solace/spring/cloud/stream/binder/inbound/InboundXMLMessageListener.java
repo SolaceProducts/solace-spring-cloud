@@ -61,7 +61,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		this.attributesHolder = attributesHolder;
 		this.needHolder = needHolder;
 		this.needAttributes = needAttributes;
-		this.flowReceiverContainer.getEventHandler().setXmlMessageMapper(xmlMessageMapper);
+		this.flowReceiverContainer.setXMLMessageMapper(xmlMessageMapper);
 	}
 
 	abstract void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) throws SolaceAcknowledgmentException;

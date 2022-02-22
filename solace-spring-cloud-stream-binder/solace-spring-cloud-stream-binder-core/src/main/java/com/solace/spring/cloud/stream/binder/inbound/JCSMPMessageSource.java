@@ -8,7 +8,6 @@ import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
-import com.solace.spring.cloud.stream.binder.util.SolaceFlowEventHandler;
 import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.ClosedFacilityException;
@@ -144,7 +143,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			}
 
 			try {
-				flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties, new SolaceFlowEventHandler(xmlMessageMapper));
+				flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties, xmlMessageMapper);
 				flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
 						TimeUnit.MILLISECONDS);
 				flowReceiverContainer.bind();

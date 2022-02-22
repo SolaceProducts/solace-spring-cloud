@@ -59,17 +59,17 @@ public class FlowReceiverContainer {
 	private TimeUnit rebindWaitTimeoutUnit = TimeUnit.SECONDS;
 
 	private static final Log logger = LogFactory.getLog(FlowReceiverContainer.class);
-	private final SolaceFlowEventHandler eventHandler;
+	private XMLMessageMapper xmlMessageMapper;
 
 	public FlowReceiverContainer(JCSMPSession session, String queueName, EndpointProperties endpointProperties) {
 		this(session, queueName, endpointProperties, null);
 	}
 
-	public FlowReceiverContainer(JCSMPSession session, String queueName, EndpointProperties endpointProperties, SolaceFlowEventHandler eventHandler) {
+	public FlowReceiverContainer(JCSMPSession session, String queueName, EndpointProperties endpointProperties, XMLMessageMapper xmlMessageMapper) {
 		this.session = session;
 		this.queueName = queueName;
 		this.endpointProperties = endpointProperties;
-		this.eventHandler = eventHandler;
+		this.xmlMessageMapper = xmlMessageMapper;
 	}
 
 	/**
@@ -96,13 +96,16 @@ public class FlowReceiverContainer {
 						.setEndpoint(JCSMPFactory.onlyInstance().createQueue(queueName))
 						.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT)
 						.setStartState(true);
-				FlowReceiver flowReceiver = session.createFlow(null, flowProperties, endpointProperties, eventHandler);
+				FlowReceiver flowReceiver = session.createFlow(null, flowProperties, endpointProperties);
 				FlowReceiverReference newFlowReceiverReference = new FlowReceiverReference(flowReceiver);
 				flowReceiverAtomicReference.set(newFlowReceiverReference);
 				bindCondition.signalAll();
 				return newFlowReceiverReference.getId();
 			}
 		} finally {
+			if (xmlMessageMapper != null) {
+				xmlMessageMapper.resetIgnoredProperties(id.toString());
+			}
 			writeLock.unlock();
 		}
 	}
@@ -483,8 +486,8 @@ public class FlowReceiverContainer {
 		return queueName;
 	}
 
-	public SolaceFlowEventHandler getEventHandler() {
-		return eventHandler;
+	public void setXMLMessageMapper(XMLMessageMapper xmlMessageMapper) {
+		this.xmlMessageMapper = xmlMessageMapper;
 	}
 
 	static class FlowReceiverReference {
