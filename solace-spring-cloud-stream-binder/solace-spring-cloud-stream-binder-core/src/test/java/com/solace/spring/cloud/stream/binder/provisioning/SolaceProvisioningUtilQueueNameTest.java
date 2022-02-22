@@ -265,12 +265,12 @@ public class SolaceProvisioningUtilQueueNameTest {
     public void testQueueNameExpressionWithStaticValue() {
         SolaceConsumerProperties consumerProperties = createConsumerProperties(null, true, true, true, true);
         //The escaped single quote '' resolves to a single quote in the actual queue name
-        consumerProperties.setQueueNameExpression("'My/Static.QueueName-_''>*!@#$%^&()+='");
+        consumerProperties.setQueueNameExpression("'My/Static.QueueName-_''>*!@#$%^&()+=#{test}:[]{}|\\\"-~'");
 
         String actual = SolaceProvisioningUtil
                 .getQueueNames("unused/destination", "unusedGroup", new ExtendedConsumerProperties<>(consumerProperties), true)
                 .getConsumerGroupQueueName();
-        assertEquals("My/Static.QueueName-_'>*!@#$%^&()+=", actual);
+        assertEquals("My/Static.QueueName-_'>*!@#$%^&()+=#{test}:[]{}|\\\"-~", actual);
     }
 
     @Test

@@ -94,6 +94,7 @@ public class SolaceCommonProperties {
 		this.addDestinationAsSubscriptionToQueue = addDestinationAsSubscriptionToQueue;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of queueNameExpression and errorQueueNameExpression. Prefixes can be specified directly in these SpEL expressions.")
 	public String getQueueNamePrefix() {
 		return queueNamePrefix;
 	}
@@ -102,6 +103,7 @@ public class SolaceCommonProperties {
 		this.queueNamePrefix = queueNamePrefix;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `errorQueueNameExpression`. The familiarity modifier can be removed from queue names by removing it directly from these SpEL expressions.")
 	public boolean isUseFamiliarityInQueueName() {
 		return useFamiliarityInQueueName;
 	}
@@ -110,6 +112,7 @@ public class SolaceCommonProperties {
 		this.useFamiliarityInQueueName = useFamiliarityInQueueName;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `errorQueueNameExpression`. The destination encoding can be removed from queue names by removing it directly from these SpEL expressions.")
 	public boolean isUseDestinationEncodingInQueueName() {
 		return useDestinationEncodingInQueueName;
 	}

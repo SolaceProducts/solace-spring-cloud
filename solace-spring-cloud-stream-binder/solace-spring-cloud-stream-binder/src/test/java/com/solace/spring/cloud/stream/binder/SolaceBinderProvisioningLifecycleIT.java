@@ -1847,7 +1847,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 			fail("Expected provisioning to fail due to empty queue name");
 		} catch (Exception e) {
 			assertThat(e).isInstanceOf(ProvisioningException.class);
-			assertThat(e.getMessage()).containsIgnoringCase("The name of the queue to provision is invalid. At least one character is required. Current value is '   '");
+			assertThat(e.getMessage()).isEqualTo("Invalid SpEL expression '   ' as it resolves to a String that does not contain actual text.");
 		}
 	}
 

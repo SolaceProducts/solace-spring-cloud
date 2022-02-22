@@ -80,9 +80,18 @@ public class SolaceProvisioningUtil {
 			EvaluationContext evaluationContext = new StandardEvaluationContext(root);
 			ExpressionParser parser = new SpelExpressionParser();
 			Expression queueNameExp = parser.parseExpression(expression);
-			return (String) queueNameExp.getValue(evaluationContext);
+			String resolvedQueueName = (String) queueNameExp.getValue(evaluationContext);
+			validateQueueName(resolvedQueueName, expression);
+			return resolvedQueueName != null ? resolvedQueueName.trim() : null;
 		} catch (ExpressionException e) {
 			throw new ProvisioningException(String.format("Failed to evaluate Spring expression: %s", expression), e);
+		}
+	}
+
+	private static void validateQueueName(String name, String expression) {
+		if (!StringUtils.hasText(name)) {
+			throw new ProvisioningException(String.format("Invalid SpEL expression %s as it resolves to a String that does not contain actual text.",
+					expression));
 		}
 	}
 

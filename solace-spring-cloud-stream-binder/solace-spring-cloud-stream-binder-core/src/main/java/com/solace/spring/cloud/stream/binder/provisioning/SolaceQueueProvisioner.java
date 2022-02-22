@@ -144,7 +144,6 @@ public class SolaceQueueProvisioner
 			if (isDurable) {
 				queue = JCSMPFactory.onlyInstance().createQueue(name);
 				if (doDurableProvisioning) {
-					validateQueueName(name);
 					jcsmpSession.provision(queue, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
 				} else {
 					logger.info(String.format(
@@ -152,7 +151,6 @@ public class SolaceQueueProvisioner
 							durableQueueType, name));
 				}
 			} else {
-				validateQueueName(name);
 				// EndpointProperties will be applied during consumer creation
 				queue = jcsmpSession.createTemporaryQueue(name);
 			}
@@ -183,12 +181,6 @@ public class SolaceQueueProvisioner
 		}
 
 		return queue;
-	}
-
-	private void validateQueueName(String name) {
-		if (!StringUtils.hasText(name)) {
-			throw new ProvisioningException(String.format("The name of the queue to provision is invalid. At least one character is required. Current value is '%s'", name));
-		}
 	}
 
 	private Queue provisionErrorQueue(String errorQueueName, SolaceConsumerProperties properties) {

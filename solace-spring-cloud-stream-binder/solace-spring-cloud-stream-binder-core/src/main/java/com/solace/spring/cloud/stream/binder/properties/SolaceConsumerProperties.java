@@ -2,6 +2,7 @@ package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solacesystems.jcsmp.EndpointProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
 import java.util.concurrent.TimeUnit;
 
@@ -135,6 +136,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.queueAdditionalSubscriptions = queueAdditionalSubscriptions;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `queueNameExpression`. The group name can be removed from the consumer group's queue name by removing it directly from this SpEL expression.")
 	public boolean isUseGroupNameInQueueName() {
 		return useGroupNameInQueueName;
 	}
@@ -175,6 +177,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.errorQueueNameExpression = errorQueueNameExpression;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `errorQueueNameExpression`.")
 	public String getErrorQueueNameOverride() {
 		return errorQueueNameOverride;
 	}
@@ -183,6 +186,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.errorQueueNameOverride = errorQueueNameOverride;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `errorQueueNameExpression`. The group name can be removed from the error queue name by removing it directly from this SpEL expression.")
 	public boolean isUseGroupNameInErrorQueueName() {
 		return useGroupNameInErrorQueueName;
 	}
