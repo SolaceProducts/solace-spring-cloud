@@ -35,7 +35,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 	final FlowReceiverContainer flowReceiverContainer;
 	final ConsumerDestination consumerDestination;
 	final ThreadLocal<AttributeAccessor> attributesHolder;
-	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
+	private final XMLMessageMapper xmlMessageMapper;
 	private final Consumer<Message<?>> messageConsumer;
 	private final JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
 	private final boolean needHolder;
@@ -61,7 +61,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		this.attributesHolder = attributesHolder;
 		this.needHolder = needHolder;
 		this.needAttributes = needAttributes;
-		this.flowReceiverContainer.setXMLMessageMapper(xmlMessageMapper);
+		this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
 	}
 
 	abstract void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) throws SolaceAcknowledgmentException;

@@ -235,7 +235,7 @@ public class XMLMessageMapper {
 				builder.setHeaderIfAbsent(header.getKey(), header.getValue().getReadAction().apply(xmlMessage));
 			} catch (UnsupportedOperationException e) {
 				if (logger.isDebugEnabled()) {
-					logger.debug(String.format("Ignoring Solace header %s. Error: %s", header.getKey(), e));
+					logger.debug(String.format("Ignoring Solace header %s. Error: %s", header.getKey(), e.getMessage()), e);
 				}
 				ignoredHeaderProperties.add(header.getKey());
 				continue;
@@ -379,7 +379,7 @@ public class XMLMessageMapper {
 			return;
 		}
 		if (logger.isDebugEnabled()) {
-			logger.info(String.format("Clearing ignored properties %s on flow receiver container %s", ignoredHeaderProperties, flowReceiverId));
+			logger.debug(String.format("Clearing ignored properties %s on flow receiver container %s", ignoredHeaderProperties, flowReceiverId));
 		}
 		ignoredHeaderProperties.clear();
 	}
