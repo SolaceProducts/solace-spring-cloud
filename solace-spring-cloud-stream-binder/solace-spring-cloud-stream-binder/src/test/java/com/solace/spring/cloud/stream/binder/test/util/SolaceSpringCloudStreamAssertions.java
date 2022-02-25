@@ -8,6 +8,8 @@ import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.XMLMessage;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.assertj.core.api.SoftAssertions;
 import org.assertj.core.api.ThrowingConsumer;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
@@ -15,6 +17,7 @@ import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
+import org.springframework.messaging.support.ErrorMessage;
 import org.springframework.util.MimeType;
 
 import java.util.Arrays;
@@ -53,19 +56,14 @@ public class SolaceSpringCloudStreamAssertions {
 
 			if (isBatched) {
 				assertThat(message.getHeaders())
-						.containsKey(SolaceBinderHeaders.BATCHED_HEADERS)
-						.satisfies(rootHeaders -> assertThat(rootHeaders.get(SolaceBinderHeaders.BATCHED_HEADERS))
-								.isNotNull()
-								.isInstanceOf(List.class)
-								.asList()
-								.isNotEmpty()
-								.allSatisfy(msgHeaders -> assertThat(msgHeaders).isInstanceOf(Map.class))
-								.map(msgHeaders -> {
-									@SuppressWarnings("unchecked")
-									Map<String, Object> msgHeadersMap = (Map<String, Object>) msgHeaders;
-									return msgHeadersMap;
-								})
-								.allSatisfy(satisfiesHeader));
+						.extractingByKey(SolaceBinderHeaders.BATCHED_HEADERS)
+						.isNotNull()
+						.isInstanceOf(List.class)
+						.asList()
+						.isNotEmpty()
+						.allSatisfy(msgHeaders -> assertThat(msgHeaders)
+								.asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
+								.satisfies(satisfiesHeader));
 			} else {
 				assertThat(message.getHeaders()).satisfies(satisfiesHeader);
 			}
@@ -111,22 +109,20 @@ public class SolaceSpringCloudStreamAssertions {
 		return message -> {
 			if (consumerProperties.isBatchMode()) {
 				assertThat(message.getHeaders())
-						.containsKey(SolaceBinderHeaders.BATCHED_HEADERS)
-						.satisfies(headers -> assertThat(headers.get(SolaceBinderHeaders.BATCHED_HEADERS))
-								.isNotNull()
-								.isInstanceOf(List.class)
-								.asList()
-								.hasSize(expectedMessages.length)
-								.allSatisfy(msgHeaders -> {
-									@SuppressWarnings("unchecked")
-									Map<String, Object> msgHeadersMap = (Map<String, Object>) msgHeaders;
-									assertThat(msgHeadersMap)
-											.doesNotContainKey(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK);
-									assertThat(Optional.ofNullable(msgHeadersMap.get(MessageHeaders.CONTENT_TYPE))
-											.map(convertToMimeType)
-											.orElse(null))
-											.isEqualTo(expectedContentType);
-								}));
+						.containsKey(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK)
+						.containsKey(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT)
+						.extractingByKey(SolaceBinderHeaders.BATCHED_HEADERS)
+						.isNotNull()
+						.isInstanceOf(List.class)
+						.asList()
+						.hasSize(expectedMessages.length)
+						.allSatisfy(msgHeaders -> assertThat(msgHeaders)
+								.asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
+								.doesNotContainKey(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK)
+								.doesNotContainKey(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT)
+								.hasEntrySatisfying(MessageHeaders.CONTENT_TYPE, contentType ->
+										assertThat(convertToMimeType.apply(contentType))
+												.isEqualTo(expectedContentType)));
 
 				assertThat(message.getPayload())
 						.isInstanceOf(List.class)
@@ -135,6 +131,82 @@ public class SolaceSpringCloudStreamAssertions {
 			} else {
 				assertThat(message.getPayload()).isEqualTo(expectedMessages[0].getPayload());
 				assertThat(StaticMessageHeaderAccessor.getContentType(message)).isEqualTo(expectedContentType);
+				assertThat(message.getHeaders())
+						.containsKey(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK)
+						.containsKey(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT);
+			}
+		};
+	}
+
+	/**
+	 * <p>Returns a function to evaluate that an error message is valid.</p>
+	 * <p>Should be used as a parameter of
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.</p>
+	 * @param expectRawMessageHeader true if the error message contains the raw XMLMessage
+	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer)
+	 * @return message evaluator
+	 */
+	public static ThrowingConsumer<Message<?>> isValidProducerErrorMessage(boolean expectRawMessageHeader) {
+		return errorMessage -> {
+			assertThat(errorMessage.getPayload()).isNotNull();
+			assertThat(errorMessage)
+					.asInstanceOf(InstanceOfAssertFactories.type(ErrorMessage.class))
+					.extracting(ErrorMessage::getOriginalMessage)
+					.isNotNull();
+			if (expectRawMessageHeader) {
+				assertThat((Object) StaticMessageHeaderAccessor.getSourceData(errorMessage))
+						.isInstanceOf(XMLMessage.class);
+			} else {
+				assertThat(errorMessage.getHeaders())
+						.doesNotContainKey(IntegrationMessageHeaderAccessor.SOURCE_DATA);
+			}
+		};
+	}
+
+	/**
+	 * <p>Returns a function to evaluate that a consumed Solace message is valid.</p>
+	 * <p>Should be used as a parameter of
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.</p>
+	 * @param consumerProperties consumer properties
+	 * @param pollableConsumer true if consumer is a pollable consumer
+	 * @param expectRawMessageHeader true if the error message contains the raw XMLMessage
+	 * @param expectedMessages the messages against which this message will be evaluated against.
+	 *                            Should have a size of exactly 1 if this consumer is not in batch mode.
+	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer)
+	 * @return message evaluator
+	 */
+	public static ThrowingConsumer<Message<?>> isValidConsumerErrorMessage(
+			ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
+			boolean pollableConsumer,
+			boolean expectRawMessageHeader,
+			List<Message<?>> expectedMessages) {
+		return errorMessage -> {
+			assertThat(errorMessage.getPayload()).isNotNull();
+			assertThat(errorMessage)
+					.asInstanceOf(InstanceOfAssertFactories.type(ErrorMessage.class))
+					.extracting(ErrorMessage::getOriginalMessage)
+					.isNotNull()
+					.satisfies(isValidMessage(consumerProperties, expectedMessages))
+					.extracting(Message::getHeaders)
+					.asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
+					.hasEntrySatisfying(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, deliveryAttempt ->
+							assertThat(deliveryAttempt)
+									.asInstanceOf(InstanceOfAssertFactories.ATOMIC_INTEGER)
+									.hasValue(pollableConsumer ? 0 : consumerProperties.getMaxAttempts()));
+
+			if (expectRawMessageHeader) {
+				if (consumerProperties.isBatchMode()) {
+					assertThat((Object) StaticMessageHeaderAccessor.getSourceData(errorMessage))
+							.isNotNull()
+							.asList()
+							.allSatisfy(m -> assertThat(m).isInstanceOf(XMLMessage.class));
+				} else {
+					assertThat((Object) StaticMessageHeaderAccessor.getSourceData(errorMessage))
+							.isInstanceOf(XMLMessage.class);
+				}
+			} else {
+				assertThat(errorMessage.getHeaders())
+						.doesNotContainKey(IntegrationMessageHeaderAccessor.SOURCE_DATA);
 			}
 		};
 	}

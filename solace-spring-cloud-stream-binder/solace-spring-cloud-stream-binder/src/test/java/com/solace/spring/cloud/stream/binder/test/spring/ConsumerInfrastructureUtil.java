@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder.test.spring;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solacesystems.jcsmp.JCSMPTransportException;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.Binding;
@@ -136,6 +137,8 @@ public class ConsumerInfrastructureUtil<T> {
 						if (e.getCause() instanceof JCSMPTransportException &&
 								e.getCause().getMessage().contains("was closed while in receive")) {
 							LOGGER.info(String.format("Absorbing %s", JCSMPTransportException.class));
+						} else if (ExceptionUtils.getRootCause(e) instanceof ExpectedMessageHandlerException) {
+							LOGGER.info("Received expected exception", ExceptionUtils.getRootCause(e));
 						} else {
 							throw e;
 						}
@@ -145,6 +148,12 @@ public class ConsumerInfrastructureUtil<T> {
 			assertThat(latch.await(3, TimeUnit.MINUTES)).isTrue();
 		} else {
 			throw new UnsupportedOperationException("type not supported: " + type);
+		}
+	}
+
+	public static class ExpectedMessageHandlerException extends RuntimeException {
+		public ExpectedMessageHandlerException(String message) {
+			super(message);
 		}
 	}
 }

@@ -34,6 +34,7 @@ import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -155,7 +156,7 @@ public class SolaceMessageChannelBinder
 	protected void postProcessPollableSource(DefaultPollableMessageSource bindingTarget) {
 		bindingTarget.setAttributesProvider((accessor, message) -> {
 			Object sourceData = StaticMessageHeaderAccessor.getSourceData(message);
-			if (sourceData == null || sourceData instanceof XMLMessage) {
+			if (sourceData == null || sourceData instanceof XMLMessage || sourceData instanceof List) {
 				accessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_RAW_MESSAGE, sourceData);
 			}
 		});
