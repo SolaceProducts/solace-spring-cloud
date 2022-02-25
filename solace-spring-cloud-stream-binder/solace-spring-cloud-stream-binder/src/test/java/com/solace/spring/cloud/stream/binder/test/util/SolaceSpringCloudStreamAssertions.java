@@ -11,6 +11,7 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import org.assertj.core.api.SoftAssertions;
 import org.assertj.core.api.ThrowingConsumer;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
+import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
@@ -119,6 +120,8 @@ public class SolaceSpringCloudStreamAssertions {
 								.allSatisfy(msgHeaders -> {
 									@SuppressWarnings("unchecked")
 									Map<String, Object> msgHeadersMap = (Map<String, Object>) msgHeaders;
+									assertThat(msgHeadersMap)
+											.doesNotContainKey(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK);
 									assertThat(Optional.ofNullable(msgHeadersMap.get(MessageHeaders.CONTENT_TYPE))
 											.map(convertToMimeType)
 											.orElse(null))

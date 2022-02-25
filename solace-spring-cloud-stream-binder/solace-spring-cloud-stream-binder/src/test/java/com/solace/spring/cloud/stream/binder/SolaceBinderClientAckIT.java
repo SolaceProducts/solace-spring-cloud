@@ -4,8 +4,8 @@ import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
-import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
+import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
@@ -23,6 +23,8 @@ import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.slf4j.Logger;
@@ -58,6 +60,7 @@ import java.util.stream.IntStream;
 import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
 import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.errorQueueHasMessages;
 import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.hasNestedHeader;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.isValidMessage;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
@@ -1035,6 +1038,173 @@ public class SolaceBinderClientAckIT<T> {
 		validateNumAckedMessages(context, sempV2Api, queueName, messages.size());
 		validateNumUnackedMessages(context, sempV2Api, queueName, 0);
 		validateNumEnqueuedMessages(context, sempV2Api, errorQueueName, 0);
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@ParameterizedTest(name = "[{index}] channelType={0}")
+	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
+	public void testBatchIsNotStaleFromAsyncRequeue(
+			Class<T> channelType,
+			SempV2Api sempV2Api,
+			SpringCloudStreamContext context,
+			@ExecSvc(poolSize = 1, scheduled = true) ScheduledExecutorService executorService,
+			SoftAssertions softly,
+			TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
+
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.setBatchMode(true);
+		consumerProperties.getExtension().setBatchMaxSize(2);
+
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
+
+		List<Message<?>> messages = IntStream.range(0, consumerProperties.getExtension().getBatchMaxSize() + 1)
+				.mapToObj(i -> MessageBuilder.withPayload(UUID.randomUUID().toString().getBytes())
+						.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+						.build())
+				.collect(Collectors.toList());
+
+		context.binderBindUnbindLatency();
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+
+		AtomicBoolean firstReceivedMessage = new AtomicBoolean(false);
+		AtomicBoolean wasRedelivered = new AtomicBoolean(false);
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, 2,
+				() -> messages.forEach(moduleOutputChannel::send),
+				(msg, callback) -> {
+					AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
+					Objects.requireNonNull(ackCallback).noAutoAck();
+					softly.assertThat(msg).as("first batch is not valid")
+							.satisfies(isValidMessage(consumerProperties,
+									messages.subList(0, consumerProperties.getExtension().getBatchMaxSize())));
+					if (!firstReceivedMessage.get()) {
+						logger.info("Got first message");
+						executorService.schedule(() -> {
+							softly.assertThat(queueName).satisfies(q ->
+									validateNumEnqueuedMessages(context, sempV2Api, q, messages.size()));
+							AckUtils.requeue(ackCallback);
+							callback.run();
+						}, 2, TimeUnit.SECONDS);
+						firstReceivedMessage.set(true);
+					} else if (isRedelivered(msg, true)) {
+						logger.info("Got redelivered message");
+						wasRedelivered.set(true);
+						try {
+							ackCallback.acknowledge(AcknowledgmentCallback.Status.ACCEPT);
+						} catch (Exception e) {
+							softly.fail(String.format(
+									"Exception caught when trying to process redelivered batch %s", msg), e);
+							throw e;
+						}
+						callback.run();
+					} else {
+						softly.fail("Found leftover messages from before the flow rebind: %s", msg);
+					}
+				});
+		assertThat(wasRedelivered.get()).isTrue();
+
+		// one leftover message stuck in batch collector
+		validateNumEnqueuedMessages(context, sempV2Api, queueName, 1);
+		validateNumUnackedMessages(context, sempV2Api, queueName, 1);
+		validateNumRedeliveredMessages(context, sempV2Api, queueName, messages.size());
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@ParameterizedTest(name = "[{index}] channelType={0}")
+	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
+	public void testBatchIsNotStaleFromAsyncRequeueAndTimeout(
+			Class<T> channelType,
+			SempV2Api sempV2Api,
+			SpringCloudStreamContext context,
+			@ExecSvc(poolSize = 1, scheduled = true) ScheduledExecutorService executorService,
+			SoftAssertions softly,
+			TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
+
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.setBatchMode(true);
+		consumerProperties.getExtension().setFlowPreRebindWaitTimeout(TimeUnit.SECONDS.toMillis(1));
+		consumerProperties.getExtension().setBatchTimeout((int) TimeUnit.SECONDS.toMillis(10));
+
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
+
+		List<Message<?>> messages = IntStream.range(0, 2)
+				.mapToObj(i -> MessageBuilder.withPayload(UUID.randomUUID().toString().getBytes())
+						.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+						.build())
+				.collect(Collectors.toList());
+
+		context.binderBindUnbindLatency();
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+
+		AtomicBoolean firstReceivedMessage = new AtomicBoolean(false);
+		AtomicBoolean wasRedelivered = new AtomicBoolean(false);
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, 2,
+				() -> moduleOutputChannel.send(messages.get(0)),
+				(msg, callback) -> {
+					AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
+					Objects.requireNonNull(ackCallback).noAutoAck();
+					if (!firstReceivedMessage.get()) {
+						logger.info("Got first message");
+						softly.assertThat(msg).as("first batch is not valid")
+								.satisfies(isValidMessage(consumerProperties, messages.get(0)));
+						softly.assertThat(moduleOutputChannel.send(messages.get(1))).isTrue();
+						softly.assertThat(queueName).satisfies(q -> retryAssert(() ->
+								validateNumUnackedMessages(context, sempV2Api, q, messages.size())));
+						executorService.schedule(() -> {
+							softly.assertThat(queueName).satisfies(q ->
+									validateNumEnqueuedMessages(context, sempV2Api, q, messages.size()));
+							AckUtils.requeue(ackCallback);
+							callback.run();
+						}, 2, TimeUnit.SECONDS);
+						firstReceivedMessage.set(true);
+					} else if (isRedelivered(msg, true)) {
+						logger.info("Got redelivered message");
+						softly.assertThat(msg).as("first batch is not valid")
+								.satisfies(isValidMessage(consumerProperties, messages));
+						wasRedelivered.set(true);
+						try {
+							ackCallback.acknowledge(AcknowledgmentCallback.Status.ACCEPT);
+						} catch (Exception e) {
+							softly.fail(String.format(
+									"Exception caught when trying to process redelivered batch %s", msg), e);
+							throw e;
+						}
+						callback.run();
+					} else {
+						softly.fail("Found leftover messages from before the flow rebind: %s", msg);
+					}
+				});
+		assertThat(wasRedelivered.get()).isTrue();
+
+		// one leftover message stuck in batch collector
+		validateNumEnqueuedMessages(context, sempV2Api, queueName, 0);
+		validateNumUnackedMessages(context, sempV2Api, queueName, 0);
+		validateNumRedeliveredMessages(context, sempV2Api, queueName, messages.size());
 
 		producerBinding.unbind();
 		consumerBinding.unbind();
