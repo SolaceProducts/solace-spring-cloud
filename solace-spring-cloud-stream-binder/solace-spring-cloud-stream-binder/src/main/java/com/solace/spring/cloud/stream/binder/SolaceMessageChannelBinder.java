@@ -14,6 +14,7 @@ import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
+import com.solacesystems.jcsmp.Context;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
@@ -46,6 +47,7 @@ public class SolaceMessageChannelBinder
 				DisposableBean {
 
 	private final JCSMPSession jcsmpSession;
+	private final Context jcsmpContext;
 	private final JCSMPSessionProducerManager sessionProducerManager;
 	private final AtomicBoolean consumersRemoteStopFlag = new AtomicBoolean(false);
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
@@ -56,8 +58,12 @@ public class SolaceMessageChannelBinder
 	private static final SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
 
 	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, SolaceQueueProvisioner solaceQueueProvisioner) {
+		this(jcsmpSession, null, solaceQueueProvisioner);
+	}
+	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, Context jcsmpContext, SolaceQueueProvisioner solaceQueueProvisioner) {
 		super(new String[0], solaceQueueProvisioner);
 		this.jcsmpSession = jcsmpSession;
+		this.jcsmpContext = jcsmpContext;
 		this.sessionProducerManager = new JCSMPSessionProducerManager(jcsmpSession);
 	}
 
@@ -68,6 +74,9 @@ public class SolaceMessageChannelBinder
 		sessionProducerManager.release(errorHandlerProducerKey);
 		consumersRemoteStopFlag.set(true);
 		jcsmpSession.closeSession();
+		if (jcsmpContext != null) {
+			jcsmpContext.destroy();
+		}
 	}
 
 	@Override
