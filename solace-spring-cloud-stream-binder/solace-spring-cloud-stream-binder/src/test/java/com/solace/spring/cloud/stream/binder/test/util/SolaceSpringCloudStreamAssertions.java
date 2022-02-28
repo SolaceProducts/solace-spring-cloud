@@ -71,6 +71,35 @@ public class SolaceSpringCloudStreamAssertions {
 	}
 
 	/**
+	 * <p>Returns a function to evaluate a message for the lack of a header which may be nested in a batched message.
+	 * </p>
+	 * <p>Should be used as a parameter of
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.</p>
+	 * @param header header key
+	 * @param isBatched is message expected to be a batched message?
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.
+	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer)
+	 * @return message header requirements evaluator
+	 */
+	public static ThrowingConsumer<Message<?>> noNestedHeader(String header, boolean isBatched) {
+		return message -> {
+			if (isBatched) {
+				assertThat(message.getHeaders())
+						.extractingByKey(SolaceBinderHeaders.BATCHED_HEADERS)
+						.isNotNull()
+						.isInstanceOf(List.class)
+						.asList()
+						.isNotEmpty()
+						.allSatisfy(msgHeaders -> assertThat(msgHeaders)
+								.asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
+								.doesNotContainKey(header));
+			} else {
+				assertThat(message.getHeaders()).doesNotContainKey(header);
+			}
+		};
+	}
+
+	/**
 	 * <p>Returns a function to evaluate that a consumed Solace message is valid.</p>
 	 * <p>Should be used as a parameter of
 	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.</p>
