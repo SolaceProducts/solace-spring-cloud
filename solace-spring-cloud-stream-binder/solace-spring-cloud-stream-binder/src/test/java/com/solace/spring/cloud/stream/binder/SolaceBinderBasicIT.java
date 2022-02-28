@@ -61,6 +61,7 @@ import org.springframework.integration.context.IntegrationContextUtils;
 import org.springframework.integration.support.MessageBuilder;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.SubscribableChannel;
@@ -68,6 +69,8 @@ import org.springframework.messaging.support.ErrorMessage;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.MimeTypeUtils;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -970,6 +973,50 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		logger.info("num-sent: {}, num-consumed: {}, num-redelivered: {}", numMsgsSent, numMsgsConsumed.get(),
 				redeliveredMsgs);
 		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@CartesianTest(name = "[{index}] batchMode={0}")
+	public void testBatchTimeoutHasPrecedenceOverPolledConsumerWaitTime(
+			@Values(booleans = {false, true}) boolean batchMode) throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input",
+				new BindingProperties());
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setBatchMode(batchMode);
+		consumerProperties.getExtension().setBatchTimeout((int) TimeUnit.SECONDS.toMillis(10));
+		consumerProperties.getExtension().setPolledConsumerWaitTimeInMillis((int) TimeUnit.SECONDS.toMillis(1));
+
+		assertThat(consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis())
+				.as("polled-consumer-wait-time should be at least 1 second for this test")
+				.isGreaterThanOrEqualTo((int) TimeUnit.SECONDS.toMillis(1));
+
+		assertThat(consumerProperties.getExtension().getBatchTimeout())
+				.as("Batch timeout needs to be at least 10 times larger than polled-consumer-wait-time")
+				.isGreaterThanOrEqualTo(10 * consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis());
+
+		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(destination0,
+				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
+
+		binderBindUnbindLatency();
+
+		Instant start = Instant.now();
+		assertThat(moduleInputChannel.poll(m -> {})).isFalse();
+		Duration duration = Duration.between(start, Instant.now()).abs();
+		if (batchMode) {
+			assertThat(duration)
+					.isGreaterThanOrEqualTo(Duration.ofMillis(consumerProperties.getExtension().getBatchTimeout()));
+		} else {
+			assertThat(duration)
+					.isGreaterThanOrEqualTo(Duration.ofMillis(consumerProperties.getExtension()
+							.getPolledConsumerWaitTimeInMillis()))
+					.isLessThan(Duration.ofMillis(consumerProperties.getExtension().getBatchTimeout()).dividedBy(2));
+		}
+
 		consumerBinding.unbind();
 	}
 
