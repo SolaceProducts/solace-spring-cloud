@@ -42,7 +42,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
 	private FlowReceiverContainer flowReceiverContainer;
 	private JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
-	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
+	private XMLMessageMapper xmlMessageMapper;
 	private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 	private volatile boolean isRunning = false;
 	private Supplier<Boolean> remoteStopFlag;
@@ -144,6 +144,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 			try {
 				flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
+				this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
 				flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
 						TimeUnit.MILLISECONDS);
 				flowReceiverContainer.bind();
