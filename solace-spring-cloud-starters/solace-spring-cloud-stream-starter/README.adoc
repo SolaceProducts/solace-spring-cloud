@@ -676,6 +676,33 @@ Though note that there are few limitations:
 . `concurrency` &gt; 1 is ignored for polled consumers.
 . Setting `provisionDurableQueue` to `false` disables endpoint configuration validation. Meaning that point 1 cannot be validated. In this scenario, it is the developer's responsibility to ensure that point 1 is followed.
 
+== Batch Consumers
+
+https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_batch_consumers[Batch consumers] can be enabled by setting `spring.cloud.stream.bindings.<binding-name>.consumer.batch-mode` to `true`. In which case, batched messages may be consumed as follows:
+
+[source,java]
+----
+@Bean
+Consumer<Message<List<Payload>>> input() {
+	return batchMsg -> { <1>
+		List<Payload> batchedPayloads = batchMsg.getPayload();
+		List<Map<String, Object>> batchedHeaders = (List<Map<String, Object>>) batchMsg.getHeaders().get(SolaceBinderHeaders.BATCHED_HEADERS); <2>
+
+		for (int i = 0; i < batchedPayloads.size(); i++) {
+			Payload payload = batchedPayloads[i];
+			Map<String, Object> headers = batchedHeaders[i];
+			// Process inidividual message payload and its headers
+		}
+	};
+}
+----
+<1> A batch of messages is really just a single Spring `Message` whose payload is a list of individual message payloads.
+<2> The `solace_scst_batchedHeaders` message header contains the consolidated list of message headers for each of the individual messages in the batch.
+
+IMPORTANT: Message batches are non-transacted. A batch that this binder creates is fundamentally a collection of individual messages and must not be treated as a single consistent unit.
+
+To create a batch of messages, the binder will consume messages from the PubSub+ broker until either a maximum batch size or timeout has been achieved. After which, the binder will compose the batch message and send it to the consumer handler for processing. Both these batching parameters can be configured using the `batchMaxSize` and `batchTimeout` consumer config options.
+
 == Manual Message Acknowledgment
 
 Message handlers can disable auto-acknowledgement and manually invoke the acknowledgement callback as follows:
