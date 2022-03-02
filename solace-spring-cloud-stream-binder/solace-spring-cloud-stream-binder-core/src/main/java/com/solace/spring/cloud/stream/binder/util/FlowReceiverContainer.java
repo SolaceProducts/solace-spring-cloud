@@ -61,17 +61,14 @@ public class FlowReceiverContainer {
 	private TimeUnit rebindWaitTimeoutUnit = TimeUnit.SECONDS;
 
 	private static final Log logger = LogFactory.getLog(FlowReceiverContainer.class);
+	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private final SolaceFlowEventHandler eventHandler;
 
 	public FlowReceiverContainer(JCSMPSession session, String queueName, EndpointProperties endpointProperties) {
-		this(session, queueName, endpointProperties, null);
-	}
-
-	public FlowReceiverContainer(JCSMPSession session, String queueName, EndpointProperties endpointProperties, SolaceFlowEventHandler eventHandler) {
 		this.session = session;
 		this.queueName = queueName;
 		this.endpointProperties = endpointProperties;
-		this.eventHandler = eventHandler;
+		this.eventHandler = new SolaceFlowEventHandler(xmlMessageMapper, id.toString());
 	}
 
 	/**
@@ -102,6 +99,7 @@ public class FlowReceiverContainer {
 				FlowReceiver flowReceiver = session.createFlow(null, flowProperties, endpointProperties, eventHandler);
 				FlowReceiverReference newFlowReceiverReference = new FlowReceiverReference(flowReceiver);
 				flowReceiverAtomicReference.set(newFlowReceiverReference);
+				xmlMessageMapper.resetIgnoredProperties(id.toString());
 				bindCondition.signalAll();
 				return newFlowReceiverReference.getId();
 			}
@@ -520,8 +518,8 @@ public class FlowReceiverContainer {
 		return queueName;
 	}
 
-	public SolaceFlowEventHandler getEventHandler() {
-		return eventHandler;
+	public XMLMessageMapper getXMLMessageMapper() {
+		return xmlMessageMapper;
 	}
 
 	static class FlowReceiverReference {

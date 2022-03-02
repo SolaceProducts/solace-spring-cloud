@@ -8,7 +8,6 @@ import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
-import com.solace.spring.cloud.stream.binder.util.SolaceFlowEventHandler;
 import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.ClosedFacilityException;
@@ -44,7 +43,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
 	private FlowReceiverContainer flowReceiverContainer;
 	private JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
-	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
+	private XMLMessageMapper xmlMessageMapper;
 	private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 	private volatile boolean isRunning = false;
 	private Supplier<Boolean> remoteStopFlag;
@@ -145,11 +144,10 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			}
 
 			try {
-				if (flowReceiverContainer == null) {
-					flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties, new SolaceFlowEventHandler(xmlMessageMapper));
-					flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
-							TimeUnit.MILLISECONDS);
-				}
+				flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
+				this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
+				flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
+						TimeUnit.MILLISECONDS);
 				flowReceiverContainer.bind();
 			} catch (JCSMPException e) {
 				String msg = String.format("Unable to get a message consumer for session %s", jcsmpSession.getSessionName());

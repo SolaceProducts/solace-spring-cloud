@@ -103,7 +103,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		try {
 			for (int i = 0; i < concurrency; i++) {
 				logger.info(String.format("Creating consumer %s of %s for inbound adapter %s", i + 1, concurrency, id));
-				FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties, new SolaceFlowEventHandler());
+				FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
 				flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getFlowPreRebindWaitTimeout(),
 						TimeUnit.MILLISECONDS);
 				flowReceiverContainer.bind();
