@@ -847,7 +847,7 @@ Solace binders can report health statuses via the Spring Boot Actuator health en
 | Status indicating that the binder is actively trying to reconnect to the message broker.
 
 | DOWN
-| Status indicating that the binder has suffered an unexpected failure. User intervention is likely required.
+| Status indicating that the binder has suffered an unexpected failure. For instance, the binder may have exhausted all reconnection attempts. User intervention is likely required.
 |===
 
 == Resources
