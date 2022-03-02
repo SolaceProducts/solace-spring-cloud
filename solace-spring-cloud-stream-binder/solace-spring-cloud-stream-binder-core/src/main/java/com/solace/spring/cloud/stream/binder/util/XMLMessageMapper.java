@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solacesystems.common.util.ByteArray;
 import com.solacesystems.jcsmp.BytesMessage;
@@ -46,6 +47,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
@@ -62,6 +64,7 @@ public class XMLMessageMapper {
 
 	private final ObjectWriter stringSetWriter = OBJECT_MAPPER.writerFor(new TypeReference<Set<String>>(){});
 	private final ObjectReader stringSetReader = OBJECT_MAPPER.readerFor(new TypeReference<Set<String>>(){});
+	private final Set<String> ignoredHeaderProperties = ConcurrentHashMap.newKeySet();
 
 	public BytesXMLMessage mapError(BytesXMLMessage inputMessage, SolaceConsumerProperties consumerProperties) {
 		BytesXMLMessage errorMessage = JCSMPFactory.onlyInstance().createMessage(inputMessage);
@@ -261,7 +264,18 @@ public class XMLMessageMapper {
 			if (!header.getValue().isReadable()) {
 				continue;
 			}
-			builder.setHeaderIfAbsent(header.getKey(), header.getValue().getReadAction().apply(xmlMessage));
+			if (ignoredHeaderProperties.contains(header.getKey())) {
+				continue;
+			}
+			try {
+				builder.setHeaderIfAbsent(header.getKey(), header.getValue().getReadAction().apply(xmlMessage));
+			} catch (UnsupportedOperationException e) {
+				if (logger.isDebugEnabled()) {
+					logger.debug(String.format("Ignoring Solace header %s. Error: %s", header.getKey(), e.getMessage()), e);
+				}
+				ignoredHeaderProperties.add(header.getKey());
+				continue;
+			}
 		}
 
 		return builder;
@@ -398,6 +412,16 @@ public class XMLMessageMapper {
 
 	private <R> R rethrowableCall(ThrowingSupplier<R> supplier) {
 		return supplier.get();
+	}
+
+	public void resetIgnoredProperties(String flowReceiverId) {
+		if (ignoredHeaderProperties.isEmpty()) {
+			return;
+		}
+		if (logger.isDebugEnabled()) {
+			logger.debug(String.format("Clearing ignored properties %s on flow receiver container %s", ignoredHeaderProperties, flowReceiverId));
+		}
+		ignoredHeaderProperties.clear();
 	}
 
 	@FunctionalInterface

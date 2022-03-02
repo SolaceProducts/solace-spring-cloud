@@ -11,6 +11,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
+import org.mockito.Mockito;
 import org.springframework.messaging.MessageHeaders;
 
 import java.lang.reflect.Field;
@@ -139,9 +140,11 @@ public class SolaceHeadersTest {
 			return;
 		}
 
-		XMLMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		XMLMessage xmlMessage = Mockito.spy(JCSMPFactory.onlyInstance().createMessage(TextMessage.class));
 		@SuppressWarnings("unchecked") Map<String, SolaceHeaderMeta<?>> solaceHeaderMeta =
 				(Map<String, SolaceHeaderMeta<?>>) headersMeta;
+
+		Mockito.doReturn(100).when(xmlMessage).getDeliveryCount();
 
 		for (Map.Entry<String, SolaceHeaderMeta<?>> headerMeta : solaceHeaderMeta.entrySet()) {
 			if (!headerMeta.getValue().isReadable()) continue;

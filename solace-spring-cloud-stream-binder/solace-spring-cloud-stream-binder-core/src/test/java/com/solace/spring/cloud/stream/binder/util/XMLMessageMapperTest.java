@@ -30,6 +30,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.assertj.core.api.Assertions;
 import org.assertj.core.api.InstanceOfAssertFactories;
+import org.assertj.core.api.MapAssert;
 import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Named;
 import org.junit.jupiter.api.Test;
@@ -348,6 +349,9 @@ public class XMLMessageMapperTest {
 			switch (header.getKey()) {
 				case SolaceHeaders.REPLICATION_GROUP_MESSAGE_ID:
 					assertNull(xmlMessage.getReplicationGroupMessageId());
+					break;
+				case SolaceHeaders.DELIVERY_COUNT:
+					assertThrows(UnsupportedOperationException.class, xmlMessage::getDeliveryCount);
 					break;
 				case SolaceHeaders.DESTINATION:
 					assertNull(xmlMessage.getDestination());
@@ -859,6 +863,9 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.CORRELATION_ID:
 					Mockito.when(xmlMessage.getCorrelationId()).thenReturn(header.getKey());
 					break;
+				case SolaceHeaders.DELIVERY_COUNT:
+					Mockito.when(xmlMessage.getDeliveryCount()).thenThrow(new UnsupportedOperationException("Feature is disabled"));
+					break;
 				case SolaceHeaders.DESTINATION:
 					Mockito.when(xmlMessage.getDestination())
 							.thenReturn(JCSMPFactory.onlyInstance().createQueue(header.getKey()));
@@ -951,6 +958,10 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceHeaders.CORRELATION_ID:
 					assertEquals(xmlMessage.getCorrelationId(), actualValue);
+					break;
+				case SolaceHeaders.DELIVERY_COUNT:
+					//For this test, the delivery count feature is disabled
+					assertNull(actualValue);
 					break;
 				case SolaceHeaders.DESTINATION:
 					assertEquals(xmlMessage.getDestination(), actualValue);
@@ -1054,6 +1065,7 @@ public class XMLMessageMapperTest {
 
 		Mockito.when(xmlMessage.getProperties()).thenReturn(metadata);
 		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
+		Mockito.when(xmlMessage.getDeliveryCount()).thenThrow(new UnsupportedOperationException("Feature is disabled"));
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
@@ -1116,6 +1128,7 @@ public class XMLMessageMapperTest {
 
 		Mockito.when(xmlMessage.getProperties()).thenReturn(metadata);
 		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
+		Mockito.when(xmlMessage.getDeliveryCount()).thenThrow(new UnsupportedOperationException("Feature is disabled"));
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
@@ -1162,6 +1175,30 @@ public class XMLMessageMapperTest {
 		} else {
 			validateSpringHeaders(springMessage.getHeaders(), xmlMessage, filteredMetadata);
 		}
+	}
+
+	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@ValueSource(booleans = {false, true})
+	public void testMapXMLMessageToSpringMessage_deliveryCountFeatureEnabled(boolean batchMode) {
+		int deliveryCount = 42;
+		TextMessage xmlMessage = Mockito.mock(TextMessage.class);
+		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
+		Mockito.when(xmlMessage.getDeliveryCount()).thenReturn(deliveryCount);
+
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
+		MapAssert<String, Object> headersAssert;
+		if (batchMode) {
+			headersAssert = Assertions.assertThat(Objects.requireNonNull(xmlMessageMapper
+									.mapBatchMessage(Collections.singletonList(xmlMessage), acknowledgmentCallback)
+									.getHeaders()
+					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class))
+					.get(0))
+					.asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class));
+		} else {
+			headersAssert = Assertions.assertThat(xmlMessageMapper.map(xmlMessage, acknowledgmentCallback)
+					.getHeaders());
+		}
+		headersAssert.extractingByKey(SolaceHeaders.DELIVERY_COUNT).isEqualTo(deliveryCount);
 	}
 
 	@ParameterizedTest(name = "[{index}] batchMode={0}")
@@ -1630,6 +1667,9 @@ public class XMLMessageMapperTest {
 			assertEquals(xmlMessage.getHTTPContentType(), (contentType instanceof MimeType ?
 					(MimeType) contentType : MimeType.valueOf(contentType.toString())).toString());
 		}
+
+		//DeliveryCount feature is assumed disabled
+		Assertions.assertThat(messageHeaders).doesNotContainKey(SolaceHeaders.DELIVERY_COUNT);
 	}
 
 	private <T> void validateSpringBatchPayload(List<?> payloads, List<T> expectedPayloads) {
