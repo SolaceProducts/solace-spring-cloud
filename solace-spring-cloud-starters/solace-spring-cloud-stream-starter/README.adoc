@@ -832,6 +832,23 @@ public void send(String payload, long timeout, TimeUnit unit) {
     }
 }
 ----
+== Solace Binder Health Indicator
+Solace binders can report health statuses via the Spring Boot Actuator health endpoint. To enable this feature, add Spring Boot Actuator to the classpath. To manually disable this feature, set `management.health.binders.enabled=false`.
+
+[cols="1,3", options="header"]
+|===
+| Health Status
+| Description
+
+| UP
+| Status indicating that the binder is functioning as expected.
+
+| RECONNECTING
+| Status indicating that the binder is actively trying to reconnect to the message broker.
+
+| DOWN
+| Status indicating that the binder has suffered an unexpected failure. User intervention is likely required.
+|===
 
 == Resources
 
