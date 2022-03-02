@@ -144,10 +144,12 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			}
 
 			try {
-				flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
-				this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
-				flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
-						TimeUnit.MILLISECONDS);
+				if (flowReceiverContainer == null) {
+					flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
+					this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
+					flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
+							TimeUnit.MILLISECONDS);
+				}
 				flowReceiverContainer.bind();
 			} catch (JCSMPException e) {
 				String msg = String.format("Unable to get a message consumer for session %s", jcsmpSession.getSessionName());
