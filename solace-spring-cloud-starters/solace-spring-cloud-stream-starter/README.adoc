@@ -2,7 +2,7 @@
 :revnumber: 3.2.1
 :toc: preamble
 :icons: font
-:scst-version: 3.1.1
+:scst-version: 3.2.2
 
 // Github-Specific Settings
 ifdef::env-github[]
@@ -528,6 +528,13 @@ This is the `JMSType` header field if publishing/consuming to/from JMS.
 | String
 | Read/Write
 | The correlation ID.
+
+| solace_deliveryCount
+| Integer
+| Read
+| The number of times the message has been delivered.
+
+Note that, while the Delivery Count feature is in controlled availability, `Enable Client Delivery Count` must be enabled on the queue and consumer bindings may need to be restarted after `Enable Client Delivery Count` is turned on.
 
 | solace_destination
 | Destination
