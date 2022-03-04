@@ -107,7 +107,7 @@ public class SolaceBinderSubscriptionsIT {
 
         Binding<MessageChannel> producerBinding = binder.bindProducer(DESTINATION, moduleOutputChannel, producerProperties);
 
-        String queueName = SolaceProvisioningUtil.getQueueName(DESTINATION, group0, producerProperties.getExtension());
+        String queueName = SolaceProvisioningUtil.getQueueName(DESTINATION, group0, producerProperties);
         assertActualSubscriptionsAreCorrect(context, sempV2Api, queueName, addDestinationAsSubscriptionToQueue,
                 provisionSubscriptionsToDurableQueue);
 

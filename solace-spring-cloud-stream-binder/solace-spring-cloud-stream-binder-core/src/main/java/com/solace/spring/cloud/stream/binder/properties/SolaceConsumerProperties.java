@@ -2,6 +2,7 @@ package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solacesystems.jcsmp.EndpointProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 import org.springframework.util.Assert;
 
 import javax.validation.constraints.Min;
@@ -49,7 +50,16 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	/**
 	 * Whether to include the group name in the queue name for non-anonymous consumer groups.
 	 */
+	@Deprecated
 	private boolean useGroupNameInQueueName = true;
+
+	/**
+	 * A SpEL expression for creating the consumer group’s queue name.
+	 * Modifying this can cause naming conflicts between the queue names of consumer groups.
+	 * While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>,
+	 * directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
+	 */
+	private String queueNameExpression = "(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + (isAnonymous ? group?.trim() + '/' : (properties.solace.useGroupNameInQueueName ? group?.trim() + '/' : '')) + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')";
 
 	// Error Queue Properties ---------
 	/**
@@ -63,12 +73,21 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 */
 	private boolean provisionErrorQueue = true;
 	/**
+	 * A SpEL expression for creating the error queue’s name.
+	 * Modifying this can cause naming conflicts between the error queue names.
+	 * While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>,
+	 * directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
+	 */
+	private String errorQueueNameExpression = "(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + 'error/' + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + (isAnonymous ? group?.trim() + '/' : (properties.solace.useGroupNameInErrorQueueName ? group?.trim() + '/' : '')) + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')";
+	/**
 	 * A custom error queue name.
 	 */
+	@Deprecated
 	private String errorQueueNameOverride = null;
 	/**
 	 * Whether to include the group name in the error queue name for non-anonymous consumer groups.
 	 */
+	@Deprecated
 	private boolean useGroupNameInErrorQueueName = true;
 	/**
 	 * Maximum number of attempts to send a failed message to the error queue.
@@ -156,12 +175,21 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.queueAdditionalSubscriptions = queueAdditionalSubscriptions;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `queueNameExpression`. The group name can be removed from the consumer group's queue name by removing it directly from this SpEL expression.")
 	public boolean isUseGroupNameInQueueName() {
 		return useGroupNameInQueueName;
 	}
 
 	public void setUseGroupNameInQueueName(boolean useGroupNameInQueueName) {
 		this.useGroupNameInQueueName = useGroupNameInQueueName;
+	}
+
+	public String getQueueNameExpression() {
+		return queueNameExpression;
+	}
+
+	public void setQueueNameExpression(String queueNameExpression) {
+		this.queueNameExpression = queueNameExpression;
 	}
 
 	public boolean isAutoBindErrorQueue() {
@@ -180,6 +208,15 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.provisionErrorQueue = provisionErrorQueue;
 	}
 
+	public String getErrorQueueNameExpression() {
+		return errorQueueNameExpression;
+	}
+
+	public void setErrorQueueNameExpression(String errorQueueNameExpression) {
+		this.errorQueueNameExpression = errorQueueNameExpression;
+	}
+
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `errorQueueNameExpression`.")
 	public String getErrorQueueNameOverride() {
 		return errorQueueNameOverride;
 	}
@@ -188,6 +225,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.errorQueueNameOverride = errorQueueNameOverride;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `errorQueueNameExpression`. The group name can be removed from the error queue name by removing it directly from this SpEL expression.")
 	public boolean isUseGroupNameInErrorQueueName() {
 		return useGroupNameInErrorQueueName;
 	}

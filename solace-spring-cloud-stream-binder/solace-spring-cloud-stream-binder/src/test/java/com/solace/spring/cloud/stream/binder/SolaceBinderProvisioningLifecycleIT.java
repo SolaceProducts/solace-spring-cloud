@@ -79,6 +79,7 @@ import java.util.stream.IntStream;
 import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 /**
  * All tests which modify the default provisioning lifecycle.
@@ -105,7 +106,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getQueueNames(destination0, group0, consumerProperties, false)
 				.getConsumerGroupQueueName());
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
@@ -163,7 +164,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 		consumerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(false);
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-				.getQueueName(destination0, group0, producerProperties.getExtension()));
+				.getQueueName(destination0, group0, producerProperties));
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
 
@@ -215,7 +216,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getQueueNames(destination0, group0, consumerProperties, false)
 				.getConsumerGroupQueueName());
 		EndpointProperties endpointProperties = new EndpointProperties();
 		endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
@@ -390,7 +391,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 
 		String errorQueueName = SolaceProvisioningUtil
-				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getQueueNames(destination0, group0, consumerProperties, false)
 				.getErrorQueueName();
 		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueName);
 
@@ -994,7 +995,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 		consumerProperties.getExtension().setProvisionDurableQueue(false);
 
 		String queue0 = SolaceProvisioningUtil
-				.getQueueNames(destination0, group0, consumerProperties.getExtension(), false)
+				.getQueueNames(destination0, group0, consumerProperties, false)
 				.getConsumerGroupQueueName();
 
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
@@ -1140,7 +1141,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 			ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
 			consumerFlowProperties.setStartState(true);
 			consumerFlowProperties.setEndpoint(JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-					.getQueueName(topic0, group0, producerProperties.getExtension())));
+					.getQueueName(topic0, group0, producerProperties)));
 			flowReceiver = jcsmpSession.createFlow(new XMLMessageListener() {
 				@Override
 				public void onReceive(BytesXMLMessage bytesXMLMessage) {
@@ -1850,5 +1851,49 @@ public class SolaceBinderProvisioningLifecycleIT {
 
 		producerBinding.unbind();
 		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testConsumerProvisionWithQueueNameExpressionResolvingToWhiteSpaces(SpringCloudStreamContext context) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
+
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(50);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.getExtension().setQueueNameExpression("'   '");
+
+		try {
+			binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
+			fail("Expected provisioning to fail due to empty queue name");
+		} catch (Exception e) {
+			assertThat(e).isInstanceOf(ProvisioningException.class);
+			assertThat(e.getMessage()).isEqualTo("Invalid SpEL expression '   ' as it resolves to a String that does not contain actual text.");
+		}
+	}
+
+	@Test
+	public void testConsumerProvisionWithQueueNameTooLong(SpringCloudStreamContext context) throws Exception {
+		int MAX_QUEUE_NAME_LENGTH = 200;
+		SolaceTestBinder binder = context.getBinder();
+
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(50);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		String longQueueName = RandomStringUtils.randomAlphanumeric(MAX_QUEUE_NAME_LENGTH + 1);
+		consumerProperties.getExtension().setQueueNameExpression("'" + longQueueName + "'");
+
+		try {
+			binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
+			fail("Expected provisioning to fail due to queue name exceeding number of allowed characters");
+		} catch (Exception e) {
+			assertThat(e.getCause()).isInstanceOf(IllegalArgumentException.class);
+			assertEquals("Queue name \"" + longQueueName + "\" must have a maximum length of 200", e.getCause().getMessage());
+		}
 	}
 }

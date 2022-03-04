@@ -58,7 +58,7 @@ public class SolaceTestBinder
 	@Override
 	public Binding<MessageChannel> bindConsumer(String name, String group, MessageChannel moduleInputChannel,
 												ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
-		preBindCaptureConsumerResources(name, group, properties.getExtension());
+		preBindCaptureConsumerResources(name, group, properties);
 		Binding<MessageChannel> binding = super.bindConsumer(name, group, moduleInputChannel, properties);
 		captureConsumerResources(binding, group, properties.getExtension());
 		return binding;
@@ -68,7 +68,7 @@ public class SolaceTestBinder
 	public Binding<PollableSource<MessageHandler>> bindPollableConsumer(String name, String group,
 																		PollableSource<MessageHandler> inboundBindTarget,
 																		ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
-		preBindCaptureConsumerResources(name, group, properties.getExtension());
+		preBindCaptureConsumerResources(name, group, properties);
 		Binding<PollableSource<MessageHandler>> binding = super.bindPollableConsumer(name, group, inboundBindTarget, properties);
 		captureConsumerResources(binding, group, properties.getExtension());
 		return binding;
@@ -79,7 +79,7 @@ public class SolaceTestBinder
 												ExtendedProducerProperties<SolaceProducerProperties> properties) {
 		if (properties.getRequiredGroups() != null) {
 			Arrays.stream(properties.getRequiredGroups())
-					.forEach(g -> preBindCaptureProducerResources(name, g, properties.getExtension()));
+					.forEach(g -> preBindCaptureProducerResources(name, g, properties));
 		}
 
 		return super.bindProducer(name, moduleOutputChannel, properties);
@@ -93,15 +93,14 @@ public class SolaceTestBinder
 		return bindingNameToErrorQueueName.get(binding.getBindingName());
 	}
 
-	private void preBindCaptureConsumerResources(String name, String group, SolaceConsumerProperties consumerProperties) {
+	private void preBindCaptureConsumerResources(String name, String group, ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties) {
 		if (SolaceProvisioningUtil.isAnonQueue(group)) return; // we don't know any anon resource names before binding
 
-		SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(name, group,
-				consumerProperties, false);
+		SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(name, group, consumerProperties, false);
 
 		// values set here may be overwritten after binding
 		queues.add(queueNames.getConsumerGroupQueueName());
-		if (consumerProperties.isAutoBindErrorQueue()) {
+		if (consumerProperties.getExtension().isAutoBindErrorQueue()) {
 			queues.add(queueNames.getErrorQueueName());
 		}
 	}
@@ -121,7 +120,7 @@ public class SolaceTestBinder
 		}
 	}
 
-	private void preBindCaptureProducerResources(String name, String group, SolaceProducerProperties producerProperties) {
+	private void preBindCaptureProducerResources(String name, String group, ExtendedProducerProperties<SolaceProducerProperties> producerProperties) {
 		String queueName = SolaceProvisioningUtil.getQueueName(name, group, producerProperties);
 		queues.add(queueName);
 	}
@@ -147,7 +146,14 @@ public class SolaceTestBinder
 		for (String queueName : queues) {
 			try {
 				logger.info(String.format("De-provisioning queue %s", queueName));
-				Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName);
+				Queue queue;
+				try {
+					queue = JCSMPFactory.onlyInstance().createQueue(queueName);
+				} catch (Exception e) {
+					//This is possible as we eagerly add queues to cleanup in preBindCaptureConsumerResources()
+					logger.info(String.format("Skipping de-provisioning as queue name is invalid; queue was never provisioned", queueName));
+					continue;
+				}
 				jcsmpSession.deprovision(queue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
 			} catch (JCSMPException e) {
 				throw new RuntimeException(e);
