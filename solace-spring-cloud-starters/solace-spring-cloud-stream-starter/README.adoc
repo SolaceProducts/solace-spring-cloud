@@ -394,7 +394,7 @@ WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in fav
 queueNameExpression::
 A SpEL expression for creating the consumer group’s queue name.
 +
-Default: `"(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + group + '/' + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')"` +
+Default: `"(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + group?.trim() + '/' + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')"` +
 See: <<Generated Queue Name Syntax>>
 +
 WARNING: Modifying this can cause naming conflicts between the queue names of consumer groups.
