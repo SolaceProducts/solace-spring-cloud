@@ -4,13 +4,17 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceCommonProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
+import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
+import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
+import org.springframework.cloud.stream.provisioning.ProvisioningException;
+import org.springframework.expression.*;
+import org.springframework.expression.spel.standard.SpelExpressionParser;
+import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.util.StringUtils;
 
-import java.util.UUID;
+import java.util.*;
 
 public class SolaceProvisioningUtil {
-	private static final String QUEUE_NAME_DELIM = "/";
-	private static final String QUEUE_NAME_SEGMENT_ERROR = "error";
 
 	private SolaceProvisioningUtil() {}
 
@@ -50,79 +54,45 @@ public class SolaceProvisioningUtil {
 		return baseTopicName;
 	}
 
-	public static String getQueueName(String topicName, String groupName,
-									  SolaceProducerProperties producerProperties) {
-		return getQueueNames(topicName, groupName, producerProperties, false, true, true)
-				.getConsumerGroupQueueName();
+	public static String getQueueName(String topicName, String groupName, ExtendedProducerProperties<SolaceProducerProperties> properties) {
+		String queueNameExpression = properties.getExtension().getQueueNameExpressionsForRequiredGroups().getOrDefault(groupName, properties.getExtension().getQueueNameExpression());
+		return resolveQueueNameExpression(queueNameExpression, new ExpressionContextRoot(groupName, topicName, properties));
 	}
 
 	public static QueueNames getQueueNames(String topicName, String groupName,
-										   SolaceConsumerProperties consumerProperties, boolean isAnonymous) {
-		QueueNames queueNames = getQueueNames(topicName, groupName, consumerProperties,
-				isAnonymous,
-				consumerProperties.isUseGroupNameInQueueName(),
-				consumerProperties.isUseGroupNameInErrorQueueName());
-
-		if (StringUtils.hasText(consumerProperties.getErrorQueueNameOverride())) {
-			return new QueueNames(queueNames.getConsumerGroupQueueName(),
-					consumerProperties.getErrorQueueNameOverride(), queueNames.getPhysicalGroupName());
-		} else {
-			return queueNames;
-		}
-	}
-
-	private static QueueNames getQueueNames(String topicName, String groupName, SolaceCommonProperties properties,
-											boolean isAnonymous,
-											boolean useGroupName, boolean useGroupNameInErrorQueue) {
+										   ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties, boolean isAnonymous) {
 		final String physicalGroupName = isAnonymous ? UUID.randomUUID().toString() : groupName;
-		StringBuilder groupQueueName = new StringBuilder();
-		StringBuilder errorQueueName = new StringBuilder();
+		ExpressionContextRoot root = new ExpressionContextRoot(physicalGroupName, topicName, isAnonymous, consumerProperties);
 
-		if (StringUtils.hasText(properties.getQueueNamePrefix())) {
-			groupQueueName.append(properties.getQueueNamePrefix()).append(QUEUE_NAME_DELIM);
-			errorQueueName.append(properties.getQueueNamePrefix()).append(QUEUE_NAME_DELIM);
-		}
-
-		errorQueueName.append(QUEUE_NAME_SEGMENT_ERROR).append(QUEUE_NAME_DELIM);
-
-		if (properties.isUseFamiliarityInQueueName()) {
-			if (isAnonymous) {
-				groupQueueName.append(QueueNameFamiliarity.ANON.getLabel()).append(QUEUE_NAME_DELIM);
-				errorQueueName.append(QueueNameFamiliarity.ANON.getLabel()).append(QUEUE_NAME_DELIM);
-			} else {
-				groupQueueName.append(QueueNameFamiliarity.WELL_KNOWN.getLabel()).append(QUEUE_NAME_DELIM);
-				errorQueueName.append(QueueNameFamiliarity.WELL_KNOWN.getLabel()).append(QUEUE_NAME_DELIM);
-			}
-		}
-
-		if (isAnonymous) {
-			groupQueueName.append(physicalGroupName).append(QUEUE_NAME_DELIM);
-			errorQueueName.append(physicalGroupName).append(QUEUE_NAME_DELIM);
+		String resolvedQueueName = resolveQueueNameExpression(consumerProperties.getExtension().getQueueNameExpression(), root);
+		String resolvedErrorQueueName;
+		if (StringUtils.hasText(consumerProperties.getExtension().getErrorQueueNameOverride())) {
+			resolvedErrorQueueName = consumerProperties.getExtension().getErrorQueueNameOverride();
 		} else {
-			if (useGroupName) {
-				groupQueueName.append(physicalGroupName).append(QUEUE_NAME_DELIM);
-			}
-			if (useGroupNameInErrorQueue) {
-				errorQueueName.append(physicalGroupName).append(QUEUE_NAME_DELIM);
-			}
+			resolvedErrorQueueName = resolveQueueNameExpression(consumerProperties.getExtension().getErrorQueueNameExpression(), root);
 		}
 
-		if (properties.isUseDestinationEncodingInQueueName()) {
-			groupQueueName.append(QueueNameDestinationEncoding.PLAIN.getLabel()).append(QUEUE_NAME_DELIM);
-			errorQueueName.append(QueueNameDestinationEncoding.PLAIN.getLabel()).append(QUEUE_NAME_DELIM);
-		}
-
-		String encodedDestination = replaceTopicWildCards(topicName, "_");
-		groupQueueName.append(encodedDestination);
-		errorQueueName.append(encodedDestination);
-
-		return new QueueNames(groupQueueName.toString(), errorQueueName.toString(), physicalGroupName);
+		return new QueueNames(resolvedQueueName, resolvedErrorQueueName, physicalGroupName);
 	}
 
-	private static String replaceTopicWildCards(String topicName, CharSequence replacement) {
-		return topicName
-				.replace("*", replacement)
-				.replace(">", replacement);
+	private static String resolveQueueNameExpression(String expression, ExpressionContextRoot root) {
+		try {
+			EvaluationContext evaluationContext = new StandardEvaluationContext(root);
+			ExpressionParser parser = new SpelExpressionParser();
+			Expression queueNameExp = parser.parseExpression(expression);
+			String resolvedQueueName = (String) queueNameExp.getValue(evaluationContext);
+			validateQueueName(resolvedQueueName, expression);
+			return resolvedQueueName != null ? resolvedQueueName.trim() : null;
+		} catch (ExpressionException e) {
+			throw new ProvisioningException(String.format("Failed to evaluate Spring expression: %s", expression), e);
+		}
+	}
+
+	private static void validateQueueName(String name, String expression) {
+		if (!StringUtils.hasText(name)) {
+			throw new ProvisioningException(String.format("Invalid SpEL expression %s as it resolves to a String that does not contain actual text.",
+					expression));
+		}
 	}
 
 	public static class QueueNames {
@@ -146,19 +116,6 @@ public class SolaceProvisioningUtil {
 
 		public String getPhysicalGroupName() {
 			return physicalGroupName;
-		}
-	}
-
-	private enum QueueNameFamiliarity {
-		WELL_KNOWN("wk"), ANON("an");
-		private final String label;
-
-		QueueNameFamiliarity(String label) {
-			this.label = label;
-		}
-
-		public String getLabel() {
-			return label;
 		}
 	}
 }

@@ -24,7 +24,6 @@ import org.springframework.cloud.stream.provisioning.ProvisioningProvider;
 import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -57,7 +56,7 @@ public class SolaceQueueProvisioner
 		Map<String,String[]> requiredGroupsExtraSubs = properties.getExtension().getQueueAdditionalSubscriptions();
 
 		for (String groupName : requiredGroups) {
-			String queueName = SolaceProvisioningUtil.getQueueName(name, groupName, properties.getExtension());
+			String queueName = SolaceProvisioningUtil.getQueueName(topicName, groupName, properties);
 			logger.info(String.format("Creating durable queue %s for required consumer group %s", queueName, groupName));
 			EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
 			boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
@@ -96,8 +95,7 @@ public class SolaceQueueProvisioner
 
 		boolean isAnonQueue = SolaceProvisioningUtil.isAnonQueue(group);
 		boolean isDurableQueue = SolaceProvisioningUtil.isDurableQueue(group);
-		SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(name, group,
-				properties.getExtension(), isAnonQueue);
+		SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(name, group, properties, isAnonQueue);
 		String groupQueueName = queueNames.getConsumerGroupQueueName();
 
 		EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
@@ -156,7 +154,7 @@ public class SolaceQueueProvisioner
 				// EndpointProperties will be applied during consumer creation
 				queue = jcsmpSession.createTemporaryQueue(name);
 			}
-		} catch (JCSMPException e) {
+		} catch (Exception e) {
 			String action = isDurable ? "provision durable" : "create temporary";
 			String msg = String.format("Failed to %s queue %s", action, name);
 			logger.warn(msg, e);

@@ -15,7 +15,7 @@ public class SolaceCommonProperties {
 	 * This should only be set to false if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum)
 	 * on the consumer group’s queue on the message broker. This property also applies to topics added by the queueAdditionalSubscriptions property.
 	 */
-  @Deprecated
+	@Deprecated
 	private boolean provisionSubscriptionsToDurableQueue = true;
 	/**
 	 * Whether to add the Destination as a subscription to queue during provisioning.
@@ -26,14 +26,17 @@ public class SolaceCommonProperties {
 	/**
 	 * Naming prefix for all queues.
 	 */
+	@Deprecated
 	private String queueNamePrefix = "scst";
 	/**
 	 * When set to true, the familiarity modifier, wk/an, is included in the generated queue name.
 	 */
+	@Deprecated
 	private boolean useFamiliarityInQueueName = true;
 	/**
 	 * When set to true, the destination encoding (plain), is included in the generated queue name.
 	 */
+	@Deprecated
 	private boolean useDestinationEncodingInQueueName = true;
 
 	/**
@@ -91,6 +94,7 @@ public class SolaceCommonProperties {
 		this.addDestinationAsSubscriptionToQueue = addDestinationAsSubscriptionToQueue;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of queueNameExpression and errorQueueNameExpression. Prefixes can be specified directly in these SpEL expressions.")
 	public String getQueueNamePrefix() {
 		return queueNamePrefix;
 	}
@@ -99,6 +103,7 @@ public class SolaceCommonProperties {
 		this.queueNamePrefix = queueNamePrefix;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `errorQueueNameExpression`. The familiarity modifier can be removed from queue names by removing it directly from these SpEL expressions.")
 	public boolean isUseFamiliarityInQueueName() {
 		return useFamiliarityInQueueName;
 	}
@@ -107,6 +112,7 @@ public class SolaceCommonProperties {
 		this.useFamiliarityInQueueName = useFamiliarityInQueueName;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `errorQueueNameExpression`. The destination encoding can be removed from queue names by removing it directly from these SpEL expressions.")
 	public boolean isUseDestinationEncodingInQueueName() {
 		return useDestinationEncodingInQueueName;
 	}

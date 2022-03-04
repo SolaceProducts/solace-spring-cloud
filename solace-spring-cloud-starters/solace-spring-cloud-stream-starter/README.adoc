@@ -168,23 +168,39 @@ Default: `true`
 +
 WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `addDestinationAsSubscriptionToQueue`.
 
+queueNameExpression::
+A SpEL expression for creating the consumer group’s queue name.
++
+Default: `"(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + (isAnonymous ? group?.trim() + '/' : (properties.solace.useGroupNameInQueueName ? group?.trim() + '/' : '')) + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')"` +
+See: <<Generated Queue Name Syntax>>
++
+WARNING: Modifying this can cause naming conflicts between the queue names of consumer groups.
++
+WARNING: While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>, directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
+
 queueNamePrefix::
 Naming prefix for all queues.
 +
 Default: `"scst"` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `errorQueueNameExpression`. Prefixes can be specified directly in these SpEL expressions.
 
 useFamiliarityInQueueName::
 When set to `true`, the familiarity modifier, `wk`/`an`, is included in the generated queue name.
 +
 Default: `true` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `errorQueueNameExpression`. The familiarity modifier can be removed from queue names by removing it directly from these SpEL expressions.
 
 useDestinationEncodingInQueueName::
 When set to `true`, the destination encoding (`plain`), is included in the generated queue name.
 +
 Default: `true` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `errorQueueNameExpression`. The destination encoding can be removed from queue names by removing it directly from these SpEL expressions.
 
 useGroupNameInQueueName::
 Whether to include the `group` name in the queue name for non-anonymous consumer groups.
@@ -193,6 +209,8 @@ Default: `true` +
 See: <<Generated Queue Name Syntax>>
 +
 IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will consume from the same queue regardless of their configured `group` names.
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression`. The group name can be removed from the consumer group's queue name by removing it directly from this SpEL expression.
 
 queueAccessType::
 Access type for the consumer group queue.
@@ -259,11 +277,23 @@ Whether to provision durable queues for error queues when `autoBindErrorQueue` i
 Default: `true` +
 See: <<Generated Error Queue Name Syntax>>
 
+errorQueueNameExpression::
+A SpEL expression for creating the error queue’s name.
++
+Default: `"(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + 'error/' + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + (isAnonymous ? group?.trim() + '/' : (properties.solace.useGroupNameInErrorQueueName ? group?.trim() + '/' : '')) + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')"` +
+See: <<Generated Error Queue Name Syntax>>
++
+WARNING: Modifying this can cause naming conflicts between the error queue names.
++
+WARNING: While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>, directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
+
 errorQueueNameOverride::
 A custom error queue name.
 +
 Default: `null` +
 See: <<Generated Error Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `errorQueueNameExpression`.
 
 useGroupNameInErrorQueueName::
 Whether to include the `group` name in the error queue name for non-anonymous consumer groups.
@@ -272,6 +302,8 @@ Default: `true` +
 See: <<Generated Error Queue Name Syntax>>
 +
 IMPORTANT: If set to `false`, all consumers of the same `destination` which also have this set to `false` will republish failed messages to the same error queue regardless of their configured `group` names.
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `errorQueueNameExpression`. The group name can be removed from the error queue name by removing it directly from this SpEL expression.
 
 errorQueueMaxDeliveryAttempts::
 Maximum number of attempts to send a failed message to the error queue. When all delivery attempts have been exhausted, the failed message will be requeued.
@@ -359,23 +391,51 @@ Default: `true`
 +
 WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `addDestinationAsSubscriptionToQueue`.
 
+queueNameExpression::
+A SpEL expression for creating the consumer group’s queue name.
++
+Default: `"(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + group?.trim() + '/' + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')"` +
+See: <<Generated Queue Name Syntax>>
++
+WARNING: Modifying this can cause naming conflicts between the queue names of consumer groups.
++
+WARNING: While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>, directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
+
+queueNameExpressionsForRequiredGroups::
+A mapping of required consumer groups to queue name SpEL expressions.
++
+By default, queueNameExpression will be used to generate a required group’s queue name if it isn’t specified within this configuration option.
++
+Default: `Empty Map<String, String>` +
+See: <<Generated Queue Name Syntax>>
++
+WARNING: Modifying this can cause naming conflicts between the queue names of consumer groups.
++
+WARNING: While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>, directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
+
 queueNamePrefix::
 Naming prefix for all queues.
 +
 Default: `"scst"` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `queueNameExpressionsForRequiredGroups`. Prefixes can be specified directly in these SpEL expressions.
 
 useFamiliarityInQueueName::
 When set to `true`, the familiarity modifier, `wk`/`an`, is included in the generated queue name.
 +
 Default: `true` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `queueNameExpressionsForRequiredGroups`. The familiarity modifier can be removed from queue names by removing it directly from these SpEL expressions.
 
 useDestinationEncodingInQueueName::
 When set to `true`, the destination encoding (`plain`), is included in the generated queue name.
 +
 Default: `true` +
 See: <<Generated Queue Name Syntax>>
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `queueNameExpressionsForRequiredGroups`. The destination encoding can be removed from queue names by removing it directly from these SpEL expressions.
 
 queueAccessType::
 Access type for the required consumer group queue.
@@ -620,21 +680,42 @@ By default, generated consumer group queue names have the following form:
 ----
 <prefix>/<familiarity-modifier>/<group>/<destination-encoding>/<encoded-destination>
 ----
-
 prefix::
-A static prefix as indicated by the `queueNamePrefix` configuration option.
+A static prefix as indicated by the `queueNamePrefix` (deprecated) configuration option.
 
 familiarity-modifier::
-Indicates the durability of the consumer group (`wk` for well-known or `an` for anonymous). Can be enabled/disabled with the `useFamiliarityInQueueName` config option.
+Indicates the durability of the consumer group (`wk` for well-known or `an` for anonymous). Can be enabled/disabled with the `useFamiliarityInQueueName` (deprecated) config option.
 
 group::
-The consumer `group` name. Can be enabled/disabled for consumers with the `useGroupNameInQueueName` consumer config option.
+The consumer `group` name. Can be enabled/disabled for consumers with the `useGroupNameInQueueName` (deprecated) consumer config option.
 
 destination-encoding::
-Indicates the encoding scheme used to encode the destination in the queue name (currently only `plain` is supported). Can be enabled/disabled with the `useDestinationEncodingInQueueName` config option.
+Indicates the encoding scheme used to encode the destination in the queue name (currently only `plain` is supported). Can be enabled/disabled with the `useDestinationEncodingInQueueName` (deprecated) config option.
 
 encoded-destination::
 The encoded `destination` as per `<destination-encoding>`.
+
+The `queueNameExpression` property's default SpEL expression conforms to the above format, however, users can provide any valid SpEL expression in order to generate custom queue names. Valid expressions evaluate against the following context:
+[cols="1m,1", options="header"]
+|===
+| Context Variable
+| Description
+
+| destination
+| The binding’s destination name.
+
+| group
+| The binding’s consumer group name.
+
+| isAnonymous
+| Indicates whether the consumer is an anonymous consumer group
+
+| properties.solace
+| The configured Solace binding properties.
+
+| properties.spring
+| The configured Spring binding properties.
+|===
 
 === Generated Error Queue Name Syntax
 
@@ -647,9 +728,9 @@ By default, generated error queue names have the following form:
 The definitions of each segment of the error queue matches that from <<Generated Queue Name Syntax>>, with the following exceptions:
 
 group::
-The consumer `group` name. Can be enabled/disabled with the `useGroupNameInErrorQueueName` consumer config option.
+The consumer `group` name. Can be enabled/disabled with the `useGroupNameInErrorQueueName` (deprecated) consumer config option.
 
-The error queue name can also be manually overridden with the `errorQueueNameOverride` consumer config option.
+The `errorQueueNameExpression` property's default SpEL expression conforms to the above format. Users can provide any valid SpEL expression in order to generate custom error queue names using the same evaluation context as described in <<Generated Queue Name Syntax>>.
 
 == Consumer Concurrency
 
