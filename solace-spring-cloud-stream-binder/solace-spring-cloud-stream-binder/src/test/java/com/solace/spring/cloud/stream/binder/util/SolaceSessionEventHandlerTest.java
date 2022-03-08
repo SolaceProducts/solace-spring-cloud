@@ -17,6 +17,7 @@ public class SolaceSessionEventHandlerTest {
 		SolaceSessionEventHandler sessionEventHandler = new SolaceSessionEventHandler(healthIndicator);
 		sessionEventHandler.connected();
 		Mockito.verify(healthIndicator, Mockito.times(1)).up();
+		Mockito.verifyNoMoreInteractions(healthIndicator);
 	}
 
 	@ParameterizedTest
@@ -51,5 +52,7 @@ public class SolaceSessionEventHandlerTest {
 			default:
 				Mockito.verifyNoInteractions(healthIndicator);
 		}
+
+		Mockito.verifyNoMoreInteractions(healthIndicator);
 	}
 }
