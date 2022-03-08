@@ -250,7 +250,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				return true;
 			} else {
 				logger.warn(String.format(
-						"Flow receiver container %s is unexpectedly paused for message source %s",
+						"Flow receiver container %s is unexpectedly running for message source %s",
 						flowReceiverContainer.getId(), id));
 				return false;
 			}

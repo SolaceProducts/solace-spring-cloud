@@ -285,7 +285,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			for (FlowReceiverContainer flowReceiverContainer : flowReceivers) {
 				if (!flowReceiverContainer.isPaused()) {
 					logger.warn(String.format(
-							"Flow receiver container %s is unexpectedly paused for inbound adapter %s",
+							"Flow receiver container %s is unexpectedly running for inbound adapter %s",
 							flowReceiverContainer.getId(), id));
 					return false;
 				}
