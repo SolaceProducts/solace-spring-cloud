@@ -5,7 +5,6 @@ import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.FlowReceiver;
-import com.solacesystems.jcsmp.InvalidOperationException;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
@@ -458,32 +457,62 @@ public class FlowReceiverContainer {
 	}
 
 	public void pause() {
-		Lock readLock = readWriteLock.readLock();
-		readLock.lock();
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
 		try {
 			logger.info(String.format("Pausing flow receiver container %s", id));
-			FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
-			if (flowReceiverReference != null) {
-				flowReceiverReference.pause();
-				isPaused.set(true);
-			}
+			doFlowReceiverReferencePause();
+			isPaused.set(true);
 		} finally {
-			readLock.unlock();
+			writeLock.unlock();
 		}
 	}
 
-	public void resume() {
-		Lock readLock = readWriteLock.readLock();
-		readLock.lock();
+	/**
+	 * <b>CAUTION:</b> DO NOT USE THIS. This is only exposed for testing. Use {@link #pause()} instead to pause
+	 * the flow receiver container.
+	 * @see #pause()
+	 */
+	void doFlowReceiverReferencePause() {
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
+		try {
+			FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+			if (flowReceiverReference != null) {
+				flowReceiverReference.pause();
+			}
+		} finally {
+			writeLock.unlock();
+		}
+	}
+
+	public void resume() throws JCSMPException {
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
 		try {
 			logger.info(String.format("Resuming flow receiver container %s", id));
+			doFlowReceiverReferenceResume();
+			isPaused.set(false);
+		} finally {
+			writeLock.unlock();
+		}
+	}
+
+	/**
+	 * <b>CAUTION:</b> DO NOT USE THIS. This is only exposed for testing. Use {@link #resume()} instead to resume
+	 * the flow receiver container.
+	 * @see #resume()
+	 */
+	void doFlowReceiverReferenceResume() throws JCSMPException {
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
+		try {
 			FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
 			if (flowReceiverReference != null) {
 				flowReceiverReference.resume();
-				isPaused.set(false);
 			}
 		} finally {
-			readLock.unlock();
+			writeLock.unlock();
 		}
 	}
 
@@ -551,21 +580,12 @@ public class FlowReceiverContainer {
 			return staleMessagesFlag;
 		}
 
-		public void pause() {
+		private void pause() {
 			flowReceiver.stop();
 		}
 
-		public void resume() {
-			if (flowReceiver != null) {
-				try {
-					flowReceiver.start();
-				} catch (InvalidOperationException e) {
-					//Unlikely to occur as our Pausable implementation returns immediately when consumer binding is not running
-					logger.info(String.format("Attempted to resume flow received container %s but it was closed. Exception: %s", id, e.getMessage()));
-				} catch (Exception e) {
-					logger.error(String.format("Could not resume flow receiver container %s. Exception: %s", id, e.getMessage()));
-				}
-			}
+		private void resume() throws JCSMPException {
+			flowReceiver.start();
 		}
 
 		@Override

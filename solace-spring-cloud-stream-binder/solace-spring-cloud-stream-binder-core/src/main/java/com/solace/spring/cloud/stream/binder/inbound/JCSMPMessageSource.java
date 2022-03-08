@@ -46,6 +46,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private XMLMessageMapper xmlMessageMapper;
 	private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 	private volatile boolean isRunning = false;
+	private volatile boolean paused = false;
 	private Supplier<Boolean> remoteStopFlag;
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
 	private Consumer<Queue> postStart;
@@ -149,6 +150,12 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 					this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
 					flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
 							TimeUnit.MILLISECONDS);
+					if (paused) {
+						logger.info(String.format(
+								"Message source %s is paused, pausing newly created flow receiver container %s",
+								id, flowReceiverContainer.getId()));
+						flowReceiverContainer.pause();
+					}
 				}
 				flowReceiverContainer.bind();
 			} catch (JCSMPException e) {
@@ -207,14 +214,11 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
-			if (!isRunning()) {
-				logger.info(String.format("Can't pause message source %s as it is not running", id));
-				return;
-			}
+			logger.info(String.format("Pausing message source %s", id));
 			if (flowReceiverContainer != null) {
-				logger.info(String.format("Pausing message source %s", id));
 				flowReceiverContainer.pause();
 			}
+			paused = true;
 		} finally {
 			writeLock.unlock();
 		}
@@ -225,14 +229,15 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
-			if (!isRunning()) {
-				logger.info(String.format("Can't resume message source %s as it is not running", id));
-				return;
-			}
+			logger.info(String.format("Resuming message source %s", id));
 			if (flowReceiverContainer != null) {
-				logger.info(String.format("Resuming message source %s", id));
-				flowReceiverContainer.resume();
+				try {
+					flowReceiverContainer.resume();
+				} catch (JCSMPException e) {
+					throw new RuntimeException(String.format("Failed to resume message source %s", id), e);
+				}
 			}
+			paused = false;
 		} finally {
 			writeLock.unlock();
 		}
@@ -240,6 +245,17 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 	@Override
 	public boolean isPaused() {
-		return flowReceiverContainer.isPaused();
+		if (paused) {
+			if (flowReceiverContainer.isPaused()) {
+				return true;
+			} else {
+				logger.warn(String.format(
+						"Flow receiver container %s is unexpectedly paused for message source %s",
+						flowReceiverContainer.getId(), id));
+				return false;
+			}
+		} else {
+			return false;
+		}
 	}
 }

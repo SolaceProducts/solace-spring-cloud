@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder.test.spring;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPTransportException;
 import org.junit.jupiter.api.TestInfo;
@@ -36,9 +37,11 @@ public class SpringCloudStreamContext extends PartitionCapableBinderTests<Solace
 		implements ExtensionContext.Store.CloseableResource {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SpringCloudStreamContext.class);
 	private JCSMPSession jcsmpSession;
+	private SempV2Api sempV2Api;
 
-	public SpringCloudStreamContext(JCSMPSession jcsmpSession) {
+	public SpringCloudStreamContext(JCSMPSession jcsmpSession, SempV2Api sempV2Api) {
 		this.jcsmpSession = Objects.requireNonNull(jcsmpSession);
+		this.sempV2Api = sempV2Api;
 	}
 
 	/**
@@ -46,6 +49,7 @@ public class SpringCloudStreamContext extends PartitionCapableBinderTests<Solace
 	 */
 	protected SpringCloudStreamContext() {
 		this.jcsmpSession = null;
+		this.sempV2Api = null;
 	}
 
 	@Override
@@ -64,7 +68,7 @@ public class SpringCloudStreamContext extends PartitionCapableBinderTests<Solace
 			if (jcsmpSession == null || jcsmpSession.isClosed()) {
 				throw new IllegalStateException("JCSMPSession cannot be null or closed");
 			}
-			testBinder = new SolaceTestBinder(jcsmpSession);
+			testBinder = new SolaceTestBinder(jcsmpSession, sempV2Api);
 		}
 		return testBinder;
 	}
@@ -144,6 +148,12 @@ public class SpringCloudStreamContext extends PartitionCapableBinderTests<Solace
 		this.jcsmpSession = jcsmpSession;
 	}
 
+	/**
+	 * Should only be used by subclasses.
+	 */
+	protected void setSempV2Api(SempV2Api sempV2Api) {
+		this.sempV2Api = sempV2Api;
+	}
 
 	public <T> ConsumerInfrastructureUtil<T> createConsumerInfrastructureUtil(Class<T> type) {
 		return new ConsumerInfrastructureUtil<>(type);

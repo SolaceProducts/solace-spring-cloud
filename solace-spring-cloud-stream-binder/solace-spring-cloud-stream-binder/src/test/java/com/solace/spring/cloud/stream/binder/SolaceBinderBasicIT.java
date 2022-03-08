@@ -1,6 +1,5 @@
 package com.solace.spring.cloud.stream.binder;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
@@ -46,6 +45,8 @@ import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.junitpioneer.jupiter.RetryingTest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -91,6 +92,7 @@ import static org.assertj.core.api.Assertions.fail;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Runs all basic Spring Cloud Stream Binder functionality tests
@@ -106,8 +108,9 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 	private static final Logger logger = LoggerFactory.getLogger(SolaceBinderBasicIT.class);
 
 	@BeforeEach
-	void setUp(JCSMPSession jcsmpSession) {
+	void setUp(JCSMPSession jcsmpSession, SempV2Api sempV2Api) {
 		setJcsmpSession(jcsmpSession);
+		setSempV2Api(sempV2Api);
 	}
 
 	// NOT YET SUPPORTED ---------------------------------
@@ -1183,17 +1186,21 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		producer.close();
 	}
 
-	@Test
+	@ParameterizedTest
+	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
 	@Execution(ExecutionMode.CONCURRENT)
-	public void testPauseResumeOnPolledConsumer(JCSMPSession jcsmpSession, SempV2Api sempV2Api) throws Exception {
+	public <T> void testPauseResume(Class<T> channelType,
+									JCSMPSession jcsmpSession,
+									SempV2Api sempV2Api) throws Exception {
 		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = createConsumerInfrastructureUtil(channelType);
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 		int defaultWindowSize = (int) jcsmpSession.getProperty(JCSMPProperties.SUB_ACK_WINDOW_SIZE);
 
-		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
-				destination0, "testPolledConsumer", moduleInputChannel, createConsumerProperties());
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -1206,16 +1213,58 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		consumerBinding.unbind();
 	}
 
-	@Test
+	@ParameterizedTest
+	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
 	@Execution(ExecutionMode.CONCURRENT)
-	public void testPauseStateIsMaintainedWhenPolledConsumerIsRestarted(JCSMPSession jcsmpSession, SempV2Api sempV2Api) throws Exception {
+	public <T> void testPauseBeforeConsumerStart(Class<T> channelType,
+												 JCSMPSession jcsmpSession,
+												 SempV2Api sempV2Api) throws Exception {
 		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = createConsumerInfrastructureUtil(channelType);
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
-		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
-				destination0, "testPolledConsumer", moduleInputChannel, createConsumerProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setAutoStartup(false);
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+
+		assertThat(consumerBinding.isRunning()).isFalse();
+		assertThat(consumerBinding.isPaused()).isFalse();
+
+		consumerBinding.pause();
+		assertThat(consumerBinding.isRunning()).isFalse();
+		assertThat(consumerBinding.isPaused()).isTrue();
+		assertThat(getTxFlows(sempV2Api, vpnName, queueName, 1)).hasSize(0);
+
+		consumerBinding.start();
+		assertThat(consumerBinding.isRunning()).isTrue();
+		assertThat(consumerBinding.isPaused()).isTrue();
+		assertThat(getTxFlows(sempV2Api, vpnName, queueName, 1))
+				.hasSize(1)
+				.allSatisfy(flow -> assertThat(flow.getWindowSize()).isEqualTo(0));
+
+		consumerBinding.unbind();
+	}
+
+	@ParameterizedTest
+	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
+	@Execution(ExecutionMode.CONCURRENT)
+	public <T> void testPauseStateIsMaintainedWhenConsumerIsRestarted(Class<T> channelType,
+																	  JCSMPSession jcsmpSession,
+																	  SempV2Api sempV2Api) throws Exception {
+		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = createConsumerInfrastructureUtil(channelType);
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 		consumerBinding.pause();
@@ -1230,17 +1279,77 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		consumerBinding.unbind();
 	}
 
-	@Test
+	@ParameterizedTest
+	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
 	@Execution(ExecutionMode.CONCURRENT)
-	public void testPauseResumeOnStoppedPolledConsumer(JCSMPSession jcsmpSession, SempV2Api sempV2Api) throws Exception {
+	public <T> void testPauseOnStoppedConsumer(Class<T> channelType,
+											   JCSMPSession jcsmpSession,
+											   SempV2Api sempV2Api) throws Exception {
 		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = createConsumerInfrastructureUtil(channelType);
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+
+		consumerBinding.stop();
+		assertThat(getTxFlows(sempV2Api, vpnName, queueName, 1)).hasSize(0);
+		consumerBinding.pause();
+		assertThat(getTxFlows(sempV2Api, vpnName, queueName, 1)).hasSize(0);
+		consumerBinding.start();
+		assertEquals(0, getTxFlows(sempV2Api, vpnName, queueName, 1).get(0).getWindowSize());
+
+		consumerBinding.unbind();
+	}
+
+	@ParameterizedTest
+	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
+	@Execution(ExecutionMode.CONCURRENT)
+	public <T> void testResumeOnStoppedConsumer(Class<T> channelType,
+												JCSMPSession jcsmpSession,
+												SempV2Api sempV2Api) throws Exception {
+		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = createConsumerInfrastructureUtil(channelType);
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 		int defaultWindowSize = (int) jcsmpSession.getProperty(JCSMPProperties.SUB_ACK_WINDOW_SIZE);
 
-		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input", new BindingProperties());
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(
-				destination0, "testPolledConsumer", moduleInputChannel, createConsumerProperties());
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+
+		consumerBinding.pause();
+		consumerBinding.stop();
+		assertThat(getTxFlows(sempV2Api, vpnName, queueName, 1)).hasSize(0);
+		consumerBinding.resume();
+		assertThat(getTxFlows(sempV2Api, vpnName, queueName, 1)).hasSize(0);
+		consumerBinding.start();
+		assertEquals(defaultWindowSize, getTxFlows(sempV2Api, vpnName, queueName, 1).get(0).getWindowSize());
+
+		consumerBinding.unbind();
+	}
+
+	@ParameterizedTest
+	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
+	@Execution(ExecutionMode.CONCURRENT)
+	public <T> void testPauseResumeOnStoppedConsumer(Class<T> channelType,
+													 JCSMPSession jcsmpSession,
+													 SempV2Api sempV2Api) throws Exception {
+		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = createConsumerInfrastructureUtil(channelType);
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		int defaultWindowSize = (int) jcsmpSession.getProperty(JCSMPProperties.SUB_ACK_WINDOW_SIZE);
+
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
@@ -1250,6 +1359,35 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		consumerBinding.resume(); //Has no effect
 		consumerBinding.start();
 		assertEquals(defaultWindowSize, getTxFlows(sempV2Api, vpnName, queueName, 1).get(0).getWindowSize());
+
+		consumerBinding.unbind();
+	}
+
+	@ParameterizedTest
+	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
+	@Execution(ExecutionMode.CONCURRENT)
+	public <T> void testFailResumeOnClosedConsumer(Class<T> channelType,
+												   JCSMPSession jcsmpSession,
+												   SempV2Api sempV2Api) throws Exception {
+		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = createConsumerInfrastructureUtil(channelType);
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+
+		consumerBinding.pause();
+		assertEquals(0, getTxFlows(sempV2Api, vpnName, queueName, 1).get(0).getWindowSize());
+		getJcsmpSession().closeSession();
+		RuntimeException exception = assertThrows(RuntimeException.class, consumerBinding::resume);
+		assertThat(exception).hasRootCauseInstanceOf(ClosedFacilityException.class);
+		assertThat(consumerBinding.isPaused())
+				.as("Failed resume should leave the binding in a paused state")
+				.isTrue();
 
 		consumerBinding.unbind();
 	}

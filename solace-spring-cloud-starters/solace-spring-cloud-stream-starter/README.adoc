@@ -800,6 +800,8 @@ Since the names of anonymous consumer groups, and in turn the name of their woul
 
 The Solace binder supports pausing and resuming consumer bindings. See link:https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#binding_visualization_control[Spring Cloud Stream documentation] to learn how to pause and resume consumer bindings.
 
+NOTE: There is no guarantee that the effect of pausing a binding will be instantaneous: messages already in-flight or being processed by the binder may still be delivered after the call to pause returns.
+
 == Failed Producer Message Error Handling
 
 By default, asynchronous producer errors aren't handled by the framework. Producer error channels can be enabled using the link:https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_producer_properties[`errorChannelEnabled` producer config option].
