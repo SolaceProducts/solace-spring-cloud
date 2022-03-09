@@ -913,6 +913,25 @@ public void send(String payload, long timeout, TimeUnit unit) {
     }
 }
 ----
+== Solace Binder Health Indicator
+Solace binders can report health statuses via the https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_health_indicator[Spring Boot Actuator health endpoint]. To enable this feature, add Spring Boot Actuator to the classpath. To manually disable this feature, set `management.health.binders.enabled=false`.
+
+[cols="1,3", options="header"]
+|===
+| Health Status
+| Description
+
+| UP
+| Status indicating that the binder is functioning as expected.
+
+| RECONNECTING
+| Status indicating that the binder is actively trying to reconnect to the message broker.
+
+This is a custom health status. It isn't included in the health severity order list (`management.endpoint.health.status.order`) and returns the default HTTP status code of `200`. To customize these, see https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html#actuator.endpoints.health.writing-custom-health-indicators[Writing Custom HealthIndicators].
+
+| DOWN
+| Status indicating that the binder has suffered an unexpected failure. For instance, the binder may have exhausted all reconnection attempts. User intervention is likely required.
+|===
 
 == Resources
 
