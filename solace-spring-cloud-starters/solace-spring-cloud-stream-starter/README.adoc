@@ -772,13 +772,13 @@ https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/sp
 ----
 @Bean
 Consumer<Message<List<Payload>>> input() {
-	return batchMsg -> { <1>
+	return batchMsg -> { // <1>
 		List<Payload> batchedPayloads = batchMsg.getPayload();
-		List<Map<String, Object>> batchedHeaders = (List<Map<String, Object>>) batchMsg.getHeaders().get(SolaceBinderHeaders.BATCHED_HEADERS); <2>
+		List<Map<String, Object>> batchedHeaders = (List<Map<String, Object>>) batchMsg.getHeaders().get(SolaceBinderHeaders.BATCHED_HEADERS); // <2>
 
 		for (int i = 0; i < batchedPayloads.size(); i++) {
-			Payload payload = batchedPayloads[i];
-			Map<String, Object> headers = batchedHeaders[i];
+			Payload payload = batchedPayloads.get(i);
+			Map<String, Object> headers = batchedHeaders.get(i);
 			// Process inidividual message payload and its headers
 		}
 	};
@@ -788,6 +788,16 @@ Consumer<Message<List<Payload>>> input() {
 <2> The `solace_scst_batchedHeaders` message header contains the consolidated list of message headers for each of the individual messages in the batch.
 
 IMPORTANT: Message batches are non-transacted. A batch that this binder creates is fundamentally a collection of individual messages and must not be treated as a single consistent unit.
+
+[TIP]
+====
+If the Spring Cloud Stream framework fails to convert the batch message, consider setting one of the following consumer config options:
+
+* An explicit https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_common_binding_properties[`contentType`].
+** e.g. `application/octet-stream` for `byte[]` messages.
+* https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_consumer_properties[`useNativeDecoding=true`] if the message handler is just consuming raw payload types.
+** e.g. if PubSub+ delivers a bytes message and the consumer message handler accepts `Message<List<byte[]>>`.
+====
 
 To create a batch of messages, the binder will consume messages from the PubSub+ broker until either a maximum batch size or timeout has been achieved. After which, the binder will compose the batch message and send it to the consumer handler for processing. Both these batching parameters can be configured using the `batchMaxSize` and `batchTimeout` consumer config options.
 
