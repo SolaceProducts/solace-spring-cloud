@@ -1,6 +1,7 @@
 = Spring Cloud Stream Binder for Solace PubSub+
 :revnumber: 3.2.1
 :toc: preamble
+:toclevels: 3
 :icons: font
 :scst-version: 3.2.2
 
@@ -19,21 +20,26 @@ An implementation of Spring's Cloud Stream Binder for integrating with Solace Pu
 
 The Solace implementation of the Spring Cloud Stream Binder maps the following concepts from Spring to Solace:
 
-* Destinations to topic subscriptions (Source apps always send messages to a topic)
+* Destinations to topics/subscriptions
+** Producer bindings always sends messages to topics
 * Consumer groups to durable queues
+** A consumer group's queue is subscribed to its destination subscription (default)
+** Consumer bindings always receives messages from queues
 * Anonymous consumer groups to temporary queues (When no group is specified; used for SCS Publish-Subscribe Model)
 
-And internally, each consumer group queue is subscribed to at least their destination topic. So a typical message flow would then appear as follows:
+In Solace, the above setup is called topic-to-queue mapping. So a typical message flow would then appear as follows:
 
 . Producer bindings publish messages to their destination topics
-. Consumer group queues receive the messages published to their destination topic
-. Consumers of a particular consumer group consume messages from their group in a round-robin fashion (by default)
+. Each consumer groups' queue receives the messages published to their destination topic
+. The PubSub+ broker distributes messages in a round-robin fashion to each consumer binding for a particular consumer group
++
+NOTE: Round-robin distribution only occurs if the consumer group's queue is configured for non-exclusive access. If the queue has exclusive access, then only one consumer will receive messages.
 
-Note that partitioning is not yet supported by this version of the binder.
+NOTE: Partitioning is not yet supported by this version of the binder.
 
-Note that since the Binder always consumes from queues it is currently required that Assured Delivery be enabled on the Solace PubSub+ Message VPN being used (Assured Delivery is automatically enabled if using Solace Cloud.)
+IMPORTANT: Since consumer bindings always consumes from queues it is required that Assured Delivery is enabled on the Solace PubSub+ Message VPN being used (Assured Delivery is automatically enabled if using Solace Cloud.)
 
-Also, it will be assumed that you have a basic understanding of the Spring Cloud Stream project. If not, then please refer to https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/[Spring's documentation]. For the sake of brevity, this document will solely focus on discussing components unique to Solace.
+For the sake of brevity, it will be assumed that you have a basic understanding of the Spring Cloud Stream project. If not, then please refer to https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/[Spring's documentation]. This document will solely focus on discussing components unique to Solace.
 
 == Spring Cloud Stream Binder
 
@@ -120,7 +126,7 @@ spring:
         solace-broker:
           type: solace
           environment:
-            solace:
+            solace: <1>
               java:
                 host: tcp://localhost:55555
                 msgVpn: default
@@ -128,9 +134,12 @@ spring:
                 clientPassword: default
                 connectRetries: -1
                 reconnectRetries: -1
+#                apiProperties:
+#                  ssl_trust_store: <path_to_trust_store>
+#                  ssl_trust_store_password: <trust_store_password>
+#                  ssl_validate_certificate: true
 ----
-
-Notice that the latter half of this configuration actually originates from the https://github.com/SolaceProducts/solace-spring-boot/tree/master/solace-spring-boot-starters/solace-java-spring-boot-starter#updating-your-application-properties[JCSMP Spring Boot Auto-Configuration project].
+<1> The latter half of this configuration where the Solace session is configured actually originates from the https://github.com/SolaceProducts/solace-spring-boot/tree/master/solace-spring-boot-starters/solace-java-spring-boot-starter#updating-your-application-properties[JCSMP Spring Boot Auto-Configuration project].
 
 == Configuration Options
 
@@ -138,11 +147,22 @@ Notice that the latter half of this configuration actually originates from the h
 
 Configuration of the Solace Spring Cloud Stream Binder is done through https://docs.spring.io/spring-boot/docs/current/reference/html/boot-features-external-config.html[Spring Boot's externalized configuration]. This is where users can control the binder's configuration options as well as the Solace Java API properties.
 
-=== Inherited Configuration Options
-
-As for auto-configuration-related options required for auto-connecting to Solace message brokers, refer to the https://github.com/SolaceProducts/solace-spring-boot/tree/master/solace-spring-boot-starters/solace-java-spring-boot-starter#configure-the-application-to-use-your-solace-pubsub-service-credentials[JCSMP Spring Boot Auto-Configuration documentation].
-
 For general binder configuration options and properties, refer to the https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_configuration_options[Spring Cloud Stream Reference Documentation].
+
+==== Solace Session Properties
+
+The binder's Solace session is configurable using properties prefixed by `solace.java` or `spring.cloud.stream.binders.<binder-name>.environment.solace.java`.
+
+IMPORTANT: This binder leverages the JCSMP Spring Boot Auto-Configuration project to configure its session. See the https://github.com/SolaceProducts/solace-spring-boot/tree/master/solace-spring-boot-starters/solace-java-spring-boot-starter#configure-the-application-to-use-your-solace-pubsub-service-credentials[JCSMP Spring Boot Auto-Configuration documentation] for more info on how to configure these properties.
+
+See <<Creating a Simple Solace Binding>> for a simple example of how to configure a session for this binder.
+
+[TIP]
+====
+`solace.java.apiProperties` can be used to pass additional session properties not available under the standard `solace.java` prefix.
+
+See https://github.com/SolaceProducts/solace-spring-boot/tree/master/solace-spring-boot-starters/solace-java-spring-boot-starter#updating-your-application-properties[JCSMP Spring Boot Auto-Configuration documentation] for more info about `solace.java.apiProperties`.
+====
 
 ==== Solace Consumer Properties
 
@@ -252,7 +272,8 @@ An array of additional topic subscriptions to be applied on the consumer group q
 These subscriptions may also contain wildcards. +
 The `prefix` property is not applied on these subscriptions.
 +
-Default: `String[0]`
+Default: `String[0]` +
+See: <<Overview>> for more info on how this binder uses topic-to-queue mapping to implement Spring Cloud Streams consumer groups.
 
 polledConsumerWaitTimeInMillis::
 Maximum wait time for polled consumers to receive a message from their consumer group queue.
@@ -477,7 +498,8 @@ A mapping of required consumer groups to arrays of additional topic subscription
 These subscriptions may also contain wildcards. +
 The `prefix` property is not applied on these subscriptions.
 +
-Default: Empty `Map&lt;String,String[]&gt;`
+Default: Empty `Map&lt;String,String[]&gt;` +
+See: <<Overview>> for more info on how this binder uses topic-to-queue mapping to implement Spring Cloud Streams consumer groups.
 
 === Solace Message Headers
 
@@ -806,7 +828,7 @@ If asynchronously acknowledging messages, then if these messages aren’t acknow
 This property can be configured for dynamically created queues by using https://docs.solace.com/Configuring-and-Managing/Configuring-Endpoint-Templates.htm#Configur[queue templates]. However note that as per https://docs.solace.com/PubSub-Basics/Endpoints.htm#Which[our documentation], anonymous consumer group queues (i.e. temporary queues) will not match a queue template’s name filter. Only the queue template defined in the client profile’s "Copy Settings From Queue Template" setting will apply to those.
 ====
 
-== Message Target Destination
+== Dynamic Producer Destinations
 
 Spring Cloud Stream has a reserved message header called `scst_targetDestination` (retrievable via `BinderHeaders.TARGET_DESTINATION`), which allows for messages to be redirected from their bindings' configured destination to the target destination specified by this header.
 
