@@ -32,7 +32,6 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 	/**
 	 * A mapping of required consumer groups to arrays of additional topic subscriptions to be applied on each consumer group’s queue.
 	 * These subscriptions may also contain wildcards.
-	 * The prefix property is not applied on these subscriptions.
 	 */
 	private Map<String,String[]> queueAdditionalSubscriptions = new HashMap<>();
 	/**

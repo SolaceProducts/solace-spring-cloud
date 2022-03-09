@@ -269,8 +269,7 @@ Default: `null`
 
 queueAdditionalSubscriptions::
 An array of additional topic subscriptions to be applied on the consumer group queue. +
-These subscriptions may also contain wildcards. +
-The `prefix` property is not applied on these subscriptions.
+These subscriptions may also contain wildcards.
 +
 Default: `String[0]` +
 See: <<Overview>> for more info on how this binder uses topic-to-queue mapping to implement Spring Cloud Streams consumer groups.
@@ -495,8 +494,7 @@ Default: `null`
 
 queueAdditionalSubscriptions::
 A mapping of required consumer groups to arrays of additional topic subscriptions to be applied on each consumer group's queue. +
-These subscriptions may also contain wildcards. +
-The `prefix` property is not applied on these subscriptions.
+These subscriptions may also contain wildcards.
 +
 Default: Empty `Map&lt;String,String[]&gt;` +
 See: <<Overview>> for more info on how this binder uses topic-to-queue mapping to implement Spring Cloud Streams consumer groups.
@@ -832,27 +830,21 @@ This property can be configured for dynamically created queues by using https://
 
 Spring Cloud Stream has a reserved message header called `scst_targetDestination` (retrievable via `BinderHeaders.TARGET_DESTINATION`), which allows for messages to be redirected from their bindings' configured destination to the target destination specified by this header.
 
-For this binder's implementation of this header, the target destination defines the _exact_ Solace topic to which a message will be sent. i.e. No post-processing is done for this header (e.g. `prefix` is not applied).
-
-If you want to apply a destination post-processing step – lets say the `prefix` for example, you will need to directly apply that to the header itself:
+For this binder's implementation of this header, the target destination defines the _exact_ Solace topic to which a message will be sent. i.e. No post-processing is done for this header.
 
 [source,java]
 ----
 public class MyMessageBuilder {
-    @Value("${spring.cloud.stream.solace.bindings.<bindingName>.producer.prefix}") // <1>
-    String prefix;
-
     public Message<String> buildMeAMessage() {
         return MessageBuilder.withPayload("payload")
-            .setHeader(BinderHeaders.TARGET_DESTINATION, prefix + "new-target-destination") // <2>
+            .setHeader(BinderHeaders.TARGET_DESTINATION, "some-dynamic-destination") // <1>
             .build();
     }
 }
 ----
-<1> Retrieve your binding's configured prefix.
-<2> Apply the prefix to the target destination header.
+<1> This message will be sent to the `some-dynamic-destination` topic, ignoring the producer's configured destination
 
-Also, this header is cleared by the message's producer before it is sent off to the message broker. So you should attach the target destination to your message payload if you want to get that information on the consumer-side.
+NOTE: This header is cleared by the message's producer before it is sent off to the message broker. So you should attach the target destination to your message payload if you want to get that information on the consumer-side.
 
 == Empty Payload VS Null Payload
 

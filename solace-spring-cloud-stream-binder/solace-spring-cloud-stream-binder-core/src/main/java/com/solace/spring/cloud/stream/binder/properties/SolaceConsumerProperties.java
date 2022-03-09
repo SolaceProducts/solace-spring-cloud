@@ -24,7 +24,6 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	/**
 	 * An array of additional topic subscriptions to be applied on the consumer group queue.
 	 * These subscriptions may also contain wildcards.
-	 * The prefix property is not applied on these subscriptions.
 	 */
 	private String[] queueAdditionalSubscriptions = new String[0];
 	/**
