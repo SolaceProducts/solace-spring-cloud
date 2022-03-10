@@ -255,7 +255,8 @@ The `prefix` property is not applied on these subscriptions.
 Default: `String[0]`
 
 polledConsumerWaitTimeInMillis::
-Maximum wait time for polled consumers to receive a message from their consumer group queue.
+Maximum wait time for polled consumers to receive a message from their consumer group queue. +
+Only applicable when `batchMode` is `false`.
 +
 Default: `100`
 
@@ -272,8 +273,7 @@ Default: `255`
 
 batchTimeout::
 The maximum wait time in milliseconds to receive a batch of messages. If this timeout is reached, then the messages that have already been received will be used to create the batch. A value of `0` means wait forever. +
-Only applicable when `batchMode` is `true`. +
-This config option takes precedence over `polledConsumerWaitTimeInMillis` when batching is enabled.
+Only applicable when `batchMode` is `true`.
 +
 Default: `5000`
 

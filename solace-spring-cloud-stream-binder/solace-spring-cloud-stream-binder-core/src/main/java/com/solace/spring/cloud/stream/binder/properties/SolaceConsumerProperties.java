@@ -25,14 +25,13 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * messages that have already been received will be used to create the batch. A value of {@code 0} means wait
 	 * forever.</p>
 	 * <p>Only applicable when {@code batchMode} is {@code true}.</p>
-	 * <p>This config option takes precedence over {@link #polledConsumerWaitTimeInMillis} when batching is
-	 * enabled.</p>
 	 */
 	@Min(0)
 	private int batchTimeout = 5000;
 
 	/**
 	 * Maximum wait time for polled consumers to receive a message from their consumer group queue.
+	 * <p>Only applicable when {@code batchMode} is {@code false}.</p>
 	 */
 	private int polledConsumerWaitTimeInMillis = 100;
 	/**
