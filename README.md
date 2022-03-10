@@ -29,7 +29,7 @@ Please consult the [Spring Cloud Compatibility Table](./solace-spring-cloud-bom/
 ### Solace Spring Cloud Projects
 
 These are the projects contained within this repository:
-* [Solace Spring Cloud Stream Starter](./solace-spring-cloud-starters/solace-spring-cloud-stream-starter)
+* [Spring Cloud Stream Binder for Solace PubSub+](./solace-spring-cloud-starters/solace-spring-cloud-stream-starter)
 * [Solace Spring Cloud Connector](./solace-spring-cloud-connector)
 
 ## Building Locally
