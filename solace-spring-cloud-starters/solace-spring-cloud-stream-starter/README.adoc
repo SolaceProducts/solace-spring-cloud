@@ -696,7 +696,7 @@ The consolidated list of message headers for a batch of messages where the heade
 
 == Native Payload Types
 
-Below are the payload types supported by this binder:
+Below are the payload types natively supported by this binder (before/after https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#content-type-management[Content Type Negotiation]):
 
 [cols="1m,1,3", options="header"]
 |===
