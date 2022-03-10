@@ -13,9 +13,11 @@ import com.solacesystems.jcsmp.JCSMPTransportException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.lang.Nullable;
+import org.springframework.util.concurrent.SettableListenableFuture;
 
 import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -37,6 +39,8 @@ public class FlowReceiverContainer {
 	private final AtomicReference<FlowReceiverReference> flowReceiverAtomicReference = new AtomicReference<>();
 	private final AtomicBoolean isRebinding = new AtomicBoolean(false);
 	private final AtomicBoolean isPaused = new AtomicBoolean(false);
+	private final AtomicReference<SettableListenableFuture<UUID>> rebindFutureReference = new AtomicReference<>(
+			new SettableListenableFuture<>());
 
 	/* Ideally we would cache the outgoing message IDs and remove them as they get acknowledged,
 	 * but that has way too much overhead at scale (millions or billions of unacknowledged messages).
@@ -99,6 +103,7 @@ public class FlowReceiverContainer {
 				FlowReceiverReference newFlowReceiverReference = new FlowReceiverReference(flowReceiver);
 				flowReceiverAtomicReference.set(newFlowReceiverReference);
 				xmlMessageMapper.resetIgnoredProperties(id.toString());
+				rebindFutureReference.getAndSet(new SettableListenableFuture<>()).set(newFlowReceiverReference.getId());
 				bindCondition.signalAll();
 				return newFlowReceiverReference.getId();
 			}
@@ -199,6 +204,9 @@ public class FlowReceiverContainer {
 
 			unbind();
 			return bind();
+		} catch (Throwable e) {
+			rebindFutureReference.getAndSet(new SettableListenableFuture<>()).setException(e);
+			throw e;
 		} finally {
 			isRebinding.compareAndSet(true, false);
 			writeLock.unlock();
@@ -422,23 +430,111 @@ public class FlowReceiverContainer {
 					messageContainer.getId(), messageContainer.getMessage().getMessageId()));
 		}
 
-		unacknowledgedMessageTracker.decrement();
-
-		UUID flowReceiverReferenceId;
-		try {
-			flowReceiverReferenceId = rebind(messageContainer.getFlowReceiverReferenceId(), returnImmediately);
-		} catch (Exception e) {
-			if (!messageContainer.isStale()) {
-				logger.debug("Failed to rebind, re-incrementing unacknowledged-messages counter", e);
-				unacknowledgedMessageTracker.increment();
-			} else {
-				logger.debug("Failed to rebind", e);
+		final boolean decremented;
+		if (messageContainer.getAckInProgress().compareAndSet(false, true)) {
+			if (logger.isTraceEnabled()) {
+				logger.trace(String.format(
+						"Marked message container %s as ack-in-progress, decrementing unacknowledged-messages counter",
+						messageContainer.getId()));
 			}
-			throw e;
+			unacknowledgedMessageTracker.decrement();
+			decremented = true;
+		} else {
+			decremented = false;
 		}
 
-		messageContainer.setAcknowledged(true);
-		return flowReceiverReferenceId;
+		try {
+			UUID flowReceiverReferenceId;
+			try {
+				flowReceiverReferenceId = rebind(messageContainer.getFlowReceiverReferenceId(), returnImmediately);
+			} catch (Exception e) {
+				if (!messageContainer.isStale() && decremented) {
+					logger.debug("Failed to rebind, re-incrementing unacknowledged-messages counter", e);
+					unacknowledgedMessageTracker.increment();
+				} else {
+					logger.debug("Failed to rebind", e);
+				}
+				throw e;
+			}
+
+			messageContainer.setAcknowledged(true);
+			return flowReceiverReferenceId;
+		} finally {
+			if (decremented) {
+				messageContainer.getAckInProgress().set(false);
+			}
+		}
+	}
+
+	/**
+	 * Same as {@link #acknowledge(MessageContainer)}, but returns a future to asynchronously capture the flow
+	 * container's rebind result.
+	 * @param messageContainer The message.
+	 * @return a future containing the new flow reference ID or the current flow reference ID if message was already
+	 * acknowledge.
+	 * @throws SolaceStaleMessageException the message is stale and cannot be acknowledged
+	 * @throws UnboundFlowReceiverContainerException flow container is not bound
+	 * @see #acknowledgeRebind(MessageContainer)
+	 */
+	public Future<UUID> futureAcknowledgeRebind(MessageContainer messageContainer)
+			throws SolaceStaleMessageException, UnboundFlowReceiverContainerException {
+		if (messageContainer == null || messageContainer.isAcknowledged()) {
+			Lock readLock = readWriteLock.readLock();
+			readLock.lock();
+
+			try {
+				FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+				if (flowReceiverReference == null) {
+					throw new UnboundFlowReceiverContainerException(String.format(
+							"Flow receiver container %s is not bound", id));
+				} else {
+					SettableListenableFuture<UUID> future = new SettableListenableFuture<>();
+					future.set(flowReceiverReference.getId());
+					return future;
+				}
+			} finally {
+				readLock.unlock();
+			}
+		}
+
+		if (messageContainer.isStale()) {
+			throw new SolaceStaleMessageException(String.format("Message container %s (XMLMessage %s) is stale",
+					messageContainer.getId(), messageContainer.getMessage().getMessageId()));
+		}
+
+		SettableListenableFuture<UUID> future = rebindFutureReference.get();
+
+		if (!messageContainer.getAckInProgress().compareAndSet(false, true)) {
+			if (logger.isTraceEnabled()) {
+				logger.trace(String.format("Message container %s (XMLMessage %s) already has an ack in-progress",
+						messageContainer.getId(), messageContainer.getMessage().getMessageId()));
+			}
+			return future;
+		}
+
+		if (logger.isTraceEnabled()) {
+			logger.trace(String.format(
+					"Decrementing unacknowledged-messages counter for message container %s (XMLMessage %s).",
+					messageContainer.getId(), messageContainer.getMessage().getMessageId()));
+		}
+		unacknowledgedMessageTracker.decrement();
+
+		future.addCallback(newFlowReceiverContainerId -> {
+			messageContainer.setAcknowledged(true);
+			messageContainer.getAckInProgress().set(false);
+			}, e -> {
+			try {
+				if (!messageContainer.isStale()) {
+					logger.trace("Failed to rebind, re-incrementing unacknowledged-messages counter", e);
+					unacknowledgedMessageTracker.increment();
+				} else {
+					logger.trace("Failed to rebind", e);
+				}
+			} finally {
+				messageContainer.getAckInProgress().set(false);
+			}
+		});
+		return future;
 	}
 
 	public boolean isBound() {
@@ -454,6 +550,10 @@ public class FlowReceiverContainer {
 	public void setRebindWaitTimeout(long timeout, TimeUnit unit) {
 		this.rebindWaitTimeout = timeout;
 		this.rebindWaitTimeoutUnit = unit;
+	}
+
+	public long getRebindWaitTimeout(TimeUnit unit) {
+		return unit.convert(this.rebindWaitTimeout, this.rebindWaitTimeoutUnit);
 	}
 
 	public void pause() {

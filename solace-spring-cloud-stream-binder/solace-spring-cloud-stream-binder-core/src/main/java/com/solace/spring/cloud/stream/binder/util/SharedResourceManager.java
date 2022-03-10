@@ -33,8 +33,8 @@ abstract class SharedResourceManager<T> {
 			if (registeredIds.isEmpty()) {
 				logger.info(String.format("No %s exists, a new one will be created", type));
 				sharedResource = create();
-			} else {
-				logger.debug(String.format("A message %s already exists, reusing it", type));
+			} else if (logger.isTraceEnabled()) {
+				logger.trace(String.format("A message %s already exists, reusing it", type));
 			}
 
 			registeredIds.add(key);

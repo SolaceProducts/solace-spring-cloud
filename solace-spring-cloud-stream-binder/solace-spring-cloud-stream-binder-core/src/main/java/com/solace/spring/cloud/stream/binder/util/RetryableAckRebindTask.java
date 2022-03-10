@@ -37,7 +37,7 @@ public class RetryableAckRebindTask implements RetryableTaskService.RetryableTas
 			if (messageContainer.isStale() && !flowReceiverContainer.isBound()) {
 				logger.warn(String.format(
 						"failed to rebind queue %s and flow container %s is now unbound. Attempting to bind.",
-						flowReceiverContainer.getId(), flowReceiverContainer.getQueueName()), e);
+						flowReceiverContainer.getQueueName(), flowReceiverContainer.getId()), e);
 				taskService.submit(new RetryableBindTask(flowReceiverContainer));
 				return true;
 			} else {

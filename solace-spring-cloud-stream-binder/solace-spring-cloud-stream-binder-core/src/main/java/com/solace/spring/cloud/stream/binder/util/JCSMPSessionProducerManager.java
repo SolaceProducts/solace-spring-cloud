@@ -36,13 +36,16 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 		sharedResource.close();
 	}
 
-	static class CloudStreamEventHandler implements JCSMPStreamingPublishCorrelatingEventHandler {
+	public static class CloudStreamEventHandler implements JCSMPStreamingPublishCorrelatingEventHandler {
 
 		@Override
 		public void responseReceivedEx(Object correlationKey) {
 			if (correlationKey instanceof ErrorChannelSendingCorrelationKey) {
 				ErrorChannelSendingCorrelationKey key = (ErrorChannelSendingCorrelationKey) correlationKey;
-				logger.debug("Producer received response for message " + StaticMessageHeaderAccessor.getId(key.getInputMessage()));
+				if (logger.isTraceEnabled()) {
+					logger.trace("Producer received response for message " +
+							StaticMessageHeaderAccessor.getId(key.getInputMessage()));
+				}
 				if (key.getConfirmCorrelation() != null) {
 					key.getConfirmCorrelation().success();
 				}
@@ -56,12 +59,11 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 									" redelivered on the original queue.",
 							key.getSourceMessageId(), key.getErrorQueueName()), e);
 				}
-			} else {
-				logger.debug("Producer received response for correlation key: " + correlationKey);
+			} else if (logger.isTraceEnabled()) {
+				logger.trace("Producer received response for correlation key: " + correlationKey);
 			}
 		}
 
-		@SuppressWarnings("ThrowableNotThrown")
 		@Override
 		public void handleErrorEx(Object correlationKey, JCSMPException cause, long timestamp) {
 			if (correlationKey instanceof ErrorChannelSendingCorrelationKey) {

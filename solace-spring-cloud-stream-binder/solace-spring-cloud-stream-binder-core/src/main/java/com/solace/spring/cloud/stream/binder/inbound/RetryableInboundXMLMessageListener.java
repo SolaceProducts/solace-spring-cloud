@@ -1,11 +1,9 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
-import com.solace.spring.cloud.stream.binder.util.JCSMPAcknowledgementCallbackFactory;
+import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
-import com.solacesystems.jcsmp.BytesXMLMessage;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.acks.AckUtils;
@@ -17,32 +15,35 @@ import org.springframework.retry.support.RetryTemplate;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 	private final RetryTemplate retryTemplate;
 	private final RecoveryCallback<?> recoveryCallback;
 
-	private static final Log logger = LogFactory.getLog(RetryableInboundXMLMessageListener.class);
-
 	RetryableInboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 									   ConsumerDestination consumerDestination,
+									   SolaceConsumerProperties consumerProperties,
+									   @Nullable BatchCollector batchCollector,
 									   Consumer<Message<?>> messageConsumer,
 									   JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
 									   RetryTemplate retryTemplate,
 									   RecoveryCallback<?> recoveryCallback,
 									   @Nullable AtomicBoolean remoteStopFlag,
 									   ThreadLocal<AttributeAccessor> attributesHolder) {
-		super(flowReceiverContainer, consumerDestination, messageConsumer, ackCallbackFactory, remoteStopFlag,
-				attributesHolder, false, true);
+		super(flowReceiverContainer, consumerDestination, consumerProperties, batchCollector, messageConsumer,
+				ackCallbackFactory, remoteStopFlag, attributesHolder, false, true);
 		this.retryTemplate = retryTemplate;
 		this.recoveryCallback = recoveryCallback;
 	}
 
 	@Override
-	void handleMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) throws SolaceAcknowledgmentException {
+	void handleMessage(Supplier<Message<?>> messageSupplier, Consumer<Message<?>> sendToConsumerHandler,
+								 AcknowledgmentCallback acknowledgmentCallback, boolean isBatched)
+			throws SolaceAcknowledgmentException {
 		Message<?> message = retryTemplate.execute((context) -> {
 			attributesHolder.set(context);
-			return createMessage(bytesXMLMessage, acknowledgmentCallback);
+			return messageSupplier.get();
 		}, (context) -> {
 			recoveryCallback.recover(context);
 			AckUtils.autoAck(acknowledgmentCallback);
@@ -55,7 +56,7 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 
 		retryTemplate.execute((context) -> {
 			attributesHolder.set(context);
-			sendToConsumer(message, bytesXMLMessage);
+			sendToConsumerHandler.accept(message);
 			AckUtils.autoAck(acknowledgmentCallback);
 			return null;
 		}, (context) -> {

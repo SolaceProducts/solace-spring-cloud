@@ -255,7 +255,8 @@ The `prefix` property is not applied on these subscriptions.
 Default: `String[0]`
 
 polledConsumerWaitTimeInMillis::
-Maximum wait time for polled consumers to receive a message from their consumer group queue.
+Maximum wait time for polled consumers to receive a message from their consumer group queue. +
+Only applicable when `batchMode` is `false`.
 +
 Default: `100`
 
@@ -263,6 +264,18 @@ flowPreRebindWaitTimeout::
 The maximum time to wait for all unacknowledged messages to be acknowledged before a flow receiver rebind. Will wait forever if set to a value less than `0`.
 +
 Default: `10000`
+
+batchMaxSize::
+The maximum number of messages per batch. +
+Only applicable when `batchMode` is `true`.
++
+Default: `255`
+
+batchTimeout::
+The maximum wait time in milliseconds to receive a batch of messages. If this timeout is reached, then the messages that have already been received will be used to create the batch. A value of `0` means wait forever. +
+Only applicable when `batchMode` is `true`.
++
+Default: `5000`
 
 autoBindErrorQueue::
 Whether to automatically create a durable error queue to which messages will be republished when message processing failures are encountered. Only applies once all internal retries have been exhausted.
@@ -636,6 +649,14 @@ TIP: Use link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream
 | Default Value
 | Description
 
+| solace_scst_batchedHeaders
+| List<Map<String, Object>>
+| Read
+|
+| Only applicable when `batchMode` is `true`.
+
+The consolidated list of message headers for a batch of messages where the headers for each payload element is in this list’s corresponding index.
+
 | solace_scst_confirmCorrelation
 | CorrelationData
 | Write
@@ -672,6 +693,64 @@ TIP: Use link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream
 | "base64"
 | The encoding algorithm used to encode the headers indicated by `solace_scst_serializedHeaders`.
 |===
+
+== Native Payload Types
+
+Below are the payload types natively supported by this binder (before/after https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#content-type-management[Content Type Negotiation]):
+
+[cols="1m,1,3", options="header"]
+|===
+| Payload Type | PubSub+ Message Type | Notes
+
+| byte[]
+| Binary Message
+| Basic PubSub+ payload type.
+
+| String
+| Text Message
+| Basic PubSub+ payload type.
+
+| SDTStream
+| Stream Message
+| Basic PubSub+ payload type.
+
+| SDTMap
+| Map Message
+| Basic PubSub+ payload type.
+
+| String
+| XML-Content Message
+| Basic PubSub+ payload type.
+
+Only available for consumption.
+
+| Serializable
+| Bytes Message
+| This is not a basic payload type supported by the PubSub+ broker, but is one defined and coordinated by this binder.
+
+**Publishing:**
+
+When a `Serializable` payload which doesn't satisfy any of the basic PubSub+ payload types is given to the binder to publish, the binder will serialize this payload to a `byte[]` and set the user property, `solace_scst_serializedPayload`, to `true`.
+
+**Consuming:**
+
+When the binder consumes a binary message which has the `solace_scst_serializedPayload` user property set to `true`, the binder will deserialize the binary attachment.
+|===
+
+[TIP]
+====
+Typically, the Spring Cloud Stream framework will convert a published payload into a `byte[]` before giving it to the binder. In which case, this binder will publish a binary message.
+
+If this occurs, but you wish to publish other message types, then one option is to set `useNativeEncoding=true` on your producer (https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_producer_properties[but read the caveats carefully before enabling this feature]), and have your message handler return a payload of one of this binder's supported native payload types; e.g. return `Message<SDTStream>` to publish a stream message.
+
+See https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#content-type-management[Content Type Negotiation] for more info on how Spring Cloud Streams converts payloads and other options to control message conversion.
+====
+
+=== Empty Payload VS Null Payload
+
+Spring messages can't contain null payloads, however, message handlers can differentiate between null payloads and empty payloads by looking at the `solace_scst_nullPayload` header. The binder adds the `solace_scst_nullPayload` header when a Solace message with null payload is consumed from the wire. When that is the case, the binder sets the Spring message's payload to a null equivalent payload. Null equivalent payloads are one of the following: empty `byte[]`, empty `String`, empty `SDTMap`, or empty `SDTStream`.
+
+NOTE: Applications can't differentiate between null payloads and empty payloads when consuming binary messages or XML-content messages from the wire. This is because Solace always converts empty payloads to null payloads when those message types are published.
 
 == Generated Queue Name Syntax
 
@@ -742,6 +821,48 @@ Though note that there are few limitations:
 . `concurrency` &gt; 1 is not supported for consumer bindings which are a part of anonymous consumer groups.
 . `concurrency` &gt; 1 is ignored for polled consumers.
 . Setting `provisionDurableQueue` to `false` disables endpoint configuration validation. Meaning that point 1 cannot be validated. In this scenario, it is the developer's responsibility to ensure that point 1 is followed.
+
+== Batch Consumers
+
+https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_batch_consumers[Batch consumers] can be enabled by setting `spring.cloud.stream.bindings.<binding-name>.consumer.batch-mode` to `true`. In which case, batched messages may be consumed as follows:
+
+[source,java]
+----
+@Bean
+Consumer<Message<List<Payload>>> input() {
+	return batchMsg -> { // <1>
+		List<Payload> batchedPayloads = batchMsg.getPayload();
+		List<Map<String, Object>> batchedHeaders = (List<Map<String, Object>>) batchMsg.getHeaders().get(SolaceBinderHeaders.BATCHED_HEADERS); // <2>
+
+		for (int i = 0; i < batchedPayloads.size(); i++) {
+			Payload payload = batchedPayloads.get(i);
+			Map<String, Object> headers = batchedHeaders.get(i);
+			// Process inidividual message payload and its headers
+		}
+	};
+}
+----
+<1> A batch of messages is really just a single Spring `Message` whose payload is a list of individual message payloads.
+<2> The `solace_scst_batchedHeaders` message header contains the consolidated list of message headers for each of the individual messages in the batch.
+
+IMPORTANT: Message batches are non-transacted. A batch that this binder creates is fundamentally a collection of individual messages and must not be treated as a single consistent unit.
+
+[TIP]
+====
+If the Spring Cloud Stream framework fails to convert the batch message, consider setting one of the following consumer config options:
+
+* An explicit https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_common_binding_properties[`contentType`].
+** e.g. `application/octet-stream` for `byte[]` messages.
+* https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_consumer_properties[`useNativeDecoding=true`] if the message handler is just consuming raw payload types.
+** e.g. if PubSub+ delivers a binary message and the consumer message handler accepts `Message<List<byte[]>>`.
+** https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_consumer_properties[Read the caveats carefully before enabling this feature]
+
+See https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#content-type-management[Content Type Negotiation] for more info on how Spring Cloud Streams converts payloads and other options to control message conversion.
+
+See <<Native Payload Types>> for more info regarding this binder's natively supported payload types.
+====
+
+To create a batch of messages, the binder will consume messages from the PubSub+ broker until either a maximum batch size or timeout has been achieved. After which, the binder will compose the batch message and send it to the consumer handler for processing. Both these batching parameters can be configured using the `batchMaxSize` and `batchTimeout` consumer config options.
 
 == Manual Message Acknowledgment
 
@@ -831,12 +952,6 @@ public class MyMessageBuilder {
 <2> Apply the prefix to the target destination header.
 
 Also, this header is cleared by the message's producer before it is sent off to the message broker. So you should attach the target destination to your message payload if you want to get that information on the consumer-side.
-
-== Empty Payload VS Null Payload
-
-Spring messages can't contain null payloads, however, message handlers can differentiate between null payloads and empty payloads by looking at the `solace_scst_nullPayload` header. The binder adds the `solace_scst_nullPayload` header when a Solace message with null payload is consumed from the wire. When that is the case, the binder sets the Spring message's payload to a null equivalent payload. Null equivalent payloads are one of the following: empty byte[], empty String, empty SDTMap, or empty SDTStream.
-
-NOTE: Applications can't differentiate between null payloads and empty payloads when consuming bytes messages or XML-content messages from the wire. This is because Solace always converts empty payloads to null payloads when those message types are published.
 
 == Failed Consumer Message Error Handling
 

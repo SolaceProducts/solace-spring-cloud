@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.util.*;
@@ -42,6 +43,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final SolaceConsumerProperties consumerProperties;
 	private final EndpointProperties endpointProperties;
 	private final int concurrency;
+	private final boolean batchingEnabled;
 	private final RetryableTaskService taskService;
 	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
 	private final List<FlowReceiverContainer> flowReceivers;
@@ -60,12 +62,14 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	public JCSMPInboundChannelAdapter(SolaceConsumerDestination consumerDestination,
 									  JCSMPSession jcsmpSession,
 									  int concurrency,
+									  boolean batchingEnabled,
 									  RetryableTaskService taskService,
 									  SolaceConsumerProperties consumerProperties,
 									  @Nullable EndpointProperties endpointProperties) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
 		this.concurrency = concurrency;
+		this.batchingEnabled = batchingEnabled;
 		this.taskService = taskService;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
@@ -221,9 +225,11 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					"Cannot have an 'errorChannel' property when a 'RetryTemplate' is provided; " +
 							"use an 'ErrorMessageSendingRecoverer' in the 'recoveryCallback' property to send " +
 							"an error message when retries are exhausted");
-			RetryableInboundXMLMessageListener retryableMessageListener = new RetryableInboundXMLMessageListener(
+			listener = new RetryableInboundXMLMessageListener(
 					flowReceiverContainer,
 					consumerDestination,
+					consumerProperties,
+					batchingEnabled ? new BatchCollector(consumerProperties) : null,
 					this::sendMessage,
 					ackCallbackFactory,
 					retryTemplate,
@@ -231,11 +237,12 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					remoteStopFlag,
 					attributesHolder
 			);
-			listener = retryableMessageListener;
 		} else {
 			listener = new BasicInboundXMLMessageListener(
 					flowReceiverContainer,
 					consumerDestination,
+					consumerProperties,
+					batchingEnabled ? new BatchCollector(consumerProperties) : null,
 					this::sendMessage,
 					ackCallbackFactory,
 					this::sendErrorMessageIfNecessary,
@@ -297,7 +304,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		}
 	}
 
-	private final class SolaceRetryListener implements RetryListener {
+	private static final class SolaceRetryListener implements RetryListener {
 
 		private final String queueName;
 

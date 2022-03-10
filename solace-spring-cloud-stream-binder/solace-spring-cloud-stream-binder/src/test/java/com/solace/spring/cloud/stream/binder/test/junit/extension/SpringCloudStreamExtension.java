@@ -12,6 +12,9 @@ import org.junit.jupiter.api.extension.ParameterResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/**
+ * JUnit 5 extension to manage and inject {@link SpringCloudStreamContext} into test parameters.
+ */
 public class SpringCloudStreamExtension implements AfterEachCallback, BeforeEachCallback, ParameterResolver {
 	private static final Namespace NAMESPACE = Namespace.create(SpringCloudStreamContext.class);
 	private static final Logger LOGGER = LoggerFactory.getLogger(SpringCloudStreamExtension.class);

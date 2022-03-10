@@ -5,33 +5,31 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.JCSMPTransportException;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.DefaultPollableMessageSource;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.binder.PartitionCapableBinderTests;
-import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.cloud.stream.binder.Spy;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.integration.channel.AbstractSubscribableChannel;
 import org.springframework.integration.channel.DirectChannel;
-import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHandler;
-import org.springframework.messaging.MessagingException;
 
 import java.util.Objects;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+/**
+ * <p>Spring Cloud Stream Context.</p>
+ * <p>Note: Parent class {@link PartitionCapableBinderTests} also inherits some unit tests. In general, do not
+ * subclass this class directly but instead use
+ * {@link com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension
+ * SpringCloudStreamExtension} to inject this
+ * context into tests.</p>
+ * @see com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension SpringCloudStreamExtension
+ */
 public class SpringCloudStreamContext extends PartitionCapableBinderTests<SolaceTestBinder,
 		ExtendedConsumerProperties<SolaceConsumerProperties>, ExtendedProducerProperties<SolaceProducerProperties>>
 		implements ExtensionContext.Store.CloseableResource {
@@ -68,6 +66,7 @@ public class SpringCloudStreamContext extends PartitionCapableBinderTests<Solace
 			if (jcsmpSession == null || jcsmpSession.isClosed()) {
 				throw new IllegalStateException("JCSMPSession cannot be null or closed");
 			}
+			logger.info("Creating new test binder");
 			testBinder = new SolaceTestBinder(jcsmpSession, sempV2Api);
 		}
 		return testBinder;
@@ -75,7 +74,18 @@ public class SpringCloudStreamContext extends PartitionCapableBinderTests<Solace
 
 	@Override
 	public ExtendedConsumerProperties<SolaceConsumerProperties> createConsumerProperties() {
-		return new ExtendedConsumerProperties<>(new SolaceConsumerProperties());
+		return createConsumerProperties(true);
+	}
+
+	public ExtendedConsumerProperties<SolaceConsumerProperties> createConsumerProperties(boolean useDefaultOverrides) {
+		ExtendedConsumerProperties<SolaceConsumerProperties> properties = new ExtendedConsumerProperties<>(
+				new SolaceConsumerProperties());
+
+		if (useDefaultOverrides) {
+			// Disable timeout for batch messaging consistency
+			properties.getExtension().setBatchTimeout(0);
+		}
+		return properties;
 	}
 
 	@Override
@@ -156,104 +166,6 @@ public class SpringCloudStreamContext extends PartitionCapableBinderTests<Solace
 	}
 
 	public <T> ConsumerInfrastructureUtil<T> createConsumerInfrastructureUtil(Class<T> type) {
-		return new ConsumerInfrastructureUtil<>(type);
-	}
-
-	/**
-	 * Utility class that abstracts away the differences between asynchronous and polled consumer-related operations.
-	 * @param <T> The channel type
-	 */
-	public class ConsumerInfrastructureUtil<T> {
-		private final Class<T> type;
-
-		private ConsumerInfrastructureUtil(Class<T> type) {
-			this.type = type;
-		}
-
-		public T createChannel(String channelName, BindingProperties bindingProperties) throws Exception {
-			if (type.equals(DirectChannel.class)) {
-				@SuppressWarnings("unchecked")
-				T channel = (T) createBindableChannel(channelName, bindingProperties);
-				return channel;
-			} else if (type.equals(PollableSource.class)) {
-				@SuppressWarnings("unchecked")
-				T channel = (T) createBindableMessageSource(channelName, bindingProperties);
-				return channel;
-			} else {
-				throw new UnsupportedOperationException("type not supported: " + type);
-			}
-		}
-
-		public Binding<T> createBinding(SolaceTestBinder binder, String destination, String group, T channel,
-										ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties) {
-			if (type.equals(DirectChannel.class)) {
-				@SuppressWarnings("unchecked")
-				Binding<T> binding = (Binding<T>) binder.bindConsumer(destination, group, (DirectChannel) channel,
-						consumerProperties);
-				return binding;
-			} else if (type.equals(PollableSource.class)) {
-				@SuppressWarnings("unchecked")
-				Binding<T> binding = (Binding<T>) binder.bindPollableConsumer(destination, group,
-						(PollableSource<MessageHandler>) channel, consumerProperties);
-				return binding;
-			} else {
-				throw new UnsupportedOperationException("type not supported: " + type);
-			}
-		}
-
-		public void sendAndSubscribe(T inputChannel, DirectChannel outputChannel, Message<?> message,
-									 Consumer<Message<?>> fnc) throws InterruptedException {
-			sendAndSubscribe(inputChannel, outputChannel, message, fnc, 1);
-		}
-
-		public void sendAndSubscribe(T inputChannel, DirectChannel outputChannel, Message<?> message,
-									 Consumer<Message<?>> fnc, int numMessagesToReceive) throws InterruptedException {
-			sendAndSubscribe(inputChannel, outputChannel, message, (msg, callback) -> {
-				fnc.accept(msg);
-				callback.run();
-			}, numMessagesToReceive);
-		}
-
-		public void sendAndSubscribe(T inputChannel, DirectChannel outputChannel, Message<?> message,
-									 BiConsumer<Message<?>, Runnable> fnc) throws InterruptedException {
-			sendAndSubscribe(inputChannel, outputChannel, message, fnc, 1);
-		}
-
-		public void sendAndSubscribe(T inputChannel, DirectChannel outputChannel, Message<?> message,
-									 BiConsumer<Message<?>, Runnable> fnc, int numMessagesToReceive)
-				throws InterruptedException {
-			if (type.equals(DirectChannel.class)) {
-				final CountDownLatch latch = new CountDownLatch(numMessagesToReceive);
-				((DirectChannel) inputChannel).subscribe(msg -> fnc.accept(msg, latch::countDown));
-
-				outputChannel.send(message);
-				assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
-			} else if (type.equals(PollableSource.class)) {
-				outputChannel.send(message);
-
-				@SuppressWarnings("unchecked")
-				PollableSource<MessageHandler> pollableSource = (PollableSource<MessageHandler>) inputChannel;
-				final CountDownLatch latch = new CountDownLatch(numMessagesToReceive);
-				for (int i = 0; latch.getCount() > 0 && i < 100; i ++) {
-					boolean gotMessage = false;
-					for (int j = 0; latch.getCount() > 0 && !gotMessage && j < 100; j++) {
-						LOGGER.info(String.format("Poll: %s, latch count: %s", (i * 100) + j, latch.getCount()));
-						try {
-							gotMessage = pollableSource.poll(msg -> fnc.accept(msg, latch::countDown));
-						} catch (MessagingException e) {
-							if (e.getCause() instanceof JCSMPTransportException &&
-									e.getCause().getMessage().contains("was closed while in receive")) {
-								LOGGER.info(String.format("Absorbing %s", JCSMPTransportException.class));
-							} else {
-								throw e;
-							}
-						}
-					}
-				}
-				assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
-			} else {
-				throw new UnsupportedOperationException("type not supported: " + type);
-			}
-		}
+		return new ConsumerInfrastructureUtil<>(this, type);
 	}
 }

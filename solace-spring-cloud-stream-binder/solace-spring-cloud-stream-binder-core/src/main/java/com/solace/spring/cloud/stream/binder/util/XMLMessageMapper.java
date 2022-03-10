@@ -27,20 +27,24 @@ import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AcknowledgmentCallback;
+import org.springframework.integration.support.AbstractIntegrationMessageBuilder;
 import org.springframework.integration.support.DefaultMessageBuilderFactory;
 import org.springframework.integration.support.MessageBuilder;
+import org.springframework.integration.support.MessageBuilderFactory;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.util.MimeType;
 import org.springframework.util.SerializationUtils;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -48,10 +52,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class XMLMessageMapper {
 	private static final Log logger = LogFactory.getLog(XMLMessageMapper.class);
 	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+	private static final MessageBuilderFactory MESSAGE_BUILDER_FACTORY = new DefaultMessageBuilderFactory();
 	static final int MESSAGE_VERSION = 1;
 	static final Encoder DEFAULT_ENCODING = Encoder.BASE64;
 
@@ -159,11 +166,42 @@ public class XMLMessageMapper {
 		return xmlMessage;
 	}
 
-	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback) throws SolaceMessageConversionException {
+	public Message<List<?>> mapBatchMessage(List<? extends XMLMessage> xmlMessages,
+											AcknowledgmentCallback acknowledgmentCallback)
+			throws SolaceMessageConversionException {
+		return mapBatchMessage(xmlMessages, acknowledgmentCallback, false);
+	}
+
+	public Message<List<?>> mapBatchMessage(List<? extends XMLMessage> xmlMessages,
+											AcknowledgmentCallback acknowledgmentCallback,
+											boolean setRawMessageHeader) throws SolaceMessageConversionException {
+		List<Map<String, Object>> batchedHeaders = new ArrayList<>();
+		List<Object> batchedPayloads = new ArrayList<>();
+		for (XMLMessage xmlMessage : xmlMessages) {
+			Message<?> message = mapInternal(xmlMessage).build();
+			batchedHeaders.add(message.getHeaders());
+			batchedPayloads.add(message.getPayload());
+		}
+
+		AbstractIntegrationMessageBuilder<List<?>> builder = MESSAGE_BUILDER_FACTORY.withPayload(batchedPayloads);
+		return injectRootMessageHeaders(builder, acknowledgmentCallback, setRawMessageHeader ? xmlMessages : null)
+				.setHeader(SolaceBinderHeaders.BATCHED_HEADERS, batchedHeaders)
+				.build();
+	}
+
+	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback)
+			throws SolaceMessageConversionException {
 		return map(xmlMessage, acknowledgmentCallback, false);
 	}
 
-	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback, boolean setRawMessageHeader) throws SolaceMessageConversionException {
+	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback,
+						  boolean setRawMessageHeader) throws SolaceMessageConversionException {
+		return injectRootMessageHeaders(mapInternal(xmlMessage), acknowledgmentCallback, setRawMessageHeader ?
+				xmlMessage : null).build();
+	}
+
+	private AbstractIntegrationMessageBuilder<?> mapInternal(XMLMessage xmlMessage)
+			throws SolaceMessageConversionException {
 		SDTMap metadata = xmlMessage.getProperties();
 
 		Object payload;
@@ -210,12 +248,10 @@ public class XMLMessageMapper {
 			}
 		}
 
-		MessageBuilder<?> builder = new DefaultMessageBuilderFactory()
+		AbstractIntegrationMessageBuilder<?> builder = MESSAGE_BUILDER_FACTORY
 				.withPayload(payload)
 				.copyHeaders(map(metadata))
-				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgmentCallback)
-				.setHeaderIfAbsent(MessageHeaders.CONTENT_TYPE, xmlMessage.getHTTPContentType())
-				.setHeaderIfAbsent(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, new AtomicInteger(0));
+				.setHeaderIfAbsent(MessageHeaders.CONTENT_TYPE, xmlMessage.getHTTPContentType());
 
 		if (isNullPayload) {
 			if (logger.isDebugEnabled()) {
@@ -242,11 +278,15 @@ public class XMLMessageMapper {
 			}
 		}
 
-		if (setRawMessageHeader) {
-			builder.setHeader(IntegrationMessageHeaderAccessor.SOURCE_DATA, xmlMessage);
-		}
+		return builder;
+	}
 
-		return builder.build();
+	private <T> AbstractIntegrationMessageBuilder<T> injectRootMessageHeaders(AbstractIntegrationMessageBuilder<T> builder,
+																		  AcknowledgmentCallback acknowledgmentCallback,
+																		  Object sourceData) {
+		return builder.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgmentCallback)
+				.setHeaderIfAbsent(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, new AtomicInteger(0))
+				.setHeader(IntegrationMessageHeaderAccessor.SOURCE_DATA, sourceData);
 	}
 
 	SDTMap map(MessageHeaders headers, Collection<String> excludedHeaders, boolean convertNonSerializableHeadersToString) {

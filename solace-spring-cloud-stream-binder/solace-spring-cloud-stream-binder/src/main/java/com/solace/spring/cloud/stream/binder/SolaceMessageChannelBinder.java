@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder;
 
+import com.solace.spring.cloud.stream.binder.inbound.BatchCollector;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
@@ -34,6 +35,7 @@ import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -99,7 +101,7 @@ public class SolaceMessageChannelBinder
 		SolaceConsumerDestination solaceDestination = (SolaceConsumerDestination) destination;
 
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(solaceDestination, jcsmpSession,
-				properties.getConcurrency(), taskService, properties.getExtension(),
+				properties.getConcurrency(), properties.isBatchMode(), taskService, properties.getExtension(),
 				getConsumerEndpointProperties(properties));
 
 		adapter.setRemoteStopFlag(consumersRemoteStopFlag);
@@ -137,8 +139,12 @@ public class SolaceMessageChannelBinder
 		SolaceConsumerDestination solaceDestination = (SolaceConsumerDestination) destination;
 
 		EndpointProperties endpointProperties = getConsumerEndpointProperties(consumerProperties);
-		JCSMPMessageSource messageSource = new JCSMPMessageSource(solaceDestination, jcsmpSession, taskService,
-				consumerProperties, endpointProperties);
+		JCSMPMessageSource messageSource = new JCSMPMessageSource(solaceDestination,
+				jcsmpSession,
+				consumerProperties.isBatchMode() ? new BatchCollector(consumerProperties.getExtension()) : null,
+				taskService,
+				consumerProperties,
+				endpointProperties);
 
 		messageSource.setRemoteStopFlag(consumersRemoteStopFlag::get);
 		messageSource.setPostStart(getConsumerPostStart(solaceDestination, consumerProperties));
@@ -159,7 +165,7 @@ public class SolaceMessageChannelBinder
 	protected void postProcessPollableSource(DefaultPollableMessageSource bindingTarget) {
 		bindingTarget.setAttributesProvider((accessor, message) -> {
 			Object sourceData = StaticMessageHeaderAccessor.getSourceData(message);
-			if (sourceData == null || sourceData instanceof XMLMessage) {
+			if (sourceData == null || sourceData instanceof XMLMessage || sourceData instanceof List) {
 				accessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_RAW_MESSAGE, sourceData);
 			}
 		});

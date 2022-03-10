@@ -3,7 +3,9 @@ package com.solace.spring.cloud.stream.binder.properties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
+import org.springframework.util.Assert;
 
+import javax.validation.constraints.Min;
 import java.util.concurrent.TimeUnit;
 
 import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties.DEFAULTS_PREFIX;
@@ -12,7 +14,24 @@ import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBin
 @ConfigurationProperties(DEFAULTS_PREFIX + ".consumer")
 public class SolaceConsumerProperties extends SolaceCommonProperties {
 	/**
+	 * <p>The maximum number of messages per batch.</p>
+	 * <p>Only applicable when {@code batchMode} is {@code true}.</p>
+	 */
+	@Min(1)
+	private int batchMaxSize = 255;
+
+	/**
+	 * <p>The maximum wait time in milliseconds to receive a batch of messages. If this timeout is reached, then the
+	 * messages that have already been received will be used to create the batch. A value of {@code 0} means wait
+	 * forever.</p>
+	 * <p>Only applicable when {@code batchMode} is {@code true}.</p>
+	 */
+	@Min(0)
+	private int batchTimeout = 5000;
+
+	/**
 	 * Maximum wait time for polled consumers to receive a message from their consumer group queue.
+	 * <p>Only applicable when {@code batchMode} is {@code false}.</p>
 	 */
 	private int polledConsumerWaitTimeInMillis = 100;
 	/**
@@ -111,6 +130,25 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 */
 	private Long errorMsgTtl = null;
 	// ------------------------
+
+
+	public int getBatchMaxSize() {
+		return batchMaxSize;
+	}
+
+	public void setBatchMaxSize(int batchMaxSize) {
+		Assert.isTrue(batchMaxSize >= 1, "max batch size must be greater than 0");
+		this.batchMaxSize = batchMaxSize;
+	}
+
+	public int getBatchTimeout() {
+		return batchTimeout;
+	}
+
+	public void setBatchTimeout(int batchTimeout) {
+		Assert.isTrue(batchTimeout >= 0, "batch timeout must be greater than or equal to 0");
+		this.batchTimeout = batchTimeout;
+	}
 
 	public int getPolledConsumerWaitTimeInMillis() {
 		return polledConsumerWaitTimeInMillis;

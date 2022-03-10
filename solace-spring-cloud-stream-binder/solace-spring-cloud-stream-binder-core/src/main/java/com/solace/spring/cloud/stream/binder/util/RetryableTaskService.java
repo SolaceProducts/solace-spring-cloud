@@ -30,8 +30,8 @@ public class RetryableTaskService {
 		}
 
 		if (!tasks.add(task)) {
-			if (logger.isDebugEnabled()) {
-				logger.debug(String.format("Skipping task submission. Task already exists: %s", task));
+			if (logger.isTraceEnabled()) {
+				logger.trace(String.format("Skipping task submission. Task already exists: %s", task));
 			}
 			return;
 		}

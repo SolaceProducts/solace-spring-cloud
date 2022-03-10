@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.messaging;
 
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -13,7 +14,8 @@ public class SolaceBinderHeaderMeta<T> implements HeaderMeta<T> {
 			{SolaceBinderHeaders.SERIALIZED_HEADERS, new SolaceBinderHeaderMeta<>(String.class, false, false, Scope.WIRE)},
 			{SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING, new SolaceBinderHeaderMeta<>(String.class, false, false, Scope.WIRE)},
 			{SolaceBinderHeaders.CONFIRM_CORRELATION, new SolaceBinderHeaderMeta<>(CorrelationData.class, false, false, Scope.LOCAL)},
-			{SolaceBinderHeaders.NULL_PAYLOAD, new SolaceBinderHeaderMeta<>(Boolean.class, true, false, Scope.LOCAL)}
+			{SolaceBinderHeaders.NULL_PAYLOAD, new SolaceBinderHeaderMeta<>(Boolean.class, true, false, Scope.LOCAL)},
+			{SolaceBinderHeaders.BATCHED_HEADERS, new SolaceBinderHeaderMeta<>(List.class, true, false, Scope.LOCAL)}
 	}).collect(Collectors.toMap(d -> (String) d[0], d -> (SolaceBinderHeaderMeta<?>) d[1]));
 
 	private final Class<T> type;
