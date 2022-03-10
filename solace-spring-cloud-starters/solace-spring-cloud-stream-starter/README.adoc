@@ -694,6 +694,64 @@ The consolidated list of message headers for a batch of messages where the heade
 | The encoding algorithm used to encode the headers indicated by `solace_scst_serializedHeaders`.
 |===
 
+== Native Payload Types
+
+Below are the payload types supported by this binder:
+
+[cols="1m,1,3", options="header"]
+|===
+| Payload Type | PubSub+ Message Type | Notes
+
+| byte[]
+| Binary Message
+| Basic PubSub+ payload type.
+
+| String
+| Text Message
+| Basic PubSub+ payload type.
+
+| SDTStream
+| Stream Message
+| Basic PubSub+ payload type.
+
+| SDTMap
+| Map Message
+| Basic PubSub+ payload type.
+
+| String
+| XML-Content Message
+| Basic PubSub+ payload type.
+
+Only available for consumption.
+
+| Serializable
+| Bytes Message
+| This is not a basic payload type supported by the PubSub+ broker, but is one defined and coordinated by this binder.
+
+**Publishing:**
+
+When a `Serializable` payload which doesn't satisfy any of the basic PubSub+ payload types is given to the binder to publish, the binder will serialize this payload to a `byte[]` and set the user property, `solace_scst_serializedPayload`, to `true`.
+
+**Consuming:**
+
+When the binder consumes a binary message which has the `solace_scst_serializedPayload` user property set to `true`, the binder will deserialize the binary attachment.
+|===
+
+[TIP]
+====
+Typically, the Spring Cloud Stream framework will convert a published payload into a `byte[]` before giving it to the binder. In which case, this binder will publish a binary message.
+
+If this occurs, but you wish to publish other message types, then one option is to set `useNativeEncoding=true` on your producer (https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_producer_properties[but read the caveats carefully before enabling this feature]), and have your message handler return a payload of one of this binder's supported native payload types; e.g. return `Message<SDTStream>` to publish a stream message.
+
+See https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#content-type-management[Content Type Negotiation] for more info on how Spring Cloud Streams converts payloads and other options to control message conversion.
+====
+
+=== Empty Payload VS Null Payload
+
+Spring messages can't contain null payloads, however, message handlers can differentiate between null payloads and empty payloads by looking at the `solace_scst_nullPayload` header. The binder adds the `solace_scst_nullPayload` header when a Solace message with null payload is consumed from the wire. When that is the case, the binder sets the Spring message's payload to a null equivalent payload. Null equivalent payloads are one of the following: empty `byte[]`, empty `String`, empty `SDTMap`, or empty `SDTStream`.
+
+NOTE: Applications can't differentiate between null payloads and empty payloads when consuming binary messages or XML-content messages from the wire. This is because Solace always converts empty payloads to null payloads when those message types are published.
+
 == Generated Queue Name Syntax
 
 By default, generated consumer group queue names have the following form:
@@ -796,7 +854,12 @@ If the Spring Cloud Stream framework fails to convert the batch message, conside
 * An explicit https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_common_binding_properties[`contentType`].
 ** e.g. `application/octet-stream` for `byte[]` messages.
 * https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_consumer_properties[`useNativeDecoding=true`] if the message handler is just consuming raw payload types.
-** e.g. if PubSub+ delivers a bytes message and the consumer message handler accepts `Message<List<byte[]>>`.
+** e.g. if PubSub+ delivers a binary message and the consumer message handler accepts `Message<List<byte[]>>`.
+** https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_consumer_properties[Read the caveats carefully before enabling this feature]
+
+See https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#content-type-management[Content Type Negotiation] for more info on how Spring Cloud Streams converts payloads and other options to control message conversion.
+
+See <<Native Payload Types>> for more info regarding this binder's natively supported payload types.
 ====
 
 To create a batch of messages, the binder will consume messages from the PubSub+ broker until either a maximum batch size or timeout has been achieved. After which, the binder will compose the batch message and send it to the consumer handler for processing. Both these batching parameters can be configured using the `batchMaxSize` and `batchTimeout` consumer config options.
@@ -889,12 +952,6 @@ public class MyMessageBuilder {
 <2> Apply the prefix to the target destination header.
 
 Also, this header is cleared by the message's producer before it is sent off to the message broker. So you should attach the target destination to your message payload if you want to get that information on the consumer-side.
-
-== Empty Payload VS Null Payload
-
-Spring messages can't contain null payloads, however, message handlers can differentiate between null payloads and empty payloads by looking at the `solace_scst_nullPayload` header. The binder adds the `solace_scst_nullPayload` header when a Solace message with null payload is consumed from the wire. When that is the case, the binder sets the Spring message's payload to a null equivalent payload. Null equivalent payloads are one of the following: empty byte[], empty String, empty SDTMap, or empty SDTStream.
-
-NOTE: Applications can't differentiate between null payloads and empty payloads when consuming bytes messages or XML-content messages from the wire. This is because Solace always converts empty payloads to null payloads when those message types are published.
 
 == Failed Consumer Message Error Handling
 
