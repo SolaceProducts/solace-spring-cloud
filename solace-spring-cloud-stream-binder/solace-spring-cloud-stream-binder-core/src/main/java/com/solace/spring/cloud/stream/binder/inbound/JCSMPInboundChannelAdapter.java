@@ -13,6 +13,7 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.context.OrderlyShutdownCapable;
+import org.springframework.integration.core.Pausable;
 import org.springframework.integration.endpoint.MessageProducerSupport;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessagingException;
@@ -34,7 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-public class JCSMPInboundChannelAdapter extends MessageProducerSupport implements OrderlyShutdownCapable {
+public class JCSMPInboundChannelAdapter extends MessageProducerSupport implements OrderlyShutdownCapable, Pausable {
 	private final String id = UUID.randomUUID().toString();
 	private final SolaceConsumerDestination consumerDestination;
 	private final JCSMPSession jcsmpSession;
@@ -43,7 +44,9 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final int concurrency;
 	private final RetryableTaskService taskService;
 	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
+	private final List<FlowReceiverContainer> flowReceivers;
 	private final Set<AtomicBoolean> consumerStopFlags;
+	private final AtomicBoolean paused = new AtomicBoolean(false);
 	private Consumer<Queue> postStart;
 	private ExecutorService executorService;
 	private AtomicBoolean remoteStopFlag;
@@ -66,6 +69,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		this.taskService = taskService;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
+		this.flowReceivers = new ArrayList<>(this.concurrency);
 		this.consumerStopFlags = new HashSet<>(this.concurrency);
 	}
 
@@ -95,16 +99,23 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName);
 
-		final List<FlowReceiverContainer> flowReceivers = new ArrayList<>(concurrency);
+		for (int i = 0, numToCreate = concurrency - flowReceivers.size(); i < numToCreate; i++) {
+			logger.info(String.format("Creating consumer %s of %s for inbound adapter %s", i + 1, concurrency, id));
+			FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
+			flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getFlowPreRebindWaitTimeout(),
+					TimeUnit.MILLISECONDS);
+			if (paused.get()) {
+				logger.info(String.format(
+						"Inbound adapter %s is paused, pausing newly created flow receiver container %s",
+						id, flowReceiverContainer.getId()));
+				flowReceiverContainer.pause();
+			}
+			flowReceivers.add(flowReceiverContainer);
+		}
 
 		try {
-			for (int i = 0; i < concurrency; i++) {
-				logger.info(String.format("Creating consumer %s of %s for inbound adapter %s", i + 1, concurrency, id));
-				FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
-				flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getFlowPreRebindWaitTimeout(),
-						TimeUnit.MILLISECONDS);
+			for (FlowReceiverContainer flowReceiverContainer : flowReceivers) {
 				flowReceiverContainer.bind();
-				flowReceivers.add(flowReceiverContainer);
 			}
 		} catch (JCSMPException e) {
 			String msg = String.format("Failed to get message consumer for inbound adapter %s", id);
@@ -234,6 +245,56 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			);
 		}
 		return listener;
+	}
+
+	@Override
+	public void pause() {
+		logger.info(String.format("Pausing inbound adapter %s", id));
+		flowReceivers.forEach(FlowReceiverContainer::pause);
+		paused.set(true);
+	}
+
+	@Override
+	public void resume() {
+		logger.info(String.format("Resuming inbound adapter %s", id));
+		try {
+			for (FlowReceiverContainer flowReceiver : flowReceivers) {
+				flowReceiver.resume();
+			}
+			paused.set(false);
+		} catch (Exception e) {
+			RuntimeException toThrow = new RuntimeException(
+					String.format("Failed to resume inbound adapter %s", id), e);
+			if (paused.get()) {
+				logger.error(String.format(
+						"Inbound adapter %s failed to be resumed. Resumed flow receiver containers will be re-paused",
+						id), e);
+				try {
+					pause();
+				} catch (Exception e1) {
+					toThrow.addSuppressed(e1);
+				}
+			}
+			throw toThrow;
+		}
+	}
+
+	@Override
+	public boolean isPaused() {
+		if (paused.get()) {
+			for (FlowReceiverContainer flowReceiverContainer : flowReceivers) {
+				if (!flowReceiverContainer.isPaused()) {
+					logger.warn(String.format(
+							"Flow receiver container %s is unexpectedly running for inbound adapter %s",
+							flowReceiverContainer.getId(), id));
+					return false;
+				}
+			}
+
+			return true;
+		} else {
+			return false;
+		}
 	}
 
 	private final class SolaceRetryListener implements RetryListener {
