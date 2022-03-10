@@ -38,6 +38,8 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junitpioneer.jupiter.cartesian.CartesianTest;
+import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
@@ -488,6 +490,275 @@ public class FlowReceiverContainerIT {
 		} finally {
 			executorService.shutdownNow();
 		}
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testPauseResume(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue, SempV2Api sempV2Api) throws Exception {
+		int defaultWindowSize = (int) jcsmpSession.getProperty(JCSMPProperties.SUB_ACK_WINDOW_SIZE);
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
+		assertThat(getTxFlows(sempV2Api, queue, 2), hasSize(0));
+		flowReceiverContainer.bind();
+		assertEquals(defaultWindowSize, getTxFlows(sempV2Api, queue, 2).get(0).getWindowSize());
+
+		flowReceiverContainer.pause();
+		assertTrue(flowReceiverContainer.isPaused());
+		assertEquals(0, getTxFlows(sempV2Api, queue, 1).get(0).getWindowSize());
+
+		flowReceiverContainer.resume();
+		assertFalse(flowReceiverContainer.isPaused());
+		assertEquals(defaultWindowSize, getTxFlows(sempV2Api, queue, 1).get(0).getWindowSize());
+	}
+
+	@CartesianTest(name = "[{index}] testResuming={0} isDurable={1}")
+	public void testPauseResumeANonBoundFlow(
+			@Values(booleans = {false, true}) boolean testResuming,
+			@Values(booleans = {false, true}) boolean isDurable,
+			JCSMPSession jcsmpSession,
+			Queue durableQueue,
+			SempV2Api sempV2Api) throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
+		if (testResuming) {
+			flowReceiverContainer.pause();
+		}
+
+		assertNull(flowReceiverContainer.getFlowReceiverReference());
+		assertEquals(testResuming, flowReceiverContainer.isPaused());
+
+		if (testResuming) {
+			flowReceiverContainer.resume();
+		} else {
+			flowReceiverContainer.pause();
+		}
+		assertNull(flowReceiverContainer.getFlowReceiverReference());
+		assertEquals(!testResuming, flowReceiverContainer.isPaused());
+		assertEquals(0, getTxFlows(sempV2Api, queue, 1).size());
+	}
+
+	@CartesianTest(name = "[{index}] testResuming={0} isDurable={1}")
+	public void testPauseResumeAnUnboundFlow(
+			@Values(booleans = {false, true}) boolean testResuming,
+			@Values(booleans = {false, true}) boolean isDurable,
+			JCSMPSession jcsmpSession,
+			Queue durableQueue,
+			SempV2Api sempV2Api) throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
+		flowReceiverContainer.bind();
+		flowReceiverContainer.unbind();
+
+		if (testResuming) {
+			flowReceiverContainer.pause();
+		}
+
+		assertNull(flowReceiverContainer.getFlowReceiverReference());
+		assertEquals(testResuming, flowReceiverContainer.isPaused());
+		if (testResuming) {
+			flowReceiverContainer.resume();
+		} else {
+			flowReceiverContainer.pause();
+		}
+		assertNull(flowReceiverContainer.getFlowReceiverReference());
+		assertEquals(!testResuming, flowReceiverContainer.isPaused());
+		assertEquals(0, getTxFlows(sempV2Api, queue, 1).size());
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testRebindWhilePaused(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue, SempV2Api sempV2Api) throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		int defaultWindowSize = (int) jcsmpSession.getProperty(JCSMPProperties.SUB_ACK_WINDOW_SIZE);
+		assertThat(getTxFlows(sempV2Api, queue, 2), hasSize(0));
+
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+		UUID flowReferenceId1 = flowReceiverContainer.bind();
+		List<MonitorMsgVpnQueueTxFlow> flows = getTxFlows(sempV2Api, queue, 2);
+		assertThat(flows, hasSize(1));
+		assertEquals(defaultWindowSize, flows.get(0).getWindowSize());
+
+		flowReceiverContainer.pause();
+		assertTrue(flowReceiverContainer.isPaused());
+		assertEquals(0, getTxFlows(sempV2Api, queue, 1).get(0).getWindowSize());
+
+		UUID flowReferenceId2 = flowReceiverContainer.rebind(flowReferenceId1);
+		assertNotEquals(flowReferenceId1, flowReferenceId2);
+
+		//Check paused state was preserved post rebind
+		assertTrue(flowReceiverContainer.isPaused());
+		flows = getTxFlows(sempV2Api, queue, 2);
+		assertThat(flows, hasSize(1));
+		assertEquals(0, flows.get(0).getWindowSize());
+
+		//Resume
+		flowReceiverContainer.resume();
+		assertFalse(flowReceiverContainer.isPaused());
+		flows = getTxFlows(sempV2Api, queue, 2);
+		assertThat(flows, hasSize(1));
+		assertEquals(defaultWindowSize, flows.get(0).getWindowSize());
+	}
+
+	@CartesianTest(name = "[{index}] testResuming={0} isDurable={1}")
+	public void testPauseResumeWhileRebinding(
+			@Values(booleans = {false, true}) boolean testResuming,
+			@Values(booleans = {false, true}) boolean isDurable,
+			JCSMPSession jcsmpSession,
+			Queue durableQueue,
+			SempV2Api sempV2Api) throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		if (testResuming) flowReceiverContainer.pause();
+
+		CountDownLatch midRebindLatch = new CountDownLatch(1);
+		CountDownLatch finishRebindLatch = new CountDownLatch(1);
+		Mockito.doAnswer(invocation -> {
+			midRebindLatch.countDown();
+			finishRebindLatch.await();
+			return invocation.callRealMethod();
+		}).when(flowReceiverContainer).bind();
+
+		ExecutorService executorService = Executors.newFixedThreadPool(2);
+		try {
+			assertEquals(testResuming, flowReceiverContainer.isPaused());
+
+			Future<UUID> rebindFuture = executorService.submit(() -> flowReceiverContainer.rebind(flowReferenceId));
+			assertTrue(midRebindLatch.await(1, TimeUnit.MINUTES));
+			Future<?> pauseResumeFuture = executorService.submit(testResuming ? () -> {
+				try {
+					flowReceiverContainer.resume();
+				} catch (JCSMPException e) {
+					throw new RuntimeException(e);
+				}
+			} : flowReceiverContainer::pause);
+			executorService.shutdown();
+
+			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+			assertFalse(rebindFuture.isDone());
+			assertFalse(pauseResumeFuture.isDone());
+			assertEquals(testResuming, flowReceiverContainer.isPaused());
+
+			finishRebindLatch.countDown();
+			pauseResumeFuture.get(1, TimeUnit.MINUTES);
+
+			assertEquals(testResuming, !flowReceiverContainer.isPaused()); //Pause state has flipped
+			List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(sempV2Api, queue, 2);
+			assertThat(txFlows, hasSize(1));
+			int defaultWindowSize = (int) jcsmpSession.getProperty(JCSMPProperties.SUB_ACK_WINDOW_SIZE);
+			assertEquals(testResuming ? defaultWindowSize : 0, txFlows.get(0).getWindowSize());
+		} finally {
+			executorService.shutdownNow();
+		}
+	}
+
+	@ParameterizedTest(name = "[{index}] isDurable={0}")
+	@ValueSource(booleans = {false, true})
+	public void testPauseWhileResuming(
+			boolean isDurable,
+			JCSMPSession jcsmpSession,
+			Queue durableQueue,
+			SempV2Api sempV2Api,
+			@ExecSvc ExecutorService executorService) throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
+		flowReceiverContainer.bind();
+		flowReceiverContainer.pause();
+		assertTrue(flowReceiverContainer.isPaused());
+
+		CountDownLatch midResumeLatch = new CountDownLatch(1);
+		// can't use latch, or else pause() will take write lock
+		CountDownLatch finishResumeLatch = new CountDownLatch(1);
+		Mockito.doAnswer(invocation -> {
+			// Call real method first since the potential race condition can happen right after
+			// this method returns in flowReceiverContainer.resume()
+			Object toReturn = invocation.callRealMethod();
+			midResumeLatch.countDown();
+			finishResumeLatch.await();
+			return toReturn;
+		}).when(flowReceiverContainer).doFlowReceiverReferenceResume();
+
+		Future<?> resumeFuture = executorService.submit(() -> {
+			try {
+				flowReceiverContainer.resume();
+			} catch (JCSMPException e) {
+				throw new RuntimeException(e);
+			}
+		});
+		assertTrue(midResumeLatch.await(1, TimeUnit.MINUTES));
+		Future<?> pauseFuture = executorService.submit(flowReceiverContainer::pause);
+		executorService.shutdown();
+
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		assertFalse(resumeFuture.isDone());
+		assertFalse(pauseFuture.isDone());
+		assertTrue(flowReceiverContainer.isPaused());
+
+		finishResumeLatch.countDown();
+		pauseFuture.get(1, TimeUnit.MINUTES);
+		resumeFuture.get(1, TimeUnit.MINUTES);
+		assertTrue(flowReceiverContainer.isPaused());
+
+		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(sempV2Api, queue, 2);
+		assertThat(txFlows, hasSize(1));
+		assertEquals(0, txFlows.get(0).getWindowSize());
+	}
+
+	@ParameterizedTest(name = "[{index}] isDurable={0}")
+	@ValueSource(booleans = {false, true})
+	public void testResumeWhilePausing(
+			boolean isDurable,
+			JCSMPSession jcsmpSession,
+			Queue durableQueue,
+			SempV2Api sempV2Api,
+			@ExecSvc ExecutorService executorService) throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
+		flowReceiverContainer.bind();
+		assertFalse(flowReceiverContainer.isPaused());
+
+		CountDownLatch midPauseLatch = new CountDownLatch(1);
+		CountDownLatch finishPauseLatch = new CountDownLatch(1);
+		Mockito.doAnswer(invocation -> {
+			// Call real method first since the potential race condition can happen right after
+			// this method returns in flowReceiverContainer.pause()
+			Object toReturn = invocation.callRealMethod();
+			midPauseLatch.countDown();
+			finishPauseLatch.await();
+			return toReturn;
+		}).when(flowReceiverContainer).doFlowReceiverReferencePause();
+
+		Future<?> pauseFuture = executorService.submit(flowReceiverContainer::pause);
+		assertTrue(midPauseLatch.await(1, TimeUnit.MINUTES));
+		Future<?> resumeFuture = executorService.submit(() -> {
+			try {
+				flowReceiverContainer.resume();
+			} catch (JCSMPException e) {
+				throw new RuntimeException(e);
+			}
+		});
+		executorService.shutdown();
+
+		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
+		assertFalse(pauseFuture.isDone());
+		assertFalse(resumeFuture.isDone());
+		assertFalse(flowReceiverContainer.isPaused());
+
+		finishPauseLatch.countDown();
+		resumeFuture.get(1, TimeUnit.MINUTES);
+		pauseFuture.get(1, TimeUnit.MINUTES);
+		assertFalse(flowReceiverContainer.isPaused());
+
+		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(sempV2Api, queue, 2);
+		assertThat(txFlows, hasSize(1));
+		int defaultWindowSize = (int) jcsmpSession.getProperty(JCSMPProperties.SUB_ACK_WINDOW_SIZE);
+		assertEquals(defaultWindowSize, txFlows.get(0).getWindowSize());
 	}
 
 	@ParameterizedTest

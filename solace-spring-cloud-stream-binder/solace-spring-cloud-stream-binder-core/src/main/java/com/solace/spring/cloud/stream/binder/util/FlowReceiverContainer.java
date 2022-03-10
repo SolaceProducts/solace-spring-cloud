@@ -38,6 +38,7 @@ public class FlowReceiverContainer {
 	private final EndpointProperties endpointProperties;
 	private final AtomicReference<FlowReceiverReference> flowReceiverAtomicReference = new AtomicReference<>();
 	private final AtomicBoolean isRebinding = new AtomicBoolean(false);
+	private final AtomicBoolean isPaused = new AtomicBoolean(false);
 	private final AtomicReference<SettableListenableFuture<UUID>> rebindFutureReference = new AtomicReference<>(
 			new SettableListenableFuture<>());
 
@@ -76,7 +77,7 @@ public class FlowReceiverContainer {
 	/**
 	 * <p>Create the {@link FlowReceiver} and {@link FlowReceiver#start() starts} it.</p>
 	 * <p>Does nothing if this container is already bound to a {@link FlowReceiver}.</p>
-	 * @return If no flow is bound, return the new flow reference ID. Otherwise return the existing flow reference ID.
+	 * @return If no flow is bound, return the new flow reference ID. Otherwise, return the existing flow reference ID.
 	 * @throws JCSMPException a JCSMP exception
 	 */
 	public UUID bind() throws JCSMPException {
@@ -93,10 +94,11 @@ public class FlowReceiverContainer {
 				logger.info(String.format("Flow receiver container %s is already bound to %s", id, existingFlowRefId));
 				return existingFlowRefId;
 			} else {
+				logger.info(String.format("Flow receiver container %s started in state '%s'", id, isPaused.get() ? "Paused" : "Running"));
 				final ConsumerFlowProperties flowProperties = new ConsumerFlowProperties()
 						.setEndpoint(JCSMPFactory.onlyInstance().createQueue(queueName))
 						.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT)
-						.setStartState(true);
+						.setStartState(!isPaused.get());
 				FlowReceiver flowReceiver = session.createFlow(null, flowProperties, endpointProperties, eventHandler);
 				FlowReceiverReference newFlowReceiverReference = new FlowReceiverReference(flowReceiver);
 				flowReceiverAtomicReference.set(newFlowReceiverReference);
@@ -554,6 +556,70 @@ public class FlowReceiverContainer {
 		return unit.convert(this.rebindWaitTimeout, this.rebindWaitTimeoutUnit);
 	}
 
+	public void pause() {
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
+		try {
+			logger.info(String.format("Pausing flow receiver container %s", id));
+			doFlowReceiverReferencePause();
+			isPaused.set(true);
+		} finally {
+			writeLock.unlock();
+		}
+	}
+
+	/**
+	 * <b>CAUTION:</b> DO NOT USE THIS. This is only exposed for testing. Use {@link #pause()} instead to pause
+	 * the flow receiver container.
+	 * @see #pause()
+	 */
+	void doFlowReceiverReferencePause() {
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
+		try {
+			FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+			if (flowReceiverReference != null) {
+				flowReceiverReference.pause();
+			}
+		} finally {
+			writeLock.unlock();
+		}
+	}
+
+	public void resume() throws JCSMPException {
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
+		try {
+			logger.info(String.format("Resuming flow receiver container %s", id));
+			doFlowReceiverReferenceResume();
+			isPaused.set(false);
+		} finally {
+			writeLock.unlock();
+		}
+	}
+
+	/**
+	 * <b>CAUTION:</b> DO NOT USE THIS. This is only exposed for testing. Use {@link #resume()} instead to resume
+	 * the flow receiver container.
+	 * @see #resume()
+	 */
+	void doFlowReceiverReferenceResume() throws JCSMPException {
+		Lock writeLock = readWriteLock.writeLock();
+		writeLock.lock();
+		try {
+			FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+			if (flowReceiverReference != null) {
+				flowReceiverReference.resume();
+			}
+		} finally {
+			writeLock.unlock();
+		}
+	}
+
+	public boolean isPaused() {
+		return isPaused.get();
+	}
+
 	/**
 	 * <p>Get the nested {@link FlowReceiver}.</p>
 	 * <p><b>Caution:</b> Instead of using this, consider instead implementing a new function with the required rebind
@@ -612,6 +678,14 @@ public class FlowReceiverContainer {
 
 		public AtomicBoolean getStaleMessagesFlag() {
 			return staleMessagesFlag;
+		}
+
+		private void pause() {
+			flowReceiver.stop();
+		}
+
+		private void resume() throws JCSMPException {
+			flowReceiver.start();
 		}
 
 		@Override

@@ -5,8 +5,11 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
+import com.solace.test.integration.semp.v2.SempV2Api;
+import com.solace.test.integration.semp.v2.config.ApiException;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
 import org.apache.commons.logging.Log;
@@ -37,15 +40,17 @@ public class SolaceTestBinder
 		extends AbstractPollableConsumerTestBinder<SolaceMessageChannelBinder, ExtendedConsumerProperties<SolaceConsumerProperties>, ExtendedProducerProperties<SolaceProducerProperties>> {
 
 	private final JCSMPSession jcsmpSession;
+	private final SempV2Api sempV2Api;
 	private final AnnotationConfigApplicationContext applicationContext;
 	private final Set<String> queues = new HashSet<>();
 	private final Map<String, String> bindingNameToQueueName = new HashMap<>();
 	private final Map<String, String> bindingNameToErrorQueueName = new HashMap<>();
 	private static final Log logger = LogFactory.getLog(SolaceTestBinder.class);
 
-	public SolaceTestBinder(JCSMPSession jcsmpSession) {
+	public SolaceTestBinder(JCSMPSession jcsmpSession, SempV2Api sempV2Api) {
 		this.applicationContext = new AnnotationConfigApplicationContext(Config.class);
 		this.jcsmpSession = jcsmpSession;
+		this.sempV2Api = sempV2Api;
 		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, new SolaceQueueProvisioner(jcsmpSession));
 		binder.setApplicationContext(this.applicationContext);
 		this.setPollableConsumerBinder(binder);
@@ -156,7 +161,14 @@ public class SolaceTestBinder
 				}
 				jcsmpSession.deprovision(queue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
 			} catch (JCSMPException e) {
-				throw new RuntimeException(e);
+				try {
+					sempV2Api.config().deleteMsgVpnQueue(
+							(String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME), queueName);
+				} catch (ApiException e1) {
+					RuntimeException toThrow = new RuntimeException(e);
+					toThrow.addSuppressed(e1);
+					throw toThrow;
+				}
 			}
 		}
 	}
