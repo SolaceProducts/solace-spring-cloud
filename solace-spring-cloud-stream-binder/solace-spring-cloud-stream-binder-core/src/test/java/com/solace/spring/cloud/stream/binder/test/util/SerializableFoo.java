@@ -1,13 +1,13 @@
-package com.solace.spring.cloud.stream.binder.util;
+package com.solace.spring.cloud.stream.binder.test.util;
 
 import java.io.Serializable;
 import java.util.Objects;
 
-class SerializableFoo implements Serializable {
-	private String someVar0;
-	private String someVar1;
+public class SerializableFoo implements Serializable {
+	private final String someVar0;
+	private final String someVar1;
 
-	SerializableFoo(String someVar0, String someVar1) {
+	public SerializableFoo(String someVar0, String someVar1) {
 		this.someVar0 = someVar0;
 		this.someVar1 = someVar1;
 	}

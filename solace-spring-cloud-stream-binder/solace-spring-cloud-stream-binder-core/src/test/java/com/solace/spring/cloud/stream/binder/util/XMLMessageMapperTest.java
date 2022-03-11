@@ -11,6 +11,8 @@ import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.test.util.SerializableFoo;
+import com.solace.spring.cloud.stream.binder.test.util.ThrowingFunction;
 import com.solacesystems.jcsmp.BytesMessage;
 import com.solacesystems.jcsmp.DeliveryMode;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -23,17 +25,32 @@ import com.solacesystems.jcsmp.StreamMessage;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLContentMessage;
 import com.solacesystems.jcsmp.XMLMessage;
-import org.apache.commons.lang.RandomStringUtils;
-import org.apache.commons.lang.math.RandomUtils;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.assertj.core.api.Assertions;
+import org.assertj.core.api.InstanceOfAssertFactories;
+import org.assertj.core.api.MapAssert;
 import org.hamcrest.CoreMatchers;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.Named;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.function.ThrowingConsumer;
+import org.junit.jupiter.api.function.ThrowingSupplier;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.junitpioneer.jupiter.cartesian.CartesianArgumentsProvider;
+import org.junitpioneer.jupiter.cartesian.CartesianArgumentsSource;
+import org.junitpioneer.jupiter.cartesian.CartesianTest;
+import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.mockito.Mockito;
-import org.mockito.MockitoAnnotations;
 import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cloud.stream.binder.BinderHeaders;
+import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.support.DefaultMessageBuilderFactory;
@@ -43,7 +60,10 @@ import org.springframework.messaging.MessageHeaders;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.util.SerializationUtils;
+import org.testcontainers.shaded.org.apache.commons.lang.math.RandomUtils;
 
+import java.lang.reflect.Array;
+import java.lang.reflect.Parameter;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Base64;
@@ -55,7 +75,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.hamcrest.CoreMatchers.not;
@@ -67,16 +89,17 @@ import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasKey;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.instanceOf;
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThrows;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
+@ExtendWith(MockitoExtension.class)
 public class XMLMessageMapperTest {
 	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 	private final ObjectWriter objectWriter = OBJECT_MAPPER.writer();
@@ -84,11 +107,6 @@ public class XMLMessageMapperTest {
 
 	@Spy
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
-
-	@Before
-	public void setupMockito() {
-		MockitoAnnotations.initMocks(this);
-	}
 
 	private static final Log logger = LogFactory.getLog(XMLMessageMapperTest.class);
 	private static final Set<String> JMS_INVALID_HEADER_NAMES = new HashSet<>(Arrays.asList("~ab;c", "NULL",
@@ -115,7 +133,7 @@ public class XMLMessageMapperTest {
 
 		assertThat(xmlMessage, CoreMatchers.instanceOf(BytesMessage.class));
 		assertEquals(testSpringMessage.getPayload(), ((BytesMessage) xmlMessage).getData());
-		validateXMLMessage(xmlMessage, testSpringMessage);
+		validateXMLProperties(xmlMessage, testSpringMessage);
 	}
 
 	@Test
@@ -131,7 +149,7 @@ public class XMLMessageMapperTest {
 
 		assertThat(xmlMessage, CoreMatchers.instanceOf(TextMessage.class));
 		assertEquals(testSpringMessage.getPayload(), ((TextMessage) xmlMessage).getText());
-		validateXMLMessage(xmlMessage, testSpringMessage);
+		validateXMLProperties(xmlMessage, testSpringMessage);
 	}
 
 	@Test
@@ -151,7 +169,7 @@ public class XMLMessageMapperTest {
 		assertThat(xmlMessage.getProperties().keySet(),
 				hasItem(SolaceBinderHeaders.SERIALIZED_PAYLOAD));
 		assertEquals(true, xmlMessage.getProperties().getBoolean(SolaceBinderHeaders.SERIALIZED_PAYLOAD));
-		validateXMLMessage(xmlMessage, testSpringMessage);
+		validateXMLProperties(xmlMessage, testSpringMessage);
 	}
 
 	@Test
@@ -172,7 +190,7 @@ public class XMLMessageMapperTest {
 
 		assertThat(xmlMessage, CoreMatchers.instanceOf(StreamMessage.class));
 		assertEquals(testSpringMessage.getPayload(), ((StreamMessage) xmlMessage).getStream());
-		validateXMLMessage(xmlMessage, testSpringMessage);
+		validateXMLProperties(xmlMessage, testSpringMessage);
 	}
 
 	@Test
@@ -193,7 +211,7 @@ public class XMLMessageMapperTest {
 
 		assertThat(xmlMessage, CoreMatchers.instanceOf(MapMessage.class));
 		assertEquals(testSpringMessage.getPayload(), ((MapMessage) xmlMessage).getMap());
-		validateXMLMessage(xmlMessage, testSpringMessage);
+		validateXMLProperties(xmlMessage, testSpringMessage);
 	}
 
 	@Test
@@ -208,7 +226,7 @@ public class XMLMessageMapperTest {
 				.flatMap(h -> h)
 				.filter(h -> h.getValue().isWritable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, writeableHeaders.size());
+		assertNotEquals(0, writeableHeaders.size(), "Test header set was empty");
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
 			Object value;
@@ -222,6 +240,9 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceHeaders.DMQ_ELIGIBLE:
 					value = !(Boolean) ((SolaceHeaderMeta<?>) header.getValue()).getDefaultValueOverride();
+					break;
+				case SolaceHeaders.IS_REPLY:
+					value = true; //The opposite of what a Solace message defaults to
 					break;
 				case SolaceHeaders.EXPIRATION:
 				case SolaceHeaders.SENDER_TIMESTAMP:
@@ -267,6 +288,9 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.EXPIRATION:
 					assertEquals(expectedValue, xmlMessage.getExpiration());
 					break;
+				case SolaceHeaders.IS_REPLY:
+					assertEquals(expectedValue, xmlMessage.isReplyMessage());
+					break;
 				case SolaceHeaders.HTTP_CONTENT_ENCODING:
 					assertEquals(expectedValue, xmlMessage.getHTTPContentEncoding());
 					break;
@@ -296,7 +320,7 @@ public class XMLMessageMapperTest {
 			}
 		}
 
-		validateXMLMessage(xmlMessage, testSpringMessage);
+		validateXMLProperties(xmlMessage, testSpringMessage);
 	}
 
 	@Test
@@ -311,10 +335,10 @@ public class XMLMessageMapperTest {
 				.flatMap(h -> h)
 				.filter(h -> !h.getValue().isWritable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, nonWriteableHeaders.size());
+		assertNotEquals(0, nonWriteableHeaders.size(), "Test header set was empty");
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : nonWriteableHeaders) {
-			// Doesn't matter what we said the values to
+			// Doesn't matter what we set the values to
 			messageBuilder.setHeader(header.getKey(), new Object());
 		}
 
@@ -325,6 +349,9 @@ public class XMLMessageMapperTest {
 			switch (header.getKey()) {
 				case SolaceHeaders.REPLICATION_GROUP_MESSAGE_ID:
 					assertNull(xmlMessage.getReplicationGroupMessageId());
+					break;
+				case SolaceHeaders.DELIVERY_COUNT:
+					assertThrows(UnsupportedOperationException.class, xmlMessage::getDeliveryCount);
 					break;
 				case SolaceHeaders.DESTINATION:
 					assertNull(xmlMessage.getDestination());
@@ -352,9 +379,9 @@ public class XMLMessageMapperTest {
 					assertEquals("base64", xmlMessage.getProperties().getString(header.getKey()));
 					break;
 				case SolaceBinderHeaders.SERIALIZED_PAYLOAD:
-					assertNull(xmlMessage.getProperties().get(header.getKey()));
-					break;
+				case SolaceBinderHeaders.BATCHED_HEADERS:
 				case SolaceBinderHeaders.CONFIRM_CORRELATION:
+				case SolaceBinderHeaders.NULL_PAYLOAD:
 					assertNull(xmlMessage.getProperties().get(header.getKey()));
 					break;
 				default:
@@ -362,7 +389,7 @@ public class XMLMessageMapperTest {
 			}
 		}
 
-		validateXMLMessage(xmlMessage, testSpringMessage,
+		validateXMLProperties(xmlMessage, testSpringMessage,
 				testSpringMessage.getHeaders()
 						.entrySet()
 						.stream()
@@ -400,7 +427,7 @@ public class XMLMessageMapperTest {
 		assertThat(serializedHeaders, not(empty()));
 		assertThat(serializedHeaders, hasItem("solace_foo2"));
 
-		validateXMLMessage(xmlMessage, testSpringMessage);
+		validateXMLProperties(xmlMessage, testSpringMessage);
 	}
 
 	@Test
@@ -411,7 +438,7 @@ public class XMLMessageMapperTest {
 				.filter(h -> h.getValue().isWritable())
 				.filter(h -> h.getValue().hasOverriddenDefaultValue())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, overriddenWriteableHeaders.size());
+		assertNotEquals(0, overriddenWriteableHeaders.size(), "Test header set was empty");
 
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory()
 				.withPayload("")
@@ -429,13 +456,14 @@ public class XMLMessageMapperTest {
 			}
 		}
 
-		validateXMLMessage(xmlMessage, testSpringMessage);
+		validateXMLProperties(xmlMessage, testSpringMessage);
 	}
 
-	@Test(expected = SolaceMessageConversionException.class)
+	@Test
 	public void testFailMapSpringMessageToXMLMessage_InvalidPayload() {
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload(new Object()).build();
-		xmlMessageMapper.map(testSpringMessage, null, false);
+		assertThrows(SolaceMessageConversionException.class, () -> xmlMessageMapper.map(testSpringMessage,
+				null, false));
 	}
 
 	@Test
@@ -446,7 +474,7 @@ public class XMLMessageMapperTest {
 				.flatMap(h -> h)
 				.filter(h -> h.getValue().isWritable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, writeableHeaders.size());
+		assertNotEquals(0, writeableHeaders.size(), "Test header set was empty");
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
 			Message<?> testSpringMessage = new DefaultMessageBuilderFactory().withPayload("")
@@ -546,7 +574,7 @@ public class XMLMessageMapperTest {
 				.flatMap(h -> h)
 				.filter(h -> h.getValue().isWritable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, writeableHeaders.size());
+		assertNotEquals(0, writeableHeaders.size(), "Test header set was empty");
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
 			Object value;
@@ -560,6 +588,9 @@ public class XMLMessageMapperTest {
 				break;
 			case SolaceHeaders.DMQ_ELIGIBLE:
 				value = !(Boolean) ((SolaceHeaderMeta<?>) header.getValue()).getDefaultValueOverride();
+				break;
+			case SolaceHeaders.IS_REPLY:
+				value = true; //The opposite of what a Solace message defaults to
 				break;
 			case SolaceHeaders.EXPIRATION:
 			case SolaceHeaders.SENDER_TIMESTAMP:
@@ -612,6 +643,9 @@ public class XMLMessageMapperTest {
 			case SolaceHeaders.HTTP_CONTENT_ENCODING:
 				assertEquals(expectedValue, xmlMessage.getHTTPContentEncoding());
 				break;
+			case SolaceHeaders.IS_REPLY:
+				assertEquals(expectedValue, xmlMessage.isReplyMessage());
+				break;
 			case SolaceHeaders.PRIORITY:
 				assertEquals(expectedValue, xmlMessage.getPriority());
 				break;
@@ -647,181 +681,171 @@ public class XMLMessageMapperTest {
 		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders, false);
 	}
 
-	@Test
-	public void testMapXMLMessageToSpringMessage_ByteArray() throws Exception {
-		BytesMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
-		xmlMessage.setData("testPayload".getBytes(StandardCharsets.UTF_8));
+	@ParameterizedTest
+	@MethodSource("xmlMessageTypeProviders")
+	public <T, MT extends XMLMessage> void testMapXMLMessageToSpringMessage(
+			XmlMessageTypeProvider<T, MT> xmlMessageTypeProvider) throws Throwable {
+		MT xmlMessage = JCSMPFactory.onlyInstance().createMessage(xmlMessageTypeProvider.getXmlMessageType());
+		T expectedPayload = xmlMessageTypeProvider.createPayload();
+		xmlMessageTypeProvider.setXMLMessagePayload(xmlMessage, expectedPayload);
+
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
+		metadata.putString(MessageHeaders.CONTENT_TYPE, xmlMessageTypeProvider.getMimeType().toString());
 		metadata.putString("test-header-1", "test-header-val-1");
 		metadata.putString("test-header-2", "test-header-val-2");
-		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.APPLICATION_OCTET_STREAM_VALUE);
+		xmlMessageTypeProvider.injectAdditionalXMLMessageProperties(metadata);
 		xmlMessage.setProperties(metadata);
 
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
 		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
 
-		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(byte[].class));
-		assertArrayEquals(xmlMessage.getData(), (byte[]) springMessage.getPayload());
-		validateSpringMessage(springMessage, xmlMessage);
+		validateSpringPayload(springMessage.getPayload(), expectedPayload);
+		validateSpringHeaders(springMessage.getHeaders(), xmlMessage);
+		assertNull(StaticMessageHeaderAccessor.getSourceData(springMessage));
 	}
 
-	@Test
-	public void testMapXMLMessageToSpringMessage_String() throws Exception {
-		TextMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-		xmlMessage.setText("testPayload");
-		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
-		metadata.putString("test-header-1", "test-header-val-1");
-		metadata.putString("test-header-2", "test-header-val-2");
-		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
-		xmlMessage.setProperties(metadata);
+	@ParameterizedTest
+	@MethodSource("xmlMessageTypeProviders")
+	public <T, MT extends XMLMessage> void testMapXMLMessageToSpringMessageBatch(
+			XmlMessageTypeProvider<T, MT> xmlMessageTypeProvider) {
+		List<T> expectedPayloads = IntStream.range(0, 256)
+				.mapToObj(i -> xmlMessageTypeProvider.createPayload())
+				.collect(Collectors.toList());
+		List<MT> xmlMessages = expectedPayloads.stream()
+				.map((ThrowingFunction<T, MT>) payload -> {
+					MT m = JCSMPFactory.onlyInstance().createMessage(xmlMessageTypeProvider.getXmlMessageType());
+					xmlMessageTypeProvider.setXMLMessagePayload(m, payload);
+					SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
+					metadata.putString(MessageHeaders.CONTENT_TYPE, xmlMessageTypeProvider.getMimeType().toString());
+					metadata.putString("test-header-1", "test-header-val-1");
+					metadata.putString("test-header-2", "test-header-val-2");
+					xmlMessageTypeProvider.injectAdditionalXMLMessageProperties(metadata);
+					m.setProperties(metadata);
+					return m;
+				})
+				.collect(Collectors.toList());
 
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
+		Message<List<?>> springMessage = xmlMessageMapper.mapBatchMessage(xmlMessages, acknowledgmentCallback);
+		Mockito.verify(xmlMessageMapper).mapBatchMessage(xmlMessages, acknowledgmentCallback, false);
 
-		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(String.class));
-		assertEquals(xmlMessage.getText(), springMessage.getPayload());
-		validateSpringMessage(springMessage, xmlMessage);
+		validateSpringBatchPayload(springMessage.getPayload(), expectedPayloads);
+		validateSpringBatchHeaders(springMessage.getHeaders(), xmlMessages);
+		assertNull(StaticMessageHeaderAccessor.getSourceData(springMessage));
 	}
 
-	@Test
-	public void testMapXMLMessageToSpringMessage_Serializable() throws Exception {
-		BytesMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
-		SerializableFoo expectedPayload = new SerializableFoo("abc123", "HOOPLA!!");
-		xmlMessage.setData(SerializationUtils.serialize(expectedPayload));
+	@ParameterizedTest
+	@MethodSource("xmlMessageTypeProviders")
+	public <T, MT extends XMLMessage> void testMapXMLMessageToSpringMessage_WithRawMessageHeader(
+			XmlMessageTypeProvider<T, MT> xmlMessageTypeProvider) throws Throwable {
+		MT xmlMessage = JCSMPFactory.onlyInstance().createMessage(xmlMessageTypeProvider.getXmlMessageType());
+		T expectedPayload = xmlMessageTypeProvider.createPayload();
+		xmlMessageTypeProvider.setXMLMessagePayload(xmlMessage, expectedPayload);
+
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
+		metadata.putString(MessageHeaders.CONTENT_TYPE, xmlMessageTypeProvider.getMimeType().toString());
 		metadata.putString("test-header-1", "test-header-val-1");
 		metadata.putString("test-header-2", "test-header-val-2");
-		metadata.putString(MessageHeaders.CONTENT_TYPE, "application/x-java-serialized-object");
-		metadata.putBoolean(SolaceBinderHeaders.SERIALIZED_PAYLOAD, true);
+		xmlMessageTypeProvider.injectAdditionalXMLMessageProperties(metadata);
 		xmlMessage.setProperties(metadata);
 
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
-
-		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(SerializableFoo.class));
-		assertEquals(expectedPayload, springMessage.getPayload());
-		validateSpringMessage(springMessage, xmlMessage);
-	}
-
-	@Test
-	public void testMapXMLMessageToSpringMessage_STDStream() throws Exception {
-		SDTStream expectedPayload = JCSMPFactory.onlyInstance().createStream();
-		expectedPayload.writeBoolean(true);
-		expectedPayload.writeCharacter('s');
-		expectedPayload.writeMap(JCSMPFactory.onlyInstance().createMap());
-		expectedPayload.writeStream(JCSMPFactory.onlyInstance().createStream());
-		StreamMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(StreamMessage.class);
-		xmlMessage.setStream(expectedPayload);
-		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
-		metadata.putString("test-header-1", "test-header-val-1");
-		metadata.putString("test-header-2", "test-header-val-2");
-		metadata.putString(MessageHeaders.CONTENT_TYPE, "application/x-java-serialized-object");
-		xmlMessage.setProperties(metadata);
-
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
-
-		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(SDTStream.class));
-		assertEquals(expectedPayload, springMessage.getPayload());
-		validateSpringMessage(springMessage, xmlMessage);
-	}
-
-	@Test
-	public void testMapXMLMessageToSpringMessage_STDMap() throws Exception {
-		SDTMap expectedPayload = JCSMPFactory.onlyInstance().createMap();
-		expectedPayload.putBoolean("a", true);
-		expectedPayload.putCharacter("b", 's');
-		expectedPayload.putMap("c", JCSMPFactory.onlyInstance().createMap());
-		expectedPayload.putStream("d", JCSMPFactory.onlyInstance().createStream());
-		MapMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(MapMessage.class);
-		xmlMessage.setMap(expectedPayload);
-		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
-		metadata.putString("test-header-1", "test-header-val-1");
-		metadata.putString("test-header-2", "test-header-val-2");
-		metadata.putString(MessageHeaders.CONTENT_TYPE, "application/x-java-serialized-object");
-		xmlMessage.setProperties(metadata);
-
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
-
-		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(SDTMap.class));
-		assertEquals(expectedPayload, springMessage.getPayload());
-		validateSpringMessage(springMessage, xmlMessage);
-	}
-
-	@Test
-	public void testMapXMLMessageToSpringMessage_XMLContent() throws Exception {
-		XMLContentMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(XMLContentMessage.class);
-		xmlMessage.setXMLContent("<a><b>testPayload</b><c>testPayload2</c></a>");
-		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
-		metadata.putString("test-header-1", "test-header-val-1");
-		metadata.putString("test-header-2", "test-header-val-2");
-		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_XML_VALUE);
-		xmlMessage.setProperties(metadata);
-
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
-
-		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(String.class));
-		assertEquals(xmlMessage.getXMLContent(), springMessage.getPayload());
-		validateSpringMessage(springMessage, xmlMessage);
-	}
-
-	@Test
-	public void testMapXMLMessageToSpringMessage_WithRawMessageHeader() throws Exception {
-		BytesMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
-		SerializableFoo expectedPayload = new SerializableFoo("abc123", "HOOPLA!!");
-		xmlMessage.setData(SerializationUtils.serialize(expectedPayload));
-		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
-		metadata.putString("test-header-1", "test-header-val-1");
-		metadata.putString("test-header-2", "test-header-val-2");
-		metadata.putString(MessageHeaders.CONTENT_TYPE, "application/x-java-serialized-object");
-		metadata.putBoolean(SolaceBinderHeaders.SERIALIZED_PAYLOAD, true);
-		xmlMessage.setProperties(metadata);
-
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback, true);
 
-		assertThat(springMessage.getPayload(), CoreMatchers.instanceOf(SerializableFoo.class));
-		assertEquals(expectedPayload, springMessage.getPayload());
-		validateSpringMessage(springMessage, xmlMessage);
-
+		validateSpringPayload(springMessage.getPayload(), expectedPayload);
+		validateSpringHeaders(springMessage.getHeaders(), xmlMessage);
 		assertEquals(xmlMessage, StaticMessageHeaderAccessor.getSourceData(springMessage));
 	}
 
-	@Test
-	public void testMapXMLMessageToSpringMessage_WithContentTypeHeaderAndHTTPContentType() throws Exception {
-		TextMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-		xmlMessage.setText("testPayload");
+	@ParameterizedTest
+	@MethodSource("xmlMessageTypeProviders")
+	public <T, MT extends XMLMessage> void testMapXMLMessageToSpringMessageBatch_WithRawMessageHeader(
+			XmlMessageTypeProvider<T, MT> xmlMessageTypeProvider) {
+		List<T> expectedPayloads = IntStream.range(0, 256)
+				.mapToObj(i -> xmlMessageTypeProvider.createPayload())
+				.collect(Collectors.toList());
+		List<MT> xmlMessages = expectedPayloads.stream()
+				.map((ThrowingFunction<T, MT>) payload -> {
+					MT m = JCSMPFactory.onlyInstance().createMessage(xmlMessageTypeProvider.getXmlMessageType());
+					xmlMessageTypeProvider.setXMLMessagePayload(m, payload);
+					SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
+					metadata.putString(MessageHeaders.CONTENT_TYPE, xmlMessageTypeProvider.getMimeType().toString());
+					metadata.putString("test-header-1", "test-header-val-1");
+					metadata.putString("test-header-2", "test-header-val-2");
+					xmlMessageTypeProvider.injectAdditionalXMLMessageProperties(metadata);
+					m.setProperties(metadata);
+					return m;
+				})
+				.collect(Collectors.toList());
+
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
+		Message<List<?>> springMessage = xmlMessageMapper.mapBatchMessage(xmlMessages, acknowledgmentCallback, true);
+
+		validateSpringBatchPayload(springMessage.getPayload(), expectedPayloads);
+		validateSpringBatchHeaders(springMessage.getHeaders(), xmlMessages);
+		assertEquals(xmlMessages, StaticMessageHeaderAccessor.getSourceData(springMessage));
+		Assertions.assertThat(springMessage.getHeaders())
+				.extractingByKey(SolaceBinderHeaders.BATCHED_HEADERS)
+				.asList()
+				.allSatisfy(springMessageHeaders -> Assertions.assertThat(springMessageHeaders)
+						.asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
+						.doesNotContainKey(IntegrationMessageHeaderAccessor.SOURCE_DATA));
+	}
+
+	@CartesianTest(name = "[{index}] {0} batchMode={1}")
+	public <T, MT extends XMLMessage> void testMapXMLMessageToSpringMessage_WithContentTypeHeaderAndHTTPContentType(
+			@CartesianArgumentsSource(XmlMessageTypeCartesianProvider.class)
+					Named<XmlMessageTypeProvider<T, MT>> namedXmlMessageTypeProvider,
+			@Values(booleans = {false, true}) boolean batchMode) throws Throwable {
+		XmlMessageTypeProvider<T, MT> xmlMessageTypeProvider = namedXmlMessageTypeProvider.getPayload();
+		MT xmlMessage = JCSMPFactory.onlyInstance().createMessage(xmlMessageTypeProvider.getXmlMessageType());
+		T expectedPayload = xmlMessageTypeProvider.createPayload();
+		xmlMessageTypeProvider.setXMLMessagePayload(xmlMessage, expectedPayload);
+
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
-		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
+		metadata.putString(MessageHeaders.CONTENT_TYPE, xmlMessageTypeProvider.getMimeType().toString());
+		xmlMessageTypeProvider.injectAdditionalXMLMessageProperties(metadata);
 		xmlMessage.setProperties(metadata);
 		xmlMessage.setHTTPContentType(MimeTypeUtils.TEXT_HTML_VALUE);
 
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
+		Message<?> springMessage;
+		MessageHeaders springMessageHeaders;
+		if (batchMode) {
+			List<MT> xmlMessages = Collections.singletonList(xmlMessage);
+			springMessage = xmlMessageMapper.mapBatchMessage(xmlMessages, acknowledgmentCallback);
+			Mockito.verify(xmlMessageMapper).mapBatchMessage(xmlMessages, acknowledgmentCallback, false);
+			@SuppressWarnings("unchecked")
+			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
+					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+			springMessageHeaders = new MessageHeaders(messageHeaders);
+		} else {
+			springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+			Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
+			springMessageHeaders = springMessage.getHeaders();
+		}
 
 		assertEquals(metadata.getString(MessageHeaders.CONTENT_TYPE),
-				Objects.requireNonNull(StaticMessageHeaderAccessor.getContentType(springMessage)).toString());
-		validateSpringMessage(springMessage, xmlMessage);
+				springMessageHeaders.get(MessageHeaders.CONTENT_TYPE));
+
+		if (batchMode) {
+			validateSpringBatchHeaders(springMessage.getHeaders(), Collections.singletonList(xmlMessage));
+		} else {
+			validateSpringHeaders(springMessage.getHeaders(), xmlMessage);
+		}
 	}
 
-	@Test
-	public void testMapXMLMessageToSpringMessage_ReadSolaceProperties() throws Exception {
+	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@ValueSource(booleans = {false, true})
+	public void testMapXMLMessageToSpringMessage_ReadSolaceProperties(boolean batchMode) throws Exception {
 		Set<Map.Entry<String, ? extends HeaderMeta<?>>> readableHeaders = Stream.of(
 					SolaceHeaderMeta.META.entrySet().stream(),
 					SolaceBinderHeaderMeta.META.entrySet().stream())
 				.flatMap(h -> h)
 				.filter(h -> h.getValue().isReadable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, readableHeaders.size());
+		assertNotEquals(0, readableHeaders.size(), "Test header set was empty");
 
 		XMLMessage defaultXmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 		TextMessage xmlMessage = Mockito.mock(TextMessage.class); // Some properties are read-only. Need to mock
@@ -839,6 +863,9 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.CORRELATION_ID:
 					Mockito.when(xmlMessage.getCorrelationId()).thenReturn(header.getKey());
 					break;
+				case SolaceHeaders.DELIVERY_COUNT:
+					Mockito.when(xmlMessage.getDeliveryCount()).thenThrow(new UnsupportedOperationException("Feature is disabled"));
+					break;
 				case SolaceHeaders.DESTINATION:
 					Mockito.when(xmlMessage.getDestination())
 							.thenReturn(JCSMPFactory.onlyInstance().createQueue(header.getKey()));
@@ -852,6 +879,9 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceHeaders.EXPIRATION:
 					Mockito.when(xmlMessage.getExpiration()).thenReturn(RandomUtils.nextLong());
+					break;
+				case SolaceHeaders.IS_REPLY:
+					Mockito.when(xmlMessage.isReplyMessage()).thenReturn(!defaultXmlMessage.isReplyMessage());
 					break;
 				case SolaceHeaders.HTTP_CONTENT_ENCODING:
 					Mockito.when(xmlMessage.getHTTPContentEncoding()).thenReturn(header.getKey());
@@ -899,12 +929,26 @@ public class XMLMessageMapperTest {
 		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
+		Message<?> springMessage;
+		MessageHeaders springMessageHeaders;
+		if (batchMode) {
+			List<TextMessage> xmlMessages = Collections.singletonList(xmlMessage);
+			springMessage = xmlMessageMapper.mapBatchMessage(xmlMessages, acknowledgmentCallback);
+			Mockito.verify(xmlMessageMapper).mapBatchMessage(xmlMessages, acknowledgmentCallback, false);
+
+			@SuppressWarnings("unchecked")
+			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
+							.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+			springMessageHeaders = new MessageHeaders(messageHeaders);
+		} else {
+			springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+			Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
+			springMessageHeaders = springMessage.getHeaders();
+		}
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : readableHeaders) {
-			Object actualValue = springMessage.getHeaders().get(header.getKey());
+			Object actualValue = springMessageHeaders.get(header.getKey());
 			switch (header.getKey()) {
 				case SolaceHeaders.APPLICATION_MESSAGE_ID:
 					assertEquals(xmlMessage.getApplicationMessageId(), actualValue);
@@ -914,6 +958,10 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceHeaders.CORRELATION_ID:
 					assertEquals(xmlMessage.getCorrelationId(), actualValue);
+					break;
+				case SolaceHeaders.DELIVERY_COUNT:
+					//For this test, the delivery count feature is disabled
+					assertNull(actualValue);
 					break;
 				case SolaceHeaders.DESTINATION:
 					assertEquals(xmlMessage.getDestination(), actualValue);
@@ -929,6 +977,9 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceHeaders.HTTP_CONTENT_ENCODING:
 					assertEquals(xmlMessage.getHTTPContentEncoding(), actualValue);
+					break;
+				case SolaceHeaders.IS_REPLY:
+					assertEquals(xmlMessage.isReplyMessage(), actualValue);
 					break;
 				case SolaceHeaders.PRIORITY:
 					assertEquals(xmlMessage.getPriority(), actualValue);
@@ -964,22 +1015,31 @@ public class XMLMessageMapperTest {
 					assertEquals(xmlMessage.getProperties().get(header.getKey()), actualValue);
 					break;
 				default:
-					fail(String.format("no test for header %s", header.getKey()));
+					if (HeaderMeta.Scope.WIRE.equals(header.getValue().getScope())) {
+						fail(String.format("no test for header %s", header.getKey()));
+					} else {
+						assertNull(actualValue, "Only wire-scoped headers can map to the Spring message");
+					}
 			}
 		}
 
-		validateSpringMessage(springMessage, xmlMessage);
+		if (batchMode) {
+			validateSpringBatchHeaders(springMessage.getHeaders(), Collections.singletonList(xmlMessage));
+		} else {
+			validateSpringHeaders(springMessage.getHeaders(), xmlMessage);
+		}
 	}
 
-	@Test
-	public void testMapXMLMessageToSpringMessage_NonReadableSolaceProperties() throws Exception {
+	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@ValueSource(booleans = {false, true})
+	public void testMapXMLMessageToSpringMessage_NonReadableSolaceProperties(boolean batchMode) throws Exception {
 		Set<Map.Entry<String, ? extends HeaderMeta<?>>> nonReadableHeaders = Stream.of(
 				SolaceHeaderMeta.META.entrySet().stream(),
 				SolaceBinderHeaderMeta.META.entrySet().stream())
 				.flatMap(h -> h)
 				.filter(h -> !h.getValue().isReadable())
 				.collect(Collectors.toSet());
-		assertNotEquals("Test header set was empty", 0, nonReadableHeaders.size());
+		assertNotEquals(0, nonReadableHeaders.size(), "Test header set was empty");
 
 		TextMessage xmlMessage = Mockito.mock(TextMessage.class);
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
@@ -1005,14 +1065,30 @@ public class XMLMessageMapperTest {
 
 		Mockito.when(xmlMessage.getProperties()).thenReturn(metadata);
 		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
+		Mockito.when(xmlMessage.getDeliveryCount()).thenThrow(new UnsupportedOperationException("Feature is disabled"));
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
+
+		Message<?> springMessage;
+		MessageHeaders springMessageHeaders;
+		if (batchMode) {
+			List<TextMessage> xmlMessages = Collections.singletonList(xmlMessage);
+			springMessage = xmlMessageMapper.mapBatchMessage(xmlMessages, acknowledgmentCallback);
+			Mockito.verify(xmlMessageMapper).mapBatchMessage(xmlMessages, acknowledgmentCallback, false);
+
+			@SuppressWarnings("unchecked")
+			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
+					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+			springMessageHeaders = new MessageHeaders(messageHeaders);
+		} else {
+			springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+			Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
+			springMessageHeaders = springMessage.getHeaders();
+		}
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : nonReadableHeaders) {
-			assertThat(springMessage.getHeaders(), not(hasKey(header)));
+			assertThat(springMessageHeaders, not(hasKey(header)));
 		}
 
 		SDTMap filteredMetadata = JCSMPFactory.onlyInstance().createMap();
@@ -1022,11 +1098,17 @@ public class XMLMessageMapperTest {
 			}
 		}
 
-		validateSpringMessage(springMessage, xmlMessage, filteredMetadata);
+		if (batchMode) {
+			validateSpringBatchHeaders(springMessage.getHeaders(), Collections.singletonList(xmlMessage),
+					Collections.singletonList(filteredMetadata));
+		} else {
+			validateSpringHeaders(springMessage.getHeaders(), xmlMessage, filteredMetadata);
+		}
 	}
 
-	@Test
-	public void testMapXMLMessageToSpringMessage_ReadLocalSolaceProperties() throws Exception {
+	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@ValueSource(booleans = {false, true})
+	public void testMapXMLMessageToSpringMessage_ReadLocalSolaceProperties(boolean batchMode) throws Exception {
 		Set<Map.Entry<String, ? extends HeaderMeta<?>>> readableLocalHeaders = Stream.of(
 				SolaceHeaderMeta.META.entrySet().stream(),
 				SolaceBinderHeaderMeta.META.entrySet().stream())
@@ -1034,7 +1116,7 @@ public class XMLMessageMapperTest {
 				.filter(h -> h.getValue().isReadable())
 				.filter(h -> HeaderMeta.Scope.LOCAL.equals(h.getValue().getScope()))
 				.collect(Collectors.toSet());
-//		assertNotEquals("Test header set was empty", 0, readableLocalHeaders.size());
+		assertNotEquals(0, readableLocalHeaders.size(), "Test header set was empty");
 
 		TextMessage xmlMessage = Mockito.mock(TextMessage.class);
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
@@ -1046,14 +1128,38 @@ public class XMLMessageMapperTest {
 
 		Mockito.when(xmlMessage.getProperties()).thenReturn(metadata);
 		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
+		Mockito.when(xmlMessage.getDeliveryCount()).thenThrow(new UnsupportedOperationException("Feature is disabled"));
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
-		Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
+
+		Message<?> springMessage;
+		MessageHeaders springMessageHeaders;
+		if (batchMode) {
+			List<TextMessage> xmlMessages = Collections.singletonList(xmlMessage);
+			springMessage = xmlMessageMapper.mapBatchMessage(xmlMessages, acknowledgmentCallback);
+			Mockito.verify(xmlMessageMapper).mapBatchMessage(xmlMessages, acknowledgmentCallback, false);
+
+			@SuppressWarnings("unchecked")
+			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
+					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+			springMessageHeaders = new MessageHeaders(messageHeaders);
+		} else {
+			springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+			Mockito.verify(xmlMessageMapper).map(xmlMessage, acknowledgmentCallback, false);
+			springMessageHeaders = springMessage.getHeaders();
+		}
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : readableLocalHeaders) {
-			fail(String.format("no test for header %s", header.getKey()));
+			Object actualValue = springMessageHeaders.get(header.getKey());
+			switch (header.getKey()) {
+				case SolaceBinderHeaders.BATCHED_HEADERS:
+				case SolaceBinderHeaders.NULL_PAYLOAD:
+					assertNull(actualValue);
+					break;
+				default:
+					fail(String.format("no test for header %s", header.getKey()));
+			}
 		}
 
 		SDTMap filteredMetadata = JCSMPFactory.onlyInstance().createMap();
@@ -1063,11 +1169,41 @@ public class XMLMessageMapperTest {
 			}
 		}
 
-		validateSpringMessage(springMessage, xmlMessage, filteredMetadata);
+		if (batchMode) {
+			validateSpringBatchHeaders(springMessage.getHeaders(), Collections.singletonList(xmlMessage),
+					Collections.singletonList(filteredMetadata));
+		} else {
+			validateSpringHeaders(springMessage.getHeaders(), xmlMessage, filteredMetadata);
+		}
 	}
 
-	@Test
-	public void testMapXMLMessageToSpringMessage_ReadUndefinedSolaceHeader() throws Exception {
+	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@ValueSource(booleans = {false, true})
+	public void testMapXMLMessageToSpringMessage_deliveryCountFeatureEnabled(boolean batchMode) {
+		int deliveryCount = 42;
+		TextMessage xmlMessage = Mockito.mock(TextMessage.class);
+		Mockito.when(xmlMessage.getText()).thenReturn("testPayload");
+		Mockito.when(xmlMessage.getDeliveryCount()).thenReturn(deliveryCount);
+
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
+		MapAssert<String, Object> headersAssert;
+		if (batchMode) {
+			headersAssert = Assertions.assertThat(Objects.requireNonNull(xmlMessageMapper
+									.mapBatchMessage(Collections.singletonList(xmlMessage), acknowledgmentCallback)
+									.getHeaders()
+					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class))
+					.get(0))
+					.asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class));
+		} else {
+			headersAssert = Assertions.assertThat(xmlMessageMapper.map(xmlMessage, acknowledgmentCallback)
+					.getHeaders());
+		}
+		headersAssert.extractingByKey(SolaceHeaders.DELIVERY_COUNT).isEqualTo(deliveryCount);
+	}
+
+	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@ValueSource(booleans = {false, true})
+	public void testMapXMLMessageToSpringMessage_ReadUndefinedSolaceHeader(boolean batchMode) throws Exception {
 		String undefinedSolaceHeader1 = "abc124";
 		SerializableFoo undefinedSolaceHeader2 = new SerializableFoo("a", "b");
 		TextMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
@@ -1080,19 +1216,87 @@ public class XMLMessageMapperTest {
 		metadata.putString(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
 		xmlMessage.setProperties(metadata);
 
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 
-		assertEquals(undefinedSolaceHeader1, springMessage.getHeaders().get("solace_foo1", String.class));
-		assertEquals(undefinedSolaceHeader2, springMessage.getHeaders().get("solace_foo2", SerializableFoo.class));
-		validateSpringMessage(springMessage, xmlMessage);
+		Message<?> springMessage;
+		MessageHeaders springMessageHeaders;
+		if (batchMode) {
+			List<TextMessage> xmlMessages = Collections.singletonList(xmlMessage);
+			springMessage = xmlMessageMapper.mapBatchMessage(xmlMessages, acknowledgmentCallback);
+			@SuppressWarnings("unchecked")
+			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
+					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+			springMessageHeaders = new MessageHeaders(messageHeaders);
+		} else {
+			springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+			springMessageHeaders = springMessage.getHeaders();
+		}
+
+		assertEquals(undefinedSolaceHeader1, springMessageHeaders.get("solace_foo1", String.class));
+		assertEquals(undefinedSolaceHeader2, springMessageHeaders.get("solace_foo2", SerializableFoo.class));
+
+		if (batchMode) {
+			validateSpringBatchHeaders(springMessage.getHeaders(), Collections.singletonList(xmlMessage));
+		} else {
+			validateSpringHeaders(springMessage.getHeaders(), xmlMessage);
+		}
 	}
 
-	@Test(expected = SolaceMessageConversionException.class)
-	public void testFailMapXMLMessageToSpringMessage_WithNullPayload() {
+	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@ValueSource(booleans = {false, true})
+	public void testMapXMLMessageToSpringMessage_WithNullPayload(boolean batchMode) {
 		BytesMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
-		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
-		xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
+
+		Message<?> springMessage;
+		MessageHeaders springMessageHeaders;
+		if (batchMode) {
+			List<BytesMessage> xmlMessages = Collections.singletonList(xmlMessage);
+			springMessage = xmlMessageMapper.mapBatchMessage(xmlMessages, acknowledgmentCallback);
+			@SuppressWarnings("unchecked")
+			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
+					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+			springMessageHeaders = new MessageHeaders(messageHeaders);
+		} else {
+			springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+			springMessageHeaders = springMessage.getHeaders();
+		}
+
+		assertEquals(Boolean.TRUE, springMessageHeaders.get(SolaceBinderHeaders.NULL_PAYLOAD, Boolean.class));
+		if (batchMode) {
+			Assertions.assertThat(springMessage.getHeaders()).doesNotContainKey(SolaceBinderHeaders.NULL_PAYLOAD);
+		}
+	}
+
+	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@ValueSource(booleans = {false, true})
+	public void testMapXMLMessageToSpringMessage_WithListPayload(boolean batchMode) throws Exception {
+		BytesMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
+		List<SerializableFoo> expectedPayload = Collections.singletonList(new SerializableFoo(
+				RandomStringUtils.randomAlphanumeric(100), RandomStringUtils.randomAlphanumeric(100)));
+		xmlMessage.setData(SerializationUtils.serialize(expectedPayload));
+		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
+		metadata.putString(MessageHeaders.CONTENT_TYPE, "application/x-java-serialized-object");
+		metadata.putBoolean(SolaceBinderHeaders.SERIALIZED_PAYLOAD, true);
+		xmlMessage.setProperties(metadata);
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
+
+		Message<?> springMessage;
+		if (batchMode) {
+			springMessage = xmlMessageMapper.mapBatchMessage(Collections.singletonList(xmlMessage),
+					acknowledgmentCallback);
+		} else {
+			springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
+		}
+
+		if (batchMode) {
+			validateSpringBatchPayload((List<?>) springMessage.getPayload(),
+					Collections.singletonList(expectedPayload));
+			validateSpringBatchHeaders(springMessage.getHeaders(), Collections.singletonList(xmlMessage));
+		} else {
+			validateSpringPayload(springMessage.getPayload(), expectedPayload);
+			validateSpringHeaders(springMessage.getHeaders(), xmlMessage);
+		}
 	}
 
 	@Test
@@ -1292,12 +1496,12 @@ public class XMLMessageMapperTest {
 		do {
 			logger.info(String.format("Iteration %s - Message<?> to XMLMessage:\n%s", i, springMessage));
 			xmlMessage = xmlMessageMapper.map(springMessage, null, false);
-			validateXMLMessage(xmlMessage, expectedSpringMessage, springHeaders);
+			validateXMLProperties(xmlMessage, expectedSpringMessage, springHeaders);
 
 			logger.info(String.format("Iteration %s - XMLMessage to Message<?>:\n%s", i, xmlMessage));
-			AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class);
+			AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 			springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback);
-			validateSpringMessage(springMessage, expectedXmlMessage);
+			validateSpringHeaders(springMessage.getHeaders(), expectedXmlMessage);
 
 			// Update the expected default spring headers
 			springHeaders.put(MessageHeaders.ID, springMessage.getHeaders().getId());
@@ -1307,12 +1511,12 @@ public class XMLMessageMapperTest {
 		} while (i < 3);
 	}
 
-	private void validateXMLMessage(XMLMessage xmlMessage, Message<?> springMessage)
+	private void validateXMLProperties(XMLMessage xmlMessage, Message<?> springMessage)
 			throws Exception {
-		validateXMLMessage(xmlMessage, springMessage, springMessage.getHeaders());
+		validateXMLProperties(xmlMessage, springMessage, springMessage.getHeaders());
 	}
 
-	private void validateXMLMessage(XMLMessage xmlMessage, Message<?> springMessage, Map<String, Object> expectedHeaders)
+	private void validateXMLProperties(XMLMessage xmlMessage, Message<?> springMessage, Map<String, Object> expectedHeaders)
 			throws Exception {
 
 		assertEquals(DeliveryMode.PERSISTENT, xmlMessage.getDeliveryMode());
@@ -1362,15 +1566,48 @@ public class XMLMessageMapperTest {
 		}
 	}
 
-	private void validateSpringMessage(Message<?> message, XMLMessage xmlMessage)
+	private void validateSpringHeaders(MessageHeaders messageHeaders, XMLMessage xmlMessage)
 			throws SDTException, JsonProcessingException {
-		validateSpringMessage(message, xmlMessage, xmlMessage.getProperties());
+		validateSpringHeaders(messageHeaders, xmlMessage, false, xmlMessage.getProperties());
 	}
 
-	private void validateSpringMessage(Message<?> message, XMLMessage xmlMessage, SDTMap expectedHeaders)
+	private void validateSpringHeaders(MessageHeaders messageHeaders, XMLMessage xmlMessage, SDTMap expectedHeaders)
 			throws SDTException, JsonProcessingException {
-		MessageHeaders messageHeaders = message.getHeaders();
+		validateSpringHeaders(messageHeaders, xmlMessage, false, expectedHeaders);
+	}
+	private void validateSpringBatchHeaders(MessageHeaders batchMessageHeaders, List<? extends XMLMessage> xmlMessages) {
+		validateSpringBatchHeaders(batchMessageHeaders, xmlMessages,
+				xmlMessages.stream().map(XMLMessage::getProperties).collect(Collectors.toList()));
+	}
 
+	private void validateSpringBatchHeaders(MessageHeaders batchMessageHeaders, List<? extends XMLMessage> xmlMessages,
+											List<SDTMap> expectedBatchedHeaders) {
+		Assertions.assertThat(batchMessageHeaders)
+				.hasEntrySatisfying(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, ackCallback ->
+						Assertions.assertThat(ackCallback).isNotNull().isInstanceOf(AcknowledgmentCallback.class))
+				.hasEntrySatisfying(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, deliveryAttempt ->
+						Assertions.assertThat(deliveryAttempt).isNotNull()
+								.asInstanceOf(InstanceOfAssertFactories.ATOMIC_INTEGER).hasValue(0))
+				.extractingByKey(SolaceBinderHeaders.BATCHED_HEADERS)
+				.isNotNull()
+				.asInstanceOf(InstanceOfAssertFactories.list(Map.class))
+				.hasSize(xmlMessages.size())
+				.map(messageHeaders -> {
+					@SuppressWarnings("unchecked")
+					MessageHeaders headers = new MessageHeaders((Map<String, Object>) messageHeaders);
+					return headers;
+				})
+				.satisfies(batchedHeaders -> {
+					for (int i = 0; i < xmlMessages.size(); i++) {
+						validateSpringHeaders(batchedHeaders.get(i), xmlMessages.get(i), true,
+								expectedBatchedHeaders.get(i));
+					}
+				});
+	}
+
+	private void validateSpringHeaders(MessageHeaders messageHeaders, XMLMessage xmlMessage, boolean batchMode,
+									   SDTMap expectedHeaders)
+			throws SDTException, JsonProcessingException {
 		List<String> nonReadableBinderHeaderMeta = SolaceBinderHeaderMeta.META
 				.entrySet()
 				.stream()
@@ -1403,20 +1640,179 @@ public class XMLMessageMapperTest {
 			assertEquals(expectedHeaders.get(headerName), messageHeaders.get(headerName));
 		}
 
-		AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(message);
-		assertNotNull(ackCallback);
-		assertThat(ackCallback,
-				CoreMatchers.instanceOf(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class));
+		if (batchMode) {
+			Assertions.assertThat(messageHeaders)
+					.doesNotContainKey(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK);
+		} else {
+			Assertions.assertThat(messageHeaders.get(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK,
+							AcknowledgmentCallback.class))
+					.isNotNull()
+					.isInstanceOf(AcknowledgmentCallback.class);
+		}
 
-		AtomicInteger deliveryAttempt = StaticMessageHeaderAccessor.getDeliveryAttempt(message);
-		assertNotNull(deliveryAttempt);
-		assertThat(deliveryAttempt, CoreMatchers.instanceOf(AtomicInteger.class));
-		assertEquals(0, deliveryAttempt.get());
+		if (batchMode) {
+			Assertions.assertThat(messageHeaders)
+					.doesNotContainKey(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT);
+		} else {
+			Assertions.assertThat(messageHeaders.get(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT,
+							AtomicInteger.class))
+					.isNotNull()
+					.asInstanceOf(InstanceOfAssertFactories.ATOMIC_INTEGER)
+					.hasValue(0);
+		}
 
-		MimeType contentType = StaticMessageHeaderAccessor.getContentType(message);
+		Object contentType = messageHeaders.get(MessageHeaders.CONTENT_TYPE);
 		assertNotNull(contentType);
 		if (!expectedHeaders.containsKey(MessageHeaders.CONTENT_TYPE)) {
-			assertEquals(xmlMessage.getHTTPContentType(), contentType.toString());
+			assertEquals(xmlMessage.getHTTPContentType(), (contentType instanceof MimeType ?
+					(MimeType) contentType : MimeType.valueOf(contentType.toString())).toString());
+		}
+
+		//DeliveryCount feature is assumed disabled
+		Assertions.assertThat(messageHeaders).doesNotContainKey(SolaceHeaders.DELIVERY_COUNT);
+	}
+
+	private <T> void validateSpringBatchPayload(List<?> payloads, List<T> expectedPayloads) {
+		Assertions.assertThat(payloads).hasSize(expectedPayloads.size());
+		for (int i = 0; i < expectedPayloads.size(); i++) {
+			validateSpringPayload(payloads.get(i), expectedPayloads.get(i));
+		}
+	}
+
+	private <T> void validateSpringPayload(Object payload, T expectedPayload) {
+		Assertions.assertThat(payload).isInstanceOf(expectedPayload.getClass());
+
+		@SuppressWarnings("unchecked")
+		T springMessagePayload = (T) expectedPayload.getClass().cast(payload);
+
+		if (expectedPayload.getClass().isArray()) {
+			if (expectedPayload.getClass().getComponentType().isPrimitive()) {
+				assertEquals(Array.getLength(expectedPayload), Array.getLength(springMessagePayload));
+				for (int i = 0; i < Array.getLength(springMessagePayload); i++) {
+					assertEquals(Array.get(expectedPayload, i), Array.get(springMessagePayload, i));
+				}
+			} else {
+				assertArrayEquals((Object[]) expectedPayload, (Object[]) springMessagePayload);
+			}
+		} else {
+			assertEquals(expectedPayload, springMessagePayload);
+		}
+	}
+
+	private static Stream<Arguments> xmlMessageTypeProviders() {
+		return Stream.of(
+				Arguments.of(Named.of("BYTE_ARRAY", new XmlMessageTypeProvider<>(
+						BytesMessage.class,
+						MimeTypeUtils.APPLICATION_OCTET_STREAM,
+						() -> RandomStringUtils.randomAlphabetic(10).getBytes(StandardCharsets.UTF_8),
+						BytesMessage::setData))),
+				Arguments.of(Named.of("SERIALIZABLE", new XmlMessageTypeProvider<>(
+						BytesMessage.class,
+						new MimeType("application", "x-java-serialized-object"),
+						() -> new SerializableFoo(RandomStringUtils.randomAlphabetic(10),
+								RandomStringUtils.randomAlphabetic(10)),
+						(msg, p) -> msg.setData(SerializationUtils.serialize(p)),
+						props -> props.putBoolean(SolaceBinderHeaders.SERIALIZED_PAYLOAD, true)))),
+				Arguments.of(Named.of("STRING", new XmlMessageTypeProvider<>(
+						TextMessage.class,
+						MimeTypeUtils.TEXT_PLAIN,
+						() -> RandomStringUtils.randomAlphabetic(10),
+						TextMessage::setText))),
+				Arguments.of(Named.of("SDT_MAP", new XmlMessageTypeProvider<>(
+						MapMessage.class,
+						new MimeType("application", "x-java-serialized-object"),
+						() -> {
+							SDTMap expectedPayload = JCSMPFactory.onlyInstance().createMap();
+							expectedPayload.putBoolean("a", true);
+							expectedPayload.putCharacter("b", 's');
+							expectedPayload.putMap("c", JCSMPFactory.onlyInstance().createMap());
+							expectedPayload.putStream("d", JCSMPFactory.onlyInstance().createStream());
+							return expectedPayload;
+						},
+						MapMessage::setMap))),
+				Arguments.of(Named.of("SDT_STREAM", new XmlMessageTypeProvider<>(
+						StreamMessage.class,
+						new MimeType("application", "x-java-serialized-object"),
+						() -> {
+							SDTStream expectedPayload = JCSMPFactory.onlyInstance().createStream();
+							expectedPayload.writeBoolean(true);
+							expectedPayload.writeCharacter('s');
+							expectedPayload.writeMap(JCSMPFactory.onlyInstance().createMap());
+							expectedPayload.writeStream(JCSMPFactory.onlyInstance().createStream());
+							return expectedPayload;
+						},
+						StreamMessage::setStream))),
+				Arguments.of(Named.of("XML_CONTENT", new XmlMessageTypeProvider<>(
+						XMLContentMessage.class,
+						MimeTypeUtils.TEXT_XML,
+						() -> "<a><b>testPayload</b><c>testPayload2</c></a>",
+						XMLContentMessage::setXMLContent))));
+	}
+
+	private static class XmlMessageTypeCartesianProvider implements CartesianArgumentsProvider<
+			Named<XmlMessageTypeProvider<?, ?>>> {
+
+		@SuppressWarnings("unchecked")
+		@Override
+		public Stream<Named<XmlMessageTypeProvider<?, ?>>> provideArguments(ExtensionContext context, Parameter parameter) {
+			return xmlMessageTypeProviders()
+					.map(arguments -> arguments.get()[0])
+					.map(arg -> (Named<XmlMessageTypeProvider<?, ?>>) arg);
+		}
+	}
+
+	private static class XmlMessageTypeProvider<T, MT extends XMLMessage> {
+		private final Class<MT> xmlMessageType;
+		private final MimeType mimeType;
+		private final ThrowingSupplier<T> createPayloadSupplier;
+		private final BiConsumer<MT, T> setXmlMessagePayloadFnc;
+		private final ThrowingConsumer<SDTMap> injectAdditionalXMLMessageProperties;
+
+		private XmlMessageTypeProvider(Class<MT> xmlMessageType,
+									   MimeType mimeType,
+									   ThrowingSupplier<T> createPayloadSupplier,
+									   BiConsumer<MT, T> setXmlMessagePayloadFnc) {
+			this(xmlMessageType,
+					mimeType,
+					createPayloadSupplier,
+					setXmlMessagePayloadFnc,
+					props -> {});
+		}
+
+		private XmlMessageTypeProvider(Class<MT> xmlMessageType,
+									   MimeType mimeType,
+									   ThrowingSupplier<T> createPayloadSupplier,
+									   BiConsumer<MT, T> setXmlMessagePayloadFnc,
+									   ThrowingConsumer<SDTMap> injectAdditionalXMLMessageProperties) {
+			this.xmlMessageType = xmlMessageType;
+			this.mimeType = mimeType;
+			this.createPayloadSupplier = createPayloadSupplier;
+			this.setXmlMessagePayloadFnc = setXmlMessagePayloadFnc;
+			this.injectAdditionalXMLMessageProperties = injectAdditionalXMLMessageProperties;
+		}
+
+		public Class<MT> getXmlMessageType() {
+			return xmlMessageType;
+		}
+
+		public void setXMLMessagePayload(MT message, T payload) {
+			setXmlMessagePayloadFnc.accept(message, payload);
+		}
+
+		public MimeType getMimeType() {
+			return mimeType;
+		}
+
+		public T createPayload() {
+			try {
+				return createPayloadSupplier.get();
+			} catch (Throwable e) {
+				throw new RuntimeException(e);
+			}
+		}
+
+		public void injectAdditionalXMLMessageProperties(SDTMap sdtMap) throws Throwable {
+			injectAdditionalXMLMessageProperties.accept(sdtMap);
 		}
 	}
 }

@@ -5,7 +5,9 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -18,18 +20,18 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RetryableTaskServiceTest {
 	private RetryableTaskService taskService;
 	private static final Log logger = LogFactory.getLog(RetryableTaskServiceTest.class);
 
-	@Before
+	@BeforeEach
 	public void setUp() {
 		taskService = new RetryableTaskService();
 	}
 
-	@After
+	@AfterEach
 	public void tearDown() {
 		taskService.close();
 	}

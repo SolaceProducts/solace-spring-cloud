@@ -1,18 +1,18 @@
 package com.solace.spring.cloud.stream.binder;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
-import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
-import com.solace.spring.cloud.stream.binder.test.util.IgnoreInheritedTests;
-import com.solace.spring.cloud.stream.binder.test.util.InheritedTestsFilteredRunner;
+import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
+import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
-import org.apache.commons.lang.RandomStringUtils;
+import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.springframework.boot.test.context.ConfigFileApplicationContextInitializer;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.Binding;
-import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.support.MessageBuilder;
@@ -21,7 +21,7 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.MessagingException;
-import org.springframework.test.context.ContextConfiguration;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.MimeTypeUtils;
 
 import java.util.concurrent.CountDownLatch;
@@ -29,40 +29,42 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.fail;
+import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * All tests regarding messaging which use a dynamic configuration on a message-by-message basis.
  */
-@RunWith(InheritedTestsFilteredRunner.class)
-@ContextConfiguration(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigFileApplicationContextInitializer.class)
-@IgnoreInheritedTests
-public class SolaceBinderDynamicMessagingIT extends SolaceBinderITBase {
-	@Test
-	public void testTargetDestination() throws Exception {
-		SolaceTestBinder binder = getBinder();
+@SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigDataApplicationContextInitializer.class)
+@ExtendWith(PubSubPlusExtension.class)
+@ExtendWith(SpringCloudStreamExtension.class)
+public class SolaceBinderDynamicMessagingIT {
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel0 = createBindableChannel("input0", new BindingProperties());
-		DirectChannel moduleInputChannel1 = createBindableChannel("input1", new BindingProperties());
+	@Test
+	public void testTargetDestination(SpringCloudStreamContext context, SoftAssertions softly,
+									  TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
+
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel0 = context.createBindableChannel("input0", new BindingProperties());
+		DirectChannel moduleInputChannel1 = context.createBindableChannel("input1", new BindingProperties());
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String destination1 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 		Binding<MessageChannel> consumerBinding0 = binder.bindConsumer(
-				destination0, group0, moduleInputChannel0, createConsumerProperties());
+				destination0, group0, moduleInputChannel0, context.createConsumerProperties());
 		Binding<MessageChannel> consumerBinding1 = binder.bindConsumer(
-				destination1, group0, moduleInputChannel1, createConsumerProperties());
+				destination1, group0, moduleInputChannel1, context.createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.setHeader(BinderHeaders.TARGET_DESTINATION, destination1)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		Function<CountDownLatch, MessageHandler> msgHandlerFactory = latch -> m -> {
 			assertThat(m.getHeaders()).doesNotContainKey(BinderHeaders.TARGET_DESTINATION);
@@ -77,12 +79,10 @@ public class SolaceBinderDynamicMessagingIT extends SolaceBinderITBase {
 
 		moduleOutputChannel.send(message);
 
-		SoftAssertions softly = new SoftAssertions();
 		softly.assertThat(latch0.await(10, TimeUnit.SECONDS))
 				.as("Didn't expect %s to get msg", consumerBinding0.getBindingName()).isFalse();
 		softly.assertThat(latch1.await(10, TimeUnit.SECONDS))
 				.as("Expected %s to get msg", consumerBinding1.getBindingName()).isTrue();
-		softly.assertAll();
 
 		producerBinding.unbind();
 		consumerBinding0.unbind();
@@ -90,173 +90,26 @@ public class SolaceBinderDynamicMessagingIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testTargetDestinationWithStaticPrefix() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testTargetDestinationWithEmptyString(SpringCloudStreamContext context, TestInfo testInfo)
+			throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel0 = createBindableChannel("input0", new BindingProperties());
-		DirectChannel moduleInputChannel1 = createBindableChannel("input1", new BindingProperties());
-		DirectChannel moduleInputChannel2 = createBindableChannel("input2", new BindingProperties());
-
-		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		String destination1 = RandomStringUtils.randomAlphanumeric(10);
-		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String prefix0 = String.format("prefix%s0", getDestinationNameDelimiter());
-
-		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
-
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties0 = createConsumerProperties();
-		consumerProperties0.getExtension().setQueueNamePrefix(prefix0);
-
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties2 = createConsumerProperties();
-		consumerProperties2.getExtension().setQueueNamePrefix(prefix0);
-
-		Binding<MessageChannel> consumerBinding0 = binder.bindConsumer(
-				destination0, group0, moduleInputChannel0, consumerProperties0);
-		Binding<MessageChannel> consumerBinding1 = binder.bindConsumer(
-				destination1, group0, moduleInputChannel1, createConsumerProperties());
-		Binding<MessageChannel> consumerBinding2 = binder.bindConsumer(
-				destination1, group0, moduleInputChannel2, consumerProperties2);
-
-		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
-				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
-				.setHeader(BinderHeaders.TARGET_DESTINATION, destination1)
-				.build();
-
-		binderBindUnbindLatency();
-
-		Function<CountDownLatch, MessageHandler> msgHandlerFactory = latch -> m -> {
-			assertThat(m.getHeaders()).doesNotContainKey(BinderHeaders.TARGET_DESTINATION);
-			latch.countDown();
-		};
-
-		final CountDownLatch latch0 = new CountDownLatch(1);
-		moduleInputChannel0.subscribe(msgHandlerFactory.apply(latch0));
-
-		final CountDownLatch latch1 = new CountDownLatch(1);
-		moduleInputChannel1.subscribe(msgHandlerFactory.apply(latch1));
-
-		final CountDownLatch latch2 = new CountDownLatch(1);
-		moduleInputChannel2.subscribe(msgHandlerFactory.apply(latch2));
-
-		moduleOutputChannel.send(message);
-
-		SoftAssertions softly = new SoftAssertions();
-		softly.assertThat(latch0.await(10, TimeUnit.SECONDS))
-				.as("Didn't expect %s to get msg", consumerBinding0.getBindingName()).isFalse();
-		softly.assertThat(latch1.await(10, TimeUnit.SECONDS))
-				.as("Expected %s to get msg", consumerBinding1.getBindingName()).isTrue();
-		softly.assertThat(latch2.await(10, TimeUnit.SECONDS))
-				.as("Expected %s to get msg", consumerBinding2.getBindingName()).isTrue();
-		softly.assertAll();
-
-		producerBinding.unbind();
-		consumerBinding0.unbind();
-		consumerBinding1.unbind();
-		consumerBinding2.unbind();
-	}
-
-	@Test
-	public void testTargetDestinationWithPrefixAndStaticPrefix() throws Exception {
-		SolaceTestBinder binder = getBinder();
-
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel0 = createBindableChannel("input0", new BindingProperties());
-		DirectChannel moduleInputChannel1 = createBindableChannel("input1", new BindingProperties());
-		DirectChannel moduleInputChannel2 = createBindableChannel("input2", new BindingProperties());
-		DirectChannel moduleInputChannel3 = createBindableChannel("input3", new BindingProperties());
-
-		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		String destination1 = RandomStringUtils.randomAlphanumeric(10);
-		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String prefix0 = String.format("prefix%s0", getDestinationNameDelimiter());
-
-		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
-
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties0 = createConsumerProperties();
-		consumerProperties0.getExtension().setQueueNamePrefix(prefix0);
-
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties2 = createConsumerProperties();
-		consumerProperties2.getExtension().setQueueNamePrefix(prefix0);
-
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties3 = createConsumerProperties();
-		consumerProperties2.getExtension().setQueueNamePrefix(prefix0 + prefix0);
-
-		Binding<MessageChannel> consumerBinding0 = binder.bindConsumer(
-				destination0, group0, moduleInputChannel0, consumerProperties0);
-		Binding<MessageChannel> consumerBinding1 = binder.bindConsumer(
-				destination1, group0, moduleInputChannel1, createConsumerProperties());
-		Binding<MessageChannel> consumerBinding2 = binder.bindConsumer(
-				destination1, group0, moduleInputChannel2, consumerProperties2);
-		Binding<MessageChannel> consumerBinding3 = binder.bindConsumer(
-				destination1, group0, moduleInputChannel3, consumerProperties3);
-
-		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
-				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
-				.setHeader(BinderHeaders.TARGET_DESTINATION, prefix0 + destination1)
-				.build();
-
-		binderBindUnbindLatency();
-
-		Function<CountDownLatch, MessageHandler> msgHandlerFactory = latch -> m -> {
-			assertThat(m.getHeaders()).doesNotContainKey(BinderHeaders.TARGET_DESTINATION);
-			latch.countDown();
-		};
-
-		final CountDownLatch latch0 = new CountDownLatch(1);
-		moduleInputChannel0.subscribe(msgHandlerFactory.apply(latch0));
-
-		final CountDownLatch latch1 = new CountDownLatch(1);
-		moduleInputChannel1.subscribe(msgHandlerFactory.apply(latch1));
-
-		final CountDownLatch latch2 = new CountDownLatch(1);
-		moduleInputChannel2.subscribe(msgHandlerFactory.apply(latch2));
-
-		final CountDownLatch latch3 = new CountDownLatch(1);
-		moduleInputChannel3.subscribe(msgHandlerFactory.apply(latch3));
-
-		moduleOutputChannel.send(message);
-
-
-		SoftAssertions softly = new SoftAssertions();
-		softly.assertThat(latch0.await(10, TimeUnit.SECONDS))
-				.as("Didn't expect %s to get msg", consumerBinding0.getBindingName()).isFalse();
-		softly.assertThat(latch1.await(10, TimeUnit.SECONDS))
-				.as("Didn't expect %s to get msg", consumerBinding1.getBindingName()).isFalse();
-		softly.assertThat(latch2.await(10, TimeUnit.SECONDS))
-				.as("Expected %s to get msg", consumerBinding2.getBindingName()).isTrue();
-		softly.assertThat(latch3.await(10, TimeUnit.SECONDS))
-				.as("Didn't expect %s to get msg", consumerBinding2.getBindingName()).isFalse();
-
-		producerBinding.unbind();
-		consumerBinding0.unbind();
-		consumerBinding1.unbind();
-		consumerBinding2.unbind();
-		consumerBinding3.unbind();
-	}
-
-	@Test
-	public void testTargetDestinationWithEmptyString() throws Exception {
-		SolaceTestBinder binder = getBinder();
-
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, context.createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.setHeader(BinderHeaders.TARGET_DESTINATION, "")
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		final CountDownLatch latch = new CountDownLatch(1);
 		moduleInputChannel.subscribe(m -> {
@@ -271,25 +124,26 @@ public class SolaceBinderDynamicMessagingIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testTargetDestinationWithWhitespace() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testTargetDestinationWithWhitespace(SpringCloudStreamContext context, TestInfo testInfo)
+			throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, context.createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.setHeader(BinderHeaders.TARGET_DESTINATION, "   ")
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		final CountDownLatch latch = new CountDownLatch(1);
 		moduleInputChannel.subscribe(m -> {
@@ -304,25 +158,25 @@ public class SolaceBinderDynamicMessagingIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testTargetDestinationWithNull() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testTargetDestinationWithNull(SpringCloudStreamContext context, TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = createBindableChannel("input", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, createConsumerProperties());
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, context.createConsumerProperties());
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.setHeader(BinderHeaders.TARGET_DESTINATION, null)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		final CountDownLatch latch = new CountDownLatch(1);
 		moduleInputChannel.subscribe(m -> {
@@ -337,22 +191,23 @@ public class SolaceBinderDynamicMessagingIT extends SolaceBinderITBase {
 	}
 
 	@Test
-	public void testTargetDestinationWithNonString() throws Exception {
-		SolaceTestBinder binder = getBinder();
+	public void testTargetDestinationWithNonString(SpringCloudStreamContext context, TestInfo testInfo)
+			throws Exception {
+		SolaceTestBinder binder = context.getBinder();
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, createProducerProperties());
+				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.setHeader(BinderHeaders.TARGET_DESTINATION, 1)
 				.build();
 
-		binderBindUnbindLatency();
+		context.binderBindUnbindLatency();
 
 		try {
 			moduleOutputChannel.send(message);

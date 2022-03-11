@@ -1,22 +1,71 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solacesystems.jcsmp.EndpointProperties;
+import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
 public class SolaceCommonProperties {
+	/**
+	 * Whether to provision durable queues for non-anonymous consumer groups.
+	 * This should only be set to false if you have externally pre-provisioned the required queue on the message broker.
+	 */
 	private boolean provisionDurableQueue = true;
+
+	/**
+	 * Whether to add topic subscriptions to durable queues for non-anonymous consumer groups.
+	 * This should only be set to false if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum)
+	 * on the consumer group’s queue on the message broker. This property also applies to topics added by the queueAdditionalSubscriptions property.
+	 */
+	@Deprecated
 	private boolean provisionSubscriptionsToDurableQueue = true;
+	/**
+	 * Whether to add the Destination as a subscription to queue during provisioning.
+	 */
+	private boolean addDestinationAsSubscriptionToQueue = true;
 
 	// Queue Properties -------
+	/**
+	 * Naming prefix for all queues.
+	 */
+	@Deprecated
 	private String queueNamePrefix = "scst";
+	/**
+	 * When set to true, the familiarity modifier, wk/an, is included in the generated queue name.
+	 */
+	@Deprecated
 	private boolean useFamiliarityInQueueName = true;
+	/**
+	 * When set to true, the destination encoding (plain), is included in the generated queue name.
+	 */
+	@Deprecated
 	private boolean useDestinationEncodingInQueueName = true;
 
+	/**
+	 * Access type for the consumer group queue.
+	 */
 	private int queueAccessType = EndpointProperties.ACCESSTYPE_NONEXCLUSIVE;
+	/**
+	 * Permissions for the consumer group queue.
+	 */
 	private int queuePermission = EndpointProperties.PERMISSION_CONSUME;
+	/**
+	 * If specified, whether to notify sender if a message fails to be enqueued to the consumer group queue.
+	 */
 	private Integer queueDiscardBehaviour = null;
+	/**
+	 * Sets the maximum message redelivery count on consumer group queue. (Zero means retry forever).
+	 */
 	private Integer queueMaxMsgRedelivery = null;
+	/**
+	 * Maximum message size for the consumer group queue.
+	 */
 	private Integer queueMaxMsgSize = null;
+	/**
+	 * Message spool quota for the consumer group queue.
+	 */
 	private Integer queueQuota = null;
+	/**
+	 * Whether the consumer group queue respects Message TTL.
+	 */
 	private Boolean queueRespectsMsgTtl = null;
 	// ------------------------
 
@@ -28,6 +77,7 @@ public class SolaceCommonProperties {
 		this.provisionDurableQueue = provisionDurableQueue;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of addDestinationAsSubscriptionToQueue.")
 	public boolean isProvisionSubscriptionsToDurableQueue() {
 		return provisionSubscriptionsToDurableQueue;
 	}
@@ -36,6 +86,15 @@ public class SolaceCommonProperties {
 		this.provisionSubscriptionsToDurableQueue = provisionSubscriptionsToDurableQueue;
 	}
 
+	public boolean isAddDestinationAsSubscriptionToQueue() {
+		return addDestinationAsSubscriptionToQueue;
+	}
+
+	public void setAddDestinationAsSubscriptionToQueue(boolean addDestinationAsSubscriptionToQueue) {
+		this.addDestinationAsSubscriptionToQueue = addDestinationAsSubscriptionToQueue;
+	}
+
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of queueNameExpression and errorQueueNameExpression. Prefixes can be specified directly in these SpEL expressions.")
 	public String getQueueNamePrefix() {
 		return queueNamePrefix;
 	}
@@ -44,6 +103,7 @@ public class SolaceCommonProperties {
 		this.queueNamePrefix = queueNamePrefix;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `errorQueueNameExpression`. The familiarity modifier can be removed from queue names by removing it directly from these SpEL expressions.")
 	public boolean isUseFamiliarityInQueueName() {
 		return useFamiliarityInQueueName;
 	}
@@ -52,6 +112,7 @@ public class SolaceCommonProperties {
 		this.useFamiliarityInQueueName = useFamiliarityInQueueName;
 	}
 
+	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `errorQueueNameExpression`. The destination encoding can be removed from queue names by removing it directly from these SpEL expressions.")
 	public boolean isUseDestinationEncodingInQueueName() {
 		return useDestinationEncodingInQueueName;
 	}

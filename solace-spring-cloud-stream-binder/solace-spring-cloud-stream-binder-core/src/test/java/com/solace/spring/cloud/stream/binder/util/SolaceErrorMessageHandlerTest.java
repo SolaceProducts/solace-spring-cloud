@@ -2,13 +2,12 @@ package com.solace.spring.cloud.stream.binder.util;
 
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.TextMessage;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
@@ -19,46 +18,41 @@ import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.ErrorMessage;
 import org.springframework.messaging.support.MessageBuilder;
 
+@ExtendWith(MockitoExtension.class)
 public class SolaceErrorMessageHandlerTest {
-	@Rule
-	public MockitoRule initRule = MockitoJUnit.rule();
-
-	@Mock
-	JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback acknowledgementCallback;
-
 	SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
 	SolaceErrorMessageHandler errorMessageHandler;
 	AttributeAccessor attributeAccessor;
 
-	@Before
+	@BeforeEach
 	public void setup() {
 		errorMessageHandler = new SolaceErrorMessageHandler();
 		attributeAccessor = ErrorMessageUtils.getAttributeAccessor(null, null);
 	}
 
 	@Test
-	public void testAcknowledgmentCallbackHeader() {
+	public void testAcknowledgmentCallbackHeader(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK,
-						Mockito.mock(JCSMPAcknowledgementCallbackFactory.JCSMPAcknowledgementCallback.class))
+						Mockito.mock(AcknowledgmentCallback.class))
 				.build();
 
 		attributeAccessor.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, inputMessage);
 		attributeAccessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_ACKNOWLEDGMENT_CALLBACK,
-				this.acknowledgementCallback);
+				acknowledgementCallback);
 
 		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
 				new MessagingException(inputMessage),
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(this.acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
 		Mockito.verify(StaticMessageHeaderAccessor.getAcknowledgmentCallback(inputMessage), Mockito.never())
 				.acknowledge(Mockito.any());
 	}
 
 	@Test
-	public void testFailedMessageAcknowledgmentCallback() {
+	public void testFailedMessageAcknowledgmentCallback(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -72,7 +66,7 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testNoFailedMessage() {
+	public void testNoFailedMessage(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
 				new MessagingException("test"),
 				attributeAccessor);
@@ -82,7 +76,7 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testNonMessagingException() {
+	public void testNonMessagingException(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -96,7 +90,8 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testMessagingExceptionContainingDifferentFailedMessage() {
+	public void testMessagingExceptionContainingDifferentFailedMessage(
+			@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -112,7 +107,8 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testMessagingExceptionWithNullFailedMessage() {
+	public void testMessagingExceptionWithNullFailedMessage(
+			@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -127,7 +123,7 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testSourceDataHeader() {
+	public void testSourceDataHeader(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -141,11 +137,11 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(this.acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
 	}
 
 	@Test
-	public void testStaleException() {
+	public void testStaleException(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();
@@ -159,7 +155,7 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testStaleMessage() {
+	public void testStaleMessage(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
 				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
 				.build();

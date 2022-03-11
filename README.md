@@ -29,7 +29,7 @@ Please consult the [Spring Cloud Compatibility Table](./solace-spring-cloud-bom/
 ### Solace Spring Cloud Projects
 
 These are the projects contained within this repository:
-* [Solace Spring Cloud Stream Starter](./solace-spring-cloud-starters/solace-spring-cloud-stream-starter)
+* [Spring Cloud Stream Binder for Solace PubSub+](./solace-spring-cloud-starters/solace-spring-cloud-stream-starter)
 * [Solace Spring Cloud Connector](./solace-spring-cloud-connector)
 
 ## Building Locally
@@ -71,6 +71,32 @@ If it shouldn't be inherited by the BOM, it doesn't go here.
 - solace-spring-cloud-parent  
 This POM defines common properties and dependencies for the Solace Spring Cloud projects.
 
+### Running the Tests
+
+Run the following command to run all the unit and integration tests:
+
+```shell
+mvn clean verify
+```
+
+#### Run Tests With An External Broker
+
+By default, the tests requires for Docker to be installed on the host machine so that they can auto-provision a PubSub+ broker. Otherwise, the following environment variables can be set to direct the tests to use an external broker:
+
+```
+SOLACE_JAVA_HOST=tcp://localhost:55555
+SOLACE_JAVA_CLIENT_USERNAME=default
+SOLACE_JAVA_CLIENT_PASSWORD=default
+SOLACE_JAVA_MSG_VPN=default
+TEST_SOLACE_MGMT_HOST=http://localhost:8080
+TEST_SOLACE_MGMT_USERNAME=admin
+TEST_SOLACE_MGMT_PASSWORD=admin
+```
+
+#### Parallel Test Execution
+
+Parallel test execution is enabled by default. Add the `-Djunit.jupiter.execution.parallel.enabled=false` option to your command to disable parallel test execution.
+
 ## Release Process
 
 1. Update `solace-spring-boot-bom` to latest released version
@@ -108,7 +134,7 @@ For more information about Spring Boot Auto-Configuration and Starters try these
 - [GitHub Tutorial - Master Spring Boot Auto-Configuration](//github.com/snicoll-demos/spring-boot-master-auto-configuration)
 
 For more information about Cloud Foundry and the Solace PubSub+ service these resources:
-- [Solace PubSub+ for Pivotal Cloud Foundry](http://docs.pivotal.io/solace-messaging/)
+- [Solace PubSub+ for VMware Tanzu](http://docs.pivotal.io/solace-messaging/)
 - [Cloud Foundry Documentation](http://docs.cloudfoundry.org/)
 - For an introduction to Cloud Foundry: https://www.cloudfoundry.org/
 

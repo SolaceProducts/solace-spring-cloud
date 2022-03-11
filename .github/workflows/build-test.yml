@@ -1,34 +1,66 @@
 # This workflow will build and test a Java project with Maven
 
-name: build
+name: Test
 
 on:
   pull_request:
   push:
+  workflow_dispatch:
 
 jobs:
-  build:
+  dupe_check:
+    name: Check for Duplicate Workflow Run
+    runs-on: ubuntu-latest
+    outputs:
+      should_skip: ${{ steps.skip_check.outputs.should_skip }}
+    steps:
+      - id: skip_check
+        uses: fkirc/skip-duplicate-actions@v3.4.0
+        with:
+          concurrent_skipping: same_content
+          do_not_skip: '["pull_request", "workflow_dispatch", "schedule"]'
 
+  build:
+    name : Build & Test
+    needs:
+      - dupe_check
+    if: needs.dupe_check.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v2
-      - name: Setup JDK 1.8
-        uses: actions/setup-java@v1
+      - name: Cache local Maven repository
+        uses: actions/cache@v2
         with:
-          java-version: 1.8
-      - name: Build and run Unit Tests
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-test-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-test-
+      - name: Setup JDK 1.8
+        uses: actions/setup-java@v2
+        with:
+          distribution: zulu
+          java-version: 8
+      - name: Build and run Tests
         run: mvn clean verify
-      - name: Build and run Integration Tests
-        if: ${{ github.event_name != 'pull_request' }}
-        run: mvn clean verify -Pit
-        env:
-          SOLACE_JAVA_MSG_VPN: ${{ secrets.SOLACE_JAVA_MSG_VPN }}
-          SOLACE_JAVA_CLIENT_USERNAME: ${{ secrets.SOLACE_JAVA_CLIENT_USERNAME }}
-          SOLACE_JAVA_CLIENT_PASSWORD: ${{ secrets.SOLACE_JAVA_CLIENT_PASSWORD }}
-          SOLACE_JAVA_HOST: ${{ secrets.SOLACE_JAVA_HOST }}
-          TEST_SOLACE_MGMT_HOST: ${{ secrets.TEST_SOLACE_MGMT_HOST }}
-          TEST_SOLACE_MGMT_USERNAME: ${{ secrets.TEST_SOLACE_MGMT_USERNAME }}
-          TEST_SOLACE_MGMT_PASSWORD: ${{ secrets.TEST_SOLACE_MGMT_PASSWORD }}
-      - name: Verify Integration Test Support was not changed
-        run: ./solace-integration-test-support/scripts/validate_submodule_not_changed.sh
+      - name: Upload Test Artifacts
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: Test Results
+          path: |
+            **/target/failsafe-reports/*.xml
+            **/target/surefire-reports/*.xml
+      - name: Publish Unit Test Results
+        if: (success() || failure()) && (github.actor != 'dependabot[bot]' || (github.event_name == 'push' && !contains(github.ref, 'dependabot')))
+        uses: EnricoMi/publish-unit-test-result-action@v1
+        continue-on-error: true
+        with:
+          check_name: Unit Test Results
+          comment_mode: create new
+          fail_on: nothing
+          hide_comments: orphaned commits
+          files: |
+            **/target/failsafe-reports/*.xml
+            !**/target/failsafe-reports/failsafe-summary.xml
+            **/target/surefire-reports/*.xml

@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder;
 
+import com.solace.spring.cloud.stream.binder.inbound.BatchCollector;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
@@ -14,6 +15,7 @@ import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
+import com.solacesystems.jcsmp.Context;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
@@ -33,6 +35,7 @@ import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 
+import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -46,6 +49,7 @@ public class SolaceMessageChannelBinder
 				DisposableBean {
 
 	private final JCSMPSession jcsmpSession;
+	private final Context jcsmpContext;
 	private final JCSMPSessionProducerManager sessionProducerManager;
 	private final AtomicBoolean consumersRemoteStopFlag = new AtomicBoolean(false);
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
@@ -56,8 +60,12 @@ public class SolaceMessageChannelBinder
 	private static final SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
 
 	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, SolaceQueueProvisioner solaceQueueProvisioner) {
+		this(jcsmpSession, null, solaceQueueProvisioner);
+	}
+	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, Context jcsmpContext, SolaceQueueProvisioner solaceQueueProvisioner) {
 		super(new String[0], solaceQueueProvisioner);
 		this.jcsmpSession = jcsmpSession;
+		this.jcsmpContext = jcsmpContext;
 		this.sessionProducerManager = new JCSMPSessionProducerManager(jcsmpSession);
 	}
 
@@ -68,6 +76,9 @@ public class SolaceMessageChannelBinder
 		sessionProducerManager.release(errorHandlerProducerKey);
 		consumersRemoteStopFlag.set(true);
 		jcsmpSession.closeSession();
+		if (jcsmpContext != null) {
+			jcsmpContext.destroy();
+		}
 	}
 
 	@Override
@@ -90,7 +101,7 @@ public class SolaceMessageChannelBinder
 		SolaceConsumerDestination solaceDestination = (SolaceConsumerDestination) destination;
 
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(solaceDestination, jcsmpSession,
-				properties.getConcurrency(), taskService, properties.getExtension(),
+				properties.getConcurrency(), properties.isBatchMode(), taskService, properties.getExtension(),
 				getConsumerEndpointProperties(properties));
 
 		adapter.setRemoteStopFlag(consumersRemoteStopFlag);
@@ -128,8 +139,12 @@ public class SolaceMessageChannelBinder
 		SolaceConsumerDestination solaceDestination = (SolaceConsumerDestination) destination;
 
 		EndpointProperties endpointProperties = getConsumerEndpointProperties(consumerProperties);
-		JCSMPMessageSource messageSource = new JCSMPMessageSource(solaceDestination, jcsmpSession, taskService,
-				consumerProperties, endpointProperties);
+		JCSMPMessageSource messageSource = new JCSMPMessageSource(solaceDestination,
+				jcsmpSession,
+				consumerProperties.isBatchMode() ? new BatchCollector(consumerProperties.getExtension()) : null,
+				taskService,
+				consumerProperties,
+				endpointProperties);
 
 		messageSource.setRemoteStopFlag(consumersRemoteStopFlag::get);
 		messageSource.setPostStart(getConsumerPostStart(solaceDestination, consumerProperties));
@@ -150,7 +165,7 @@ public class SolaceMessageChannelBinder
 	protected void postProcessPollableSource(DefaultPollableMessageSource bindingTarget) {
 		bindingTarget.setAttributesProvider((accessor, message) -> {
 			Object sourceData = StaticMessageHeaderAccessor.getSourceData(message);
-			if (sourceData == null || sourceData instanceof XMLMessage) {
+			if (sourceData == null || sourceData instanceof XMLMessage || sourceData instanceof List) {
 				accessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_RAW_MESSAGE, sourceData);
 			}
 		});
@@ -230,8 +245,11 @@ public class SolaceMessageChannelBinder
 	private Consumer<Queue> getConsumerPostStart(SolaceConsumerDestination destination,
 												 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		return (queue) -> {
-			for (String topic : destination.getSubscriptions()) {
-				provisioningProvider.addSubscriptionToQueue(queue, topic, properties.getExtension());
+			provisioningProvider.addSubscriptionToQueue(queue, destination.getBindingDestinationName(), properties.getExtension(), true);
+
+			//Process additional subscriptions
+			for (String subscription : destination.getAdditionalSubscriptions()) {
+				provisioningProvider.addSubscriptionToQueue(queue, subscription, properties.getExtension(), false);
 			}
 		};
 	}

@@ -67,4 +67,21 @@ public final class SolaceBinderHeaders {
 	 * <p>A CorrelationData instance for messaging confirmations.</p>
 	 */
 	public static final String CONFIRM_CORRELATION = PREFIX + "confirmCorrelation";
+
+	/**
+	 * <p><b>Acceptable Value Type:</b> {@link Boolean}</p>
+	 * <p><b>Access:</b> Read</p>
+	 * <br>
+	 * <p>Present and true to indicate when the PubSub+ message payload was null.</p>
+	 */
+	public static final String NULL_PAYLOAD = PREFIX + "nullPayload";
+
+	/**
+	 * <p><b>Acceptable Value Type:</b> {@code List<Map<String, Object>>}</p>
+	 * <p><b>Access:</b> Read</p>
+	 * <br>
+	 * <p>Only applicable when {@code batchMode} is {@code true}. The consolidated list of message headers for a
+	 * batch of messages where the headers for each payload element is in this list’s corresponding index.</p>
+	 */
+	public static final String BATCHED_HEADERS = PREFIX + "batchedHeaders";
 }
