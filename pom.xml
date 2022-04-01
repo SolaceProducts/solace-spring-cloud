@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.solace.spring.boot</groupId>
         <artifactId>solace-spring-boot-bom</artifactId>
-        <version>1.2.1</version>
+        <version>1.2.2</version>
     </parent>
 
     <groupId>com.solace.spring.cloud</groupId>
@@ -29,11 +29,11 @@
         <!-- This is the version of Solace Spring Boot we have targeted for this build -->
         <!-- This also dictates the expected version of Spring Boot -->
         <!-- Must match ${project.parent.version} -->
-        <solace.spring.boot.bom.version>1.2.1</solace.spring.boot.bom.version>
+        <solace.spring.boot.bom.version>1.2.2</solace.spring.boot.bom.version>
 
         <!-- Override spring-boot version from solace-spring-boot to latest patch version -->
         <!-- Remove this if the next version of solace-spring-boot works fine -->
-        <spring.boot.version>2.6.4</spring.boot.version>
+        <spring.boot.version>2.6.6</spring.boot.version>
 
         <solace.spring.cloud.connector.version>4.3.7-SNAPSHOT</solace.spring.cloud.connector.version>
         <solace.spring.cloud.stream-starter.version>3.3.1-SNAPSHOT</solace.spring.cloud.stream-starter.version>
