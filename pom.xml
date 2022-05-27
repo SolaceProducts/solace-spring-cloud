@@ -21,7 +21,7 @@
         <repoName>SolaceProducts</repoName>
 
         <!-- This is the version of Spring Cloud we have targeted for this build -->
-        <spring.cloud.version>2021.0.1</spring.cloud.version>
+        <spring.cloud.version>2021.0.3</spring.cloud.version>
 
         <!-- Legacy Support for the Spring Cloud Connectors project -->
         <spring.cloud.connectors.version>2.2.13.RELEASE</spring.cloud.connectors.version>
