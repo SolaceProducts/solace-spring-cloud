@@ -13,6 +13,8 @@ import com.solacesystems.jcsmp.JCSMPTransportException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.lang.Nullable;
+import org.springframework.util.backoff.BackOffExecution;
+import org.springframework.util.backoff.ExponentialBackOff;
 import org.springframework.util.concurrent.SettableListenableFuture;
 
 import java.util.Objects;
@@ -41,6 +43,7 @@ public class FlowReceiverContainer {
 	private final AtomicBoolean isPaused = new AtomicBoolean(false);
 	private final AtomicReference<SettableListenableFuture<UUID>> rebindFutureReference = new AtomicReference<>(
 			new SettableListenableFuture<>());
+	private final AtomicReference<BackOffExecution> backOffExecutionReference = new AtomicReference<>();
 
 	/* Ideally we would cache the outgoing message IDs and remove them as they get acknowledged,
 	 * but that has way too much overhead at scale (millions or billions of unacknowledged messages).
@@ -66,6 +69,7 @@ public class FlowReceiverContainer {
 	private static final Log logger = LogFactory.getLog(FlowReceiverContainer.class);
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private final SolaceFlowEventHandler eventHandler;
+	private final ExponentialBackOff exponentialBackOff = new ExponentialBackOff();
 
 	public FlowReceiverContainer(JCSMPSession session, String queueName, EndpointProperties endpointProperties) {
 		this.session = session;
@@ -203,6 +207,18 @@ public class FlowReceiverContainer {
 			}
 
 			unbind();
+
+			long backoff = backOffExecutionReference.updateAndGet(b -> b != null ? b : exponentialBackOff.start())
+					.nextBackOff();
+			try {
+				if (logger.isTraceEnabled()) {
+					logger.trace(String.format("Rebind backoff -> %s ms", backoff));
+				}
+				Thread.sleep(backoff);
+			} catch (InterruptedException e) {
+				logger.debug("Backoff was interrupted, continuing...");
+			}
+
 			return bind();
 		} catch (Throwable e) {
 			rebindFutureReference.getAndSet(new SettableListenableFuture<>()).setException(e);
@@ -366,6 +382,7 @@ public class FlowReceiverContainer {
 		messageContainer.getMessage().ackMessage();
 		unacknowledgedMessageTracker.decrement();
 		messageContainer.setAcknowledged(true);
+		backOffExecutionReference.set(null);
 	}
 
 	/**
