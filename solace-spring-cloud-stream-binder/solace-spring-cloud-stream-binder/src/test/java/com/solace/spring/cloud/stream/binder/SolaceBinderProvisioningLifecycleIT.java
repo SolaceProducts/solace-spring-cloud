@@ -6,6 +6,7 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
+import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.spring.cloud.stream.binder.test.util.ThrowingFunction;
@@ -38,6 +39,8 @@ import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.junitpioneer.jupiter.cartesian.CartesianTest;
+import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
@@ -77,7 +80,9 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.errorQueueHasMessages;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -1895,5 +1900,255 @@ public class SolaceBinderProvisioningLifecycleIT {
 			assertThat(e.getCause()).isInstanceOf(IllegalArgumentException.class);
 			assertEquals("Queue name \"" + longQueueName + "\" must have a maximum length of 200", e.getCause().getMessage());
 		}
+	}
+
+	@ParameterizedTest
+	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
+	public <T> void testConsumerNoAutoStart(
+			Class<T> channelType,
+			SpringCloudStreamContext context,
+			JCSMPSession jcsmpSession,
+			SempV2Api sempV2Api) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.setAutoStartup(false);
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
+
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+
+		assertThat(consumerBinding.isRunning()).isFalse();
+		assertThat(consumerBinding.isPaused()).isFalse();
+		assertThat(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queueName, null)
+				.getData()
+				.getBindRequestCount())
+				.isEqualTo(0);
+
+		consumerBinding.start();
+
+		assertThat(consumerBinding.isRunning()).isTrue();
+		assertThat(consumerBinding.isPaused()).isFalse();
+		assertThat(sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queueName, null)
+				.getData())
+				.satisfies(queueData -> {
+					assertThat(queueData.getBindRequestCount()).isEqualTo(1);
+					assertThat(queueData.getBindSuccessCount()).isEqualTo(1);
+				});
+
+		consumerBinding.unbind();
+	}
+
+	@CartesianTest(name = "[{index}] channelType={0}, isDurable={1}")
+	public <T> void testConsumerNoAutoStartAndQueueNotExist(
+			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
+			@Values(booleans = {false, true}) boolean isDurable,
+			SpringCloudStreamContext context,
+			JCSMPSession jcsmpSession,
+			SempV2Api sempV2Api,
+			TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = isDurable ? RandomStringUtils.randomAlphanumeric(10) : null;
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.setAutoStartup(false);
+		consumerProperties.getExtension().setProvisionDurableQueue(false);
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, group0, moduleInputChannel, consumerProperties);
+
+		assertThat(consumerBinding.isRunning()).isFalse();
+		assertThat(consumerBinding.isPaused()).isFalse();
+		assertThat(sempV2Api.monitor()
+				.getMsgVpnClient(vpnName, (String) jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME), null)
+				.getData()
+				.getBindRequestCount())
+				.isEqualTo(0);
+
+		if (isDurable) {
+			assertThatThrownBy(consumerBinding::start).getRootCause().hasMessageContaining("Unknown Queue");
+
+			Queue queue = JCSMPFactory.onlyInstance().createQueue(binder.getConsumerQueueName(consumerBinding));
+			logger.info("Trying to connect consumer to a newly provisioned queue {}", queue.getName());
+			Binding<MessageChannel> producerBinding = null;
+			try {
+				EndpointProperties endpointProperties = new EndpointProperties();
+				endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
+				logger.info("Provisioning queue {} with Permission {}", queue.getName(),
+						endpointProperties.getPermission());
+				jcsmpSession.provision(queue, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
+
+				DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+				producerBinding = binder.bindProducer(destination0, moduleOutputChannel,
+						context.createProducerProperties(testInfo));
+
+				consumerBinding.start();
+
+				assertThat(consumerBinding.isRunning()).isTrue();
+				assertThat(consumerBinding.isPaused()).isFalse();
+				assertThat(sempV2Api.monitor()
+						.getMsgVpnQueueTxFlows(vpnName, queue.getName(), 2, null, null, null)
+						.getData())
+						.hasSize(1);
+
+				context.binderBindUnbindLatency();
+
+				consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, 1,
+						() -> moduleOutputChannel.send(MessageBuilder.withPayload("foo".getBytes())
+								.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+								.build()),
+						msg -> logger.info(String.format("Received message %s", msg)));
+			} finally {
+				if (producerBinding != null) producerBinding.unbind();
+				consumerBinding.unbind();
+				jcsmpSession.deprovision(queue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
+			}
+		}
+	}
+
+	@ParameterizedTest(name = "[{index}] channelType={0}, isDurable={1}")
+	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
+	public <T> void testConsumerNoAutoStartAndErrorQueueNotExist(
+			Class<T> channelType,
+			SpringCloudStreamContext context,
+			JCSMPSession jcsmpSession,
+			SempV2Api sempV2Api,
+			TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.setAutoStartup(false);
+		consumerProperties.getExtension().setAutoBindErrorQueue(true);
+		consumerProperties.getExtension().setProvisionErrorQueue(false);
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, group0, moduleInputChannel, consumerProperties);
+
+		assertThat(consumerBinding.isRunning()).isFalse();
+		assertThat(consumerBinding.isPaused()).isFalse();
+		assertThat(sempV2Api.monitor()
+				.getMsgVpnClient(vpnName, (String) jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME), null)
+				.getData()
+				.getBindRequestCount())
+				.isEqualTo(0);
+
+		consumerBinding.start();
+		context.binderBindUnbindLatency();
+
+		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(binder.getConsumerErrorQueueName(consumerBinding));
+		Binding<MessageChannel> producerBinding = null;
+		try {
+			logger.info("Provisioning error queue {}", errorQueue.getName());
+			jcsmpSession.provision(errorQueue, new EndpointProperties(), JCSMPSession.WAIT_FOR_CONFIRM);
+
+			DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+			producerBinding = binder.bindProducer(destination0, moduleOutputChannel,
+					context.createProducerProperties(testInfo));
+
+			Message<?> message = MessageBuilder.withPayload("foo".getBytes())
+					.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+					.build();
+
+			consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts(),
+					() -> moduleOutputChannel.send(message),
+					(msg, callback) -> {
+						callback.run();
+						throw new RuntimeException("Throwing expected exception!");
+					});
+
+			assertThat(binder.getConsumerErrorQueueName(consumerBinding))
+					.satisfies(errorQueueHasMessages(jcsmpSession, Collections.singletonList(message)));
+			retryAssert(() -> assertThat(sempV2Api.monitor()
+					.getMsgVpnQueueMsgs(vpnName, binder.getConsumerQueueName(consumerBinding), 2, null, null, null)
+					.getData())
+					.hasSize(0));
+		} finally {
+			if (producerBinding != null) producerBinding.unbind();
+			consumerBinding.unbind();
+			jcsmpSession.deprovision(errorQueue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
+		}
+	}
+
+	@Test
+	public void testProducerNoAutoStart(
+			SpringCloudStreamContext context,
+			JCSMPSession jcsmpSession,
+			SempV2Api sempV2Api,
+			TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
+		producerProperties.setAutoStartup(false);
+		producerProperties.setRequiredGroups(RandomStringUtils.randomAlphanumeric(10));
+		Binding<?> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProperties);
+
+		assertThat(producerBinding.isRunning()).isFalse();
+		assertThat(producerBinding.isPaused()).isFalse();
+		assertThat(sempV2Api.monitor()
+				.getMsgVpnClient(vpnName, (String) jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME), null)
+				.getData()
+				.getBindRequestCount())
+				.isEqualTo(0);
+
+		producerBinding.start();
+		assertThat(producerBinding.isRunning()).isTrue();
+		assertThat(producerBinding.isPaused()).isFalse();
+
+		producerBinding.unbind();
+	}
+
+	@Test
+	public void testProducerNoAutoStartAndQueueNotExist(
+			SpringCloudStreamContext context,
+			JCSMPSession jcsmpSession,
+			SempV2Api sempV2Api,
+			TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
+		producerProperties.setAutoStartup(false);
+		producerProperties.setRequiredGroups(RandomStringUtils.randomAlphanumeric(10));
+		producerProperties.getExtension().setProvisionDurableQueue(false);
+		producerProperties.getExtension().setAddDestinationAsSubscriptionToQueue(false);
+		Binding<?> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProperties);
+
+		assertThat(producerBinding.isRunning()).isFalse();
+		assertThat(producerBinding.isPaused()).isFalse();
+		assertThat(sempV2Api.monitor()
+				.getMsgVpnClient(vpnName, (String) jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME), null)
+				.getData()
+				.getBindRequestCount())
+				.isEqualTo(0);
+
+		producerBinding.start();
+		assertThat(producerBinding.isRunning()).isTrue();
+		assertThat(producerBinding.isPaused()).isFalse();
+
+		producerBinding.stop();
 	}
 }
