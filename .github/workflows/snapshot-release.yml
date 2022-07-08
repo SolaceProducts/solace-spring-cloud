@@ -1,0 +1,30 @@
+name: Snapshot Release
+
+on:
+  workflow_run:
+    workflows:
+      - Test
+    branches:
+      - 'stage-*'
+    types:
+      - completed
+
+jobs:
+  publish:
+    if: ${{ github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+      - uses: actions/setup-java@v3
+        with:
+          distribution: zulu
+          java-version: 8
+      - name: Publish package
+        run: mvn --batch-mode deploy
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
