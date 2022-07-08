@@ -60,7 +60,8 @@ public class SolaceQueueProvisioner
 			logger.info(String.format("Creating durable queue %s for required consumer group %s", queueName, groupName));
 			EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
 			boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
-			Queue queue = provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning);
+			Queue queue = provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning,
+					properties.isAutoStartup());
 
 			addSubscriptionToQueue(queue, topicName, properties.getExtension(), true);
 
@@ -118,13 +119,14 @@ public class SolaceQueueProvisioner
 		logger.info(isAnonQueue ?
 				String.format("Creating anonymous (temporary) queue %s", groupQueueName) :
 				String.format("Creating %s queue %s for consumer group %s", isDurableQueue ? "durable" : "temporary", groupQueueName, group));
-		Queue queue = provisionQueue(groupQueueName, isDurableQueue, endpointProperties, doDurableQueueProvisioning);
+		Queue queue = provisionQueue(groupQueueName, isDurableQueue, endpointProperties, doDurableQueueProvisioning,
+				properties.isAutoStartup());
 
 		Set<String> additionalSubscriptions = new HashSet<>(Arrays.asList(properties.getExtension().getQueueAdditionalSubscriptions()));
 
 		String errorQueueName = null;
 		if (properties.getExtension().isAutoBindErrorQueue()) {
-			errorQueueName = provisionErrorQueue(queueNames.getErrorQueueName(), properties.getExtension()).getName();
+			errorQueueName = provisionErrorQueue(queueNames.getErrorQueueName(), properties).getName();
 		}
 
 		return new SolaceConsumerDestination(queue.getName(), name, queueNames.getPhysicalGroupName(), !isDurableQueue,
@@ -132,12 +134,12 @@ public class SolaceQueueProvisioner
 	}
 
 	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties,
-								 boolean doDurableProvisioning) {
-		return provisionQueue(name, isDurable, endpointProperties, doDurableProvisioning, "Durable queue");
+								 boolean doDurableProvisioning, boolean testFlowCxn) {
+		return provisionQueue(name, isDurable, endpointProperties, doDurableProvisioning, testFlowCxn, "Durable queue");
 	}
 
 	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties,
-								 boolean doDurableProvisioning, String durableQueueType)
+								 boolean doDurableProvisioning, boolean testFlowCxn, String durableQueueType)
 			throws ProvisioningException {
 		Queue queue;
 		try {
@@ -161,32 +163,41 @@ public class SolaceQueueProvisioner
 			throw new ProvisioningException(msg, e);
 		}
 
-		try {
-			logger.info(String.format("Testing consumer flow connection to queue %s (will not start it)", name));
-			final ConsumerFlowProperties testFlowProperties = new ConsumerFlowProperties().setEndpoint(queue).setStartState(false);
-			jcsmpSession.createFlow(null, testFlowProperties, endpointProperties).close();
-			logger.info(String.format("Connected test consumer flow to queue %s, closing it", name));
-		} catch (JCSMPException e) {
-			String msg = String.format("Failed to connect test consumer flow to queue %s", name);
+		if (testFlowCxn) {
+			try {
+				logger.info(String.format("Testing consumer flow connection to queue %s (will not start it)", name));
+				final ConsumerFlowProperties testFlowProperties = new ConsumerFlowProperties().setEndpoint(queue).setStartState(false);
+				jcsmpSession.createFlow(null, testFlowProperties, endpointProperties).close();
+				logger.info(String.format("Connected test consumer flow to queue %s, closing it", name));
+			} catch (JCSMPException e) {
+				String msg = String.format("Failed to connect test consumer flow to queue %s", name);
 
-			if (isDurable && !doDurableProvisioning) {
-				msg += ". Provisioning is disabled, queue was not provisioned nor was its configuration validated.";
-			}
+				if (isDurable && !doDurableProvisioning) {
+					msg += ". Provisioning is disabled, queue was not provisioned nor was its configuration validated.";
+				}
 
-			if (e instanceof InvalidOperationException && !isDurable) {
-				msg += ". If the Solace client is not capable of creating temporary queues, consider assigning this consumer to a group?";
+				if (e instanceof InvalidOperationException && !isDurable) {
+					msg += ". If the Solace client is not capable of creating temporary queues, consider assigning this consumer to a group?";
+				}
+				logger.warn(msg, e);
+				throw new ProvisioningException(msg, e);
 			}
-			logger.warn(msg, e);
-			throw new ProvisioningException(msg, e);
+		} else {
+			logger.trace(String.format("Skipping test consumer flow connection for queue %s", name));
 		}
 
 		return queue;
 	}
 
-	private Queue provisionErrorQueue(String errorQueueName, SolaceConsumerProperties properties) {
+	private Queue provisionErrorQueue(String errorQueueName, ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		logger.info(String.format("Provisioning error queue %s", errorQueueName));
-		EndpointProperties endpointProperties = SolaceProvisioningUtil.getErrorQueueEndpointProperties(properties);
-		return provisionQueue(errorQueueName, true, endpointProperties, properties.isProvisionErrorQueue(), "Error Queue");
+		EndpointProperties endpointProperties = SolaceProvisioningUtil.getErrorQueueEndpointProperties(properties.getExtension());
+		return provisionQueue(errorQueueName,
+				true,
+				endpointProperties,
+				properties.getExtension().isProvisionErrorQueue(),
+				properties.isAutoStartup(),
+				"Error Queue");
 	}
 
 	public void addSubscriptionToQueue(Queue queue, String topicName, SolaceCommonProperties properties, boolean isDestinationSubscription) {
