@@ -159,7 +159,8 @@
             <id>releaseInternal</id>
             <activation>
                 <property>
-                    <name>!releaseCentral</name>
+                    <name>releaseInternal</name>
+                    <value>true</value>
                 </property>
             </activation>
             <distributionManagement>
@@ -173,6 +174,22 @@
                     <name>Apps Snapshots Repository</name>
                     <url>http://apps-jenkins:9090/nexus/content/repositories/snapshots</url>
                 </snapshotRepository>
+            </distributionManagement>
+        </profile>
+        <profile>
+            <id>releaseGitHub</id>
+            <activation>
+                <property>
+                    <name>releaseGitHub</name>
+                    <value>true</value>
+                </property>
+            </activation>
+            <distributionManagement>
+                <repository>
+                    <id>github</id>
+                    <name>GitHub SolaceDev Maven Packages - Solace Spring Cloud</name>
+                    <url>https://maven.pkg.github.com/SolaceDev/solace-spring-cloud</url>
+                </repository>
             </distributionManagement>
         </profile>
 
