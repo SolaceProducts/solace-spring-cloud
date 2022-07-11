@@ -102,8 +102,8 @@
             <id>releaseCentral</id>
             <activation>
                 <property>
-                    <name>releaseCentral</name>
-                    <value>true</value>
+                    <name>releaseTarget</name>
+                    <value>central</value>
                 </property>
             </activation>
             <properties>
@@ -159,8 +159,7 @@
             <id>releaseInternal</id>
             <activation>
                 <property>
-                    <name>releaseInternal</name>
-                    <value>true</value>
+                    <name>!releaseTarget</name>
                 </property>
             </activation>
             <distributionManagement>
@@ -180,8 +179,8 @@
             <id>releaseGitHub</id>
             <activation>
                 <property>
-                    <name>releaseGitHub</name>
-                    <value>true</value>
+                    <name>releaseTarget</name>
+                    <value>github</value>
                 </property>
             </activation>
             <distributionManagement>
