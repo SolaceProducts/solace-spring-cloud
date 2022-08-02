@@ -38,7 +38,7 @@
         <solace.spring.cloud.connector.version>4.3.8-SNAPSHOT</solace.spring.cloud.connector.version>
         <solace.spring.cloud.stream-starter.version>3.3.2-SNAPSHOT</solace.spring.cloud.stream-starter.version>
 
-        <solace.integration.test.support.version>0.9.0</solace.integration.test.support.version>
+        <solace.integration.test.support.version>0.9.1</solace.integration.test.support.version>
         <solace.integration.test.support.fetch_checkout.skip>false</solace.integration.test.support.fetch_checkout.skip>
         <solace.integration.test.support.install.skip>true</solace.integration.test.support.install.skip>
     </properties>
@@ -367,6 +367,7 @@
                                 <argument>-f</argument>
                                 <argument>${basedir}/solace-integration-test-support/</argument>
                                 <argument>-DskipTests</argument>
+                                <argument>-Dchangelist=</argument>
                                 <argument>-q</argument>
                             </arguments>
                         </configuration>
