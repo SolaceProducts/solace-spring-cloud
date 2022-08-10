@@ -76,7 +76,7 @@ Include version 4.0.0 or later to use Spring Boot release 2.x
 
 ```
 // Solace Cloud
-compile("com.solace.cloud.cloudfoundry:solace-spring-cloud-connector:4.3.7")
+compile("com.solace.cloud.cloudfoundry:solace-spring-cloud-connector:4.3.8")
 ```
 
 ### Using it with Maven
@@ -86,7 +86,7 @@ compile("com.solace.cloud.cloudfoundry:solace-spring-cloud-connector:4.3.7")
 <dependency>
   <groupId>com.solace.cloud.cloudfoundry</groupId>
   <artifactId>solace-spring-cloud-connector</artifactId>
-  <version>4.3.7</version>
+  <version>4.3.8</version>
 </dependency>
 ```
 

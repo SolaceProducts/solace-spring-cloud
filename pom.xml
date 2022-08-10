@@ -38,7 +38,7 @@
         <solace.spring.cloud.connector.version>4.3.8-SNAPSHOT</solace.spring.cloud.connector.version>
         <solace.spring.cloud.stream-starter.version>3.3.2-SNAPSHOT</solace.spring.cloud.stream-starter.version>
 
-        <solace.integration.test.support.version>0.9.0</solace.integration.test.support.version>
+        <solace.integration.test.support.version>0.9.1</solace.integration.test.support.version>
         <solace.integration.test.support.fetch_checkout.skip>false</solace.integration.test.support.fetch_checkout.skip>
         <solace.integration.test.support.install.skip>true</solace.integration.test.support.install.skip>
     </properties>
@@ -102,8 +102,8 @@
             <id>releaseCentral</id>
             <activation>
                 <property>
-                    <name>releaseCentral</name>
-                    <value>true</value>
+                    <name>releaseTarget</name>
+                    <value>central</value>
                 </property>
             </activation>
             <properties>
@@ -159,7 +159,7 @@
             <id>releaseInternal</id>
             <activation>
                 <property>
-                    <name>!releaseCentral</name>
+                    <name>!releaseTarget</name>
                 </property>
             </activation>
             <distributionManagement>
@@ -173,6 +173,22 @@
                     <name>Apps Snapshots Repository</name>
                     <url>http://apps-jenkins:9090/nexus/content/repositories/snapshots</url>
                 </snapshotRepository>
+            </distributionManagement>
+        </profile>
+        <profile>
+            <id>releaseGitHub</id>
+            <activation>
+                <property>
+                    <name>releaseTarget</name>
+                    <value>github</value>
+                </property>
+            </activation>
+            <distributionManagement>
+                <repository>
+                    <id>github</id>
+                    <name>GitHub SolaceDev Maven Packages - Solace Spring Cloud</name>
+                    <url>https://maven.pkg.github.com/SolaceDev/solace-spring-cloud</url>
+                </repository>
             </distributionManagement>
         </profile>
 
@@ -351,6 +367,7 @@
                                 <argument>-f</argument>
                                 <argument>${basedir}/solace-integration-test-support/</argument>
                                 <argument>-DskipTests</argument>
+                                <argument>-Dchangelist=</argument>
                                 <argument>-q</argument>
                             </arguments>
                         </configuration>
