@@ -24,6 +24,7 @@ import org.springframework.retry.RetryContext;
 import org.springframework.retry.RetryListener;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
+import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -103,9 +104,19 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName);
 
+		ExponentialBackOff exponentialBackOff = new ExponentialBackOff();
+		exponentialBackOff.setInitialInterval(consumerProperties.getFlowRebindBackOffInitialInterval());
+		exponentialBackOff.setMaxInterval(consumerProperties.getFlowRebindBackOffMaxInterval());
+		exponentialBackOff.setMultiplier(consumerProperties.getFlowRebindBackOffMultiplier());
+
 		for (int i = 0, numToCreate = concurrency - flowReceivers.size(); i < numToCreate; i++) {
 			logger.info(String.format("Creating consumer %s of %s for inbound adapter %s", i + 1, concurrency, id));
-			FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
+			FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(
+					jcsmpSession,
+					queueName,
+					endpointProperties,
+					exponentialBackOff,
+					lock -> taskService.blockIfPoolSizeExceeded(consumerProperties.getFlowRebindBlockWorkerPoolThreshold(), lock));
 			flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getFlowPreRebindWaitTimeout(),
 					TimeUnit.MILLISECONDS);
 			if (paused.get()) {

@@ -43,6 +43,7 @@ import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -1856,7 +1857,11 @@ public class FlowReceiverContainerIT {
 
 	private FlowReceiverContainer createFlowReceiverContainer(JCSMPSession jcsmpSession, Queue queue) {
 		if (flowReceiverContainerReference.compareAndSet(null, Mockito.spy(new FlowReceiverContainer(
-				jcsmpSession, queue.getName(), new EndpointProperties())))) {
+				jcsmpSession,
+				queue.getName(),
+				new EndpointProperties(),
+				new FixedBackOff(1, Long.MAX_VALUE),
+				lock -> {})))) {
 			logger.info("Created new FlowReceiverContainer " + flowReceiverContainerReference.get().getId());
 		}
 		return flowReceiverContainerReference.get();

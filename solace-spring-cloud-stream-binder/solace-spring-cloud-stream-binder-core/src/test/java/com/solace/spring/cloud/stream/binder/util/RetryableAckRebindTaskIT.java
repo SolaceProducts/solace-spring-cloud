@@ -22,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -52,8 +53,12 @@ public class RetryableAckRebindTaskIT {
 	@BeforeEach
 	public void setUp(JCSMPSession jcsmpSession, Queue queue) throws Exception {
 		taskService = Mockito.spy(new RetryableTaskService());
-		flowReceiverContainer = Mockito.spy(new FlowReceiverContainer(jcsmpSession, queue.getName(),
-				new EndpointProperties()));
+		flowReceiverContainer = Mockito.spy(new FlowReceiverContainer(
+				jcsmpSession,
+				queue.getName(),
+				new EndpointProperties(),
+				new FixedBackOff(1, Long.MAX_VALUE),
+				lock -> taskService.blockIfPoolSizeExceeded(Long.MAX_VALUE, lock)));
 		flowReceiverContainer.bind();
 		producer = jcsmpSession.getMessageProducer(new JCSMPSessionProducerManager.CloudStreamEventHandler());
 	}

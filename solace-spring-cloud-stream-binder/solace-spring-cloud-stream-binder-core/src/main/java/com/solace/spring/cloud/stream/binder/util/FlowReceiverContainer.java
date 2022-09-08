@@ -13,8 +13,8 @@ import com.solacesystems.jcsmp.JCSMPTransportException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.lang.Nullable;
+import org.springframework.util.backoff.BackOff;
 import org.springframework.util.backoff.BackOffExecution;
-import org.springframework.util.backoff.ExponentialBackOff;
 import org.springframework.util.concurrent.SettableListenableFuture;
 
 import java.util.Objects;
@@ -38,6 +38,8 @@ public class FlowReceiverContainer {
 	private final JCSMPSession session;
 	private final String queueName;
 	private final EndpointProperties endpointProperties;
+	private final BackOff backOff;
+	private final InterruptableConsumer<Lock> blockRebindIfNecessary;
 	private final AtomicReference<FlowReceiverReference> flowReceiverAtomicReference = new AtomicReference<>();
 	private final AtomicBoolean isRebinding = new AtomicBoolean(false);
 	private final AtomicBoolean isPaused = new AtomicBoolean(false);
@@ -69,13 +71,18 @@ public class FlowReceiverContainer {
 	private static final Log logger = LogFactory.getLog(FlowReceiverContainer.class);
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private final SolaceFlowEventHandler eventHandler;
-	private final ExponentialBackOff exponentialBackOff = new ExponentialBackOff();
 
-	public FlowReceiverContainer(JCSMPSession session, String queueName, EndpointProperties endpointProperties) {
+	public FlowReceiverContainer(JCSMPSession session,
+								 String queueName,
+								 EndpointProperties endpointProperties,
+								 BackOff backOff,
+								 InterruptableConsumer<Lock> blockRebindIfNecessary) {
 		this.session = session;
 		this.queueName = queueName;
 		this.endpointProperties = endpointProperties;
 		this.eventHandler = new SolaceFlowEventHandler(xmlMessageMapper, id.toString());
+		this.backOff = backOff;
+		this.blockRebindIfNecessary = blockRebindIfNecessary;
 	}
 
 	/**
@@ -208,15 +215,23 @@ public class FlowReceiverContainer {
 
 			unbind();
 
-			long backoff = backOffExecutionReference.updateAndGet(b -> b != null ? b : exponentialBackOff.start())
-					.nextBackOff();
+			BackOffExecution backOffExecution = backOffExecutionReference.getAndUpdate(
+					b -> b != null ? b : backOff.start());
 			try {
-				if (logger.isTraceEnabled()) {
-					logger.trace(String.format("Rebind backoff -> %s ms", backoff));
+				if (backOffExecution != null) {
+					long backoff = backOffExecution.nextBackOff();
+					if (logger.isDebugEnabled()) {
+						logger.debug(String.format(
+								"Back-off rebind of flow receiver container %s by %s ms", id, backoff));
+					}
+					Thread.sleep(backoff);
 				}
-				Thread.sleep(backoff);
+				blockRebindIfNecessary.accept(writeLock);
 			} catch (InterruptedException e) {
-				logger.debug("Backoff was interrupted, continuing...");
+				if (logger.isDebugEnabled()) {
+					logger.debug(String.format(
+							"Flow receiver container %s back-off was interrupted, continuing...", id));
+				}
 			}
 
 			return bind();

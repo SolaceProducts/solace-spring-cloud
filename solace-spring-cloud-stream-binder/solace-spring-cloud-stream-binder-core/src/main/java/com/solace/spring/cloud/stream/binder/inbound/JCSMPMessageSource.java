@@ -26,6 +26,7 @@ import org.springframework.integration.endpoint.AbstractMessageSource;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessagingException;
+import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.List;
 import java.util.Optional;
@@ -199,7 +200,17 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 			try {
 				if (flowReceiverContainer == null) {
-					flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
+					ExponentialBackOff exponentialBackOff = new ExponentialBackOff();
+					exponentialBackOff.setInitialInterval(consumerProperties.getExtension().getFlowRebindBackOffInitialInterval());
+					exponentialBackOff.setMaxInterval(consumerProperties.getExtension().getFlowRebindBackOffMaxInterval());
+					exponentialBackOff.setMultiplier(consumerProperties.getExtension().getFlowRebindBackOffMultiplier());
+
+					flowReceiverContainer = new FlowReceiverContainer(
+							jcsmpSession,
+							queueName,
+							endpointProperties,
+							exponentialBackOff,
+							lock -> taskService.blockIfPoolSizeExceeded(consumerProperties.getExtension().getFlowRebindBlockWorkerPoolThreshold(), lock));
 					this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
 					flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
 							TimeUnit.MILLISECONDS);
