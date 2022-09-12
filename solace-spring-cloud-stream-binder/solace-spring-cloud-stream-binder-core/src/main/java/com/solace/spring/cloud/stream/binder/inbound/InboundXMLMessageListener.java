@@ -1,7 +1,7 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
-import com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
@@ -47,7 +47,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 	private final XMLMessageMapper xmlMessageMapper;
 	private final Consumer<Message<?>> messageConsumer;
 	private final JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
-	@Nullable private final SolaceMessageMeterBinder solaceMessageMeterBinder;
+	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
 	private final boolean needHolder;
 	private final boolean needAttributes;
 	private final AtomicBoolean stopFlag = new AtomicBoolean(false);
@@ -61,7 +61,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 							  @Nullable BatchCollector batchCollector,
 							  Consumer<Message<?>> messageConsumer,
 							  JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
-							  @Nullable SolaceMessageMeterBinder solaceMessageMeterBinder,
+							  @Nullable SolaceMeterAccessor solaceMeterAccessor,
 							  @Nullable AtomicBoolean remoteStopFlag,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
 							  boolean needHolder,
@@ -72,7 +72,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		this.batchCollector = batchCollector;
 		this.messageConsumer = messageConsumer;
 		this.ackCallbackFactory = ackCallbackFactory;
-		this.solaceMessageMeterBinder = solaceMessageMeterBinder;
+		this.solaceMeterAccessor = solaceMeterAccessor;
 		this.remoteStopFlag = () -> remoteStopFlag != null && remoteStopFlag.get();
 		this.attributesHolder = attributesHolder;
 		this.needHolder = needHolder;
@@ -129,8 +129,8 @@ abstract class InboundXMLMessageListener implements Runnable {
 			return;
 		}
 
-		if (solaceMessageMeterBinder != null && messageContainer != null) {
-			solaceMessageMeterBinder.recordMessage(consumerProperties.getBindingName(), messageContainer.getMessage());
+		if (solaceMeterAccessor != null && messageContainer != null) {
+			solaceMeterAccessor.recordMessage(consumerProperties.getBindingName(), messageContainer.getMessage());
 		}
 
 		try {

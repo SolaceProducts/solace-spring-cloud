@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.config.SolaceMeterConfiguration;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
 import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
@@ -62,11 +63,12 @@ public class SolaceBinderMeterIT {
 	private static final Logger logger = LoggerFactory.getLogger(SolaceBinderMeterIT.class);
 
 	@BeforeEach
-	void setUp(@Autowired SolaceMessageMeterBinder messageMeterBinder,
+	void setUp(@Autowired SolaceMeterAccessor solaceMeterAccessor,
+			   @Autowired SolaceMessageMeterBinder messageMeterBinder,
 			   @Autowired MeterRegistry meterRegistry,
 			   SpringCloudStreamContext context) {
 		messageMeterBinder.bindTo(meterRegistry);
-		context.getBinder().getBinder().setSolaceMessageMeterBinder(messageMeterBinder);
+		context.getBinder().getBinder().setSolaceMeterAccessor(solaceMeterAccessor);
 	}
 
 	@AfterEach

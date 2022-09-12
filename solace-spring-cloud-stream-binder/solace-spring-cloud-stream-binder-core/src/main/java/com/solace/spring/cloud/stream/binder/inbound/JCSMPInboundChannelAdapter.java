@@ -1,10 +1,14 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
-import com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
-import com.solace.spring.cloud.stream.binder.util.*;
+import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
+import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
+import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
+import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
+import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -44,7 +48,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final JCSMPSession jcsmpSession;
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
 	private final EndpointProperties endpointProperties;
-	@Nullable private final SolaceMessageMeterBinder solaceMessageMeterBinder;
+	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
 	private final RetryableTaskService taskService;
 	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
 	private final List<FlowReceiverContainer> flowReceivers;
@@ -65,13 +69,13 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 									  RetryableTaskService taskService,
 									  ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
 									  @Nullable EndpointProperties endpointProperties,
-									  @Nullable SolaceMessageMeterBinder solaceMessageMeterBinder) {
+									  @Nullable SolaceMeterAccessor solaceMeterAccessor) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
 		this.taskService = taskService;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
-		this.solaceMessageMeterBinder = solaceMessageMeterBinder;
+		this.solaceMeterAccessor = solaceMeterAccessor;
 		this.flowReceivers = new ArrayList<>(consumerProperties.getConcurrency());
 		this.consumerStopFlags = new HashSet<>(consumerProperties.getConcurrency());
 	}
@@ -233,7 +237,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					ackCallbackFactory,
 					retryTemplate,
 					recoveryCallback,
-					solaceMessageMeterBinder,
+					solaceMeterAccessor,
 					remoteStopFlag,
 					attributesHolder
 			);
@@ -246,7 +250,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					this::sendMessage,
 					ackCallbackFactory,
 					this::sendErrorMessageIfNecessary,
-					solaceMessageMeterBinder,
+					solaceMeterAccessor,
 					remoteStopFlag,
 					attributesHolder,
 					this.getErrorChannel() != null

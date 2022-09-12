@@ -4,6 +4,7 @@ import com.solace.spring.cloud.stream.binder.inbound.BatchCollector;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties;
@@ -54,7 +55,7 @@ public class SolaceMessageChannelBinder
 	private final JCSMPSessionProducerManager sessionProducerManager;
 	private final AtomicBoolean consumersRemoteStopFlag = new AtomicBoolean(false);
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
-	private SolaceMessageMeterBinder solaceMessageMeterBinder;
+	private SolaceMeterAccessor solaceMeterAccessor;
 	private SolaceExtendedBindingProperties extendedBindingProperties = new SolaceExtendedBindingProperties();
 
 	private final RetryableTaskService taskService = new RetryableTaskService();
@@ -108,7 +109,7 @@ public class SolaceMessageChannelBinder
 				taskService,
 				properties,
 				getConsumerEndpointProperties(properties),
-				solaceMessageMeterBinder);
+				solaceMeterAccessor);
 
 		adapter.setRemoteStopFlag(consumersRemoteStopFlag);
 		adapter.setPostStart(getConsumerPostStart(solaceDestination, properties));
@@ -151,7 +152,7 @@ public class SolaceMessageChannelBinder
 				taskService,
 				consumerProperties,
 				endpointProperties,
-				solaceMessageMeterBinder);
+				solaceMeterAccessor);
 
 		messageSource.setRemoteStopFlag(consumersRemoteStopFlag::get);
 		messageSource.setPostStart(getConsumerPostStart(solaceDestination, consumerProperties));
@@ -235,8 +236,8 @@ public class SolaceMessageChannelBinder
 		this.extendedBindingProperties = extendedBindingProperties;
 	}
 
-	public void setSolaceMessageMeterBinder(SolaceMessageMeterBinder solaceMessageMeterBinder) {
-		this.solaceMessageMeterBinder = solaceMessageMeterBinder;
+	public void setSolaceMeterAccessor(SolaceMeterAccessor solaceMeterAccessor) {
+		this.solaceMeterAccessor = solaceMeterAccessor;
 	}
 
 	/**

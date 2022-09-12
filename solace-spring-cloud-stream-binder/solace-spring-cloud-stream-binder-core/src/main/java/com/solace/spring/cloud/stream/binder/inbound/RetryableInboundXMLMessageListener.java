@@ -1,7 +1,7 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
-import com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
@@ -31,7 +31,7 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 									   JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
 									   RetryTemplate retryTemplate,
 									   RecoveryCallback<?> recoveryCallback,
-									   @Nullable SolaceMessageMeterBinder solaceMessageMeterBinder,
+									   @Nullable SolaceMeterAccessor solaceMeterAccessor,
 									   @Nullable AtomicBoolean remoteStopFlag,
 									   ThreadLocal<AttributeAccessor> attributesHolder) {
 		super(flowReceiverContainer,
@@ -40,7 +40,7 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 				batchCollector,
 				messageConsumer,
 				ackCallbackFactory,
-				solaceMessageMeterBinder,
+				solaceMeterAccessor,
 				remoteStopFlag,
 				attributesHolder,
 				false,

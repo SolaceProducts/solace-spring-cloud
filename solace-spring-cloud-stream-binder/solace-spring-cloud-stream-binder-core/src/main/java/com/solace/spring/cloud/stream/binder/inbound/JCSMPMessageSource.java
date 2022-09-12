@@ -1,7 +1,7 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
-import com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
@@ -46,7 +46,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private final BatchCollector batchCollector;
 	private final RetryableTaskService taskService;
 	private final EndpointProperties endpointProperties;
-	@Nullable private final SolaceMessageMeterBinder solaceMessageMeterBinder;
+	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
 	private final boolean hasTemporaryQueue;
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
 	private FlowReceiverContainer flowReceiverContainer;
@@ -65,7 +65,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 							  RetryableTaskService taskService,
 							  ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
 							  EndpointProperties endpointProperties,
-							  @Nullable SolaceMessageMeterBinder solaceMessageMeterBinder) {
+							  @Nullable SolaceMeterAccessor solaceMeterAccessor) {
 		this.queueName = destination.getName();
 		this.jcsmpSession = jcsmpSession;
 		this.batchCollector = batchCollector;
@@ -73,7 +73,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
 		this.hasTemporaryQueue = destination.isTemporary();
-		this.solaceMessageMeterBinder = solaceMessageMeterBinder;
+		this.solaceMeterAccessor = solaceMeterAccessor;
 	}
 
 	@Override
@@ -110,8 +110,8 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 						messageContainerForBatch = flowReceiverContainer.receive();
 					}
 					if (messageContainerForBatch != null) {
-						if (solaceMessageMeterBinder != null) {
-							solaceMessageMeterBinder.recordMessage(
+						if (solaceMeterAccessor != null) {
+							solaceMeterAccessor.recordMessage(
 									consumerProperties.getBindingName(),
 									messageContainerForBatch.getMessage());
 						}
@@ -122,8 +122,8 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			} else {
 				int timeout = consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis();
 				messageContainer = flowReceiverContainer.receive(timeout);
-				if (solaceMessageMeterBinder != null && messageContainer != null) {
-					solaceMessageMeterBinder.recordMessage(
+				if (solaceMeterAccessor != null && messageContainer != null) {
+					solaceMeterAccessor.recordMessage(
 							consumerProperties.getBindingName(),
 							messageContainer.getMessage());
 				}
