@@ -1,9 +1,11 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
-import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
+import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.acks.AckUtils;
@@ -23,16 +25,26 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 
 	RetryableInboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 									   ConsumerDestination consumerDestination,
-									   SolaceConsumerProperties consumerProperties,
+									   ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
 									   @Nullable BatchCollector batchCollector,
 									   Consumer<Message<?>> messageConsumer,
 									   JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
 									   RetryTemplate retryTemplate,
 									   RecoveryCallback<?> recoveryCallback,
+									   @Nullable SolaceMessageMeterBinder solaceMessageMeterBinder,
 									   @Nullable AtomicBoolean remoteStopFlag,
 									   ThreadLocal<AttributeAccessor> attributesHolder) {
-		super(flowReceiverContainer, consumerDestination, consumerProperties, batchCollector, messageConsumer,
-				ackCallbackFactory, remoteStopFlag, attributesHolder, false, true);
+		super(flowReceiverContainer,
+				consumerDestination,
+				consumerProperties,
+				batchCollector,
+				messageConsumer,
+				ackCallbackFactory,
+				solaceMessageMeterBinder,
+				remoteStopFlag,
+				attributesHolder,
+				false,
+				true);
 		this.retryTemplate = retryTemplate;
 		this.recoveryCallback = recoveryCallback;
 	}

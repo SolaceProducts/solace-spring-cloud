@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.util.*;
@@ -12,6 +13,7 @@ import com.solacesystems.jcsmp.Queue;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.context.OrderlyShutdownCapable;
 import org.springframework.integration.core.Pausable;
@@ -40,10 +42,9 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final String id = UUID.randomUUID().toString();
 	private final SolaceConsumerDestination consumerDestination;
 	private final JCSMPSession jcsmpSession;
-	private final SolaceConsumerProperties consumerProperties;
+	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
 	private final EndpointProperties endpointProperties;
-	private final int concurrency;
-	private final boolean batchingEnabled;
+	@Nullable private final SolaceMessageMeterBinder solaceMessageMeterBinder;
 	private final RetryableTaskService taskService;
 	private final long shutdownInterruptThresholdInMillis = 500; //TODO Make this configurable
 	private final List<FlowReceiverContainer> flowReceivers;
@@ -61,36 +62,34 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 	public JCSMPInboundChannelAdapter(SolaceConsumerDestination consumerDestination,
 									  JCSMPSession jcsmpSession,
-									  int concurrency,
-									  boolean batchingEnabled,
 									  RetryableTaskService taskService,
-									  SolaceConsumerProperties consumerProperties,
-									  @Nullable EndpointProperties endpointProperties) {
+									  ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
+									  @Nullable EndpointProperties endpointProperties,
+									  @Nullable SolaceMessageMeterBinder solaceMessageMeterBinder) {
 		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
-		this.concurrency = concurrency;
-		this.batchingEnabled = batchingEnabled;
 		this.taskService = taskService;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
-		this.flowReceivers = new ArrayList<>(this.concurrency);
-		this.consumerStopFlags = new HashSet<>(this.concurrency);
+		this.solaceMessageMeterBinder = solaceMessageMeterBinder;
+		this.flowReceivers = new ArrayList<>(consumerProperties.getConcurrency());
+		this.consumerStopFlags = new HashSet<>(consumerProperties.getConcurrency());
 	}
 
 	@Override
 	protected void doStart() {
 		final String queueName = consumerDestination.getName();
 		logger.info(String.format("Creating %s consumer flows for queue %s <inbound adapter %s>",
-				concurrency, queueName, id));
+				consumerProperties.getConcurrency(), queueName, id));
 
 		if (isRunning()) {
 			logger.warn(String.format("Nothing to do. Inbound message channel adapter %s is already running", id));
 			return;
 		}
 
-		if (concurrency < 1) {
+		if (consumerProperties.getConcurrency() < 1) {
 			String msg = String.format("Concurrency must be greater than 0, was %s <inbound adapter %s>",
-					concurrency, id);
+					consumerProperties.getConcurrency(), id);
 			logger.warn(msg);
 			throw new MessagingException(msg);
 		}
@@ -103,10 +102,10 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName);
 
-		for (int i = 0, numToCreate = concurrency - flowReceivers.size(); i < numToCreate; i++) {
-			logger.info(String.format("Creating consumer %s of %s for inbound adapter %s", i + 1, concurrency, id));
+		for (int i = 0, numToCreate = consumerProperties.getConcurrency() - flowReceivers.size(); i < numToCreate; i++) {
+			logger.info(String.format("Creating consumer %s of %s for inbound adapter %s", i + 1, consumerProperties.getConcurrency(), id));
 			FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
-			flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getFlowPreRebindWaitTimeout(),
+			flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
 					TimeUnit.MILLISECONDS);
 			if (paused.get()) {
 				logger.info(String.format(
@@ -132,7 +131,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			retryTemplate.registerListener(new SolaceRetryListener(queueName));
 		}
 
-		executorService = Executors.newFixedThreadPool(this.concurrency);
+		executorService = Executors.newFixedThreadPool(consumerProperties.getConcurrency());
 		flowReceivers.stream()
 				.map(this::buildListener)
 				.forEach(listener -> {
@@ -155,7 +154,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private void stopAllConsumers() {
 		final String queueName = consumerDestination.getName();
 		logger.info(String.format("Stopping all %s consumer flows to queue %s <inbound adapter ID: %s>",
-				concurrency, queueName, id));
+				consumerProperties.getConcurrency(), queueName, id));
 		consumerStopFlags.forEach(flag -> flag.set(true)); // Mark threads for shutdown
 		try {
 			if (!executorService.awaitTermination(shutdownInterruptThresholdInMillis, TimeUnit.MILLISECONDS)) {
@@ -229,11 +228,12 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					flowReceiverContainer,
 					consumerDestination,
 					consumerProperties,
-					batchingEnabled ? new BatchCollector(consumerProperties) : null,
+					consumerProperties.isBatchMode() ? new BatchCollector(consumerProperties.getExtension()) : null,
 					this::sendMessage,
 					ackCallbackFactory,
 					retryTemplate,
 					recoveryCallback,
+					solaceMessageMeterBinder,
 					remoteStopFlag,
 					attributesHolder
 			);
@@ -242,10 +242,11 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 					flowReceiverContainer,
 					consumerDestination,
 					consumerProperties,
-					batchingEnabled ? new BatchCollector(consumerProperties) : null,
+					consumerProperties.isBatchMode() ? new BatchCollector(consumerProperties.getExtension()) : null,
 					this::sendMessage,
 					ackCallbackFactory,
 					this::sendErrorMessageIfNecessary,
+					solaceMessageMeterBinder,
 					remoteStopFlag,
 					attributesHolder,
 					this.getErrorChannel() != null

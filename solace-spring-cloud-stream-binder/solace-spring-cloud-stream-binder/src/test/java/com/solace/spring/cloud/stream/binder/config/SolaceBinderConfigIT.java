@@ -55,7 +55,8 @@ public class SolaceBinderConfigIT {
 	public void testClientInfoProvider(JCSMPProperties jcsmpProperties, SempV2Api sempV2Api, SoftAssertions softly)
 			throws Exception {
 		MonitorMsgVpnClient client;
-		SolaceMessageChannelBinder solaceMessageChannelBinder = binderConfiguration.solaceMessageChannelBinder();
+		SolaceMessageChannelBinder solaceMessageChannelBinder = binderConfiguration.solaceMessageChannelBinder(
+				binderConfiguration.provisioningProvider(), null);
 		try {
 			String vpnName = jcsmpProperties.getStringProperty(JCSMPProperties.VPN_NAME);
 			client = sempV2Api.monitor()
