@@ -9,13 +9,13 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Statistic;
 import io.micrometer.core.instrument.binder.BaseUnits;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.ThrowingConsumer;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 import java.util.List;
@@ -25,7 +25,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.InstanceOfAssertFactories.DOUBLE;
 
 @SpringJUnitConfig(SolaceMessageMeterBinderTest.Config.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 public class SolaceMessageMeterBinderTest {
 	@CartesianTest(name = "[{index}] writeAttachment={0}, writeXmlContent={1}, writeMetadata={2}")
 	public void testMessageSizeTotalMeter(@Values(booleans = {false, true}) boolean writeAttachment,
@@ -34,10 +33,12 @@ public class SolaceMessageMeterBinderTest {
 										  @Autowired SolaceMessageMeterBinder solaceMessageMeterBinder,
 										  @Autowired MeterRegistry meterRegistry) {
 		BytesMessage message = createTestMessage(writeAttachment, writeXmlContent, writeMetadata);
-		String bindingName = "binding-name-0";
+		String bindingName = RandomStringUtils.randomAlphanumeric(100);
 		solaceMessageMeterBinder.recordMessage(bindingName, message);
 
-		assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_TOTAL_SIZE).meters())
+		assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_TOTAL_SIZE)
+				.tag(SolaceMessageMeterBinder.TAG_NAME, bindingName)
+				.meters())
 				.hasSize(1)
 				.first()
 				.satisfies(isValidMessageSizeMeter(bindingName,
@@ -53,10 +54,12 @@ public class SolaceMessageMeterBinderTest {
 											@Autowired SolaceMessageMeterBinder solaceMessageMeterBinder,
 											@Autowired MeterRegistry meterRegistry) {
 		BytesMessage message = createTestMessage(writeAttachment, writeXmlContent, writeMetadata);
-		String bindingName = "binding-name-0";
+		String bindingName = RandomStringUtils.randomAlphanumeric(100);
 		solaceMessageMeterBinder.recordMessage(bindingName, message);
 
-		assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE).meters())
+		assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE)
+				.tag(SolaceMessageMeterBinder.TAG_NAME, bindingName)
+				.meters())
 				.hasSize(1)
 				.first()
 				.satisfies(isValidMessageSizeMeter(bindingName,

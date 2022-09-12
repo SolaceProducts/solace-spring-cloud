@@ -23,7 +23,7 @@ import com.solacesystems.jcsmp.XMLMessageProducer;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
@@ -37,7 +37,6 @@ import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.integration.channel.DirectChannel;
-import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 import java.util.List;
@@ -58,22 +57,19 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ExtendWith(ExecutorServiceExtension.class)
 @ExtendWith(PubSubPlusExtension.class)
 @ExtendWith(SpringCloudStreamExtension.class)
-@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
 public class SolaceBinderMeterIT {
 	private static final Logger logger = LoggerFactory.getLogger(SolaceBinderMeterIT.class);
 
-	@BeforeEach
-	void setUp(@Autowired SolaceMeterAccessor solaceMeterAccessor,
-			   @Autowired SolaceMessageMeterBinder messageMeterBinder,
-			   @Autowired MeterRegistry meterRegistry,
-			   SpringCloudStreamContext context) {
+	@BeforeAll
+	static void beforeAll(@Autowired SolaceMessageMeterBinder messageMeterBinder,
+						  @Autowired MeterRegistry meterRegistry) {
 		messageMeterBinder.bindTo(meterRegistry);
-		context.getBinder().getBinder().setSolaceMeterAccessor(solaceMeterAccessor);
 	}
 
-	@AfterEach
-	void tearDown(@Autowired MeterRegistry meterRegistry) {
-		meterRegistry.clear();
+	@BeforeEach
+	void setUp(@Autowired SolaceMeterAccessor solaceMeterAccessor,
+			   SpringCloudStreamContext context) {
+		context.getBinder().getBinder().setSolaceMeterAccessor(solaceMeterAccessor);
 	}
 
 	@CartesianTest(name = "[{index}] channelType={0}, batchMode={1}")
@@ -87,7 +83,9 @@ public class SolaceBinderMeterIT {
 		SolaceTestBinder binder = context.getBinder();
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
 
-		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel(
+				RandomStringUtils.randomAlphanumeric(100),
+				new BindingProperties());
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
@@ -151,7 +149,9 @@ public class SolaceBinderMeterIT {
 
 		logger.info("Validating message size meters");
 		retryAssert(() -> {
-			assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_TOTAL_SIZE).meters())
+			assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_TOTAL_SIZE)
+					.tag(SolaceMessageMeterBinder.TAG_NAME, consumerProperties.getBindingName())
+					.meters())
 					.hasSize(1)
 					.first()
 					.satisfies(isValidMessageSizeMeter(consumerProperties.getBindingName(),
@@ -161,7 +161,9 @@ public class SolaceBinderMeterIT {
 									.mapToLong(l -> l)
 									.sum()));
 
-			assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE).meters())
+			assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE)
+					.tag(SolaceMessageMeterBinder.TAG_NAME, consumerProperties.getBindingName())
+					.meters())
 					.hasSize(1)
 					.first()
 					.satisfies(isValidMessageSizeMeter(consumerProperties.getBindingName(),
