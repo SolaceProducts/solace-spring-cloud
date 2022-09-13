@@ -78,6 +78,7 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.lessThan;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1769,7 +1770,11 @@ public class FlowReceiverContainerIT {
 		UUID flowReferenceId = flowReceiverContainer.bind();
 
 		Callable<?>[] actions = new Callable[]{
-				(Callable<?>) flowReceiverContainer::bind,
+				(Callable<?>) () -> {
+					AtomicReference<UUID> newFlowReferenceId = new AtomicReference<>();
+					retryAssert(() -> newFlowReferenceId.set(assertDoesNotThrow(flowReceiverContainer::bind)));
+					return newFlowReferenceId.get();
+				},
 				(Callable<?>) () -> {flowReceiverContainer.unbind(); return null;},
 				(Callable<?>) () -> {
 					try {
