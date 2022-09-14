@@ -1761,6 +1761,7 @@ public class FlowReceiverContainerIT {
 
 	@ParameterizedTest
 	@ValueSource(booleans = {false, true})
+	@Timeout(value = 10, unit = TimeUnit.MINUTES)
 	@Execution(ExecutionMode.SAME_THREAD)
 	public void testConcurrentAll(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue) throws Exception {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
