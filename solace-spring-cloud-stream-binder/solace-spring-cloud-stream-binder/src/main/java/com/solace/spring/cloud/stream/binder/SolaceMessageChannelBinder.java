@@ -3,7 +3,6 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.cloud.stream.binder.inbound.BatchCollector;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
-import com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
@@ -89,7 +88,12 @@ public class SolaceMessageChannelBinder
 														  ExtendedProducerProperties<SolaceProducerProperties> producerProperties,
 														  MessageChannel errorChannel) {
 		JCSMPOutboundMessageHandler handler = new JCSMPOutboundMessageHandler(
-				destination, jcsmpSession, errorChannel, sessionProducerManager, producerProperties.getExtension());
+				destination,
+				jcsmpSession,
+				errorChannel,
+				sessionProducerManager,
+				producerProperties,
+				solaceMeterAccessor);
 
 		if (errorChannel != null) {
 			handler.setErrorMessageStrategy(errorMessageStrategy);

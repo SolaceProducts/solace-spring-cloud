@@ -5,6 +5,7 @@ import com.solace.spring.cloud.stream.binder.config.SolaceMeterConfiguration;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
 import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
@@ -14,9 +15,16 @@ import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
+import com.solace.test.integration.semp.v2.SempV2Api;
+import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueueSubscription;
 import com.solacesystems.jcsmp.BytesMessage;
+import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.ConsumerFlowProperties;
+import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.SDTException;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
@@ -25,6 +33,8 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
@@ -34,14 +44,21 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
+import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.integration.channel.DirectChannel;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageHeaders;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.util.MimeTypeUtils;
 
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -149,30 +166,108 @@ public class SolaceBinderMeterIT {
 
 		logger.info("Validating message size meters");
 		retryAssert(() -> {
+			assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE)
+					.tag(SolaceMessageMeterBinder.TAG_NAME, consumerProperties.getBindingName())
+					.meters())
+					.hasSize(1)
+					.first()
+					.as("Checking meter %s with name %s",
+							SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE, consumerProperties.getBindingName())
+					.satisfies(isValidMessageSizeMeter(consumerProperties.getBindingName(),
+							messages.stream()
+									.map(m -> m.getContentLength() + m.getAttachmentContentLength())
+									.mapToLong(l -> l)
+									.sum()));
+
 			assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_TOTAL_SIZE)
 					.tag(SolaceMessageMeterBinder.TAG_NAME, consumerProperties.getBindingName())
 					.meters())
 					.hasSize(1)
 					.first()
+					.as("Checking meter %s with name %s",
+							SolaceMessageMeterBinder.METER_NAME_TOTAL_SIZE, consumerProperties.getBindingName())
 					.satisfies(isValidMessageSizeMeter(consumerProperties.getBindingName(),
 							messages.stream()
 									.map(m -> m.getContentLength() + m.getAttachmentContentLength() +
 											m.getBinaryMetadataContentLength(0))
 									.mapToLong(l -> l)
 									.sum()));
-
-			assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE)
-					.tag(SolaceMessageMeterBinder.TAG_NAME, consumerProperties.getBindingName())
-					.meters())
-					.hasSize(1)
-					.first()
-					.satisfies(isValidMessageSizeMeter(consumerProperties.getBindingName(),
-							messages.stream()
-									.map(m -> m.getContentLength() + m.getAttachmentContentLength())
-									.mapToLong(l -> l)
-									.sum()));
 		});
 
 		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testProducerMeters(@Autowired SimpleMeterRegistry meterRegistry,
+								   JCSMPSession jcsmpSession,
+								   SpringCloudStreamContext context,
+								   Queue queue,
+								   SempV2Api sempV2Api,
+								   TestInfo testInfo) throws Exception {
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		sempV2Api.config().createMsgVpnQueueSubscription(
+				(String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
+				queue.getName(),
+				new ConfigMsgVpnQueueSubscription().subscriptionTopic(destination0),
+				null);
+
+		SolaceTestBinder binder = context.getBinder();
+
+		DirectChannel moduleOutputChannel = context.createBindableChannel(
+				RandomStringUtils.randomAlphanumeric(100),
+				new BindingProperties());
+
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context
+				.createProducerProperties(testInfo);
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, producerProperties);
+
+		context.binderBindUnbindLatency();
+		producerProperties.populateBindingName(producerBinding.getBindingName());
+
+		Message<?> message = MessageBuilder.withPayload(RandomStringUtils.randomAlphanumeric(100))
+				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+				.build();
+
+		moduleOutputChannel.send(message);
+
+		FlowReceiver flowReceiver = jcsmpSession.createFlow(null,
+				new ConsumerFlowProperties().setEndpoint(queue).setStartState(true));
+		BytesXMLMessage receivedMessage;
+		try {
+			logger.info("Consuming messages");
+
+			receivedMessage = flowReceiver.receive((int) TimeUnit.MINUTES.toMillis(1));
+		} finally {
+			flowReceiver.close();
+		}
+
+		logger.info("Validating message size meters");
+		retryAssert(() -> {
+			assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE)
+					.tag(SolaceMessageMeterBinder.TAG_NAME, producerProperties.getBindingName())
+					.meters())
+					.hasSize(1)
+					.first()
+					.as("Checking meter %s with name %s",
+							SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE, producerProperties.getBindingName())
+					.satisfies(isValidMessageSizeMeter(producerProperties.getBindingName(),
+							receivedMessage.getContentLength() + receivedMessage.getAttachmentContentLength()));
+
+			assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_TOTAL_SIZE)
+					.tag(SolaceMessageMeterBinder.TAG_NAME, producerProperties.getBindingName())
+					.meters())
+					.hasSize(1)
+					.first()
+					.as("Checking meter %s with name %s",
+							SolaceMessageMeterBinder.METER_NAME_TOTAL_SIZE, producerProperties.getBindingName())
+					.satisfies(isValidMessageSizeMeter(producerProperties.getBindingName(),
+							receivedMessage.getContentLength() +
+									receivedMessage.getAttachmentContentLength() +
+									receivedMessage.getBinaryMetadataContentLength(0)));
+		});
+
+		producerBinding.unbind();
 	}
 }

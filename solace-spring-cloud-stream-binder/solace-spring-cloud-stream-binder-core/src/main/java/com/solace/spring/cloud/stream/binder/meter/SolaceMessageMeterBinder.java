@@ -1,6 +1,6 @@
 package com.solace.spring.cloud.stream.binder.meter;
 
-import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.XMLMessage;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.BaseUnits;
@@ -21,7 +21,7 @@ public class SolaceMessageMeterBinder implements MeterBinder {
 		this.registry = registry;
 	}
 
-	public void recordMessage(@NotNull String bindingName, @NotNull BytesXMLMessage message) {
+	public void recordMessage(@NotNull String bindingName, @NotNull XMLMessage message) {
 		long payloadSize = message.getAttachmentContentLength() + message.getContentLength();
 		registerSizeMeter(METER_NAME_TOTAL_SIZE, METER_DESCRIPTION_TOTAL_SIZE, bindingName)
 				.record(payloadSize + message.getBinaryMetadataContentLength(0));
