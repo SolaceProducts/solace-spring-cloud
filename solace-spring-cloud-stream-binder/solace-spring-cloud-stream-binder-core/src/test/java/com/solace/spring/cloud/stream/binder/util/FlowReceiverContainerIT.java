@@ -1762,7 +1762,6 @@ public class FlowReceiverContainerIT {
 	@ParameterizedTest
 	@ValueSource(booleans = {false, true})
 	@Execution(ExecutionMode.SAME_THREAD)
-//	@Repeat(10) // should run a few times to make sure its stable
 	public void testConcurrentAll(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue) throws Exception {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
@@ -1772,7 +1771,8 @@ public class FlowReceiverContainerIT {
 		Callable<?>[] actions = new Callable[]{
 				(Callable<?>) () -> {
 					AtomicReference<UUID> newFlowReferenceId = new AtomicReference<>();
-					retryAssert(() -> newFlowReferenceId.set(assertDoesNotThrow(flowReceiverContainer::bind)));
+					retryAssert(() -> newFlowReferenceId.set(assertDoesNotThrow(flowReceiverContainer::bind)),
+							1, TimeUnit.MINUTES);
 					return newFlowReferenceId.get();
 				},
 				(Callable<?>) () -> {flowReceiverContainer.unbind(); return null;},
@@ -1852,7 +1852,7 @@ public class FlowReceiverContainerIT {
 					.collect(Collectors.toSet());
 
 			for (ScheduledFuture<?> future : futures) {
-				future.get(1, TimeUnit.MINUTES);
+				future.get(5, TimeUnit.MINUTES);
 			}
 		} finally {
 			executorService.shutdownNow();
