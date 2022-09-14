@@ -6,13 +6,12 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
 import com.solace.spring.cloud.stream.binder.test.junit.param.provider.JCSMPMessageTypeArgumentsProvider;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
+import com.solace.spring.cloud.stream.binder.test.util.SimpleJCSMPEventHandler;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solacesystems.jcsmp.BytesMessage;
-import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import com.solacesystems.jcsmp.MapMessage;
 import com.solacesystems.jcsmp.Message;
 import com.solacesystems.jcsmp.SDTMap;
@@ -112,13 +111,7 @@ public class SolaceBinderNullPayloadIT {
             latch.countDown();
         });
 
-        XMLMessageProducer producer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-            @Override
-            public void responseReceivedEx(Object o) {}
-
-            @Override
-            public void handleErrorEx(Object o, JCSMPException e, long l) {}
-        });
+        XMLMessageProducer producer = jcsmpSession.getMessageProducer(new SimpleJCSMPEventHandler());
 
         for (int i = 0; i < (batchMode ? consumerProperties.getExtension().getBatchMaxSize() : 1); i++) {
             //Not setting payload
@@ -192,13 +185,7 @@ public class SolaceBinderNullPayloadIT {
             latch.countDown();
         });
 
-        XMLMessageProducer producer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
-            @Override
-            public void responseReceivedEx(Object o) {}
-
-            @Override
-            public void handleErrorEx(Object o, JCSMPException e, long l) {}
-        });
+        XMLMessageProducer producer = jcsmpSession.getMessageProducer(new SimpleJCSMPEventHandler());
 
         for (int i = 0; i < (batchMode ? consumerProperties.getExtension().getBatchMaxSize() : 1); i++) {
             //Not setting payload
