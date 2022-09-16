@@ -1,9 +1,9 @@
 = Spring Cloud Stream Binder for Solace PubSub+
-:revnumber: 3.3.2
+:revnumber: 3.4.0
 :toc: preamble
 :toclevels: 3
 :icons: font
-:scst-version: 3.2.2
+:scst-version: 3.2.5
 
 // Github-Specific Settings
 ifdef::env-github[]
@@ -1066,6 +1066,36 @@ This is a custom health status. It isn't included in the health severity order l
 
 | DOWN
 | Status indicating that the binder has suffered an unexpected failure. For instance, the binder may have exhausted all reconnection attempts. User intervention is likely required.
+|===
+
+== Solace Binder Metrics
+
+Leveraging https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html#actuator.metrics[Spring Metrics], the Solace PubSub+ binder exposes the following metrics:
+
+[cols="2m,1,2a,2", options="header"]
+|===
+| Name
+| Type
+| Tags
+| Description
+
+| solace.message.size.payload
+| `DistributionSummary`
+
+Base Units: `bytes`
+|* `name: <bindingName>`
+| Message payload size.
+
+This is the payload size of the messages received (if `name` is a consumer binding) or published (if `name` is a producer binding) from/to a PubSub+ broker.
+
+| solace.message.size.total
+| `DistributionSummary`
+
+Base Units: `bytes`
+|* `name: <bindingName>`
+| Total message size.
+
+This is the total size of the messages received (if `name` is a consumer binding) or published (if `name` is a producer binding) from/to a PubSub+ broker.
 |===
 
 == Resources

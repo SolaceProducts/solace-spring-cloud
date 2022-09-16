@@ -3,18 +3,19 @@ package com.solace.spring.cloud.stream.binder;
 import com.solace.spring.cloud.stream.binder.inbound.BatchCollector;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
-import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solacesystems.jcsmp.Context;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
@@ -53,6 +54,7 @@ public class SolaceMessageChannelBinder
 	private final JCSMPSessionProducerManager sessionProducerManager;
 	private final AtomicBoolean consumersRemoteStopFlag = new AtomicBoolean(false);
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
+	private SolaceMeterAccessor solaceMeterAccessor;
 	private SolaceExtendedBindingProperties extendedBindingProperties = new SolaceExtendedBindingProperties();
 
 	private final RetryableTaskService taskService = new RetryableTaskService();
@@ -86,7 +88,12 @@ public class SolaceMessageChannelBinder
 														  ExtendedProducerProperties<SolaceProducerProperties> producerProperties,
 														  MessageChannel errorChannel) {
 		JCSMPOutboundMessageHandler handler = new JCSMPOutboundMessageHandler(
-				destination, jcsmpSession, errorChannel, sessionProducerManager, producerProperties.getExtension());
+				destination,
+				jcsmpSession,
+				errorChannel,
+				sessionProducerManager,
+				producerProperties,
+				solaceMeterAccessor);
 
 		if (errorChannel != null) {
 			handler.setErrorMessageStrategy(errorMessageStrategy);
@@ -100,9 +107,13 @@ public class SolaceMessageChannelBinder
 													 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
 		SolaceConsumerDestination solaceDestination = (SolaceConsumerDestination) destination;
 
-		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(solaceDestination, jcsmpSession,
-				properties.getConcurrency(), properties.isBatchMode(), taskService, properties.getExtension(),
-				getConsumerEndpointProperties(properties));
+		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(
+				solaceDestination,
+				jcsmpSession,
+				taskService,
+				properties,
+				getConsumerEndpointProperties(properties),
+				solaceMeterAccessor);
 
 		adapter.setRemoteStopFlag(consumersRemoteStopFlag);
 		adapter.setPostStart(getConsumerPostStart(solaceDestination, properties));
@@ -144,7 +155,8 @@ public class SolaceMessageChannelBinder
 				consumerProperties.isBatchMode() ? new BatchCollector(consumerProperties.getExtension()) : null,
 				taskService,
 				consumerProperties,
-				endpointProperties);
+				endpointProperties,
+				solaceMeterAccessor);
 
 		messageSource.setRemoteStopFlag(consumersRemoteStopFlag::get);
 		messageSource.setPostStart(getConsumerPostStart(solaceDestination, consumerProperties));
@@ -226,6 +238,10 @@ public class SolaceMessageChannelBinder
 
 	public void setExtendedBindingProperties(SolaceExtendedBindingProperties extendedBindingProperties) {
 		this.extendedBindingProperties = extendedBindingProperties;
+	}
+
+	public void setSolaceMeterAccessor(SolaceMeterAccessor solaceMeterAccessor) {
+		this.solaceMeterAccessor = solaceMeterAccessor;
 	}
 
 	/**

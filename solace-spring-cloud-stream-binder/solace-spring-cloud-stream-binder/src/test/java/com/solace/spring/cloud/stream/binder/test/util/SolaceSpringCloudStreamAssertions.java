@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.test.util;
 
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solacesystems.jcsmp.BytesMessage;
 import com.solacesystems.jcsmp.BytesXMLMessage;
@@ -9,6 +10,9 @@ import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.XMLMessage;
+import io.micrometer.core.instrument.Measurement;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.Statistic;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.assertj.core.api.SoftAssertions;
 import org.assertj.core.api.ThrowingConsumer;
@@ -29,6 +33,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.InstanceOfAssertFactories.DOUBLE;
 
 /**
  * Assertions to validate Spring Cloud Stream Binder for Solace.
@@ -37,14 +42,14 @@ public class SolaceSpringCloudStreamAssertions {
 	/**
 	 * <p>Returns a function to evaluate a message for a header which may be nested in a batched message.</p>
 	 * <p>Should be used as a parameter of
-	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.</p>
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[]) satisfies(ThrowingConsumer[])}.</p>
 	 * @param header header key
 	 * @param type header type
 	 * @param isBatched is message expected to be a batched message?
 	 * @param requirements requirements which the header value must satisfy. See
-	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[]) satisfies(ThrowingConsumer)}.
 	 * @param <T> header type
-	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer)
+	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[])
 	 * @return message header requirements evaluator
 	 */
 	public static <T> ThrowingConsumer<Message<?>> hasNestedHeader(String header, Class<T> type, boolean isBatched,
@@ -74,11 +79,11 @@ public class SolaceSpringCloudStreamAssertions {
 	 * <p>Returns a function to evaluate a message for the lack of a header which may be nested in a batched message.
 	 * </p>
 	 * <p>Should be used as a parameter of
-	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.</p>
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[]) satisfies(ThrowingConsumer[])}.</p>
 	 * @param header header key
 	 * @param isBatched is message expected to be a batched message?
-	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.
-	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer)
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[]) satisfies(ThrowingConsumer[])}.
+	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[])
 	 * @return message header requirements evaluator
 	 */
 	public static ThrowingConsumer<Message<?>> noNestedHeader(String header, boolean isBatched) {
@@ -102,11 +107,11 @@ public class SolaceSpringCloudStreamAssertions {
 	/**
 	 * <p>Returns a function to evaluate that a consumed Solace message is valid.</p>
 	 * <p>Should be used as a parameter of
-	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.</p>
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[]) satisfies(ThrowingConsumer[])}.</p>
 	 * @param consumerProperties consumer properties
 	 * @param expectedMessages the messages against which this message will be evaluated against.
 	 *                            Should have a size of exactly 1 if this consumer is not in batch mode.
-	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer)
+	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[])
 	 * @return message evaluator
 	 */
 	public static ThrowingConsumer<Message<?>> isValidMessage(
@@ -120,7 +125,7 @@ public class SolaceSpringCloudStreamAssertions {
 	 * @param consumerProperties consumer properties
 	 * @param expectedMessages the messages against which this message will be evaluated against.
 	 *                            Should have a size of exactly 1 if this consumer is not in batch mode.
-	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer)
+	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[])
 	 * @see #isValidMessage(ExtendedConsumerProperties, List)
 	 * @return message evaluator
 	 */
@@ -170,9 +175,9 @@ public class SolaceSpringCloudStreamAssertions {
 	/**
 	 * <p>Returns a function to evaluate that an error message is valid.</p>
 	 * <p>Should be used as a parameter of
-	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.</p>
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[]) satisfies(ThrowingConsumer[])}.</p>
 	 * @param expectRawMessageHeader true if the error message contains the raw XMLMessage
-	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer)
+	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[])
 	 * @return message evaluator
 	 */
 	public static ThrowingConsumer<Message<?>> isValidProducerErrorMessage(boolean expectRawMessageHeader) {
@@ -195,13 +200,13 @@ public class SolaceSpringCloudStreamAssertions {
 	/**
 	 * <p>Returns a function to evaluate that a consumed Solace message is valid.</p>
 	 * <p>Should be used as a parameter of
-	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.</p>
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[]) satisfies(ThrowingConsumer[])}.</p>
 	 * @param consumerProperties consumer properties
 	 * @param pollableConsumer true if consumer is a pollable consumer
 	 * @param expectRawMessageHeader true if the error message contains the raw XMLMessage
 	 * @param expectedMessages the messages against which this message will be evaluated against.
 	 *                            Should have a size of exactly 1 if this consumer is not in batch mode.
-	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer)
+	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[])
 	 * @return message evaluator
 	 */
 	public static ThrowingConsumer<Message<?>> isValidConsumerErrorMessage(
@@ -243,10 +248,10 @@ public class SolaceSpringCloudStreamAssertions {
 	/**
 	 * <p>Returns a function which drains and evaluates the messages for the provided error queue name.</p>
 	 * <p>Should be used as a parameter of
-	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer) satisfies(ThrowingConsumer)}.</p>
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[]) satisfies(ThrowingConsumer[])}.</p>
 	 * @param jcsmpSession JCSMP session
 	 * @param expectedMessages expected messages in error queue
-	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer)
+	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[])
 	 * @return error queue evaluator
 	 */
 	@SuppressWarnings("CatchMayIgnoreException")
@@ -280,5 +285,40 @@ public class SolaceSpringCloudStreamAssertions {
 				softly.assertAll();
 			}
 		};
+	}
+
+	/**
+	 * <p>Returns a function to evaluate that a Solace message size meter is valid.</p>
+	 * <p>Should be used as a parameter of
+	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[]) satisfies(ThrowingConsumer[])}.</p>
+	 * @param nameTagValue value of the name tag
+	 * @param value expected {@link Statistic#TOTAL}
+	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[])
+	 * @return meter evaluator
+	 */
+	public static ThrowingConsumer<Meter> isValidMessageSizeMeter(String nameTagValue, double value) {
+		return meter -> assertThat(meter).satisfies(
+				m -> assertThat(m.getId())
+						.as("Checking ID for meter %s", meter)
+						.satisfies(
+								meterId -> assertThat(meterId.getType()).isEqualTo(Meter.Type.DISTRIBUTION_SUMMARY),
+								meterId -> assertThat(meterId.getBaseUnit()).isEqualTo("bytes"),
+								meterId -> assertThat(meterId.getTags())
+										.hasSize(1)
+										.first()
+										.satisfies(
+												tag -> assertThat(tag.getKey())
+														.isEqualTo(SolaceMessageMeterBinder.TAG_NAME),
+												tag -> assertThat(tag.getValue()).isEqualTo(nameTagValue)
+										)
+						),
+				m -> assertThat(m.measure())
+						.as("Checking measurements for meter %s", meter)
+						.filteredOn(measurement -> measurement.getStatistic().equals(Statistic.TOTAL))
+						.first()
+						.extracting(Measurement::getValue)
+						.asInstanceOf(DOUBLE)
+						.isEqualTo(value)
+		);
 	}
 }

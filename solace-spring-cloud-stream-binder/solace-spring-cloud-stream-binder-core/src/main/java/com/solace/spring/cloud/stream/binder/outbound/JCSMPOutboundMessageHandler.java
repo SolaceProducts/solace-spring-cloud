@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.outbound;
 
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
 import com.solace.spring.cloud.stream.binder.util.CorrelationData;
@@ -16,9 +17,11 @@ import com.solacesystems.jcsmp.XMLMessageProducer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.binder.BinderHeaders;
+import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
 import org.springframework.context.Lifecycle;
 import org.springframework.integration.support.ErrorMessageStrategy;
+import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
@@ -33,7 +36,8 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	private final JCSMPSession jcsmpSession;
 	private final MessageChannel errorChannel;
 	private final JCSMPSessionProducerManager producerManager;
-	private final SolaceProducerProperties properties;
+	private final ExtendedProducerProperties<SolaceProducerProperties> properties;
+	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
 	private XMLMessageProducer producer;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private boolean isRunning = false;
@@ -45,12 +49,14 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 									   JCSMPSession jcsmpSession,
 									   MessageChannel errorChannel,
 									   JCSMPSessionProducerManager producerManager,
-									   SolaceProducerProperties properties) {
+									   ExtendedProducerProperties<SolaceProducerProperties> properties,
+									   @Nullable SolaceMeterAccessor solaceMeterAccessor) {
 		this.topic = JCSMPFactory.onlyInstance().createTopic(destination.getName());
 		this.jcsmpSession = jcsmpSession;
 		this.errorChannel = errorChannel;
 		this.producerManager = producerManager;
 		this.properties = properties;
+		this.solaceMeterAccessor = solaceMeterAccessor;
 	}
 
 	@Override
@@ -87,8 +93,8 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 					String.format("Unable to parse header %s", SolaceBinderHeaders.CONFIRM_CORRELATION), e);
 		}
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(message, properties.getHeaderExclusions(),
-				properties.isNonserializableHeaderConvertToString());
+		XMLMessage xmlMessage = xmlMessageMapper.map(message, properties.getExtension().getHeaderExclusions(),
+				properties.getExtension().isNonserializableHeaderConvertToString());
 		correlationKey.setRawMessage(xmlMessage);
 		xmlMessage.setCorrelationKey(correlationKey);
 
@@ -97,6 +103,10 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		} catch (JCSMPException e) {
 			throw handleMessagingException(correlationKey,
 					String.format("Unable to send message to topic %s", targetTopic.getName()), e);
+		} finally {
+			if (solaceMeterAccessor != null) {
+				solaceMeterAccessor.recordMessage(properties.getBindingName(), xmlMessage);
+			}
 		}
 	}
 
