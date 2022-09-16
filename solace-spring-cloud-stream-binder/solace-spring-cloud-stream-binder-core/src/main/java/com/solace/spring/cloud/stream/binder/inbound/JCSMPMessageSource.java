@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
@@ -45,6 +46,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private final BatchCollector batchCollector;
 	private final RetryableTaskService taskService;
 	private final EndpointProperties endpointProperties;
+	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
 	private final boolean hasTemporaryQueue;
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
 	private FlowReceiverContainer flowReceiverContainer;
@@ -62,7 +64,8 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 							  @Nullable BatchCollector batchCollector,
 							  RetryableTaskService taskService,
 							  ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
-							  EndpointProperties endpointProperties) {
+							  EndpointProperties endpointProperties,
+							  @Nullable SolaceMeterAccessor solaceMeterAccessor) {
 		this.queueName = destination.getName();
 		this.jcsmpSession = jcsmpSession;
 		this.batchCollector = batchCollector;
@@ -70,6 +73,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
 		this.hasTemporaryQueue = destination.isTemporary();
+		this.solaceMeterAccessor = solaceMeterAccessor;
 	}
 
 	@Override
@@ -106,6 +110,11 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 						messageContainerForBatch = flowReceiverContainer.receive();
 					}
 					if (messageContainerForBatch != null) {
+						if (solaceMeterAccessor != null) {
+							solaceMeterAccessor.recordMessage(
+									consumerProperties.getBindingName(),
+									messageContainerForBatch.getMessage());
+						}
 						batchCollector.addToBatch(messageContainerForBatch);
 					}
 				} while (!batchCollector.isBatchAvailable());
@@ -113,6 +122,11 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			} else {
 				int timeout = consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis();
 				messageContainer = flowReceiverContainer.receive(timeout);
+				if (solaceMeterAccessor != null && messageContainer != null) {
+					solaceMeterAccessor.recordMessage(
+							consumerProperties.getBindingName(),
+							messageContainer.getMessage());
+				}
 			}
 		} catch (JCSMPException e) {
 			if (!isRunning() || remoteStopFlag.get()) {
