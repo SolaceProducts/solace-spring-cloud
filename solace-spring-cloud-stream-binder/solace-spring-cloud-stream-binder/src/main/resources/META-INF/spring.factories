@@ -1,1 +1,3 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=com.solace.spring.cloud.stream.binder.config.ExtendedBindingHandlerMappingsProviderConfiguration
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
+  com.solace.spring.cloud.stream.binder.config.ExtendedBindingHandlerMappingsProviderConfiguration,\
+  com.solace.spring.cloud.stream.binder.config.SolaceMeterConfiguration
