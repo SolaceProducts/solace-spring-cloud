@@ -9,13 +9,13 @@ import com.solacesystems.jcsmp.XMLContentMessage;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
-import org.junitpioneer.jupiter.cartesian.CartesianArgumentsProvider;
+import org.junitpioneer.jupiter.cartesian.CartesianParameterArgumentsProvider;
 
 import java.lang.reflect.Parameter;
 import java.util.stream.Stream;
 
 public class JCSMPMessageTypeArgumentsProvider implements ArgumentsProvider,
-		CartesianArgumentsProvider<Class<? extends BytesXMLMessage>> {
+		CartesianParameterArgumentsProvider<Class<? extends BytesXMLMessage>> {
 	@Override
 	public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
 		return provideArguments(context, null)
