@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
@@ -64,6 +65,10 @@ public class FlowReceiverContainer {
 	 */
 	private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 	private final Condition bindCondition = readWriteLock.writeLock().newCondition();
+
+	// Need a separate lock for this
+	// Since we don't want to release the write lock when blocking the rebind
+	private final ReentrantLock rebindBlockLock = new ReentrantLock();
 
 	private long rebindWaitTimeout = -1;
 	private TimeUnit rebindWaitTimeoutUnit = TimeUnit.SECONDS;
@@ -220,13 +225,21 @@ public class FlowReceiverContainer {
 			try {
 				if (backOffExecution != null) {
 					long backoff = backOffExecution.nextBackOff();
+					if (backoff == BackOffExecution.STOP) { // shouldn't ever happen...
+						if (logger.isDebugEnabled()) {
+							logger.debug(String.format(
+									"Next rebind back-off is %s ms, but this isn't valid, resetting back-off...",
+									backoff));
+						}
+						backoff = backOffExecutionReference.updateAndGet(b -> backOff.start()).nextBackOff();
+					}
 					if (logger.isDebugEnabled()) {
 						logger.debug(String.format(
 								"Back-off rebind of flow receiver container %s by %s ms", id, backoff));
 					}
 					Thread.sleep(backoff);
 				}
-				blockRebindIfNecessary.accept(writeLock);
+				blockRebindIfNecessary.accept(rebindBlockLock);
 			} catch (InterruptedException e) {
 				if (logger.isDebugEnabled()) {
 					logger.debug(String.format(

@@ -30,6 +30,7 @@ import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jcsmp.impl.flow.FlowHandle;
 import org.apache.commons.lang3.RandomUtils;
 import org.assertj.core.api.Assertions;
+import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.util.backoff.BackOff;
+import org.springframework.util.backoff.BackOffExecution;
+import org.springframework.util.backoff.ExponentialBackOff;
 import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.ArrayList;
@@ -67,6 +71,9 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -1063,6 +1070,149 @@ public class FlowReceiverContainerIT {
 
 	@ParameterizedTest
 	@ValueSource(booleans = {false, true})
+	public void testRebindBackOff(boolean isDurable,
+								  JCSMPSession jcsmpSession,
+								  Queue durableQueue)
+			throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		ExponentialBackOff backOff = Mockito.spy(new ExponentialBackOff(1, 1.5));
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue, backOff,
+				lock -> {});
+
+		AtomicReference<BackOffExecution> backOffExecutionRef = new AtomicReference<>();
+		Mockito.doAnswer(invocation -> {
+			backOffExecutionRef.set(Mockito.spy((BackOffExecution) invocation.callRealMethod()));
+			return backOffExecutionRef.get();
+		}).when(backOff).start();
+
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		assertNull(backOffExecutionRef.get());
+
+		flowReferenceId = flowReceiverContainer.rebind(flowReferenceId);
+		BackOffExecution backOffExecution0 = backOffExecutionRef.get();
+		assertNotNull(backOffExecution0);
+		Mockito.verify(backOffExecution0, Mockito.times(0)).nextBackOff();
+
+		flowReferenceId = flowReceiverContainer.rebind(flowReferenceId);
+		assertEquals(backOffExecution0, backOffExecutionRef.get());
+		Mockito.verify(backOffExecution0, Mockito.times(1)).nextBackOff();
+
+		flowReferenceId = flowReceiverContainer.rebind(flowReferenceId);
+		assertEquals(backOffExecution0, backOffExecutionRef.get());
+		Mockito.verify(backOffExecution0, Mockito.times(2)).nextBackOff();
+
+		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		producer.send(message, queue);
+		flowReceiverContainer.acknowledge(Objects.requireNonNull(flowReceiverContainer.receive(1000)));
+
+		flowReceiverContainer.rebind(flowReferenceId);
+		BackOffExecution backOffExecution1 = backOffExecutionRef.get();
+		Assertions.assertThat(backOffExecution1).isNotNull().isNotEqualTo(backOffExecution0);
+		Mockito.verify(backOffExecution1, Mockito.times(0)).nextBackOff();
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testRebindBackOffInvalidStop(boolean isDurable,
+											 JCSMPSession jcsmpSession,
+											 Queue durableQueue)
+			throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FixedBackOff backOff = Mockito.spy(new FixedBackOff(1, 1));
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue, backOff,
+				lock -> {});
+
+		AtomicReference<BackOffExecution> backOffExecutionRef = new AtomicReference<>();
+		Mockito.doAnswer(invocation -> {
+			backOffExecutionRef.set(Mockito.spy((BackOffExecution) invocation.callRealMethod()));
+			return backOffExecutionRef.get();
+		}).when(backOff).start();
+
+		UUID flowReferenceId = flowReceiverContainer.bind();
+		assertNull(backOffExecutionRef.get());
+
+		flowReferenceId = flowReceiverContainer.rebind(flowReferenceId);
+		BackOffExecution backOffExecution0 = backOffExecutionRef.get();
+		Assertions.assertThat(backOffExecution0).isNotNull();
+		Mockito.verify(backOffExecution0, Mockito.times(0)).nextBackOff();
+
+		flowReferenceId = flowReceiverContainer.rebind(flowReferenceId);
+		Assertions.assertThat(backOffExecutionRef.get()).isEqualTo(backOffExecution0);
+		Mockito.verify(backOffExecution0, Mockito.times(1)).nextBackOff();
+
+		flowReferenceId = flowReceiverContainer.rebind(flowReferenceId);
+		BackOffExecution backOffExecution1 = backOffExecutionRef.get();
+		Assertions.assertThat(backOffExecution1)
+				.isNotNull()
+				.isNotEqualTo(backOffExecution0);
+		Mockito.verify(backOffExecution1, Mockito.times(1)).nextBackOff();
+
+		TextMessage message = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		producer.send(message, queue);
+		flowReceiverContainer.acknowledge(Objects.requireNonNull(flowReceiverContainer.receive(1000)));
+		flowReceiverContainer.rebind(flowReferenceId);
+		BackOffExecution backOffExecution2 = backOffExecutionRef.get();
+		Assertions.assertThat(backOffExecution2)
+				.isNotNull()
+				.isNotEqualTo(backOffExecution0)
+				.isNotEqualTo(backOffExecution1);
+		Mockito.verify(backOffExecution2, Mockito.times(0)).nextBackOff();
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testRebindBlock(boolean isDurable,
+								JCSMPSession jcsmpSession,
+								Queue durableQueue,
+								SempV2Api sempV2Api,
+								@ExecSvc ExecutorService executorService,
+								SoftAssertions softAssertions)
+			throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		AtomicReference<FlowReceiverContainer> flowReceiverContainer = new AtomicReference<>();
+		AtomicReference<Lock> lockRef = new AtomicReference<>();
+		AtomicReference<Condition> condition = new AtomicReference<>();
+		flowReceiverContainer.set(createFlowReceiverContainer(jcsmpSession, queue,
+				new ExponentialBackOff(1, 1.5), lock -> {
+					softAssertions.assertThat(flowReceiverContainer.get().getFlowReceiverReference()).isNull();
+					try {
+						softAssertions.assertThat(getTxFlows(sempV2Api, queue, 1)).hasSize(0);
+					} catch (Exception e) {
+						softAssertions.fail("Failed to get tx flows", e);
+					}
+
+					lockRef.set(lock);
+					condition.set(lock.newCondition());
+					lock.lock();
+					try {
+						condition.get().await();
+					} finally {
+						lock.unlock();
+					}
+				}));
+
+		UUID flowReferenceId = flowReceiverContainer.get().bind();
+		Future<UUID> future = executorService.submit(() -> flowReceiverContainer.get().rebind(flowReferenceId));
+		retryAssert(() -> {
+			Assertions.assertThat(lockRef).doesNotHaveValue(null);
+			Assertions.assertThat(condition).doesNotHaveValue(null);
+			lockRef.get().lock();
+			try {
+				Assertions.assertThat(((ReentrantLock) lockRef.get()).getWaitQueueLength(condition.get()))
+						.isEqualTo(1);
+				Assertions.assertThat(flowReceiverContainer.get().rebind(flowReferenceId, true))
+						.as("Flow receiver write operations should still be blocked")
+						.isNull();
+				condition.get().signalAll();
+			} finally {
+				lockRef.get().unlock();
+			}
+		});
+		Assertions.assertThat(future).succeedsWithin(1, TimeUnit.MINUTES);
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
 	public void testRebindInterrupt(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue, SempV2Api sempV2Api) throws Exception {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
@@ -1898,12 +2048,19 @@ public class FlowReceiverContainerIT {
 	}
 
 	private FlowReceiverContainer createFlowReceiverContainer(JCSMPSession jcsmpSession, Queue queue) {
+		return createFlowReceiverContainer(jcsmpSession, queue, new FixedBackOff(1, Long.MAX_VALUE), lock -> {});
+	}
+
+	private FlowReceiverContainer createFlowReceiverContainer(JCSMPSession jcsmpSession,
+															  Queue queue,
+															  BackOff backOff,
+															  InterruptableConsumer<Lock> blockRebindIfNecessary) {
 		if (flowReceiverContainerReference.compareAndSet(null, Mockito.spy(new FlowReceiverContainer(
 				jcsmpSession,
 				queue.getName(),
 				new EndpointProperties(),
-				new FixedBackOff(1, Long.MAX_VALUE),
-				lock -> {})))) {
+				backOff,
+				blockRebindIfNecessary)))) {
 			logger.info("Created new FlowReceiverContainer " + flowReceiverContainerReference.get().getId());
 		}
 		return flowReceiverContainerReference.get();

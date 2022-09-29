@@ -1,13 +1,15 @@
 package com.solace.spring.cloud.stream.binder.util;
 
 import com.solace.spring.cloud.stream.binder.util.RetryableTaskService.RetryableTask;
+import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
+import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -15,13 +17,22 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@ExtendWith(ExecutorServiceExtension.class)
 public class RetryableTaskServiceTest {
 	private RetryableTaskService taskService;
 	private static final Log logger = LogFactory.getLog(RetryableTaskServiceTest.class);
@@ -205,5 +216,59 @@ public class RetryableTaskServiceTest {
 		Thread.sleep(500);
 		assertThat(taskService.hasTask(task1)).isFalse();
 		assertThat(taskService.hasTask(task2)).isFalse();
+	}
+
+	@Test
+	public void testBlockIfPoolSizeExceeded(@ExecSvc ExecutorService executorService) throws Exception {
+		CountDownLatch latch = new CountDownLatch(5);
+		CountDownLatch continueLatch = new CountDownLatch(1);
+		List<RetryableTask> tasks = IntStream.range(0, (int) latch.getCount())
+				.mapToObj(i -> (RetryableTask) attempt -> {
+			logger.info("Starting task " + i);
+			latch.countDown();
+			continueLatch.await();
+			return true;
+		}).collect(Collectors.toList());
+
+		tasks.forEach(taskService::submit);
+		assertThat(latch.await(1, TimeUnit.MINUTES)).isTrue();
+		assertThat(tasks).extracting(t -> taskService.hasTask(t)).allMatch(t -> t);
+
+		ReentrantLock lock = Mockito.spy(new ReentrantLock());
+		AtomicReference<Condition> condition = new AtomicReference<>();
+		Mockito.doAnswer(invocation -> {
+			condition.set((Condition) invocation.callRealMethod());
+			return condition.get();
+		}).when(lock).newCondition();
+
+		Future<Void> blockFuture = executorService.submit(() -> {
+			taskService.blockIfPoolSizeExceeded(tasks.size() - 1, lock);
+			return null;
+		});
+
+		retryAssert(() -> {
+			Mockito.verify(lock).newCondition();
+			assertThat(condition).doesNotHaveValue(null);
+			lock.lock();
+			try {
+				assertThat(lock.getWaitQueueLength(condition.get())).isEqualTo(1);
+			} finally {
+				lock.unlock();
+			}
+		});
+
+		continueLatch.countDown();
+
+		retryAssert(() -> assertThat(tasks).extracting(t -> taskService.hasTask(t)).allMatch(t -> !t));
+		logger.info("Waiting for cached worker threads to cleanup");
+		assertThat(blockFuture)
+				.as("Cached threads should have cleaned up after 1 min and unblocked this")
+				.succeedsWithin(5, TimeUnit.MINUTES);
+		lock.lock();
+		try {
+			assertThat(lock.getWaitQueueLength(condition.get())).isEqualTo(0);
+		} finally {
+			lock.unlock();
+		}
 	}
 }
