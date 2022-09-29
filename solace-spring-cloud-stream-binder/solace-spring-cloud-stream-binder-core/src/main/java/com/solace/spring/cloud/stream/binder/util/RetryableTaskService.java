@@ -20,9 +20,9 @@ import java.util.function.Supplier;
  * Service for delegating retryable tasks.
  */
 public class RetryableTaskService {
-	private final TaskManager taskManager = new TaskManager();
 	private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 	private final ThreadPoolExecutor workerService = (ThreadPoolExecutor) Executors.newCachedThreadPool();
+	private final TaskManager taskManager = new TaskManager(workerService::getPoolSize);
 	private static final Log logger = LogFactory.getLog(RetryableTaskService.class);
 
 	public void submit(RetryableTask task) {
@@ -55,7 +55,7 @@ public class RetryableTaskService {
 	}
 
 	public void blockIfPoolSizeExceeded(long poolSizeThreshold, Lock lock) throws InterruptedException {
-		taskManager.blockIfPoolSizeExceeded(lock, poolSizeThreshold, workerService::getPoolSize);
+		taskManager.blockIfPoolSizeExceeded(lock, poolSizeThreshold);
 	}
 
 	private static class RetryableTaskWrapper implements Runnable {
@@ -107,8 +107,13 @@ public class RetryableTaskService {
 	}
 
 	private static class TaskManager {
+		private final Supplier<Integer> poolSizeSupplier;
 		private final Set<RetryableTask> tasks = ConcurrentHashMap.newKeySet();
-		private final Map<Long, Map<Lock, Condition>> blockConditionsByThreshold = new ConcurrentHashMap<>();
+		private final Map<Long, Map<Lock, Condition>> blockConditionsByPoolSize = new ConcurrentHashMap<>();
+
+		private TaskManager(Supplier<Integer> poolSizeSupplier) {
+			this.poolSizeSupplier = poolSizeSupplier;
+		}
 
 		public boolean addTask(RetryableTask task) {
 			return tasks.add(task);
@@ -116,9 +121,9 @@ public class RetryableTaskService {
 
 		public void removeTask(RetryableTask task) {
 			tasks.remove(task);
-			blockConditionsByThreshold.entrySet()
+			blockConditionsByPoolSize.entrySet()
 					.stream()
-					.filter(thresholdConditions -> tasks.size() < thresholdConditions.getKey())
+					.filter(thresholdConditions -> poolSizeSupplier.get() < thresholdConditions.getKey())
 					.flatMap(thresholdConditions -> thresholdConditions.getValue().entrySet().stream())
 					.forEach(blockCondition -> {
 						blockCondition.getKey().lock();
@@ -136,14 +141,14 @@ public class RetryableTaskService {
 
 		public void clearTasks() {
 			if (!tasks.isEmpty()) {
-				if (logger.isDebugEnabled()) {
-					logger.debug(String.format("Task service shutdown. Cancelling tasks: %s", tasks));
+				if (logger.isTraceEnabled()) {
+					logger.trace(String.format("Task service shutdown. Cancelling tasks: %s", tasks));
 				}
 			}
 			tasks.clear();
 		}
 
-		public void blockIfPoolSizeExceeded(Lock lock, long poolSizeThreshold, Supplier<Integer> poolSizeSupplier)
+		public void blockIfPoolSizeExceeded(Lock lock, long poolSizeThreshold)
 				throws InterruptedException {
 			int poolSize;
 			while ((poolSize = poolSizeSupplier.get()) > poolSizeThreshold) {
@@ -152,7 +157,7 @@ public class RetryableTaskService {
 							poolSize, poolSizeThreshold));
 				}
 
-				Map<Lock, Condition> thresholdBlockConditions = blockConditionsByThreshold.computeIfAbsent(
+				Map<Lock, Condition> thresholdBlockConditions = blockConditionsByPoolSize.computeIfAbsent(
 						poolSizeThreshold, k -> new ConcurrentHashMap<>());
 				Condition blockCondition = thresholdBlockConditions.computeIfAbsent(lock, Lock::newCondition);
 				lock.lock();
