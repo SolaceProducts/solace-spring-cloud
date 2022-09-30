@@ -30,6 +30,7 @@ import org.springframework.retry.RetryContext;
 import org.springframework.retry.RetryListener;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
+import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -106,9 +107,19 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 		Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName);
 
+		ExponentialBackOff exponentialBackOff = new ExponentialBackOff();
+		exponentialBackOff.setInitialInterval(consumerProperties.getExtension().getFlowRebindBackOffInitialInterval());
+		exponentialBackOff.setMaxInterval(consumerProperties.getExtension().getFlowRebindBackOffMaxInterval());
+		exponentialBackOff.setMultiplier(consumerProperties.getExtension().getFlowRebindBackOffMultiplier());
+
 		for (int i = 0, numToCreate = consumerProperties.getConcurrency() - flowReceivers.size(); i < numToCreate; i++) {
-			logger.info(String.format("Creating consumer %s of %s for inbound adapter %s", i + 1, consumerProperties.getConcurrency(), id));
-			FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queueName, endpointProperties);
+			logger.info(String.format("Creating consumer %s of %s for inbound adapter %s",
+					i + 1, consumerProperties.getConcurrency(), id));
+			FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(
+					jcsmpSession,
+					queueName,
+					endpointProperties,
+					exponentialBackOff);
 			flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
 					TimeUnit.MILLISECONDS);
 			if (paused.get()) {

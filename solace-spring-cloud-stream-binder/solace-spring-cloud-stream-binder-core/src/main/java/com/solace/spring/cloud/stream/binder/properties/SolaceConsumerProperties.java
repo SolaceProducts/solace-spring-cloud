@@ -41,6 +41,24 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	private long flowPreRebindWaitTimeout = TimeUnit.SECONDS.toMillis(10);
 
 	/**
+	 * The initial interval (milliseconds) to back-off when rebinding a flow.
+	 */
+	@Min(1)
+	private long flowRebindBackOffInitialInterval = TimeUnit.SECONDS.toMillis(1);
+
+	/**
+	 * The maximum interval (milliseconds) to back-off when rebinding a flow.
+	 */
+	@Min(1)
+	private long flowRebindBackOffMaxInterval = TimeUnit.SECONDS.toMillis(10);
+
+	/**
+	 * The multiplier to apply to the back-off interval between each rebind of a flow.
+	 */
+	@Min(1)
+	private double flowRebindBackOffMultiplier = 1.5;
+
+	/**
 	 * An array of additional topic subscriptions to be applied on the consumer group queue.
 	 * These subscriptions may also contain wildcards.
 	 */
@@ -163,6 +181,30 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setFlowPreRebindWaitTimeout(long flowPreRebindWaitTimeout) {
 		this.flowPreRebindWaitTimeout = flowPreRebindWaitTimeout;
+	}
+
+	public long getFlowRebindBackOffInitialInterval() {
+		return flowRebindBackOffInitialInterval;
+	}
+
+	public void setFlowRebindBackOffInitialInterval(long flowRebindBackOffInitialInterval) {
+		this.flowRebindBackOffInitialInterval = flowRebindBackOffInitialInterval;
+	}
+
+	public long getFlowRebindBackOffMaxInterval() {
+		return flowRebindBackOffMaxInterval;
+	}
+
+	public void setFlowRebindBackOffMaxInterval(long flowRebindBackOffMaxInterval) {
+		this.flowRebindBackOffMaxInterval = flowRebindBackOffMaxInterval;
+	}
+
+	public double getFlowRebindBackOffMultiplier() {
+		return flowRebindBackOffMultiplier;
+	}
+
+	public void setFlowRebindBackOffMultiplier(double flowRebindBackOffMultiplier) {
+		this.flowRebindBackOffMultiplier = flowRebindBackOffMultiplier;
 	}
 
 	public String[] getQueueAdditionalSubscriptions() {

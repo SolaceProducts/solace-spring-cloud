@@ -13,6 +13,8 @@ import com.solacesystems.jcsmp.JCSMPTransportException;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.lang.Nullable;
+import org.springframework.util.backoff.BackOff;
+import org.springframework.util.backoff.BackOffExecution;
 import org.springframework.util.concurrent.SettableListenableFuture;
 
 import java.util.Objects;
@@ -36,11 +38,13 @@ public class FlowReceiverContainer {
 	private final JCSMPSession session;
 	private final String queueName;
 	private final EndpointProperties endpointProperties;
+	private final BackOff backOff;
 	private final AtomicReference<FlowReceiverReference> flowReceiverAtomicReference = new AtomicReference<>();
 	private final AtomicBoolean isRebinding = new AtomicBoolean(false);
 	private final AtomicBoolean isPaused = new AtomicBoolean(false);
 	private final AtomicReference<SettableListenableFuture<UUID>> rebindFutureReference = new AtomicReference<>(
 			new SettableListenableFuture<>());
+	private final AtomicReference<BackOffExecution> backOffExecutionReference = new AtomicReference<>();
 
 	/* Ideally we would cache the outgoing message IDs and remove them as they get acknowledged,
 	 * but that has way too much overhead at scale (millions or billions of unacknowledged messages).
@@ -67,10 +71,14 @@ public class FlowReceiverContainer {
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private final SolaceFlowEventHandler eventHandler;
 
-	public FlowReceiverContainer(JCSMPSession session, String queueName, EndpointProperties endpointProperties) {
+	public FlowReceiverContainer(JCSMPSession session,
+								 String queueName,
+								 EndpointProperties endpointProperties,
+								 BackOff backOff) {
 		this.session = session;
 		this.queueName = queueName;
 		this.endpointProperties = endpointProperties;
+		this.backOff = backOff;
 		this.eventHandler = new SolaceFlowEventHandler(xmlMessageMapper, id.toString());
 	}
 
@@ -203,6 +211,31 @@ public class FlowReceiverContainer {
 			}
 
 			unbind();
+			BackOffExecution backOffExecution = backOffExecutionReference.getAndUpdate(
+					b -> b != null ? b : backOff.start());
+			try {
+				if (backOffExecution != null) {
+					long backoff = backOffExecution.nextBackOff();
+					if (backoff == BackOffExecution.STOP) { // shouldn't ever happen...
+						if (logger.isDebugEnabled()) {
+							logger.debug(String.format(
+									"Next rebind back-off is %s ms, but this isn't valid, resetting back-off...",
+									backoff));
+						}
+						backoff = backOffExecutionReference.updateAndGet(b -> backOff.start()).nextBackOff();
+					}
+					if (logger.isDebugEnabled()) {
+						logger.debug(String.format(
+								"Back-off rebind of flow receiver container %s by %s ms", id, backoff));
+					}
+					Thread.sleep(backoff);
+				}
+			} catch (InterruptedException e) {
+				if (logger.isDebugEnabled()) {
+					logger.debug(String.format(
+							"Flow receiver container %s back-off was interrupted, continuing...", id));
+				}
+			}
 			return bind();
 		} catch (Throwable e) {
 			rebindFutureReference.getAndSet(new SettableListenableFuture<>()).setException(e);
@@ -366,6 +399,7 @@ public class FlowReceiverContainer {
 		messageContainer.getMessage().ackMessage();
 		unacknowledgedMessageTracker.decrement();
 		messageContainer.setAcknowledged(true);
+		backOffExecutionReference.set(null);
 	}
 
 	/**

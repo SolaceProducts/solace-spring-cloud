@@ -17,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.Collections;
 import java.util.HashSet;
@@ -39,7 +40,11 @@ public class RetryableBindTaskIT {
 
 	@BeforeEach
 	public void setUp(JCSMPSession jcsmpSession, Queue queue) throws Exception {
-		flowReceiverContainer = new FlowReceiverContainer(jcsmpSession, queue.getName(), new EndpointProperties());
+		flowReceiverContainer = new FlowReceiverContainer(
+				jcsmpSession,
+				queue.getName(),
+				new EndpointProperties(),
+				new FixedBackOff(1, Long.MAX_VALUE));
 	}
 
 	@AfterEach
