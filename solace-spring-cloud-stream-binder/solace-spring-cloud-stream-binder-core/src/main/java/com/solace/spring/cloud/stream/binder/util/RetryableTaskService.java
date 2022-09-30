@@ -2,6 +2,7 @@ package com.solace.spring.cloud.stream.binder.util;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.lang.Nullable;
 
 import java.util.Map;
 import java.util.Set;
@@ -22,7 +23,9 @@ import java.util.function.Supplier;
 public class RetryableTaskService {
 	private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
 	private final ThreadPoolExecutor workerService = (ThreadPoolExecutor) Executors.newCachedThreadPool();
-	private final TaskManager taskManager = new TaskManager(workerService::getPoolSize);
+	private final TaskManager taskManager = new TaskManager(
+			workerService::getPoolSize,
+			workerService.getKeepAliveTime(TimeUnit.MILLISECONDS) + TimeUnit.MINUTES.toMillis(1));
 	private static final Log logger = LogFactory.getLog(RetryableTaskService.class);
 
 	public void submit(RetryableTask task) {
@@ -55,7 +58,7 @@ public class RetryableTaskService {
 	}
 
 	public void blockIfPoolSizeExceeded(long poolSizeThreshold, Lock lock) throws InterruptedException {
-		taskManager.blockIfPoolSizeExceeded(lock, poolSizeThreshold);
+		taskManager.registerAndBlockIfPoolSizeExceeded(lock, poolSizeThreshold);
 	}
 
 	private static class RetryableTaskWrapper implements Runnable {
@@ -83,7 +86,11 @@ public class RetryableTaskService {
 
 		@Override
 		public void run() {
-			workerService.execute(this::runWorker);
+			if (task.getBlockLock() != null && taskManager.isPoolSizeThresholdExceeded(task.getBlockLock())) {
+				reschedule();
+			} else {
+				workerService.execute(this::runWorker);
+			}
 		}
 
 		private void runWorker() {
@@ -97,22 +104,32 @@ public class RetryableTaskService {
 				if (task.run(attempt.incrementAndGet())) {
 					taskManager.removeTask(task);
 				} else {
-					scheduler.schedule(this, retryInterval, unit);
+					reschedule();
 				}
 			} catch (InterruptedException e) {
 				logger.info(String.format("Interrupt received. Aborting task: %s", task), e);
 				taskManager.removeTask(task);
 			}
 		}
+
+		private void reschedule() {
+			if (logger.isTraceEnabled()) {
+				logger.trace(String.format("Rescheduling task: %s", task));
+			}
+			scheduler.schedule(this, retryInterval, unit);
+		}
 	}
 
 	private static class TaskManager {
 		private final Supplier<Integer> poolSizeSupplier;
+		private final long blockTimeoutMillis;
 		private final Set<RetryableTask> tasks = ConcurrentHashMap.newKeySet();
 		private final Map<Long, Map<Lock, Condition>> blockConditionsByPoolSize = new ConcurrentHashMap<>();
+		private final Map<Lock, Long> poolSizeThresholdByLock = new ConcurrentHashMap<>();
 
-		private TaskManager(Supplier<Integer> poolSizeSupplier) {
+		private TaskManager(Supplier<Integer> poolSizeSupplier, long blockTimeoutMillis) {
 			this.poolSizeSupplier = poolSizeSupplier;
+			this.blockTimeoutMillis = blockTimeoutMillis;
 		}
 
 		public boolean addTask(RetryableTask task) {
@@ -121,18 +138,7 @@ public class RetryableTaskService {
 
 		public void removeTask(RetryableTask task) {
 			tasks.remove(task);
-			blockConditionsByPoolSize.entrySet()
-					.stream()
-					.filter(thresholdConditions -> poolSizeSupplier.get() < thresholdConditions.getKey())
-					.flatMap(thresholdConditions -> thresholdConditions.getValue().entrySet().stream())
-					.forEach(blockCondition -> {
-						blockCondition.getKey().lock();
-						try {
-							blockCondition.getValue().signalAll();
-						} finally {
-							blockCondition.getKey().unlock();
-						}
-					});
+			signalBlockedIfNecessary();
 		}
 
 		public boolean containsTask(RetryableTask task) {
@@ -148,10 +154,50 @@ public class RetryableTaskService {
 			tasks.clear();
 		}
 
-		public void blockIfPoolSizeExceeded(Lock lock, long poolSizeThreshold)
+		public boolean isPoolSizeThresholdExceeded(Lock lock) {
+			Long poolSizeThreshold = poolSizeThresholdByLock.get(lock);
+			if (poolSizeThreshold != null) {
+				int poolSize = poolSizeSupplier.get();
+				boolean exceededThreshold = poolSize > poolSizeThreshold;
+				if (exceededThreshold && logger.isTraceEnabled()) {
+					logger.trace(String.format("Worker pool size exceeded: %s > %s threads", poolSize, poolSizeThreshold));
+				}
+				if (!exceededThreshold) {
+					signalBlockedIfNecessary();
+				}
+				return exceededThreshold;
+			} else {
+				return false;
+			}
+		}
+
+		public void signalBlockedIfNecessary() {
+			blockConditionsByPoolSize.entrySet()
+					.stream()
+					.filter(thresholdConditions -> poolSizeSupplier.get() < thresholdConditions.getKey())
+					.flatMap(thresholdConditions -> thresholdConditions.getValue().entrySet().stream())
+					.forEach(blockCondition -> {
+						blockCondition.getKey().lock();
+						try {
+							blockCondition.getValue().signalAll();
+						} finally {
+							blockCondition.getKey().unlock();
+						}
+					});
+		}
+
+		public void registerAndBlockIfPoolSizeExceeded(Lock lock, long poolSizeThreshold)
 				throws InterruptedException {
 			int poolSize;
+			long timeout = System.currentTimeMillis() + blockTimeoutMillis;
 			while ((poolSize = poolSizeSupplier.get()) > poolSizeThreshold) {
+				if (System.currentTimeMillis() > timeout) {
+					if (logger.isTraceEnabled()) {
+						logger.trace("Timed out while waiting for worker pool size to decrease %s > %s threads");
+					}
+					break;
+				}
+
 				if (logger.isDebugEnabled()) {
 					logger.debug(String.format("Waiting for worker pool size to decrease: %s > %s threads",
 							poolSize, poolSizeThreshold));
@@ -159,15 +205,16 @@ public class RetryableTaskService {
 
 				Map<Lock, Condition> thresholdBlockConditions = blockConditionsByPoolSize.computeIfAbsent(
 						poolSizeThreshold, k -> new ConcurrentHashMap<>());
+				poolSizeThresholdByLock.put(lock, poolSizeThreshold);
 				Condition blockCondition = thresholdBlockConditions.computeIfAbsent(lock, Lock::newCondition);
 				lock.lock();
 				try {
-					blockCondition.await(1, TimeUnit.MINUTES);
+					blockCondition.await(blockTimeoutMillis, TimeUnit.MILLISECONDS);
 				} finally {
 					lock.unlock();
 				}
 			}
-			if (logger.isTraceEnabled()) {
+			if (logger.isTraceEnabled() && poolSize <= poolSizeThreshold) {
 				logger.trace(String.format("Not blocking on pool size: %s <= %s threads", poolSize, poolSizeThreshold));
 			}
 		}
@@ -183,5 +230,10 @@ public class RetryableTaskService {
 		 * @throws InterruptedException abort
 		 */
 		boolean run(int attempt) throws InterruptedException;
+
+		@Nullable
+		default Lock getBlockLock() {
+			return null;
+		}
 	}
 }

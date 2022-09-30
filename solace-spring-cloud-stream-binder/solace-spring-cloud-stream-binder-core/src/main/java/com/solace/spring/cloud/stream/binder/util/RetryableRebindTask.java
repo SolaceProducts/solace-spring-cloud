@@ -7,6 +7,7 @@ import org.apache.commons.logging.LogFactory;
 import java.util.Objects;
 import java.util.StringJoiner;
 import java.util.UUID;
+import java.util.concurrent.locks.Lock;
 
 public class RetryableRebindTask implements RetryableTaskService.RetryableTask {
 	private final FlowReceiverContainer flowReceiverContainer;
@@ -38,6 +39,11 @@ public class RetryableRebindTask implements RetryableTaskService.RetryableTask {
 				return false;
 			}
 		}
+	}
+
+	@Override
+	public Lock getBlockLock() {
+		return flowReceiverContainer.getRebindBlockLock();
 	}
 
 	@Override

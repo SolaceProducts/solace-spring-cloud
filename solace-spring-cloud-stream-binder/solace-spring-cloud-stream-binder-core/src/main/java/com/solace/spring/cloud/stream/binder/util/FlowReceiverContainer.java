@@ -696,6 +696,10 @@ public class FlowReceiverContainer {
 		return xmlMessageMapper;
 	}
 
+	public ReentrantLock getRebindBlockLock() {
+		return rebindBlockLock;
+	}
+
 	static class FlowReceiverReference {
 		private final UUID id = UUID.randomUUID();
 		private final FlowReceiver flowReceiver;
