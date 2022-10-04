@@ -50,7 +50,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * The maximum interval (milliseconds) to back-off when rebinding a flow.
 	 */
 	@Min(1)
-	private long flowRebindBackOffMaxInterval = TimeUnit.SECONDS.toMillis(10);
+	private long flowRebindBackOffMaxInterval = TimeUnit.SECONDS.toMillis(30);
 
 	/**
 	 * The multiplier to apply to the back-off interval between each rebind of a flow.

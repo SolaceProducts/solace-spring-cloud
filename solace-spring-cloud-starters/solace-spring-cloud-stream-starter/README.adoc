@@ -293,7 +293,7 @@ Default: `1000`
 flowRebindBackOffMaxInterval::
 The maximum interval (milliseconds) to back-off when rebinding a flow. +
 +
-Default: `10000`
+Default: `30000`
 
 flowRebindBackOffMultiplier::
 The multiplier to apply to the back-off interval between each rebind of a flow. +
