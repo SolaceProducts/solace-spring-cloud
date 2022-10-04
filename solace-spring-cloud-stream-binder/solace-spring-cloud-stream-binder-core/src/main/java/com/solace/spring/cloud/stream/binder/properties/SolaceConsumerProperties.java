@@ -188,6 +188,8 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	}
 
 	public void setFlowRebindBackOffInitialInterval(long flowRebindBackOffInitialInterval) {
+		Assert.isTrue(flowRebindBackOffInitialInterval >= 1,
+				"flow rebind back-off initial interval must be greater than or equal to 1");
 		this.flowRebindBackOffInitialInterval = flowRebindBackOffInitialInterval;
 	}
 
@@ -196,6 +198,8 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	}
 
 	public void setFlowRebindBackOffMaxInterval(long flowRebindBackOffMaxInterval) {
+		Assert.isTrue(flowRebindBackOffMaxInterval >= 1,
+				"flow rebind back-off max interval must be greater than or equal to 1");
 		this.flowRebindBackOffMaxInterval = flowRebindBackOffMaxInterval;
 	}
 
@@ -204,6 +208,8 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	}
 
 	public void setFlowRebindBackOffMultiplier(double flowRebindBackOffMultiplier) {
+		Assert.isTrue(flowRebindBackOffMultiplier >= 1.0,
+				"flow rebind back-off multiplier must be greater than or equal to 1.0");
 		this.flowRebindBackOffMultiplier = flowRebindBackOffMultiplier;
 	}
 

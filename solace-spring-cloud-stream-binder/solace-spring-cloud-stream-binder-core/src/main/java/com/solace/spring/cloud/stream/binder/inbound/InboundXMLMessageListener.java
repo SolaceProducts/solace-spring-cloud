@@ -99,6 +99,10 @@ abstract class InboundXMLMessageListener implements Runnable {
 							consumerDestination.getName()), e);
 				}
 			}
+		} catch (Throwable t) {
+			logger.error(String.format("Received unexpected error while consuming from destination %s",
+					consumerDestination.getName()), t);
+			throw t;
 		} finally {
 			logger.info(String.format("Closing flow receiver to destination %s", consumerDestination.getName()));
 			flowReceiverContainer.unbind();
