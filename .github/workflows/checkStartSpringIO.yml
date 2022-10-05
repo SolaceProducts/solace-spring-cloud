@@ -1,5 +1,8 @@
 name: start.spring.io checker
 on:
+  #Temporary pull request option
+  pull_request:
+    branches: [add-action-check-startspringio]
   schedule:
     # Run at midnight every day
     - cron: "0 0 * * *"
