@@ -1,0 +1,24 @@
+name: start.spring.io checker
+on:
+  schedule:
+    # Run at midnight every day
+    - cron: "0 0 * * *"
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+    steps:
+      - name: Query start.spring.io
+        id: checkStartSpringIO
+        uses: fjogeleit/http-request-action@v1.11.1
+        with:
+          url: "curl https://start.spring.io/pom.xml?dependencies=solace,cloud-stream"
+      - name: Check Response
+        run: |
+          echo ${{ steps.checkStartSpringIO.outputs.response }}
+          echo ${{ steps.checkStartSpringIO.outputs.headers }}
+#          echo ${{ fromJson(steps.checkStartSpringIO.outputs.headers).
