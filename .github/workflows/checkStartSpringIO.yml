@@ -16,7 +16,8 @@ jobs:
         id: checkStartSpringIO
         uses: fjogeleit/http-request-action@v1.11.1
         with:
-          url: https://start.spring.io/pom.xml?bootVersion=3.0.0-SNAPSHOT&dependencies=solace,cloud-stream
+          url: https://start.spring.io/pom.xml?dependencies=solace,cloud-stream
+#          url: https://start.spring.io/pom.xml?bootVersion=3.0.0-SNAPSHOT&dependencies=solace,cloud-stream
       - name: Check Response
         run: |
           echo ${{ steps.checkStartSpringIO.outputs.response }}
