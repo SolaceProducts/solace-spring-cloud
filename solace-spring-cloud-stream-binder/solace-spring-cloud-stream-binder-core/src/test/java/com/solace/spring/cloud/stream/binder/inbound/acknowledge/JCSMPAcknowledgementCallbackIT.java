@@ -47,6 +47,7 @@ import org.mockito.Mockito;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -668,7 +669,10 @@ public class JCSMPAcknowledgementCallbackIT {
 	private FlowReceiverContainer initializeFlowReceiverContainer(JCSMPSession jcsmpSession, Queue queue)
 			throws JCSMPException {
 		if (flowReceiverContainerReference.compareAndSet(null, Mockito.spy(new FlowReceiverContainer(
-				jcsmpSession, queue.getName(), new EndpointProperties())))) {
+				jcsmpSession,
+				queue.getName(),
+				new EndpointProperties(),
+				new FixedBackOff(1, Long.MAX_VALUE))))) {
 			flowReceiverContainerReference.get().bind();
 		}
 		return flowReceiverContainerReference.get();
