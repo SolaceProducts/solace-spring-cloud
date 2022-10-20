@@ -235,12 +235,14 @@ WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in fav
 queueAccessType::
 Access type for the consumer group queue.
 +
-Default: `EndpointProperties.ACCESSTYPE_NONEXCLUSIVE`
+Default: `0` (ACCESSTYPE_NONEXCLUSIVE) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `ACCESSTYPE_` prefixed constants for other possible values]
 
 queuePermission::
 Permissions for the consumer group queue.
 +
-Default: `EndpointProperties.PERMISSION_CONSUME`
+Default: `2` (PERMISSION_CONSUME) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `PERMISSION_` prefixed constants for other possible values]
 
 queueDiscardBehaviour::
 If specified, whether to notify sender if a message fails to be enqueued to the consumer group queue.
@@ -361,12 +363,14 @@ Default: `3`
 errorQueueAccessType::
 Access type for the error queue.
 +
-Default: `EndpointProperties.ACCESSTYPE_NONEXCLUSIVE`
+Default: `0` (ACCESSTYPE_NONEXCLUSIVE) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `ACCESSTYPE_` prefixed constants for other possible values]
 
 errorQueuePermission::
 Permissions for the error queue.
 +
-Default: `EndpointProperties.PERMISSION_CONSUME`
+Default: `2` (PERMISSION_CONSUME) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `PERMISSION_` prefixed constants for other possible values]
 
 errorQueueDiscardBehaviour::
 If specified, whether to notify sender if a message fails to be enqueued to the error queue.
@@ -488,12 +492,14 @@ WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in fav
 queueAccessType::
 Access type for the required consumer group queue.
 +
-Default: `EndpointProperties.ACCESSTYPE_NONEXCLUSIVE`
+Default: `0` (ACCESSTYPE_NONEXCLUSIVE) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `ACCESSTYPE_` prefixed constants for other possible values]
 
 queuePermission::
 Permissions for the required consumer group queue.
 +
-Default: `EndpointProperties.PERMISSION_CONSUME`
+Default: `2` (PERMISSION_CONSUME) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `PERMISSION_` prefixed constants for other possible values]
 
 queueDiscardBehaviour::
 If specified, whether to notify sender if a message fails to be enqueued to the required consumer group queue.
