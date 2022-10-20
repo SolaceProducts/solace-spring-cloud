@@ -1,9 +1,9 @@
 = Spring Cloud Stream Binder for Solace PubSub+
-:revnumber: 3.3.2
+:revnumber: 3.4.0
 :toc: preamble
 :toclevels: 3
 :icons: font
-:scst-version: 3.2.2
+:scst-version: 3.2.5
 
 // Github-Specific Settings
 ifdef::env-github[]
@@ -235,12 +235,14 @@ WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in fav
 queueAccessType::
 Access type for the consumer group queue.
 +
-Default: `EndpointProperties.ACCESSTYPE_NONEXCLUSIVE`
+Default: `0` (ACCESSTYPE_NONEXCLUSIVE) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `ACCESSTYPE_` prefixed constants for other possible values]
 
 queuePermission::
 Permissions for the consumer group queue.
 +
-Default: `EndpointProperties.PERMISSION_CONSUME`
+Default: `2` (PERMISSION_CONSUME) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `PERMISSION_` prefixed constants for other possible values]
 
 queueDiscardBehaviour::
 If specified, whether to notify sender if a message fails to be enqueued to the consumer group queue.
@@ -284,6 +286,21 @@ flowPreRebindWaitTimeout::
 The maximum time to wait for all unacknowledged messages to be acknowledged before a flow receiver rebind. Will wait forever if set to a value less than `0`.
 +
 Default: `10000`
+
+flowRebindBackOffInitialInterval::
+The initial interval (milliseconds) to back-off when rebinding a flow. +
++
+Default: `1000`
+
+flowRebindBackOffMaxInterval::
+The maximum interval (milliseconds) to back-off when rebinding a flow. +
++
+Default: `30000`
+
+flowRebindBackOffMultiplier::
+The multiplier to apply to the back-off interval between each rebind of a flow. +
++
+Default: `1.5`
 
 batchMaxSize::
 The maximum number of messages per batch. +
@@ -346,12 +363,14 @@ Default: `3`
 errorQueueAccessType::
 Access type for the error queue.
 +
-Default: `EndpointProperties.ACCESSTYPE_NONEXCLUSIVE`
+Default: `0` (ACCESSTYPE_NONEXCLUSIVE) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `ACCESSTYPE_` prefixed constants for other possible values]
 
 errorQueuePermission::
 Permissions for the error queue.
 +
-Default: `EndpointProperties.PERMISSION_CONSUME`
+Default: `2` (PERMISSION_CONSUME) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `PERMISSION_` prefixed constants for other possible values]
 
 errorQueueDiscardBehaviour::
 If specified, whether to notify sender if a message fails to be enqueued to the error queue.
@@ -473,12 +492,14 @@ WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in fav
 queueAccessType::
 Access type for the required consumer group queue.
 +
-Default: `EndpointProperties.ACCESSTYPE_NONEXCLUSIVE`
+Default: `0` (ACCESSTYPE_NONEXCLUSIVE) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `ACCESSTYPE_` prefixed constants for other possible values]
 
 queuePermission::
 Permissions for the required consumer group queue.
 +
-Default: `EndpointProperties.PERMISSION_CONSUME`
+Default: `2` (PERMISSION_CONSUME) +
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `PERMISSION_` prefixed constants for other possible values]
 
 queueDiscardBehaviour::
 If specified, whether to notify sender if a message fails to be enqueued to the required consumer group queue.
@@ -1066,6 +1087,36 @@ This is a custom health status. It isn't included in the health severity order l
 
 | DOWN
 | Status indicating that the binder has suffered an unexpected failure. For instance, the binder may have exhausted all reconnection attempts. User intervention is likely required.
+|===
+
+== Solace Binder Metrics
+
+Leveraging https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html#actuator.metrics[Spring Metrics], the Solace PubSub+ binder exposes the following metrics:
+
+[cols="2m,1,2a,2", options="header"]
+|===
+| Name
+| Type
+| Tags
+| Description
+
+| solace.message.size.payload
+| `DistributionSummary`
+
+Base Units: `bytes`
+|* `name: <bindingName>`
+| Message payload size.
+
+This is the payload size of the messages received (if `name` is a consumer binding) or published (if `name` is a producer binding) from/to a PubSub+ broker.
+
+| solace.message.size.total
+| `DistributionSummary`
+
+Base Units: `bytes`
+|* `name: <bindingName>`
+| Total message size.
+
+This is the total size of the messages received (if `name` is a consumer binding) or published (if `name` is a producer binding) from/to a PubSub+ broker.
 |===
 
 == Resources

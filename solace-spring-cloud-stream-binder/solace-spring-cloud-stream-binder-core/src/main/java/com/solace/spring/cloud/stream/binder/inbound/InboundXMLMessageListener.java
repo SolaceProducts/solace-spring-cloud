@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
+import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
@@ -18,6 +19,7 @@ import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.RequeueCurrentMessageException;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
@@ -39,12 +41,13 @@ import java.util.stream.Collectors;
 abstract class InboundXMLMessageListener implements Runnable {
 	final FlowReceiverContainer flowReceiverContainer;
 	final ConsumerDestination consumerDestination;
-	private final SolaceConsumerProperties consumerProperties;
+	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
 	final ThreadLocal<AttributeAccessor> attributesHolder;
 	private final BatchCollector batchCollector;
 	private final XMLMessageMapper xmlMessageMapper;
 	private final Consumer<Message<?>> messageConsumer;
 	private final JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
+	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
 	private final boolean needHolder;
 	private final boolean needAttributes;
 	private final AtomicBoolean stopFlag = new AtomicBoolean(false);
@@ -54,10 +57,11 @@ abstract class InboundXMLMessageListener implements Runnable {
 
 	InboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 							  ConsumerDestination consumerDestination,
-							  SolaceConsumerProperties consumerProperties,
+							  ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
 							  @Nullable BatchCollector batchCollector,
 							  Consumer<Message<?>> messageConsumer,
 							  JCSMPAcknowledgementCallbackFactory ackCallbackFactory,
+							  @Nullable SolaceMeterAccessor solaceMeterAccessor,
 							  @Nullable AtomicBoolean remoteStopFlag,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
 							  boolean needHolder,
@@ -68,6 +72,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		this.batchCollector = batchCollector;
 		this.messageConsumer = messageConsumer;
 		this.ackCallbackFactory = ackCallbackFactory;
+		this.solaceMeterAccessor = solaceMeterAccessor;
 		this.remoteStopFlag = () -> remoteStopFlag != null && remoteStopFlag.get();
 		this.attributesHolder = attributesHolder;
 		this.needHolder = needHolder;
@@ -94,6 +99,10 @@ abstract class InboundXMLMessageListener implements Runnable {
 							consumerDestination.getName()), e);
 				}
 			}
+		} catch (Throwable t) {
+			logger.error(String.format("Received unexpected error while consuming from destination %s",
+					consumerDestination.getName()), t);
+			throw t;
 		} finally {
 			logger.info(String.format("Closing flow receiver to destination %s", consumerDestination.getName()));
 			flowReceiverContainer.unbind();
@@ -108,8 +117,8 @@ abstract class InboundXMLMessageListener implements Runnable {
 		MessageContainer messageContainer;
 
 		try {
-			if (batchCollector != null && consumerProperties.getBatchTimeout() > 0) {
-				messageContainer = flowReceiverContainer.receive(consumerProperties.getBatchTimeout());
+			if (batchCollector != null && consumerProperties.getExtension().getBatchTimeout() > 0) {
+				messageContainer = flowReceiverContainer.receive(consumerProperties.getExtension().getBatchTimeout());
 			} else {
 				messageContainer = flowReceiverContainer.receive();
 			}
@@ -122,6 +131,10 @@ abstract class InboundXMLMessageListener implements Runnable {
 				logger.warn(msg, e);
 			}
 			return;
+		}
+
+		if (solaceMeterAccessor != null && messageContainer != null) {
+			solaceMeterAccessor.recordMessage(consumerProperties.getBindingName(), messageContainer.getMessage());
 		}
 
 		try {

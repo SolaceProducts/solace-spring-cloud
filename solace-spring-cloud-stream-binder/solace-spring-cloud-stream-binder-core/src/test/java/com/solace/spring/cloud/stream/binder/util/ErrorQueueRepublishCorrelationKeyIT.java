@@ -25,6 +25,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+import org.springframework.util.backoff.FixedBackOff;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -332,7 +333,10 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 	private FlowReceiverContainer createFlowReceiverContainer(JCSMPSession jcsmpSession, Queue queue)
 			throws JCSMPException {
 		if (flowReceiverContainerReference.compareAndSet(null, Mockito.spy(new FlowReceiverContainer(
-				jcsmpSession, queue.getName(), new EndpointProperties())))) {
+				jcsmpSession,
+				queue.getName(),
+				new EndpointProperties(),
+				new FixedBackOff(1, Long.MAX_VALUE))))) {
 			flowReceiverContainerReference.get().bind();
 		}
 		return flowReceiverContainerReference.get();

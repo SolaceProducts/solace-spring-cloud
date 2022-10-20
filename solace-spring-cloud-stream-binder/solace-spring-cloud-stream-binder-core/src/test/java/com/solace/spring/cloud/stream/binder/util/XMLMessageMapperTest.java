@@ -42,8 +42,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.junitpioneer.jupiter.cartesian.CartesianArgumentsProvider;
 import org.junitpioneer.jupiter.cartesian.CartesianArgumentsSource;
+import org.junitpioneer.jupiter.cartesian.CartesianParameterArgumentsProvider;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.mockito.Mockito;
@@ -1749,8 +1749,8 @@ public class XMLMessageMapperTest {
 						XMLContentMessage::setXMLContent))));
 	}
 
-	private static class XmlMessageTypeCartesianProvider implements CartesianArgumentsProvider<
-			Named<XmlMessageTypeProvider<?, ?>>> {
+	private static class XmlMessageTypeCartesianProvider implements CartesianParameterArgumentsProvider<
+				Named<XmlMessageTypeProvider<?, ?>>> {
 
 		@SuppressWarnings("unchecked")
 		@Override
