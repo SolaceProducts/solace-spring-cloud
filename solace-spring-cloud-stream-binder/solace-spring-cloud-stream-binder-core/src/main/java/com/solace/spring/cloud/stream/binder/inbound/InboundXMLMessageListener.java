@@ -15,6 +15,7 @@ import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPTransportException;
+import com.solacesystems.jcsmp.StaleSessionException;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
@@ -99,6 +100,8 @@ abstract class InboundXMLMessageListener implements Runnable {
 							consumerDestination.getName()), e);
 				}
 			}
+		} catch (StaleSessionException e) {
+			logger.error("Session has lost connection", e);
 		} catch (Throwable t) {
 			logger.error(String.format("Received unexpected error while consuming from destination %s",
 					consumerDestination.getName()), t);
@@ -113,7 +116,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 		return !stopFlag.get() && !remoteStopFlag.get();
 	}
 
-	private void receive() throws UnboundFlowReceiverContainerException {
+	private void receive() throws UnboundFlowReceiverContainerException, StaleSessionException {
 		MessageContainer messageContainer;
 
 		try {
@@ -122,6 +125,8 @@ abstract class InboundXMLMessageListener implements Runnable {
 			} else {
 				messageContainer = flowReceiverContainer.receive();
 			}
+		} catch (StaleSessionException e) {
+			throw e;
 		} catch (JCSMPException e) {
 			String msg = String.format("Received error while trying to read message from endpoint %s",
 					flowReceiverContainer.getQueueName());
