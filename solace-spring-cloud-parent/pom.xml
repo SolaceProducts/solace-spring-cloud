@@ -24,7 +24,7 @@
         <maven.compiler.source>1.8</maven.compiler.source>
 
         <solace.jcsmp.version>10.16.0</solace.jcsmp.version>
-        <solace.jms.version>10.16.0</solace.jms.version>
+        <solace.jms.version>10.17.0</solace.jms.version>
     </properties>
 
     <dependencyManagement>
