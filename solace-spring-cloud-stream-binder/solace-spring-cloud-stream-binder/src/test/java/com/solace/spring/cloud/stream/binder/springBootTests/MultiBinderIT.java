@@ -32,7 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("multibinder")
 @DirtiesContext //Ensures all listeners are stopped
-public class MultiBinderTests {
+public class MultiBinderIT {
     private static final PubSubPlusContainer container = new PubSubPlusContainer();
     private static final JCSMPSession jcsmpSession;
     private static final XMLMessageProducer producer;
