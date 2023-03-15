@@ -1,0 +1,2 @@
+com.solace.spring.cloud.stream.binder.meter.SolaceMessageMeterBinder
+com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor
