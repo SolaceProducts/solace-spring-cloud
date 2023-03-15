@@ -52,15 +52,12 @@ jobs:
             **/target/failsafe-reports/*.xml
             **/target/surefire-reports/*.xml
       - name: Publish Unit Test Results
-        if: (success() || failure()) && (github.actor != 'dependabot[bot]' || (github.event_name == 'push' && !contains(github.ref, 'dependabot')))
-        uses: EnricoMi/publish-unit-test-result-action@v1
+        if: ${{ !cancelled() && (github.actor != 'dependabot[bot]' || (github.event_name == 'push' && !contains(github.ref, 'dependabot'))) }}
+        uses: EnricoMi/publish-unit-test-result-action@v2
         continue-on-error: true
         with:
-          check_name: Unit Test Results
-          comment_mode: create new
           fail_on: nothing
-          hide_comments: orphaned commits
-          files: |
+          junit_files: |
             **/target/failsafe-reports/*.xml
             !**/target/failsafe-reports/failsafe-summary.xml
             **/target/surefire-reports/*.xml
