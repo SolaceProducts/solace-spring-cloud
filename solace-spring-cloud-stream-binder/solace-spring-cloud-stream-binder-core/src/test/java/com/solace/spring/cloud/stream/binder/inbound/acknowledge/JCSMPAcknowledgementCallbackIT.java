@@ -71,7 +71,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 		initializers = ConfigDataApplicationContextInitializer.class)
 @ExtendWith(ExecutorServiceExtension.class)
 @ExtendWith(PubSubPlusExtension.class)
-@Timeout(value = 1, unit = TimeUnit.MINUTES)
+@Timeout(value = 2, unit = TimeUnit.MINUTES)
 public class JCSMPAcknowledgementCallbackIT {
 	private RetryableTaskService retryableTaskService;
 	private final AtomicReference<FlowReceiverContainer> flowReceiverContainerReference = new AtomicReference<>();

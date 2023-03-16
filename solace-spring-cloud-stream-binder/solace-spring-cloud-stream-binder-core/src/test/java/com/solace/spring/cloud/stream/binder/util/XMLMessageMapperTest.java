@@ -26,6 +26,7 @@ import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLContentMessage;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.assertj.core.api.Assertions;
@@ -60,7 +61,6 @@ import org.springframework.messaging.MessageHeaders;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.util.SerializationUtils;
-import org.testcontainers.shaded.org.apache.commons.lang.math.RandomUtils;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Parameter;
@@ -248,10 +248,10 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.SENDER_TIMESTAMP:
 				case SolaceHeaders.SEQUENCE_NUMBER:
 				case SolaceHeaders.TIME_TO_LIVE:
-					value = (long) RandomUtils.JVM_RANDOM.nextInt(10000);
+					value = (long) RandomUtils.nextInt(0, 10000);
 					break;
 				case SolaceHeaders.PRIORITY:
-					value = RandomUtils.JVM_RANDOM.nextInt(255);
+					value = RandomUtils.nextInt(0, 255);
 					break;
 				case SolaceHeaders.REPLY_TO:
 					value = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(10));
@@ -596,10 +596,10 @@ public class XMLMessageMapperTest {
 			case SolaceHeaders.SENDER_TIMESTAMP:
 			case SolaceHeaders.SEQUENCE_NUMBER:
 			case SolaceHeaders.TIME_TO_LIVE:
-				value = (long) RandomUtils.JVM_RANDOM.nextInt(10000);
+				value = (long) RandomUtils.nextInt(0, 10000);
 				break;
 			case SolaceHeaders.PRIORITY:
-				value = RandomUtils.JVM_RANDOM.nextInt(255);
+				value = RandomUtils.nextInt(0, 255);
 				break;
 			case SolaceHeaders.REPLY_TO:
 				value = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(10));
