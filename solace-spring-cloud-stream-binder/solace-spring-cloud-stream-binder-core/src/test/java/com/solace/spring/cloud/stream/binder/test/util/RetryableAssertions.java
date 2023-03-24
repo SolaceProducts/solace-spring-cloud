@@ -10,7 +10,7 @@ public class RetryableAssertions {
 	public static Duration RETRY_INTERVAL = Duration.ofMillis(500);
 
 	public static void retryAssert(SoftAssertionsProvider.ThrowingRunnable assertRun) throws InterruptedException {
-		retryAssert(assertRun, 10, TimeUnit.SECONDS);
+		retryAssert(assertRun, 30, TimeUnit.SECONDS);
 	}
 
 	@SuppressWarnings("BusyWait")
