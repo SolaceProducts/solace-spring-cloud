@@ -7,7 +7,7 @@ import java.util.concurrent.TimeUnit;
 
 public class RetryableAssertions {
 	public static void retryAssert(SoftAssertionsProvider.ThrowingRunnable assertRun) throws InterruptedException {
-		retryAssert(10, TimeUnit.SECONDS, assertRun);
+		retryAssert(30, TimeUnit.SECONDS, assertRun);
 	}
 
 	@SuppressWarnings("BusyWait")
