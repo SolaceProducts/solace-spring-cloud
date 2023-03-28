@@ -5,9 +5,11 @@ import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
 import com.solace.spring.cloud.stream.binder.util.CorrelationData;
+import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.spring.cloud.stream.binder.util.ErrorChannelSendingCorrelationKey;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
+import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
@@ -32,7 +34,8 @@ import java.util.UUID;
 
 public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	private final String id = UUID.randomUUID().toString();
-	private final Topic topic;
+	private final DestinationType configDestinationType;
+	private final Destination configDestination;
 	private final JCSMPSession jcsmpSession;
 	private final MessageChannel errorChannel;
 	private final JCSMPSessionProducerManager producerManager;
@@ -51,7 +54,10 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 									   JCSMPSessionProducerManager producerManager,
 									   ExtendedProducerProperties<SolaceProducerProperties> properties,
 									   @Nullable SolaceMeterAccessor solaceMeterAccessor) {
-		this.topic = JCSMPFactory.onlyInstance().createTopic(destination.getName());
+		this.configDestinationType = properties.getExtension().getDestinationType();
+		this.configDestination = configDestinationType == DestinationType.TOPIC ?
+				JCSMPFactory.onlyInstance().createTopic(destination.getName()) :
+				JCSMPFactory.onlyInstance().createQueue(destination.getName());
 		this.jcsmpSession = jcsmpSession;
 		this.errorChannel = errorChannel;
 		this.producerManager = producerManager;
@@ -70,16 +76,9 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 			throw handleMessagingException(correlationKey, msg0, new ClosedChannelBindingException(msg1));
 		}
 
-		Topic targetTopic = topic;
-
-		try {
-			String targetDestinationHeader = message.getHeaders().get(BinderHeaders.TARGET_DESTINATION, String.class);
-			if (StringUtils.hasText(targetDestinationHeader)) {
-				targetTopic = JCSMPFactory.onlyInstance().createTopic(targetDestinationHeader);
-			}
-		} catch (IllegalArgumentException e) {
-			throw handleMessagingException(correlationKey,
-					String.format("Unable to parse header %s", BinderHeaders.TARGET_DESTINATION), e);
+		Destination targetDestination = checkDynamicDestination(message, correlationKey);
+		if (targetDestination == null) {
+			targetDestination = configDestination;
 		}
 
 		try {
@@ -99,10 +98,11 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		xmlMessage.setCorrelationKey(correlationKey);
 
 		try {
-			producer.send(xmlMessage, targetTopic);
+			producer.send(xmlMessage, targetDestination);
 		} catch (JCSMPException e) {
 			throw handleMessagingException(correlationKey,
-					String.format("Unable to send message to topic %s", targetTopic.getName()), e);
+					String.format("Unable to send message to destination %s %s",
+							targetDestination instanceof Topic ? "TOPIC" : "QUEUE", targetDestination.getName()), e);
 		} finally {
 			if (solaceMeterAccessor != null) {
 				solaceMeterAccessor.recordMessage(properties.getBindingName(), xmlMessage);
@@ -110,9 +110,41 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		}
 	}
 
+	private Destination checkDynamicDestination(Message<?> message, ErrorChannelSendingCorrelationKey correlationKey) {
+		try {
+			String dynamicDestName;
+			String targetDestinationHeader = message.getHeaders().get(BinderHeaders.TARGET_DESTINATION, String.class);
+			if (StringUtils.hasText(targetDestinationHeader)) {
+				dynamicDestName = targetDestinationHeader.trim();
+			} else {
+				return null;
+			}
+
+			String targetDestinationTypeHeader = message.getHeaders().get(SolaceBinderHeaders.TARGET_DESTINATION_TYPE, String.class);
+			if (StringUtils.hasText(targetDestinationTypeHeader)) {
+				targetDestinationTypeHeader = targetDestinationTypeHeader.trim().toUpperCase();
+				if (targetDestinationTypeHeader.equals(DestinationType.TOPIC.name())) {
+					return JCSMPFactory.onlyInstance().createTopic(dynamicDestName);
+				} else if (targetDestinationTypeHeader.equals(DestinationType.QUEUE.name())) {
+					return JCSMPFactory.onlyInstance().createQueue(dynamicDestName);
+				} else {
+					throw new IllegalArgumentException(String.format("Incorrect value specified for header '%s'. Expected [ %s|%s ] but actual value is [ %s ]",
+							SolaceBinderHeaders.TARGET_DESTINATION_TYPE, DestinationType.TOPIC.name(), DestinationType.QUEUE.name(), targetDestinationTypeHeader));
+				}
+			}
+
+			//No dynamic destinationType present so use configured destinationType
+			return configDestinationType == DestinationType.TOPIC ?
+					JCSMPFactory.onlyInstance().createTopic(dynamicDestName) :
+					JCSMPFactory.onlyInstance().createQueue(dynamicDestName);
+		} catch (Exception e) {
+			throw handleMessagingException(correlationKey, "Unable to parse headers", e);
+		}
+	}
+
 	@Override
 	public void start() {
-		logger.info(String.format("Creating producer to topic %s <message handler ID: %s>", topic.getName(), id));
+		logger.info(String.format("Creating producer to %s %s <message handler ID: %s>", configDestinationType, configDestination.getName(), id));
 		if (isRunning()) {
 			logger.warn(String.format("Nothing to do, message handler %s is already running", id));
 			return;
@@ -132,7 +164,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	@Override
 	public void stop() {
 		if (!isRunning()) return;
-		logger.info(String.format("Stopping producer to topic %s <message handler ID: %s>", topic.getName(), id));
+		logger.info(String.format("Stopping producer to %s %s <message handler ID: %s>", configDestinationType, configDestination.getName(), id));
 		producerManager.release(id);
 		isRunning = false;
 	}

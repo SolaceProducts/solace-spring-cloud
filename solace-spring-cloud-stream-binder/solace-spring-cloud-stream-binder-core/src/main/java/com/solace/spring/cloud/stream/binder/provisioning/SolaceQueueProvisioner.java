@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.provisioning;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceCommonProperties;
+import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.InvalidOperationException;
@@ -48,6 +49,16 @@ public class SolaceQueueProvisioner
 		if (properties.isPartitioned()) {
 			logger.warn("Partitioning is not supported with this version of Solace's cloud stream binder.\n" +
 					"Provisioning will continue under the assumption that it is disabled...");
+		}
+
+		if (properties.getExtension().getDestinationType() == DestinationType.QUEUE) {
+			String queueName = name;
+
+			EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
+			boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
+			provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning,
+					properties.isAutoStartup());
+			return new SolaceProducerDestination(queueName);
 		}
 
 		String topicName = SolaceProvisioningUtil.getTopicName(name, properties.getExtension());

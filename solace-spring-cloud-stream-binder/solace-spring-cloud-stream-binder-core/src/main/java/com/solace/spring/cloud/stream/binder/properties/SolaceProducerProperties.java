@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
+import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
@@ -12,6 +13,11 @@ import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBin
 @SuppressWarnings("ConfigurationProperties")
 @ConfigurationProperties(DEFAULTS_PREFIX + ".producer")
 public class SolaceProducerProperties extends SolaceCommonProperties {
+
+	/**
+	 * The type of destination messages are published to.
+	 */
+	private DestinationType destinationType = DestinationType.TOPIC;
 
 	/**
 	 * A SpEL expression for creating the consumer group’s queue name.
@@ -42,6 +48,14 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 	 * When set to true, irreversibly convert non-serializable headers to strings. An exception is thrown otherwise.
 	 */
 	private boolean nonserializableHeaderConvertToString = false;
+
+	public DestinationType getDestinationType() {
+		return destinationType;
+	}
+
+	public void setDestinationType(DestinationType destinationType) {
+		this.destinationType = destinationType;
+	}
 
 	public String getQueueNameExpression() {
 		return queueNameExpression;
