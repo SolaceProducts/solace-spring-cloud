@@ -36,11 +36,17 @@ public class SolaceBinderHeaderMeta<T> implements HeaderMeta<T> {
 		return type;
 	}
 
+	/**
+	 * The readable property is only used by tests and doesn't necessarily reflect whether a header can be read by an application or not
+	 */
 	@Override
 	public boolean isReadable() {
 		return readable;
 	}
 
+	/**
+	 * The writable property is only used by tests and doesn't necessarily reflect whether a header can be written by an application or not
+	 */
 	@Override
 	public boolean isWritable() {
 		return writable;
