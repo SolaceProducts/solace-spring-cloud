@@ -413,6 +413,15 @@ The following properties are available for Solace producers only and must be pre
 
 See link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceCommonProperties.java[SolaceCommonProperties] and link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceProducerProperties.java[SolaceProducerProperties] for the most updated list.
 
+destinationType::
+Specifies whether the configured `destination` is a `topic` or a `queue`.
++
+When set to `topic`, the `destination` name is a topic subscription added on a queue.
++
+When set to `queue`, the producer binds to a queue matching the `destination` name. All naming prefix and name generation options do not apply. However, the queue can be auto-provisioned with `provisionDurableQueue=true`.
++
+Default: `topic`
+
 headerExclusions::
 The list of headers to exclude from the published message. Excluding Solace message headers is not supported.
 +
@@ -426,7 +435,7 @@ Default: `false`
 IMPORTANT: Non-serializable headers should have a meaningful `toString()` implementation. Otherwise enabling this feature may result in potential data loss.
 
 provisionDurableQueue::
-Whether to provision durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker.
+Whether to provision durable queues for non-anonymous consumer groups or queue destinations. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker.
 +
 Default: `true` +
 See: <<Generated Queue Name Syntax>>
@@ -435,6 +444,8 @@ addDestinationAsSubscriptionToQueue::
 Whether to add the Destination as a subscription to queue during provisioning.
 +
 Default: `true`
++
+NOTE: Does not apply when `destinationType=queue`.
 
 provisionSubscriptionsToDurableQueue::
 Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum) on the consumer group's queue on the message broker. This property also applies to topics added by the `queueAdditionalSubscriptions` property.
@@ -490,39 +501,39 @@ See: <<Generated Queue Name Syntax>>
 WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `queueNameExpressionsForRequiredGroups`. The destination encoding can be removed from queue names by removing it directly from these SpEL expressions.
 
 queueAccessType::
-Access type for the required consumer group queue.
+Access type for binder provisioned queues.
 +
 Default: `0` (ACCESSTYPE_NONEXCLUSIVE) +
 See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `ACCESSTYPE_` prefixed constants for other possible values]
 
 queuePermission::
-Permissions for the required consumer group queue.
+Permissions for binder provisioned queues.
 +
 Default: `2` (PERMISSION_CONSUME) +
-See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.ACCESSTYPE_EXCLUSIVE[The `PERMISSION_` prefixed constants for other possible values]
+See: https://docs.solace.com/API-Developer-Online-Ref-Documentation/java/constant-values.html#com.solacesystems.jcsmp.EndpointProperties.PERMISSION_CONSUME[The `PERMISSION_` prefixed constants for other possible values]
 
 queueDiscardBehaviour::
-If specified, whether to notify sender if a message fails to be enqueued to the required consumer group queue.
+Queue discard behaviour for binder provisioned queues. Whether to notify sender if a message fails to be enqueued to the endpoint. A null value means use the appliance default.
 +
 Default: `null`
 
 queueMaxMsgRedelivery::
-Sets the maximum message redelivery count on the required consumer group queue. (Zero means retry forever).
+Sets the maximum message redelivery count for binder provisioned queues. (Zero means retry forever).
 +
 Default: `null`
 
 queueMaxMsgSize::
-Maximum message size for the required consumer group queue.
+Maximum message size for binder provisioned queues.
 +
 Default: `null`
 
 queueQuota::
-Message spool quota for the required consumer group queue.
+Message spool quota for binder provisioned queues.
 +
 Default: `null`
 
 queueRespectsMsgTtl::
-Whether the required consumer group queue respects Message TTL.
+Whether the binder provisioned queues respect Message TTL.
 +
 Default: `null`
 
@@ -532,6 +543,8 @@ These subscriptions may also contain wildcards.
 +
 Default: Empty `Map&lt;String,String[]&gt;` +
 See: <<Overview>> for more info on how this binder uses topic-to-queue mapping to implement Spring Cloud Streams consumer groups.
++
+NOTE: Does not apply when `destinationType=queue`.
 
 === Solace Message Headers
 
@@ -733,6 +746,22 @@ The consolidated list of message headers for a batch of messages where the heade
 | Internal Binder Use Only
 | "base64"
 | The encoding algorithm used to encode the headers indicated by `solace_scst_serializedHeaders`.
+
+| solace_scst_targetDestinationType
+| String
+| Write
+|
+| Only applicable when `scst_targetDestination` is set.
+
+*topic*
+
+Specifies that the dynamic destination is a topic
+
+*queue*
+
+Specifies that the dynamic destination is a queue
+
+When absent, the binding’s configured destination-type is used.
 |===
 
 == Native Payload Types
