@@ -418,7 +418,7 @@ Specifies whether the configured `destination` is a `topic` or a `queue`.
 +
 When set to `topic`, the `destination` name is a topic subscription added on a queue.
 +
-When set to `queue`, the producer binds to a queue matching the `destination` name. All naming prefix and name generation options do not apply. However, the queue can be auto-provisioned with `provisionDurableQueue=true`.
+When set to `queue`, the producer binds to a queue matching the `destination` name. All naming prefix and queue name generation options do not apply. However, the queue can be auto-provisioned with `provisionDurableQueue=true`.
 +
 Default: `topic`
 
@@ -1001,7 +1001,9 @@ This property can be configured for dynamically created queues by using https://
 
 Spring Cloud Stream has a reserved message header called `scst_targetDestination` (retrievable via `BinderHeaders.TARGET_DESTINATION`), which allows for messages to be redirected from their bindings' configured destination to the target destination specified by this header.
 
-For this binder's implementation of this header, the target destination defines the _exact_ Solace topic to which a message will be sent. i.e. No post-processing is done for this header.
+For this binder's implementation of this header, the target destination defines the _exact_ Solace topic or queue to which a message will be sent. i.e. No post-processing is done.
+
+This binder also adds a reserved message header called `solace_scst_targetDestinationType` (retrievable via `SolaceBinderHeaders.TARGET_DESTINATION_TYPE`), which allows to override the configured producer `destination-type`.
 
 [source,java]
 ----
@@ -1009,13 +1011,15 @@ public class MyMessageBuilder {
     public Message<String> buildMeAMessage() {
         return MessageBuilder.withPayload("payload")
             .setHeader(BinderHeaders.TARGET_DESTINATION, "some-dynamic-destination") // <1>
+            .setHeader(SolaceBinderHeaders.TARGET_DESTINATION_TYPE, "topic")         // <2>
             .build();
     }
 }
 ----
-<1> This message will be sent to the `some-dynamic-destination` topic, ignoring the producer's configured destination
+<1> This message will be sent to the `some-dynamic-destination` topic, ignoring the producer's configured destination.
+<2> Optionally, the configured producer `destination-type` can be overridden.
 
-NOTE: This header is cleared by the message's producer before it is sent off to the message broker. So you should attach the target destination to your message payload if you want to get that information on the consumer-side.
+NOTE: Those 2 headers are cleared from the message before it is sent off to the message broker. So you should attach that information to your message payload if you want to get that information on the consumer-side.
 
 == Failed Consumer Message Error Handling
 
