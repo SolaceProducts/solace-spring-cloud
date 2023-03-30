@@ -2212,4 +2212,24 @@ public class SolaceBinderProvisioningLifecycleIT {
 			if (producerBinding != null) producerBinding.unbind();
 		}
 	}
+
+	@Test
+	public void testProducerDestinationTypeSetToQueueWithRequiredGroups(SpringCloudStreamContext context, TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = context.getBinder();
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		String destination = RandomStringUtils.randomAlphanumeric(20);
+
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
+		producerProperties.setRequiredGroups("group-A");
+		producerProperties.getExtension().setDestinationType(DestinationType.QUEUE);
+
+		Binding<MessageChannel> producerBinding = null;
+		try {
+			Exception provisioningException = assertThrows(ProvisioningException.class, () -> binder.bindProducer(destination, moduleOutputChannel, producerProperties));
+			assertThat(provisioningException)
+					.hasMessageContaining("Producer requiredGroups are not supported when destinationType=QUEUE");
+		} finally {
+			if (producerBinding != null) producerBinding.unbind();
+		}
+	}
 }

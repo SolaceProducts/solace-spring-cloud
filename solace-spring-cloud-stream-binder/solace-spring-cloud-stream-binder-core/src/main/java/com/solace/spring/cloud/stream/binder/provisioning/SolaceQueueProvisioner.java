@@ -52,6 +52,9 @@ public class SolaceQueueProvisioner
 		}
 
 		if (properties.getExtension().getDestinationType() == DestinationType.QUEUE) {
+			if (properties.getRequiredGroups() != null && properties.getRequiredGroups().length > 0) {
+				throw new ProvisioningException(String.format("Producer requiredGroups are not supported when destinationType=%s", DestinationType.QUEUE));
+			}
 			provisionQueueIfRequired(name, properties);
 			return new SolaceProducerDestination(name);
 		}
