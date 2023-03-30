@@ -52,13 +52,8 @@ public class SolaceQueueProvisioner
 		}
 
 		if (properties.getExtension().getDestinationType() == DestinationType.QUEUE) {
-			String queueName = name;
-
-			EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
-			boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
-			provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning,
-					properties.isAutoStartup());
-			return new SolaceProducerDestination(queueName);
+			provisionQueueIfRequired(name, properties);
+			return new SolaceProducerDestination(name);
 		}
 
 		String topicName = SolaceProvisioningUtil.getTopicName(name, properties.getExtension());
@@ -69,11 +64,7 @@ public class SolaceQueueProvisioner
 		for (String groupName : requiredGroups) {
 			String queueName = SolaceProvisioningUtil.getQueueName(topicName, groupName, properties);
 			logger.info(String.format("Creating durable queue %s for required consumer group %s", queueName, groupName));
-			EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
-			boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
-			Queue queue = provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning,
-					properties.isAutoStartup());
-
+			Queue queue = provisionQueueIfRequired(queueName, properties);
 			addSubscriptionToQueue(queue, topicName, properties.getExtension(), true);
 
 			for (String extraTopic : requiredGroupsExtraSubs.getOrDefault(groupName, new String[0])) {
@@ -142,6 +133,13 @@ public class SolaceQueueProvisioner
 
 		return new SolaceConsumerDestination(queue.getName(), name, queueNames.getPhysicalGroupName(), !isDurableQueue,
 				errorQueueName, additionalSubscriptions);
+	}
+
+	private Queue provisionQueueIfRequired(String queueName, ExtendedProducerProperties<SolaceProducerProperties> properties) {
+		EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
+		boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
+		return provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning,
+				properties.isAutoStartup());
 	}
 
 	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties,
