@@ -15,7 +15,8 @@ public class SolaceBinderHeaderMeta<T> implements HeaderMeta<T> {
 			{SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING, new SolaceBinderHeaderMeta<>(String.class, false, false, Scope.WIRE)},
 			{SolaceBinderHeaders.CONFIRM_CORRELATION, new SolaceBinderHeaderMeta<>(CorrelationData.class, false, false, Scope.LOCAL)},
 			{SolaceBinderHeaders.NULL_PAYLOAD, new SolaceBinderHeaderMeta<>(Boolean.class, true, false, Scope.LOCAL)},
-			{SolaceBinderHeaders.BATCHED_HEADERS, new SolaceBinderHeaderMeta<>(List.class, true, false, Scope.LOCAL)}
+			{SolaceBinderHeaders.BATCHED_HEADERS, new SolaceBinderHeaderMeta<>(List.class, true, false, Scope.LOCAL)},
+			{SolaceBinderHeaders.TARGET_DESTINATION_TYPE, new SolaceBinderHeaderMeta<>(String.class, false, false, Scope.LOCAL)}
 	}).collect(Collectors.toMap(d -> (String) d[0], d -> (SolaceBinderHeaderMeta<?>) d[1]));
 
 	private final Class<T> type;
@@ -35,11 +36,17 @@ public class SolaceBinderHeaderMeta<T> implements HeaderMeta<T> {
 		return type;
 	}
 
+	/**
+	 * The readable property is only used by tests and doesn't necessarily reflect whether a header can be read by an application or not
+	 */
 	@Override
 	public boolean isReadable() {
 		return readable;
 	}
 
+	/**
+	 * The writable property is only used by tests and doesn't necessarily reflect whether a header can be written by an application or not
+	 */
 	@Override
 	public boolean isWritable() {
 		return writable;

@@ -84,4 +84,17 @@ public final class SolaceBinderHeaders {
 	 * batch of messages where the headers for each payload element is in this list’s corresponding index.</p>
 	 */
 	public static final String BATCHED_HEADERS = PREFIX + "batchedHeaders";
+
+	/**
+	 * <p><b>Acceptable Value Type:</b> String</p>
+	 * <p><b>Access:</b> Write</p>
+	 * <br>
+	 * <p> Only applicable when {@code scst_targetDestination} is set.</p>
+	 * <ul>
+	 *   <li><b>topic</b>: Specifies that the dynamic destination is a topic</li>
+	 *   <li><b>queue</b>: Specifies that the dynamic destination is a queue</li>
+	 * </ul>
+	 * <p>When absent, the binding’s configured destination-type is used.</p>
+	 */
+	public static final String TARGET_DESTINATION_TYPE = PREFIX + "targetDestinationType";
 }
