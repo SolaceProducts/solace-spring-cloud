@@ -4,6 +4,7 @@ import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.util.CorrelationData;
+import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.spring.cloud.stream.binder.util.ErrorChannelSendingCorrelationKey;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
@@ -11,6 +12,8 @@ import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solacesystems.jcsmp.Queue;
+import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import org.apache.commons.lang3.RandomStringUtils;
@@ -24,6 +27,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
 import org.springframework.messaging.Message;
@@ -31,15 +35,18 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.MessageBuilder;
 
+import java.time.Instant;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 
 @Timeout(value = 10)
 @ExtendWith(MockitoExtension.class)
@@ -48,6 +55,7 @@ public class JCSMPOutboundMessageHandlerTest {
 	private JCSMPOutboundMessageHandler messageHandler;
 	private JCSMPStreamingPublishCorrelatingEventHandler pubEventHandler;
 	private ArgumentCaptor<XMLMessage> xmlMessageCaptor;
+	private ArgumentCaptor<Destination> destinationCaptor;
 	private ExtendedProducerProperties<SolaceProducerProperties> producerProperties;
 	@Mock private XMLMessageProducer messageProducer;
 	@Mock private SolaceMeterAccessor solaceMeterAccessor;
@@ -57,6 +65,7 @@ public class JCSMPOutboundMessageHandlerTest {
 					 @Mock MessageChannel errChannel,
 					 @Mock SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy) throws JCSMPException {
 		xmlMessageCaptor = ArgumentCaptor.forClass(XMLMessage.class);
+		destinationCaptor = ArgumentCaptor.forClass(Destination.class);
 
 		ArgumentCaptor<JCSMPStreamingPublishCorrelatingEventHandler> pubEventHandlerCaptor = ArgumentCaptor
 				.forClass(JCSMPStreamingPublishCorrelatingEventHandler.class);
@@ -161,14 +170,110 @@ public class JCSMPOutboundMessageHandlerTest {
 			JCSMPException exception = new JCSMPException("Expected exception");
 			Mockito.doThrow(exception)
 					.when(messageProducer)
-					.send(xmlMessageCaptor.capture(), Mockito.any(Destination.class));
+					.send(xmlMessageCaptor.capture(), any(Destination.class));
 			assertThatThrownBy(() -> messageHandler.handleMessage(message))
 					.isInstanceOf(MessagingException.class)
 					.hasCause(exception);
 		}
 
 		Mockito.verify(solaceMeterAccessor, Mockito.times(1))
-				.recordMessage(Mockito.eq(producerProperties.getBindingName()), Mockito.any());
+				.recordMessage(Mockito.eq(producerProperties.getBindingName()), any());
+	}
+
+	@Test
+	public void test_dynamic_destinationName_only() throws JCSMPException {
+		Message<?> message = MessageBuilder.withPayload("the payload")
+				.setHeader(BinderHeaders.TARGET_DESTINATION, "dynamicDestinationName")
+				.setHeader("SOME_HEADER", "HOLA") //add extra header and confirm it is kept
+				.build();
+		messageHandler.handleMessage(message);
+
+		Mockito.verify(messageProducer).send(xmlMessageCaptor.capture(), destinationCaptor.capture());
+		Destination targetDestination = destinationCaptor.getValue();
+		assertThat(targetDestination).isInstanceOf(Topic.class);
+		assertThat(targetDestination.getName()).isEqualTo("dynamicDestinationName");
+
+		XMLMessage sentMessage = xmlMessageCaptor.getValue();
+		assertThat(sentMessage.getProperties().get(BinderHeaders.TARGET_DESTINATION)).isNull();
+		assertThat(sentMessage.getProperties().get("SOME_HEADER")).isEqualTo("HOLA");
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "topic", "queue", " TOPIc ", " QueUe  ", "", "   " })
+	public void test_dynamic_destinationName_and_destinationType(String destinationType) throws JCSMPException {
+		Message<?> message = getMessageForDynamicDestination("dynamicDestinationName", destinationType);
+		messageHandler.handleMessage(message);
+
+		Mockito.verify(messageProducer).send(xmlMessageCaptor.capture(), destinationCaptor.capture());
+		Destination targetDestination = destinationCaptor.getValue();
+
+		//MessageHandler uses default producerProperties so blank and unspecified destinationType defaults to Topic
+		assertThat(targetDestination).isInstanceOf(destinationType.trim().equalsIgnoreCase("queue") ? Queue.class : Topic.class);
+		assertThat(targetDestination.getName()).isEqualTo("dynamicDestinationName");
+
+		//Verify headers don't get set on ongoing Solace message
+		XMLMessage sentMessage = xmlMessageCaptor.getValue();
+		assertThat(sentMessage.getProperties().get(BinderHeaders.TARGET_DESTINATION)).isNull();
+		assertThat(sentMessage.getProperties().get(SolaceBinderHeaders.TARGET_DESTINATION_TYPE)).isNull();
+	}
+
+	@ParameterizedTest
+	@ValueSource(strings = { "queue", "topic" })
+	public void test_dynamic_destinationName_with_destinationType_configured_on_messageHandler(String type, @Mock JCSMPSession session) throws JCSMPException {
+		SolaceProducerProperties producerProperties = new SolaceProducerProperties();
+		producerProperties.setDestinationType(type.equals("queue") ? DestinationType.QUEUE : DestinationType.TOPIC);
+		ProducerDestination dest = Mockito.mock(ProducerDestination.class);
+		Mockito.when(dest.getName()).thenReturn("thisIsOverriddenByDynamicDestinationName");
+
+		Mockito.when(session.getMessageProducer(any())).thenReturn(messageProducer);
+
+		messageHandler = new JCSMPOutboundMessageHandler(
+				dest,
+				session,
+				null,
+				new JCSMPSessionProducerManager(session),
+				new ExtendedProducerProperties<>(producerProperties),
+				solaceMeterAccessor
+		);
+		messageHandler.start();
+
+		Message<?> message = getMessageForDynamicDestination("dynamicDestinationName", null);
+		messageHandler.handleMessage(message);
+
+		Mockito.verify(messageProducer).send(any(), destinationCaptor.capture());
+		Destination targetDestination = destinationCaptor.getValue();
+		assertThat(targetDestination).isInstanceOf(type.equals("queue") ? Queue.class : Topic.class);
+		assertThat(targetDestination.getName()).isEqualTo("dynamicDestinationName");
+	}
+
+	@Test
+	public void test_dynamic_destination_with_invalid_destinationType() {
+		Message<?> message = getMessageForDynamicDestination("dynamicDestinationName", "INVALID");
+		Exception exception = assertThrows(MessagingException.class, () -> messageHandler.handleMessage(message));
+		assertThat(exception)
+				.hasRootCauseInstanceOf(IllegalArgumentException.class)
+				.hasRootCauseMessage("Incorrect value specified for header 'solace_scst_targetDestinationType'. Expected [ TOPIC|QUEUE ] but actual value is [ INVALID ]");
+	}
+
+	@Test
+	public void test_dynamic_destinationName_with_invalid_header_value_type() throws JCSMPException {
+		Message<?> message = getMessageForDynamicDestination(Instant.now(), null);
+		Exception exception = assertThrows(MessagingException.class, () -> messageHandler.handleMessage(message));
+		assertThat(exception)
+				.hasRootCauseInstanceOf(IllegalArgumentException.class)
+				.hasRootCauseMessage("Incorrect type specified for header 'scst_targetDestination'. Expected [class java.lang.String] but actual type is [class java.time.Instant]");
+	}
+
+	@Test
+	public void test_dynamic_destinationType_with_invalid_header_value_type() throws JCSMPException {
+		Message<?> message = MessageBuilder.withPayload("the payload")
+				.setHeader(BinderHeaders.TARGET_DESTINATION, "someDynamicDestinationName")
+				.setHeader(SolaceBinderHeaders.TARGET_DESTINATION_TYPE, Instant.now())
+				.build();
+		Exception exception = assertThrows(MessagingException.class, () -> messageHandler.handleMessage(message));
+		assertThat(exception)
+				.hasRootCauseInstanceOf(IllegalArgumentException.class)
+				.hasRootCauseMessage("Incorrect type specified for header 'solace_scst_targetDestinationType'. Expected [class java.lang.String] but actual type is [class java.time.Instant]");
 	}
 
 	Message<String> getMessage(CorrelationData correlationData) {
@@ -177,8 +282,19 @@ public class JCSMPOutboundMessageHandlerTest {
 				.build();
 	}
 
+	private Message<String> getMessageForDynamicDestination(Object targetDestination, Object targetDestinationType) {
+		MessageBuilder builder = MessageBuilder.withPayload("the payload");
+		if (targetDestination != null) {
+			builder.setHeader(BinderHeaders.TARGET_DESTINATION, targetDestination);
+		}
+		if (targetDestinationType != null) {
+			builder.setHeader(SolaceBinderHeaders.TARGET_DESTINATION_TYPE, targetDestinationType);
+		}
+		return builder.build();
+	}
+
 	private ErrorChannelSendingCorrelationKey getCorrelationKey() throws JCSMPException {
-		Mockito.verify(messageProducer).send(xmlMessageCaptor.capture(), Mockito.any(Destination.class));
+		Mockito.verify(messageProducer).send(xmlMessageCaptor.capture(), any(Destination.class));
 		return (ErrorChannelSendingCorrelationKey) xmlMessageCaptor.getValue().getCorrelationKey();
 	}
 
