@@ -97,6 +97,10 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		correlationKey.setRawMessage(xmlMessage);
 		xmlMessage.setCorrelationKey(correlationKey);
 
+		if (logger.isDebugEnabled()) {
+			logger.debug(String.format("Publishing message to destination [ %s:%s ]", targetDestination instanceof Topic ? "TOPIC" : "QUEUE", targetDestination));
+		}
+
 		try {
 			producer.send(xmlMessage, targetDestination);
 		} catch (JCSMPException e) {
