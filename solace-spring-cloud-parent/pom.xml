@@ -24,6 +24,7 @@
         <maven.compiler.source>1.8</maven.compiler.source>
 
         <solace.jcsmp.version>10.18.0</solace.jcsmp.version>
+        <!-- sol-jms was not upgraded as it wasn't a smooth upgrade -->
         <solace.jms.version>10.16.0</solace.jms.version>
     </properties>
 

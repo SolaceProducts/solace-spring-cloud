@@ -1,9 +1,9 @@
 = Spring Cloud Stream Binder for Solace PubSub+
-:revnumber: 3.4.0
+:revnumber: 3.5.0
 :toc: preamble
 :toclevels: 3
 :icons: font
-:scst-version: 3.2.5
+:scst-version: 3.2.7
 
 // Github-Specific Settings
 ifdef::env-github[]
