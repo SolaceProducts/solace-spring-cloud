@@ -29,7 +29,7 @@
 	<groupId>com.solace.cloud.cloudfoundry</groupId>
 	<artifactId>solace-spring-cloud-connector</artifactId>
 	<packaging>jar</packaging>
-	<version>4.3.11-SNAPSHOT</version>
+	<version>4.3.10-SNAPSHOT</version>
 	<name>Spring Cloud Connectors for Solace PubSub+ on Cloud Foundry</name>
 	<description>Spring Cloud Connectors for Solace PubSub+ on Cloud Foundry.</description>
 	<url>https://github.com/${repoName}/solace-spring-cloud/tree/${project.scm.tag}/solace-spring-cloud-connector</url>

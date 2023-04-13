@@ -95,7 +95,7 @@ TEST_SOLACE_MGMT_PASSWORD=admin
 
 #### Parallel Test Execution
 
-Parallel test execution is enabled by default. Add the `-Djunit.jupiter.execution.parallel.enabled=false` option to your command to disable parallel test execution.
+Parallel test execution is disabled by default. Add the `-Djunit.jupiter.execution.parallel.enabled=true` option to your command to enable parallel test execution.
 
 ## Release Process
 
