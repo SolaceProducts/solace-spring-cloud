@@ -5,12 +5,12 @@
     <parent>
         <groupId>com.solace.spring.cloud</groupId>
         <artifactId>solace-spring-cloud-parent</artifactId>
-        <version>2.4.3-SNAPSHOT</version>
+        <version>3.0.0-SNAPSHOT</version>
         <relativePath>../../solace-spring-cloud-parent/pom.xml</relativePath>
     </parent>
 
     <artifactId>spring-cloud-stream-binder-solace</artifactId>
-    <version>3.4.3-SNAPSHOT</version>
+    <version>4.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Solace Spring Cloud Stream Binder</name>
@@ -57,22 +57,37 @@
         </dependency>
 
         <dependency>
+            <groupId>jakarta.annotation</groupId>
+            <artifactId>jakarta.annotation-api</artifactId>
+            <version>2.1.1</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-stream-binder-test</artifactId>
+            <artifactId>spring-cloud-stream-test-binder</artifactId>
+            <!--<version>4.0.2</version>-->
             <scope>test</scope>
         </dependency>
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-stream-test-support</artifactId>
+            <!--<version>4.0.2</version>-->
+            <scope>test</scope>
+        </dependency>
+
+
 
         <dependency>
             <groupId>org.junit-pioneer</groupId>
             <artifactId>junit-pioneer</artifactId>
-            <version>1.7.1</version>
+            <version>1.9.1</version>
             <scope>test</scope>
         </dependency>
 
         <dependency>
             <groupId>com.solace.test.integration</groupId>
             <artifactId>pubsubplus-junit-jupiter</artifactId>
-            <version>${solace.integration.test.support.version}</version>
+            <version>0.9.1-SNAPSHOT</version>
             <scope>test</scope>
         </dependency>
 
@@ -141,10 +156,57 @@
                     </execution>
                 </executions>
             </plugin>
+            <!--<plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>2.22.2</version>
+            </plugin>-->
+
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
+                <version>2.22.2</version>
+                <executions>
+                    <execution>
+                        <id>integration-test</id>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                        <configuration>
+                            <argLine>
+                                --add-opens java.base/java.lang=ALL-UNNAMED
+                                --add-opens java.base/java.util=ALL-UNNAMED
+                                --add-opens java.base/java.net=ALL-UNNAMED
+                            </argLine>
+                            <properties>
+                                <configurationParameters>
+                                    junit.jupiter.execution.parallel.enabled=true
+                                </configurationParameters>
+                            </properties>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
+
+            <!--<plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>3.0.0-M2</version>
+                <executions>
+                    <execution>
+                        <id>enforce</id>
+                        <configuration>
+                            <rules>
+                                <dependencyConvergence/>
+                            </rules>
+                        </configuration>
+                        <goals>
+                            <goal>enforce</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>-->
         </plugins>
     </build>
 
