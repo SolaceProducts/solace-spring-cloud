@@ -2029,8 +2029,7 @@ public class FlowReceiverContainerIT {
 		MonitorSempMetaOnlyResponse response = sempV2Api.monitor()
 				.getApiClient()
 				.getJSON()
-				.getContext(null)
-				.readValue(e.getResponseBody(), MonitorSempMetaOnlyResponse.class);
+				.deserialize(e.getResponseBody(), MonitorSempMetaOnlyResponse.class);
 		if (response.getMeta().getError().getStatus().equals("NOT_FOUND")) {
 			return null;
 		} else {
