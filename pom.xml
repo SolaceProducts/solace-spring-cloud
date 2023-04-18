@@ -35,7 +35,7 @@
         <!-- Remove this if the next version of solace-spring-boot works fine -->
         <spring.boot.version>2.7.10</spring.boot.version>
 
-        <solace.spring.cloud.connector.version>4.3.11-SNAPSHOT</solace.spring.cloud.connector.version>
+        <solace.spring.cloud.connector.version>4.3.10-SNAPSHOT</solace.spring.cloud.connector.version>
         <solace.spring.cloud.stream-starter.version>3.5.0-SNAPSHOT</solace.spring.cloud.stream-starter.version>
 
         <solace.integration.test.support.version>0.9.1</solace.integration.test.support.version>
