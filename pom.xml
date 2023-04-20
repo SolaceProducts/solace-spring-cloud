@@ -108,7 +108,6 @@
             </activation>
             <properties>
                 <gpg.executable>gpg2</gpg.executable>
-                <gpg.passphrase>Solace1!</gpg.passphrase>
             </properties>
             <distributionManagement>
                 <snapshotRepository>
@@ -134,7 +133,6 @@
                         <configuration>
                             <serverId>ossrh</serverId>
                             <nexusUrl>https://s01.oss.sonatype.org/</nexusUrl>
-                            <!--<stagingProfileId>1d86d96a0b6bce</stagingProfileId> -->
                             <autoReleaseAfterClose>true</autoReleaseAfterClose>
                         </configuration>
                     </plugin>
@@ -264,7 +262,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
-                <version>1.1.0</version>
+                <version>1.4.1</version>
                 <configuration>
                     <updatePomFile>true</updatePomFile>
                     <flattenMode>oss</flattenMode>
