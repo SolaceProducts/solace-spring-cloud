@@ -418,7 +418,7 @@ Specifies whether the configured `destination` is a `topic` or a `queue`.
 +
 When set to `topic`, the `destination` name is a topic subscription added on a queue.
 +
-When set to `queue`, the producer binds to a queue matching the `destination` name. All naming prefix and queue name generation options do not apply. However, the queue can be auto-provisioned with `provisionDurableQueue=true`.
+When set to `queue`, the producer binds to a queue matching the `destination` name. The queue can be auto-provisioned with `provisionDurableQueue=true` however, all naming prefix and queue name generation options do not apply. A queue will be provisioned using the `destination` name explicitly.
 +
 Default: `topic`
 
