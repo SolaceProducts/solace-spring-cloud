@@ -436,12 +436,14 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = binder.getBinder().getBinderIdentity() + context.getDestinationNameDelimiter() +
+				destination0 + context.getDestinationNameDelimiter() + "errors";
 
 		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
 
 		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
 		producerProperties.setErrorChannelEnabled(true);
+		producerProperties.populateBindingName(destination0);
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel,
 				producerProperties);
 
@@ -472,12 +474,14 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + "errors";
+		String errorDestination0 = binder.getBinder().getBinderIdentity() + context.getDestinationNameDelimiter() +
+				destination0 + context.getDestinationNameDelimiter() + "errors";
 
 		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
 
 		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
 		producerProperties.setErrorChannelEnabled(true);
+		producerProperties.populateBindingName(destination0);
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel,
 				producerProperties);
 

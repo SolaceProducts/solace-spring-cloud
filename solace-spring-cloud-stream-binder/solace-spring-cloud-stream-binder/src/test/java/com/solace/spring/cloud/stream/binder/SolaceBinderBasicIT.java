@@ -248,10 +248,12 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		String destination0EC = String.format("%s%serrors", destination0, getDestinationNameDelimiter());
+		String destination0EC = String.format("%s%s%s%serrors", binder.getBinder().getBinderIdentity(),
+				getDestinationNameDelimiter(), destination0, getDestinationNameDelimiter());
 
 		ExtendedProducerProperties<SolaceProducerProperties> producerProps = createProducerProperties(testInfo);
 		producerProps.setErrorChannelEnabled(true);
+		producerProps.populateBindingName(destination0);
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProps);
 
 		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
