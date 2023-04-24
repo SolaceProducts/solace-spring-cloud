@@ -26,6 +26,7 @@ import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLContentMessage;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.assertj.core.api.Assertions;
@@ -60,7 +61,6 @@ import org.springframework.messaging.MessageHeaders;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.util.SerializationUtils;
-import org.testcontainers.shaded.org.apache.commons.lang.math.RandomUtils;
 
 import java.lang.reflect.Array;
 import java.lang.reflect.Parameter;
@@ -248,10 +248,10 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.SENDER_TIMESTAMP:
 				case SolaceHeaders.SEQUENCE_NUMBER:
 				case SolaceHeaders.TIME_TO_LIVE:
-					value = (long) RandomUtils.JVM_RANDOM.nextInt(10000);
+					value = (long) RandomUtils.nextInt(0, 10000);
 					break;
 				case SolaceHeaders.PRIORITY:
-					value = RandomUtils.JVM_RANDOM.nextInt(255);
+					value = RandomUtils.nextInt(0, 255);
 					break;
 				case SolaceHeaders.REPLY_TO:
 					value = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(10));
@@ -382,6 +382,7 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.BATCHED_HEADERS:
 				case SolaceBinderHeaders.CONFIRM_CORRELATION:
 				case SolaceBinderHeaders.NULL_PAYLOAD:
+				case SolaceBinderHeaders.TARGET_DESTINATION_TYPE:
 					assertNull(xmlMessage.getProperties().get(header.getKey()));
 					break;
 				default:
@@ -596,10 +597,10 @@ public class XMLMessageMapperTest {
 			case SolaceHeaders.SENDER_TIMESTAMP:
 			case SolaceHeaders.SEQUENCE_NUMBER:
 			case SolaceHeaders.TIME_TO_LIVE:
-				value = (long) RandomUtils.JVM_RANDOM.nextInt(10000);
+				value = (long) RandomUtils.nextInt(0, 10000);
 				break;
 			case SolaceHeaders.PRIORITY:
-				value = RandomUtils.JVM_RANDOM.nextInt(255);
+				value = RandomUtils.nextInt(0, 255);
 				break;
 			case SolaceHeaders.REPLY_TO:
 				value = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(10));
@@ -1057,6 +1058,9 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceBinderHeaders.CONFIRM_CORRELATION:
 					metadata.putString(header.getKey(), "random_string");
+					break;
+				case SolaceBinderHeaders.TARGET_DESTINATION_TYPE:
+					metadata.putString(header.getKey(), "topic");
 					break;
 				default:
 					fail(String.format("no test for header %s", header.getKey()));

@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.provisioning;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceCommonProperties;
+import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.InvalidOperationException;
@@ -50,6 +51,14 @@ public class SolaceQueueProvisioner
 					"Provisioning will continue under the assumption that it is disabled...");
 		}
 
+		if (properties.getExtension().getDestinationType() == DestinationType.QUEUE) {
+			if (properties.getRequiredGroups() != null && properties.getRequiredGroups().length > 0) {
+				throw new ProvisioningException(String.format("Producer requiredGroups are not supported when destinationType=%s", DestinationType.QUEUE));
+			}
+			provisionQueueIfRequired(name, properties);
+			return new SolaceProducerDestination(name);
+		}
+
 		String topicName = SolaceProvisioningUtil.getTopicName(name, properties.getExtension());
 
 		Set<String> requiredGroups = new HashSet<>(Arrays.asList(properties.getRequiredGroups()));
@@ -58,11 +67,7 @@ public class SolaceQueueProvisioner
 		for (String groupName : requiredGroups) {
 			String queueName = SolaceProvisioningUtil.getQueueName(topicName, groupName, properties);
 			logger.info(String.format("Creating durable queue %s for required consumer group %s", queueName, groupName));
-			EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
-			boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
-			Queue queue = provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning,
-					properties.isAutoStartup());
-
+			Queue queue = provisionQueueIfRequired(queueName, properties);
 			addSubscriptionToQueue(queue, topicName, properties.getExtension(), true);
 
 			for (String extraTopic : requiredGroupsExtraSubs.getOrDefault(groupName, new String[0])) {
@@ -131,6 +136,13 @@ public class SolaceQueueProvisioner
 
 		return new SolaceConsumerDestination(queue.getName(), name, queueNames.getPhysicalGroupName(), !isDurableQueue,
 				errorQueueName, additionalSubscriptions);
+	}
+
+	private Queue provisionQueueIfRequired(String queueName, ExtendedProducerProperties<SolaceProducerProperties> properties) {
+		EndpointProperties endpointProperties = SolaceProvisioningUtil.getEndpointProperties(properties.getExtension());
+		boolean doDurableQueueProvisioning = properties.getExtension().isProvisionDurableQueue();
+		return provisionQueue(queueName, true, endpointProperties, doDurableQueueProvisioning,
+				properties.isAutoStartup());
 	}
 
 	private Queue provisionQueue(String name, boolean isDurable, EndpointProperties endpointProperties,

@@ -1,0 +1,40 @@
+spring:
+  cloud:
+    function:
+      definition: "consume;otherConsume"
+    stream:
+      binders:
+        solace1:
+          type: solace
+          environment:
+            solace:
+              java:
+                host: placeholder
+        solace2:
+          type: solace
+          environment:
+            solace:
+              java:
+                host: placeholder
+      bindings:
+        consume-in-0:
+          destination: MultiBinder/Queue/1
+          group: myConsumerGroup
+          binder: solace1
+        otherConsume-in-0:
+          destination: MultiBinder/Queue/2
+          group: myConsumerGroup
+          binder: solace2
+      default-binder: solace1
+management:
+  endpoint:
+    health:
+      show-components: always
+      show-details: always
+  endpoints:
+    web: # Actuator web endpoint configuration. For more info: https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html#actuator.endpoints
+      exposure:
+        include: 'health,metrics'
+  health:
+    binders:
+      enabled: true

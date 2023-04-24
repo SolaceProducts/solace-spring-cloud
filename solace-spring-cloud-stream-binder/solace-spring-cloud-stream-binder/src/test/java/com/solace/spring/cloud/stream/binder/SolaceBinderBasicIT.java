@@ -9,6 +9,7 @@ import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureU
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SimpleJCSMPEventHandler;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
@@ -22,6 +23,7 @@ import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPInterruptedException;
 import com.solacesystems.jcsmp.JCSMPProperties;
@@ -1297,6 +1299,83 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 				.isTrue();
 
 		consumerBinding.unbind();
+	}
+
+	@Test
+	public void testProducerDestinationTypeSetAsQueue(JCSMPSession jcsmpSession) throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		String destination = RandomStringUtils.randomAlphanumeric(15);
+
+		SolaceProducerProperties solaceProducerProperties = new SolaceProducerProperties();
+		solaceProducerProperties.setDestinationType(DestinationType.QUEUE);
+
+		Binding<MessageChannel> producerBinding = null;
+		FlowReceiver flowReceiver = null;
+		try {
+			producerBinding = binder.bindProducer(destination, moduleOutputChannel, new ExtendedProducerProperties<>(solaceProducerProperties));
+
+			byte[] payload = RandomStringUtils.randomAlphanumeric(15).getBytes();
+			Message<?> message = MessageBuilder.withPayload(payload)
+					.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+					.build();
+
+			binderBindUnbindLatency();
+
+			logger.info(String.format("Sending message to message handler: %s", message));
+			moduleOutputChannel.send(message);
+
+			flowReceiver = jcsmpSession.createFlow(JCSMPFactory.onlyInstance().createQueue(destination), null, null);
+			flowReceiver.start();
+			BytesXMLMessage solMsg = flowReceiver.receive(5000);
+			assertThat(solMsg)
+					.isNotNull()
+					.isInstanceOf(BytesMessage.class);
+			assertThat(((BytesMessage) solMsg).getData()).isEqualTo(payload);
+		} finally {
+			if (flowReceiver != null) flowReceiver.close();
+			if (producerBinding != null) producerBinding.unbind();
+		}
+	}
+
+	@Test
+	public void testProducerDestinationTypeSetAsTopic(JCSMPSession jcsmpSession) throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		String destination = RandomStringUtils.randomAlphanumeric(15);
+
+		SolaceProducerProperties solaceProducerProperties = new SolaceProducerProperties();
+		solaceProducerProperties.setDestinationType(DestinationType.TOPIC);
+
+		Binding<MessageChannel> producerBinding = null;
+		XMLMessageConsumer consumer = null;
+		try {
+			producerBinding = binder.bindProducer(destination, moduleOutputChannel, new ExtendedProducerProperties<>(solaceProducerProperties));
+
+			jcsmpSession.addSubscription(JCSMPFactory.onlyInstance().createTopic(destination));
+			consumer = jcsmpSession.getMessageConsumer((XMLMessageListener) null);
+			consumer.start();
+
+			byte[] payload = RandomStringUtils.randomAlphanumeric(15).getBytes();
+			Message<?> message = MessageBuilder.withPayload(payload)
+					.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+					.build();
+
+			logger.info(String.format("Sending message to message handler: %s", message));
+			moduleOutputChannel.send(message);
+
+			BytesXMLMessage solMsg = consumer.receive(5000);
+			assertThat(solMsg)
+					.isNotNull()
+					.isInstanceOf(BytesMessage.class);
+			assertThat(((BytesMessage) solMsg).getData()).isEqualTo(payload);
+		} finally {
+			if (consumer != null) consumer.close();
+			if (jcsmpSession != null) jcsmpSession.removeSubscription(JCSMPFactory.onlyInstance().createTopic(destination));
+			if (producerBinding != null) producerBinding.unbind();
+		}
 	}
 
 	private List<MonitorMsgVpnQueueTxFlow> getTxFlows(SempV2Api sempV2Api, String vpnName, String queueName, Integer count) throws ApiException {
