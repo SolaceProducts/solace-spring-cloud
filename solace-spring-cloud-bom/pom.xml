@@ -33,12 +33,6 @@
                 <artifactId>spring-cloud-starter-stream-solace</artifactId>
                 <version>${solace.spring.cloud.stream-starter.version}</version>
             </dependency>
-
-            <dependency>
-                <groupId>com.solace.cloud.cloudfoundry</groupId>
-                <artifactId>solace-spring-cloud-connector</artifactId>
-                <version>${solace.spring.cloud.connector.version}</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 
