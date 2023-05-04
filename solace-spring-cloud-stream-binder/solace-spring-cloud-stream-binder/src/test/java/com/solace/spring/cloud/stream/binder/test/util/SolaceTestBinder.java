@@ -117,9 +117,7 @@ public class SolaceTestBinder
 			queues.add(queueName);
 		}
 		if (consumerProperties.isAutoBindErrorQueue()) {
-			String errorQueueName = StringUtils.hasText(consumerProperties.getErrorQueueNameOverride()) ?
-					consumerProperties.getErrorQueueNameOverride() :
-					extractErrorQueueName(binding);
+			String errorQueueName = extractErrorQueueName(binding);
 			queues.add(errorQueueName);
 			bindingNameToErrorQueueName.put(binding.getBindingName(), errorQueueName);
 		}
