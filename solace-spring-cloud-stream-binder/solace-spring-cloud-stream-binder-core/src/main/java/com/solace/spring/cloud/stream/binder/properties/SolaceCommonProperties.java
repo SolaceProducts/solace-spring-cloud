@@ -1,7 +1,6 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solacesystems.jcsmp.EndpointProperties;
-import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 
 public class SolaceCommonProperties {
 	/**
@@ -11,34 +10,11 @@ public class SolaceCommonProperties {
 	private boolean provisionDurableQueue = true;
 
 	/**
-	 * Whether to add topic subscriptions to durable queues for non-anonymous consumer groups.
-	 * This should only be set to false if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum)
-	 * on the consumer group’s queue on the message broker. This property also applies to topics added by the queueAdditionalSubscriptions property.
-	 */
-	@Deprecated
-	private boolean provisionSubscriptionsToDurableQueue = true;
-	/**
 	 * Whether to add the Destination as a subscription to queue during provisioning.
 	 */
 	private boolean addDestinationAsSubscriptionToQueue = true;
 
 	// Queue Properties -------
-	/**
-	 * Naming prefix for all queues.
-	 */
-	@Deprecated
-	private String queueNamePrefix = "scst";
-	/**
-	 * When set to true, the familiarity modifier, wk/an, is included in the generated queue name.
-	 */
-	@Deprecated
-	private boolean useFamiliarityInQueueName = true;
-	/**
-	 * When set to true, the destination encoding (plain), is included in the generated queue name.
-	 */
-	@Deprecated
-	private boolean useDestinationEncodingInQueueName = true;
-
 	/**
 	 * Access type for the consumer group queue.
 	 */
@@ -77,48 +53,12 @@ public class SolaceCommonProperties {
 		this.provisionDurableQueue = provisionDurableQueue;
 	}
 
-	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of addDestinationAsSubscriptionToQueue.")
-	public boolean isProvisionSubscriptionsToDurableQueue() {
-		return provisionSubscriptionsToDurableQueue;
-	}
-
-	public void setProvisionSubscriptionsToDurableQueue(boolean provisionSubscriptionsToDurableQueue) {
-		this.provisionSubscriptionsToDurableQueue = provisionSubscriptionsToDurableQueue;
-	}
-
 	public boolean isAddDestinationAsSubscriptionToQueue() {
 		return addDestinationAsSubscriptionToQueue;
 	}
 
 	public void setAddDestinationAsSubscriptionToQueue(boolean addDestinationAsSubscriptionToQueue) {
 		this.addDestinationAsSubscriptionToQueue = addDestinationAsSubscriptionToQueue;
-	}
-
-	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of queueNameExpression and errorQueueNameExpression. Prefixes can be specified directly in these SpEL expressions.")
-	public String getQueueNamePrefix() {
-		return queueNamePrefix;
-	}
-
-	public void setQueueNamePrefix(String queueNamePrefix) {
-		this.queueNamePrefix = queueNamePrefix;
-	}
-
-	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `errorQueueNameExpression`. The familiarity modifier can be removed from queue names by removing it directly from these SpEL expressions.")
-	public boolean isUseFamiliarityInQueueName() {
-		return useFamiliarityInQueueName;
-	}
-
-	public void setUseFamiliarityInQueueName(boolean useFamiliarityInQueueName) {
-		this.useFamiliarityInQueueName = useFamiliarityInQueueName;
-	}
-
-	@DeprecatedConfigurationProperty(reason = "Since version 3.3.0, this property is deprecated in favor of `queueNameExpression` and `errorQueueNameExpression`. The destination encoding can be removed from queue names by removing it directly from these SpEL expressions.")
-	public boolean isUseDestinationEncodingInQueueName() {
-		return useDestinationEncodingInQueueName;
-	}
-
-	public void setUseDestinationEncodingInQueueName(boolean useDestinationEncodingInQueueName) {
-		this.useDestinationEncodingInQueueName = useDestinationEncodingInQueueName;
 	}
 
 	public int getQueueAccessType() {
