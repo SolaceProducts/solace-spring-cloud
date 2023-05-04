@@ -52,9 +52,8 @@ public class SolaceBinderSubscriptionsIT {
     public static final String[] ADDITIONAL_SUBSCRIPTIONS = new String[]{"addSub1", "addSub2"};
 
     @CartesianTest
-    public void testConsumerWITHAddDestinationAsSubscriptionANDProvisionSubscriptionsToDurableQueue(
+    public void testConsumerWITHAddDestinationAsSubscriptionToDurableQueue(
             @Values(booleans = {false, true}) boolean addDestinationAsSubscriptionToQueue,
-            @Values(booleans = {false, true}) boolean provisionSubscriptionsToDurableQueue,
             SpringCloudStreamContext context,
             SempV2Api sempV2Api) throws Exception {
         SolaceTestBinder binder = context.getBinder();
@@ -62,10 +61,8 @@ public class SolaceBinderSubscriptionsIT {
         DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
         ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
-        assertThat(consumerProperties.getExtension().isProvisionSubscriptionsToDurableQueue()).isTrue();
         assertThat(consumerProperties.getExtension().isAddDestinationAsSubscriptionToQueue()).isTrue();
 
-        consumerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(provisionSubscriptionsToDurableQueue);
         consumerProperties.getExtension().setAddDestinationAsSubscriptionToQueue(addDestinationAsSubscriptionToQueue);
         consumerProperties.getExtension().setQueueAdditionalSubscriptions(ADDITIONAL_SUBSCRIPTIONS);
 
@@ -75,16 +72,14 @@ public class SolaceBinderSubscriptionsIT {
 
         String queueName = binder.getConsumerQueueName(consumerBinding);
         //Retrieve subscriptions from broker and validate they are correct
-        assertActualSubscriptionsAreCorrect(context, sempV2Api, queueName, addDestinationAsSubscriptionToQueue,
-                provisionSubscriptionsToDurableQueue);
+        assertActualSubscriptionsAreCorrect(context, sempV2Api, queueName, addDestinationAsSubscriptionToQueue);
 
         consumerBinding.unbind();
     }
 
     @CartesianTest
-    public void testProducerWITHAddDestinationAsSubscriptionANDProvisionSubscriptionsToDurableQueue(
+    public void testProducerWITHAddDestinationAsSubscriptionToDurableQueue(
             @Values(booleans = {false, true}) boolean addDestinationAsSubscriptionToQueue,
-            @Values(booleans = {false, true}) boolean provisionSubscriptionsToDurableQueue,
             SpringCloudStreamContext context,
             SempV2Api sempV2Api,
             TestInfo testInfo) throws Exception {
@@ -95,10 +90,8 @@ public class SolaceBinderSubscriptionsIT {
         String group0 = RandomStringUtils.randomAlphanumeric(10);
 
         ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
-        assertThat(producerProperties.getExtension().isProvisionSubscriptionsToDurableQueue()).isTrue();
         assertThat(producerProperties.getExtension().isAddDestinationAsSubscriptionToQueue()).isTrue();
 
-        producerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(provisionSubscriptionsToDurableQueue);
         producerProperties.getExtension().setAddDestinationAsSubscriptionToQueue(addDestinationAsSubscriptionToQueue);
         Map<String, String[]> subs = new HashMap<>();
         subs.put(group0, ADDITIONAL_SUBSCRIPTIONS);
@@ -108,16 +101,14 @@ public class SolaceBinderSubscriptionsIT {
         Binding<MessageChannel> producerBinding = binder.bindProducer(DESTINATION, moduleOutputChannel, producerProperties);
 
         String queueName = SolaceProvisioningUtil.getQueueName(DESTINATION, group0, producerProperties);
-        assertActualSubscriptionsAreCorrect(context, sempV2Api, queueName, addDestinationAsSubscriptionToQueue,
-                provisionSubscriptionsToDurableQueue);
+        assertActualSubscriptionsAreCorrect(context, sempV2Api, queueName, addDestinationAsSubscriptionToQueue);
 
         producerBinding.unbind();
     }
 
     @CartesianTest
-    public void testPolledConsumerWITHAddDestinationAsSubscriptionANDProvisionSubscriptionsToDurableQueue(
+    public void testPolledConsumerWITHAddDestinationAsSubscriptionToDurableQueue(
             @Values(booleans = {false, true}) boolean addDestinationAsSubscriptionToQueue,
-            @Values(booleans = {false, true}) boolean provisionSubscriptionsToDurableQueue,
             SpringCloudStreamContext context,
             SempV2Api sempV2Api) throws Exception {
         SolaceTestBinder binder = context.getBinder();
@@ -127,10 +118,8 @@ public class SolaceBinderSubscriptionsIT {
         String group0 = RandomStringUtils.randomAlphanumeric(10);
 
         ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
-        assertThat(consumerProperties.getExtension().isProvisionSubscriptionsToDurableQueue()).isTrue();
         assertThat(consumerProperties.getExtension().isAddDestinationAsSubscriptionToQueue()).isTrue();
 
-        consumerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(provisionSubscriptionsToDurableQueue);
         consumerProperties.getExtension().setAddDestinationAsSubscriptionToQueue(addDestinationAsSubscriptionToQueue);
         consumerProperties.getExtension().setQueueAdditionalSubscriptions(ADDITIONAL_SUBSCRIPTIONS);
 
@@ -140,15 +129,14 @@ public class SolaceBinderSubscriptionsIT {
         //Retrieve subscriptions from broker and validate they are correct
         String queueName = binder.getConsumerQueueName(consumerBinding);
         assertActualSubscriptionsAreCorrect(context, sempV2Api, queueName,
-                addDestinationAsSubscriptionToQueue, provisionSubscriptionsToDurableQueue);
+                addDestinationAsSubscriptionToQueue);
 
         consumerBinding.unbind();
     }
 
     @CartesianTest
-    public void testAnonConsumerWITHAddDestinationAsSubscriptionANDProvisionSubscriptionsToNonDurableQueue(
+    public void testAnonConsumerWITHAddDestinationAsSubscriptionToNonDurableQueue(
             @Values(booleans = {false, true}) boolean addDestinationAsSubscriptionToQueue,
-            @Values(booleans = {false, true}) boolean provisionSubscriptionsToDurableQueue,
             SpringCloudStreamContext context,
             SempV2Api sempV2Api) throws Exception {
         SolaceTestBinder binder = context.getBinder();
@@ -158,11 +146,9 @@ public class SolaceBinderSubscriptionsIT {
         ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
         //Test defaults
         assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
-        assertThat(consumerProperties.getExtension().isProvisionSubscriptionsToDurableQueue()).isTrue();
         assertThat(consumerProperties.getExtension().isAddDestinationAsSubscriptionToQueue()).isTrue();
 
         //Configure consumer for this test
-        consumerProperties.getExtension().setProvisionSubscriptionsToDurableQueue(provisionSubscriptionsToDurableQueue);
         consumerProperties.getExtension().setAddDestinationAsSubscriptionToQueue(addDestinationAsSubscriptionToQueue);
         consumerProperties.getExtension().setQueueAdditionalSubscriptions(ADDITIONAL_SUBSCRIPTIONS);
 
@@ -171,8 +157,7 @@ public class SolaceBinderSubscriptionsIT {
 
         String queueName = binder.getConsumerQueueName(consumerBinding);
         //Retrieve subscriptions from broker and validate they are correct
-        assertActualSubscriptionsAreCorrect(context, sempV2Api, queueName, addDestinationAsSubscriptionToQueue,
-                provisionSubscriptionsToDurableQueue);
+        assertActualSubscriptionsAreCorrect(context, sempV2Api, queueName, addDestinationAsSubscriptionToQueue);
 
         consumerBinding.unbind();
     }
@@ -180,13 +165,12 @@ public class SolaceBinderSubscriptionsIT {
     private static void assertActualSubscriptionsAreCorrect(SpringCloudStreamContext context,
                                                             SempV2Api sempV2Api,
                                                             String queueName,
-                                                            boolean addDestinationAsSubscriptionToQueue,
-                                                            boolean provisionSubscriptionsToDurableQueue)
+                                                            boolean addDestinationAsSubscriptionToQueue)
             throws ApiException {
         String msgVpnName = (String) context.getJcsmpSession().getProperty(JCSMPProperties.VPN_NAME);
         Set<String> expectedSubscriptions = getExpectedQueueSubscriptions(
                 sempV2Api.monitor().getMsgVpnQueue(msgVpnName, queueName, null).getData().isDurable(),
-                addDestinationAsSubscriptionToQueue, provisionSubscriptionsToDurableQueue);
+                addDestinationAsSubscriptionToQueue);
         List<MonitorMsgVpnQueueSubscription> actualSubscriptions =
                 sempV2Api.monitor().getMsgVpnQueueSubscriptions(msgVpnName, queueName, null, null, null, null).getData();
 
@@ -198,19 +182,16 @@ public class SolaceBinderSubscriptionsIT {
     }
 
     private static Set<String> getExpectedQueueSubscriptions(boolean isDurableQueue,
-                                                             boolean addDestinationAsSubscriptionToQueue,
-                                                             boolean provisionSubscriptionsToDurableQueue) {
-        if (isDurableQueue && !provisionSubscriptionsToDurableQueue) {
-            //For backward compatibility
-            //No subscriptions added regardless of value of addDestinationAsSubscriptionToQueue
-            return Collections.emptySet();
-        } else if (addDestinationAsSubscriptionToQueue) {
+                                                             boolean addDestinationAsSubscriptionToQueue) {
+        if (addDestinationAsSubscriptionToQueue) {
             Set<String> expectedSubscriptions = new HashSet<>();
             expectedSubscriptions.add(DESTINATION);
             expectedSubscriptions.addAll(Arrays.asList(ADDITIONAL_SUBSCRIPTIONS));
             return expectedSubscriptions;
-        } else {
+        } else if (!isDurableQueue) {
             return new HashSet<>(Arrays.asList(ADDITIONAL_SUBSCRIPTIONS));
+        } else {
+            return Collections.emptySet();
         }
     }
 }
