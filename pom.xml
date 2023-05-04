@@ -23,9 +23,6 @@
         <!-- This is the version of Spring Cloud we have targeted for this build -->
         <spring.cloud.version>2022.0.2</spring.cloud.version>
 
-        <!-- Legacy Support for the Spring Cloud Connectors project -->
-        <spring.cloud.connectors.version>2.2.13.RELEASE</spring.cloud.connectors.version>
-
         <!-- This is the version of Solace Spring Boot we have targeted for this build -->
         <!-- This also dictates the expected version of Spring Boot -->
         <!-- Must match ${project.parent.version} -->
@@ -35,7 +32,6 @@
         <!-- Remove this if the next version of solace-spring-boot works fine -->
         <spring.boot.version>3.0.6</spring.boot.version>
 
-        <solace.spring.cloud.connector.version>5.0.0-SNAPSHOT</solace.spring.cloud.connector.version>
         <solace.spring.cloud.stream-starter.version>4.0.0-SNAPSHOT</solace.spring.cloud.stream-starter.version>
 
         <solace.integration.test.support.version>0.9.1</solace.integration.test.support.version>
@@ -68,7 +64,6 @@
     <modules>
         <module>solace-spring-cloud-bom</module>
         <module>solace-spring-cloud-parent</module>
-        <module>solace-spring-cloud-connector</module>
         <module>solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder</module>
         <module>solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core</module>
         <module>solace-spring-cloud-starters/solace-spring-cloud-stream-starter</module>
@@ -87,12 +82,6 @@
                 <groupId>com.solace.spring.cloud</groupId>
                 <artifactId>spring-cloud-starter-stream-solace</artifactId>
                 <version>${solace.spring.cloud.stream-starter.version}</version>
-            </dependency>
-
-            <dependency>
-                <groupId>com.solace.cloud.cloudfoundry</groupId>
-                <artifactId>solace-spring-cloud-connector</artifactId>
-                <version>${solace.spring.cloud.connector.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
