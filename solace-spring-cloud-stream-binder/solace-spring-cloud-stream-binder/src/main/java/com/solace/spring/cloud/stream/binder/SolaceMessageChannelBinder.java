@@ -72,6 +72,11 @@ public class SolaceMessageChannelBinder
 	}
 
 	@Override
+	public String getBinderIdentity() {
+		return "solace-" + super.getBinderIdentity();
+	}
+
+	@Override
 	public void destroy() {
 		logger.info(String.format("Closing JCSMP session %s", jcsmpSession.getSessionName()));
 		if (taskService != null) taskService.close();
