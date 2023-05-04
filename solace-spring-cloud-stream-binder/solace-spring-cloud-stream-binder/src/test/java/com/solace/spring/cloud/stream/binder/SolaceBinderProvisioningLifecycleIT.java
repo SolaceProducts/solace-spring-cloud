@@ -445,7 +445,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 	}
 
 	@Test
-	public void testConsumerProvisionSubscriptionsToDurableQueue(JCSMPSession jcsmpSession,
+	public void testConsumerAddDestinationAsSubscriptionsToDurableQueue(JCSMPSession jcsmpSession,
 																 SpringCloudStreamContext context,
 																 TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = context.getBinder();
@@ -494,7 +494,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 	}
 
 	@Test
-	public void testProducerProvisionSubscriptionsToDurableQueue(JCSMPSession jcsmpSession,
+	public void testProducerAddDestinationAsSubscriptionsToDurableQueue(JCSMPSession jcsmpSession,
 																 SpringCloudStreamContext context,
 																 TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = context.getBinder();
@@ -548,7 +548,7 @@ public class SolaceBinderProvisioningLifecycleIT {
 	}
 
 	@Test
-	public void testPolledConsumerProvisionSubscriptionsToDurableQueue(JCSMPSession jcsmpSession,
+	public void testPolledConsumerAddDestinationAsSubscriptionsToDurableQueue(JCSMPSession jcsmpSession,
 																	   SpringCloudStreamContext context,
 																	   TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = context.getBinder();
