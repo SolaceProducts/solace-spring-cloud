@@ -181,6 +181,13 @@ Whether to add the Destination as a subscription to queue during provisioning.
 +
 Default: `true`
 
+provisionSubscriptionsToDurableQueue::
+Whether to add topic subscriptions to durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-added the required topic subscriptions (the destination topic should be added at minimum) on the consumer group's queue on the message broker. This property also applies to topics added by the `queueAdditionalSubscriptions` property.
++
+Default: `true`
++
+WARNING: **Deprecated:** Since version 3.3.0, this property is deprecated in favor of `addDestinationAsSubscriptionToQueue`.
+
 queueNameExpression::
 A SpEL expression for creating the consumer group’s queue name.
 +
