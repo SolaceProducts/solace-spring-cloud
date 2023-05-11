@@ -65,12 +65,7 @@ public class SolaceProvisioningUtil {
 		ExpressionContextRoot root = new ExpressionContextRoot(physicalGroupName, topicName, isAnonymous, consumerProperties);
 
 		String resolvedQueueName = resolveQueueNameExpression(consumerProperties.getExtension().getQueueNameExpression(), root);
-		String resolvedErrorQueueName;
-		if (StringUtils.hasText(consumerProperties.getExtension().getErrorQueueNameOverride())) {
-			resolvedErrorQueueName = consumerProperties.getExtension().getErrorQueueNameOverride();
-		} else {
-			resolvedErrorQueueName = resolveQueueNameExpression(consumerProperties.getExtension().getErrorQueueNameExpression(), root);
-		}
+		String resolvedErrorQueueName = resolveQueueNameExpression(consumerProperties.getExtension().getErrorQueueNameExpression(), root);
 
 		return new QueueNames(resolvedQueueName, resolvedErrorQueueName, physicalGroupName);
 	}

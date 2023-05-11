@@ -25,7 +25,7 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 	 * While the default SpEL expression will consistently return a value adhering to <<Generated Queue Name Syntax>>,
 	 * directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
 	 */
-	private String queueNameExpression = "(properties.solace.queueNamePrefix?.trim()?.length() > 0 ? properties.solace.queueNamePrefix.trim() + '/' : '') + (properties.solace.useFamiliarityInQueueName ? (isAnonymous ? 'an' : 'wk') + '/' : '') + group?.trim() + '/' + (properties.solace.useDestinationEncodingInQueueName ? 'plain' + '/' : '') + destination.trim().replaceAll('[*>]', '_')";
+	private String queueNameExpression = "'scst/' + (isAnonymous ? 'an/' : 'wk/') + (group?.trim() + '/') + 'plain/' + destination.trim().replaceAll('[*>]', '_')";
 
 	/**
 	 * A mapping of required consumer groups to queue name SpEL expressions.
