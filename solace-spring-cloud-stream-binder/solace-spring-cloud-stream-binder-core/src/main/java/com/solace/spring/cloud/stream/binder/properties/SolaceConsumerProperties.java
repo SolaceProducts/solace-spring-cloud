@@ -2,9 +2,9 @@ package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solacesystems.jcsmp.EndpointProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.DeprecatedConfigurationProperty;
 import org.springframework.util.Assert;
 
+import jakarta.validation.constraints.Min;
 import java.util.concurrent.TimeUnit;
 
 import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties.DEFAULTS_PREFIX;
@@ -16,6 +16,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * <p>The maximum number of messages per batch.</p>
 	 * <p>Only applicable when {@code batchMode} is {@code true}.</p>
 	 */
+	@Min(1)
 	private int batchMaxSize = 255;
 
 	/**
@@ -24,6 +25,7 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * forever.</p>
 	 * <p>Only applicable when {@code batchMode} is {@code true}.</p>
 	 */
+	@Min(0)
 	private int batchTimeout = 5000;
 
 	/**
@@ -40,16 +42,19 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	/**
 	 * The initial interval (milliseconds) to back-off when rebinding a flow.
 	 */
+	@Min(1)
 	private long flowRebindBackOffInitialInterval = TimeUnit.SECONDS.toMillis(1);
 
 	/**
 	 * The maximum interval (milliseconds) to back-off when rebinding a flow.
 	 */
+	@Min(1)
 	private long flowRebindBackOffMaxInterval = TimeUnit.SECONDS.toMillis(30);
 
 	/**
 	 * The multiplier to apply to the back-off interval between each rebind of a flow.
 	 */
+	@Min(1)
 	private double flowRebindBackOffMultiplier = 1.5;
 
 	/**
