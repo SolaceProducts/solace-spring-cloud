@@ -30,7 +30,6 @@ Please consult the [Spring Cloud Compatibility Table](./solace-spring-cloud-bom/
 
 These are the projects contained within this repository:
 * [Spring Cloud Stream Binder for Solace PubSub+](./solace-spring-cloud-starters/solace-spring-cloud-stream-starter)
-* [Solace Spring Cloud Connector](./solace-spring-cloud-connector)
 
 ## Building Locally
 
@@ -48,11 +47,10 @@ mvn package # or mvn install to install them locally
 ```
 solace-spring-cloud-build (root)
 <-- solace-spring-cloud-bom
-<-- solace-spring-cloud-parent 
-    <-- solace-spring-cloud-connector
-    <-- solace-spring-cloud-stream-binder [spring-cloud-stream-binder-solace-core]
-    <-- solace-spring-cloud-stream-starter [spring-cloud-starter-stream-solace]
-    <-- solace-spring-cloud-stream-autoconfigure [spring-cloud-stream-binder-solace]
+<-- solace-spring-cloud-parent
+    <-- solace-spring-cloud-stream-starter [spring-cloud-starter-stream-solace] 
+    <-- solace-spring-cloud-stream-binder-core [spring-cloud-stream-binder-solace-core]
+    <-- solace-spring-cloud-stream-binder [spring-cloud-stream-binder-solace]
 
 Where <-- indicates the parent of the project
 ```
@@ -143,9 +141,6 @@ For more information about Spring Cloud try these resources:
 - [Spring Cloud Stream Reference Guide](https://docs.spring.io/spring-cloud-stream/docs/current/reference/htmlsingle/)
 - [Spring Cloud Stream Sample Applications](https://github.com/spring-cloud/spring-cloud-stream-samples)
 - [Spring Cloud Stream Source Code](https://github.com/spring-cloud/spring-cloud-stream)
-- [Spring Cloud Connectors](http://cloud.spring.io/spring-cloud-connectors/)
-- [Spring Cloud Connectors Docs](http://cloud.spring.io/spring-cloud-connectors/spring-cloud-connectors.html)
-- [Spring Cloud Connectors GitHub](https://github.com/spring-cloud/spring-cloud-connectors)
 
 For more information about Solace technology for Spring Boot please visit these resources:
 - [Solace Spring Boot](//github.com/SolaceProducts/solace-spring-boot)

@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-java@v3
         with:
           distribution: zulu
-          java-version: 8
+          java-version: 17
       - name: Publish package
         run: mvn --batch-mode deploy -DreleaseTarget=github
         env:
