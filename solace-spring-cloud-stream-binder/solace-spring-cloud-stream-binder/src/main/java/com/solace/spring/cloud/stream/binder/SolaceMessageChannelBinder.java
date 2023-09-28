@@ -211,17 +211,6 @@ public class SolaceMessageChannelBinder
 	}
 
 	@Override
-	protected String errorsBaseName(ConsumerDestination destination, String group,
-									ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties) {
-		SolaceConsumerDestination solaceDestination = (SolaceConsumerDestination) destination;
-		StringBuilder errorsBaseName = new StringBuilder(solaceDestination.getBindingDestinationName()).append('.');
-		if (solaceDestination.isTemporary()) {
-			errorsBaseName.append("anon").append('.');
-		}
-		return errorsBaseName.append(solaceDestination.getPhysicalGroupName()).append(".errors").toString();
-	}
-
-	@Override
 	public SolaceConsumerProperties getExtendedConsumerProperties(String channelName) {
 		return extendedBindingProperties.getExtendedConsumerProperties(channelName);
 	}
