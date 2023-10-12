@@ -169,6 +169,9 @@ public class JmsCompatibilityIT {
 				for (Map.Entry<String, SolaceBinderHeaderMeta<?>> headerMeta : SolaceBinderHeaderMeta.META.entrySet()) {
 					if (!HeaderMeta.Scope.WIRE.equals(headerMeta.getValue().getScope())) continue;
 					String headerName = headerMeta.getKey();
+					if (headerName.equals(SolaceBinderHeaders.PARTITION_KEY)) {
+						headerName = XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY;
+					}
 					// Everything should be receivable as a String in JMS
 					softly.assertThat(msg.getStringProperty(headerName))
 							.withFailMessage("Expecting JMS property %s to not be null", headerName)
