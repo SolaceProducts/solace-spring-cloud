@@ -21,7 +21,7 @@
         <repoName>SolaceProducts</repoName>
 
         <!-- This is the version of Spring Cloud we have targeted for this build -->
-        <spring.cloud.version>2022.0.2</spring.cloud.version>
+        <spring.cloud.version>2022.0.4</spring.cloud.version>
 
         <!-- This is the version of Solace Spring Boot we have targeted for this build -->
         <!-- This also dictates the expected version of Spring Boot -->
