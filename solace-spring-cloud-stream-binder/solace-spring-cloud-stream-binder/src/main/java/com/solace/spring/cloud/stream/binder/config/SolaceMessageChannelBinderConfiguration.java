@@ -1,16 +1,18 @@
 package com.solace.spring.cloud.stream.binder.config;
 
 import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
+import com.solace.spring.cloud.stream.binder.health.contributors.ConnectionHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.handlers.SolaceSessionEventHandler;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
-import com.solace.spring.cloud.stream.binder.util.SolaceSessionEventHandler;
 import com.solacesystems.jcsmp.Context;
 import com.solacesystems.jcsmp.ContextProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
+import jakarta.annotation.PostConstruct;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -19,11 +21,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.lang.Nullable;
 
-import jakarta.annotation.PostConstruct;
-
 @Configuration
-@Import(SolaceBinderHealthIndicatorConfiguration.class)
-@EnableConfigurationProperties({ SolaceExtendedBindingProperties.class })
+@Import(HealthIndicatorsConfiguration.class)
+@EnableConfigurationProperties({SolaceExtendedBindingProperties.class})
 public class SolaceMessageChannelBinderConfiguration {
 	private final JCSMPProperties jcsmpProperties;
 	private final SolaceExtendedBindingProperties solaceExtendedBindingProperties;
@@ -35,11 +35,12 @@ public class SolaceMessageChannelBinderConfiguration {
 	private static final Log logger = LogFactory.getLog(SolaceMessageChannelBinderConfiguration.class);
 
 	public SolaceMessageChannelBinderConfiguration(JCSMPProperties jcsmpProperties,
-												   SolaceExtendedBindingProperties solaceExtendedBindingProperties,
-												   @Nullable SolaceSessionEventHandler solaceSessionEventHandler) {
+	                                               SolaceExtendedBindingProperties solaceExtendedBindingProperties,
+	                                               @Nullable SolaceSessionEventHandler eventHandler) throws JCSMPException {
 		this.jcsmpProperties = jcsmpProperties;
 		this.solaceExtendedBindingProperties = solaceExtendedBindingProperties;
-		this.solaceSessionEventHandler = solaceSessionEventHandler;
+		this.solaceSessionEventHandler = eventHandler;
+		this.initSession();
 	}
 
 	@PostConstruct
@@ -59,7 +60,11 @@ public class SolaceMessageChannelBinderConfiguration {
 			logger.info(String.format("Connecting JCSMP session %s", jcsmpSession.getSessionName()));
 			jcsmpSession.connect();
 			if (solaceSessionEventHandler != null) {
-				solaceSessionEventHandler.connected();
+				// after setting the session health indicator status to UP,
+				// we should not be worried about setting its status to DOWN,
+				// as the call closing JCSMP session also delete the context
+				// and terminates the application
+				solaceSessionEventHandler.setSessionHealthUp();
 			}
 		} catch (Exception e) {
 			if (context != null) {
@@ -71,10 +76,14 @@ public class SolaceMessageChannelBinderConfiguration {
 
 	@Bean
 	SolaceMessageChannelBinder solaceMessageChannelBinder(SolaceQueueProvisioner solaceQueueProvisioner,
-														  @Nullable SolaceMeterAccessor solaceMeterAccessor) {
+	                                                      @Nullable ConnectionHealthContributor connectionHealthContributor,
+	                                                      @Nullable SolaceMeterAccessor solaceMeterAccessor) {
 		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, context, solaceQueueProvisioner);
 		binder.setExtendedBindingProperties(solaceExtendedBindingProperties);
 		binder.setSolaceMeterAccessor(solaceMeterAccessor);
+		if (connectionHealthContributor != null) {
+			binder.setBindingsHealthContributor(connectionHealthContributor.getSolaceBindingsHealthContributor());
+		}
 		return binder;
 	}
 

@@ -1,8 +1,13 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.health.contributors.BindingHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.contributors.BindingsHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.contributors.FlowsHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.indicators.FlowHealthIndicator;
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.properties.SolaceFlowHealthProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
@@ -61,6 +66,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private RetryTemplate retryTemplate;
 	private RecoveryCallback<?> recoveryCallback;
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
+	private BindingsHealthContributor bindingsHealthContributor;
 
 	private static final Log logger = LogFactory.getLog(JCSMPInboundChannelAdapter.class);
 	private static final ThreadLocal<AttributeAccessor> attributesHolder = new ThreadLocal<>();
@@ -112,6 +118,15 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		exponentialBackOff.setMaxInterval(consumerProperties.getExtension().getFlowRebindBackOffMaxInterval());
 		exponentialBackOff.setMultiplier(consumerProperties.getExtension().getFlowRebindBackOffMultiplier());
 
+		BindingHealthContributor bindingsContributor;
+
+		if (bindingsHealthContributor != null) {
+			bindingsContributor = new BindingHealthContributor(new FlowsHealthContributor());
+			bindingsHealthContributor.addBindingContributor(consumerProperties.getBindingName(), bindingsContributor);
+		} else {
+			bindingsContributor = null;
+		}
+
 		for (int i = 0, numToCreate = consumerProperties.getConcurrency() - flowReceivers.size(); i < numToCreate; i++) {
 			logger.info(String.format("Creating consumer %s of %s for inbound adapter %s",
 					i + 1, consumerProperties.getConcurrency(), id));
@@ -129,6 +144,15 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 				flowReceiverContainer.pause();
 			}
 			flowReceivers.add(flowReceiverContainer);
+		}
+
+		if (bindingsContributor != null) {
+			for (int i = 0; i < flowReceivers.size(); i++) {
+				FlowHealthIndicator flowHealthIndicator =
+						new FlowHealthIndicator(bindingsHealthContributor.getSolaceFlowHealthProperties());
+				bindingsContributor.getFlowsHealthContributor().addFlowContributor("flow-" + i, flowHealthIndicator);
+				flowReceivers.get(i).createEventHandler(flowHealthIndicator);
+			}
 		}
 
 		try {
@@ -184,6 +208,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 			// cleanup
 			consumerStopFlags.clear();
+
 		} catch (InterruptedException e) {
 			String msg = String.format("executor service shutdown for inbound adapter %s was interrupted", id);
 			logger.warn(msg);
@@ -220,6 +245,10 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 	public void setRemoteStopFlag(AtomicBoolean remoteStopFlag) {
 		this.remoteStopFlag = remoteStopFlag;
+	}
+
+	public void setSolaceBindingsHealthContributor(BindingsHealthContributor bindingsHealthContributor) {
+		this.bindingsHealthContributor = bindingsHealthContributor;
 	}
 
 	@Override
