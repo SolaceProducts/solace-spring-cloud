@@ -12,17 +12,17 @@ import java.util.Map;
 public class FlowsHealthContributor implements CompositeHealthContributor {
 	private final Map<String, FlowHealthIndicator> flowHealthContributor = new HashMap<>();
 
-	public void addFlowContributor(String bindingName, FlowHealthIndicator flowHealthIndicator) {
-		flowHealthContributor.put(bindingName, flowHealthIndicator);
+	public void addFlowContributor(String flowId, FlowHealthIndicator flowHealthIndicator) {
+		flowHealthContributor.put(flowId, flowHealthIndicator);
 	}
 
-	public void removeFlowContributor(String bindingName) {
-		flowHealthContributor.remove(bindingName);
+	public void removeFlowContributor(String flowId) {
+		flowHealthContributor.remove(flowId);
 	}
 
 	@Override
-	public HealthContributor getContributor(String name) {
-		return flowHealthContributor.get(name);
+	public HealthContributor getContributor(String flowId) {
+		return flowHealthContributor.get(flowId);
 	}
 
 	@Override

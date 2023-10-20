@@ -118,13 +118,13 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		exponentialBackOff.setMaxInterval(consumerProperties.getExtension().getFlowRebindBackOffMaxInterval());
 		exponentialBackOff.setMultiplier(consumerProperties.getExtension().getFlowRebindBackOffMultiplier());
 
-		BindingHealthContributor bindingsContributor;
+		BindingHealthContributor bindingContributor;
 
 		if (bindingsHealthContributor != null) {
-			bindingsContributor = new BindingHealthContributor(new FlowsHealthContributor());
-			bindingsHealthContributor.addBindingContributor(consumerProperties.getBindingName(), bindingsContributor);
+			bindingContributor = new BindingHealthContributor(new FlowsHealthContributor());
+			bindingsHealthContributor.addBindingContributor(consumerProperties.getBindingName(), bindingContributor);
 		} else {
-			bindingsContributor = null;
+			bindingContributor = null;
 		}
 
 		for (int i = 0, numToCreate = consumerProperties.getConcurrency() - flowReceivers.size(); i < numToCreate; i++) {
@@ -146,11 +146,11 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			flowReceivers.add(flowReceiverContainer);
 		}
 
-		if (bindingsContributor != null) {
+		if (bindingContributor != null) {
 			for (int i = 0; i < flowReceivers.size(); i++) {
 				FlowHealthIndicator flowHealthIndicator =
 						new FlowHealthIndicator(bindingsHealthContributor.getSolaceFlowHealthProperties());
-				bindingsContributor.getFlowsHealthContributor().addFlowContributor("flow-" + i, flowHealthIndicator);
+				bindingContributor.getFlowsHealthContributor().addFlowContributor("flow-" + i, flowHealthIndicator);
 				flowReceivers.get(i).createEventHandler(flowHealthIndicator);
 			}
 		}

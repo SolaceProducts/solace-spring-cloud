@@ -28,6 +28,7 @@ public class SessionHealthIndicator extends SolaceHealthIndicator {
 
 	public void up() {
 		super.healthUp();
+		this.reconnectCount.set(0);
 	}
 
 	public void reconnecting(@Nullable SessionEventArgs eventArgs) {
