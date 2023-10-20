@@ -35,7 +35,6 @@ public class FlowHealthIndicator extends SolaceHealthIndicator {
 						reconnectAttempt, this.solaceFlowHealthProperties.getReconnectAttemptsUntilDown()));
 			}
 			this.down(eventArgs);
-			this.reconnectCount.set(0);
 			return;
 		}
 		super.healthReconnecting(eventArgs);
@@ -43,6 +42,7 @@ public class FlowHealthIndicator extends SolaceHealthIndicator {
 
 	public void down(@Nullable FlowEventArgs eventArgs) {
 		super.healthDown(eventArgs);
+		this.reconnectCount.set(0);
 	}
 
 	@Deprecated

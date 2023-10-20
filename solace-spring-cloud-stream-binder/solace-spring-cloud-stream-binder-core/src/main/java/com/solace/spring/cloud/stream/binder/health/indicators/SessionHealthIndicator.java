@@ -42,7 +42,6 @@ public class SessionHealthIndicator extends SolaceHealthIndicator {
 						reconnectAttempt, solaceHealthSessionProperties.getReconnectAttemptsUntilDown()));
 			}
 			this.down(eventArgs);
-			this.reconnectCount.set(0);
 			return;
 		}
 		super.healthReconnecting(eventArgs);
@@ -50,6 +49,7 @@ public class SessionHealthIndicator extends SolaceHealthIndicator {
 
 	public void down(@Nullable SessionEventArgs eventArgs) {
 		super.healthDown(eventArgs);
+		this.reconnectCount.set(0);
 	}
 
 	@Deprecated
