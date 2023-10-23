@@ -167,6 +167,10 @@ public class SolaceMessageChannelBinder
 				endpointProperties,
 				solaceMeterAccessor);
 
+		if (bindingsHealthContributor != null) {
+			messageSource.setSolaceBindingsHealthContributor(bindingsHealthContributor);
+		}
+
 		messageSource.setRemoteStopFlag(consumersRemoteStopFlag::get);
 		messageSource.setPostStart(getConsumerPostStart(solaceDestination, consumerProperties));
 

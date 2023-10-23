@@ -1,5 +1,9 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.health.contributors.BindingHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.contributors.BindingsHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.contributors.FlowsHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.indicators.FlowHealthIndicator;
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
@@ -53,6 +57,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private FlowReceiverContainer flowReceiverContainer;
 	private JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
 	private XMLMessageMapper xmlMessageMapper;
+	@Nullable private BindingsHealthContributor bindingsHealthContributor;
 	private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 	private volatile boolean isRunning = false;
 	private volatile boolean paused = false;
@@ -234,6 +239,16 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 						flowReceiverContainer.pause();
 					}
 				}
+
+				if (bindingsHealthContributor != null) {
+					BindingHealthContributor bindingHealthContributor = new BindingHealthContributor(new FlowsHealthContributor());
+					bindingsHealthContributor.addBindingContributor(consumerProperties.getBindingName(), bindingHealthContributor);
+					FlowHealthIndicator flowHealthIndicator = new FlowHealthIndicator(
+							bindingsHealthContributor.getSolaceFlowHealthProperties());
+					bindingHealthContributor.getFlowsHealthContributor().addFlowContributor("flow-0", flowHealthIndicator);
+					flowReceiverContainer.createEventHandler(flowHealthIndicator);
+				}
+
 				flowReceiverContainer.bind();
 			} catch (JCSMPException e) {
 				String msg = String.format("Unable to get a message consumer for session %s", jcsmpSession.getSessionName());
@@ -263,6 +278,9 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			if (!isRunning()) return;
 			logger.info(String.format("Stopping consumer to queue %s <message source ID: %s>", queueName, id));
 			flowReceiverContainer.unbind();
+			if (bindingsHealthContributor != null) {
+				bindingsHealthContributor.removeBindingContributor(consumerProperties.getBindingName());
+			}
 			isRunning = false;
 		} finally {
 			writeLock.unlock();
@@ -334,5 +352,9 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		} else {
 			return false;
 		}
+	}
+
+	public void setSolaceBindingsHealthContributor(BindingsHealthContributor bindingsHealthContributor) {
+		this.bindingsHealthContributor = bindingsHealthContributor;
 	}
 }
