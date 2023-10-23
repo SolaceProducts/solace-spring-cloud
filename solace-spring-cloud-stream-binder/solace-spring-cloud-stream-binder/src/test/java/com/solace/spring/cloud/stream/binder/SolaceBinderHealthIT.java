@@ -14,6 +14,9 @@ import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContex
 import com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
+import com.solace.test.integration.semp.v2.SempV2Api;
+import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
+import com.solacesystems.jcsmp.JCSMPProperties;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.TestInfo;
@@ -35,7 +38,9 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringJUnitConfig(classes = {
@@ -48,7 +53,7 @@ public class SolaceBinderHealthIT {
 	private static final Logger logger = LoggerFactory.getLogger(SolaceBinderHealthIT.class);
 
 	@CartesianTest(name = "[{index}] channelType={0}, autoStart={1} concurrency={2}")
-	public <T> void testConsumerFlowHealth(
+	public <T> void testConsumerFlowHealthProvisioning(
 			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
 			@Values(booleans = {true, false}) boolean autoStart,
 			@Values(ints = {1, 3}) int concurrency,
@@ -108,6 +113,69 @@ public class SolaceBinderHealthIT {
 		assertThat(bindingsHealthContributor)
 				.asInstanceOf(InstanceOfAssertFactories.type(BindingsHealthContributor.class))
 				.satisfies(SolaceSpringCloudStreamAssertions.isSingleBindingHealthAvailable(consumerProperties.getBindingName(), concurrency, Status.UP));
+
+		consumerBinding.unbind();
+	}
+
+	@CartesianTest(name = "[{index}] channelType={0}, concurrency={1} healthStatus={2}")
+	public <T> void testConsumerFlowHealthUnhealthy(
+			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
+			@Values(ints = {1, 3}) int concurrency,
+			@Values(strings = {"DOWN", "RECONNECTING"}) String healthStatus,
+			SempV2Api sempV2Api,
+			SpringCloudStreamContext context) throws Exception {
+		if (concurrency > 1 && channelType.equals(PollableSource.class)) {
+			return;
+		}
+
+		SolaceTestBinder binder = context.getBinder();
+
+		BindingsHealthContributor bindingsHealthContributor = new BindingsHealthContributor(new SolaceFlowHealthProperties());
+		binder.getBinder().setBindingsHealthContributor(bindingsHealthContributor);
+
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.populateBindingName(RandomStringUtils.randomAlphanumeric(10));
+		consumerProperties.setConcurrency(concurrency);
+
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
+
+		context.binderBindUnbindLatency();
+
+		assertThat(bindingsHealthContributor)
+				.asInstanceOf(InstanceOfAssertFactories.type(BindingsHealthContributor.class))
+				.satisfies(SolaceSpringCloudStreamAssertions.isSingleBindingHealthAvailable(consumerProperties.getBindingName(), concurrency, Status.UP));
+
+		String vpnName = (String) context.getJcsmpSession().getProperty(JCSMPProperties.VPN_NAME);
+		String queueName = binder.getConsumerQueueName(consumerBinding);
+		logger.info(String.format("Disabling egress for queue %s", queueName));
+		switch (healthStatus) {
+			case "DOWN" -> sempV2Api.config().deleteMsgVpnQueue(vpnName, queueName);
+			case "RECONNECTING" -> sempV2Api.config()
+					.updateMsgVpnQueue(vpnName, queueName, new ConfigMsgVpnQueue().egressEnabled(false), null);
+			default -> throw new IllegalArgumentException("No test for health status: " + healthStatus);
+		}
+
+		retryAssert(2, TimeUnit.MINUTES,
+				() -> assertThat(bindingsHealthContributor)
+						.asInstanceOf(InstanceOfAssertFactories.type(BindingsHealthContributor.class))
+						.satisfies(SolaceSpringCloudStreamAssertions.isSingleBindingHealthAvailable(
+								consumerProperties.getBindingName(), concurrency, new Status(healthStatus))));
+
+		if (healthStatus.equals("RECONNECTING")) {
+			sempV2Api.config()
+					.updateMsgVpnQueue(vpnName, queueName, new ConfigMsgVpnQueue().egressEnabled(true), null);
+			retryAssert(2, TimeUnit.MINUTES,
+					() -> assertThat(bindingsHealthContributor)
+							.asInstanceOf(InstanceOfAssertFactories.type(BindingsHealthContributor.class))
+							.satisfies(SolaceSpringCloudStreamAssertions.isSingleBindingHealthAvailable(
+									consumerProperties.getBindingName(), concurrency, Status.UP)));
+		}
 
 		consumerBinding.unbind();
 	}
