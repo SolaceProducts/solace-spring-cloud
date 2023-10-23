@@ -36,11 +36,10 @@ public class SolaceMessageChannelBinderConfiguration {
 
 	public SolaceMessageChannelBinderConfiguration(JCSMPProperties jcsmpProperties,
 	                                               SolaceExtendedBindingProperties solaceExtendedBindingProperties,
-	                                               @Nullable SolaceSessionEventHandler eventHandler) throws JCSMPException {
+	                                               @Nullable SolaceSessionEventHandler eventHandler) {
 		this.jcsmpProperties = jcsmpProperties;
 		this.solaceExtendedBindingProperties = solaceExtendedBindingProperties;
 		this.solaceSessionEventHandler = eventHandler;
-		this.initSession();
 	}
 
 	@PostConstruct

@@ -6,7 +6,6 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingPro
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnClient;
-import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -40,7 +39,7 @@ public class SolaceBinderConfigIT {
 	private String clientName;
 
 	@BeforeEach
-	void setUp(JCSMPProperties jcsmpProperties, ApplicationContext applicationContext, TestInfo testInfo) throws JCSMPException {
+	void setUp(JCSMPProperties jcsmpProperties, ApplicationContext applicationContext, TestInfo testInfo) {
 		clientName = UUID.randomUUID().toString();
 		jcsmpProperties.setProperty(JCSMPProperties.CLIENT_NAME, clientName);
 
