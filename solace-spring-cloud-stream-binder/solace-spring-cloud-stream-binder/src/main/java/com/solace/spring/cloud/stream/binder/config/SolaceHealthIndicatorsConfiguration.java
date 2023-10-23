@@ -1,7 +1,7 @@
 package com.solace.spring.cloud.stream.binder.config;
 
 import com.solace.spring.cloud.stream.binder.health.contributors.BindingsHealthContributor;
-import com.solace.spring.cloud.stream.binder.health.contributors.ConnectionHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.contributors.SolaceBinderHealthContributor;
 import com.solace.spring.cloud.stream.binder.health.handlers.SolaceSessionEventHandler;
 import com.solace.spring.cloud.stream.binder.health.indicators.SessionHealthIndicator;
 import com.solace.spring.cloud.stream.binder.properties.SolaceFlowHealthProperties;
@@ -18,30 +18,30 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
 @ConditionalOnEnabledHealthIndicator("binders")
 @EnableConfigurationProperties({SolaceSessionHealthProperties.class, SolaceFlowHealthProperties.class})
-public class HealthIndicatorsConfiguration {
+public class SolaceHealthIndicatorsConfiguration {
 	private final SolaceSessionHealthProperties solaceSessionHealthProperties;
 	private final SolaceFlowHealthProperties solaceFlowHealthProperties;
-	private static final Log logger = LogFactory.getLog(HealthIndicatorsConfiguration.class);
+	private static final Log logger = LogFactory.getLog(SolaceHealthIndicatorsConfiguration.class);
 
-	public HealthIndicatorsConfiguration(SolaceSessionHealthProperties solaceSessionHealthProperties,
-	                                     SolaceFlowHealthProperties solaceFlowHealthProperties) {
+	public SolaceHealthIndicatorsConfiguration(SolaceSessionHealthProperties solaceSessionHealthProperties,
+	                                           SolaceFlowHealthProperties solaceFlowHealthProperties) {
 		this.solaceSessionHealthProperties = solaceSessionHealthProperties;
 		this.solaceFlowHealthProperties = solaceFlowHealthProperties;
 	}
 
 	@Bean
-	public ConnectionHealthContributor solaceSessionHealthContributor() {
+	public SolaceBinderHealthContributor solaceSessionHealthContributor() {
 		if (logger.isDebugEnabled()) {
 			logger.debug("Creating Solace Connection Health Indicators Hierarchy");
 		}
-		return new ConnectionHealthContributor(
+		return new SolaceBinderHealthContributor(
 				new SessionHealthIndicator(solaceSessionHealthProperties),
 				new BindingsHealthContributor(solaceFlowHealthProperties)
 		);
 	}
 
 	@Bean
-	public SolaceSessionEventHandler solaceSessionEventHandler(ConnectionHealthContributor healthContributor) {
+	public SolaceSessionEventHandler solaceSessionEventHandler(SolaceBinderHealthContributor healthContributor) {
 		if (logger.isDebugEnabled()) {
 			logger.debug("Creating Solace Session Event Handler for monitoring Health");
 		}

@@ -206,6 +206,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 				}
 			}
 
+			bindingsHealthContributor.removeBindingContributor(consumerProperties.getBindingName());
+
 			// cleanup
 			consumerStopFlags.clear();
 

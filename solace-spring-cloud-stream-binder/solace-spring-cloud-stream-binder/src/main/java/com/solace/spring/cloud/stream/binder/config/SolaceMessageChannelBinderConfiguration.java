@@ -1,7 +1,7 @@
 package com.solace.spring.cloud.stream.binder.config;
 
 import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
-import com.solace.spring.cloud.stream.binder.health.contributors.ConnectionHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.contributors.SolaceBinderHealthContributor;
 import com.solace.spring.cloud.stream.binder.health.handlers.SolaceSessionEventHandler;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties;
@@ -22,7 +22,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.lang.Nullable;
 
 @Configuration
-@Import(HealthIndicatorsConfiguration.class)
+@Import(SolaceHealthIndicatorsConfiguration.class)
 @EnableConfigurationProperties({SolaceExtendedBindingProperties.class})
 public class SolaceMessageChannelBinderConfiguration {
 	private final JCSMPProperties jcsmpProperties;
@@ -76,13 +76,13 @@ public class SolaceMessageChannelBinderConfiguration {
 
 	@Bean
 	SolaceMessageChannelBinder solaceMessageChannelBinder(SolaceQueueProvisioner solaceQueueProvisioner,
-	                                                      @Nullable ConnectionHealthContributor connectionHealthContributor,
+	                                                      @Nullable SolaceBinderHealthContributor solaceBinderHealthContributor,
 	                                                      @Nullable SolaceMeterAccessor solaceMeterAccessor) {
 		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, context, solaceQueueProvisioner);
 		binder.setExtendedBindingProperties(solaceExtendedBindingProperties);
 		binder.setSolaceMeterAccessor(solaceMeterAccessor);
-		if (connectionHealthContributor != null) {
-			binder.setBindingsHealthContributor(connectionHealthContributor.getSolaceBindingsHealthContributor());
+		if (solaceBinderHealthContributor != null) {
+			binder.setBindingsHealthContributor(solaceBinderHealthContributor.getSolaceBindingsHealthContributor());
 		}
 		return binder;
 	}

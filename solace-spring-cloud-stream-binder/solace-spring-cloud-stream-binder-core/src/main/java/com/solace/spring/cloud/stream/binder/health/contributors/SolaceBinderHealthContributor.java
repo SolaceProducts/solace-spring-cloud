@@ -9,14 +9,14 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
-public class ConnectionHealthContributor implements CompositeHealthContributor {
+public class SolaceBinderHealthContributor implements CompositeHealthContributor {
 	private final SessionHealthIndicator sessionHealthIndicator;
 	private final BindingsHealthContributor bindingsHealthContributor;
 	private static final String CONNECTION = "connection";
 	private static final String BINDINGS = "bindings";
 
-	public ConnectionHealthContributor(SessionHealthIndicator sessionHealthIndicator,
-	                                   BindingsHealthContributor bindingsHealthContributor) {
+	public SolaceBinderHealthContributor(SessionHealthIndicator sessionHealthIndicator,
+	                                     BindingsHealthContributor bindingsHealthContributor) {
 		this.sessionHealthIndicator = sessionHealthIndicator;
 		this.bindingsHealthContributor = bindingsHealthContributor;
 	}

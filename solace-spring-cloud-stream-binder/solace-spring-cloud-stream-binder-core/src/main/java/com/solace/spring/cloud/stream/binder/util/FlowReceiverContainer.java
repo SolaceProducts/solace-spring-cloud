@@ -137,9 +137,6 @@ public class FlowReceiverContainer {
 				flowReceiverReference.getStaleMessagesFlag().set(true);
 				flowReceiverReference.get().close();
 				unacknowledgedMessageTracker.reset();
-				if (eventHandler != null) {
-					eventHandler.setHealthStatusDown();
-				}
 			}
 		} finally {
 			writeLock.unlock();

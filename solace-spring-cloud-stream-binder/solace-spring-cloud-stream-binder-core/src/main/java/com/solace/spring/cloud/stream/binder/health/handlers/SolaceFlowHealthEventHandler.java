@@ -60,12 +60,4 @@ public class SolaceFlowHealthEventHandler implements FlowEventHandler {
 	public void setHealthStatusUp() {
 		this.flowHealthIndicator.up();
 	}
-
-	/**
-	 * On the contrary, this one is used only when source is unbind
-	 */
-	public void setHealthStatusDown() {
-		FlowEventArgs flowEventArgs = new FlowEventArgs(FlowEvent.FLOW_DOWN,"Flow receiver has been unbind", null, 201);
-		this.flowHealthIndicator.down(flowEventArgs);
-	}
 }
