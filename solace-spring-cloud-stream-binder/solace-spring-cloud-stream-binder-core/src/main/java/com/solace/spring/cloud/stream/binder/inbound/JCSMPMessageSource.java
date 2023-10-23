@@ -243,8 +243,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				if (bindingsHealthContributor != null) {
 					BindingHealthContributor bindingHealthContributor = new BindingHealthContributor(new FlowsHealthContributor());
 					bindingsHealthContributor.addBindingContributor(consumerProperties.getBindingName(), bindingHealthContributor);
-					FlowHealthIndicator flowHealthIndicator = new FlowHealthIndicator(
-							bindingsHealthContributor.getSolaceFlowHealthProperties());
+					FlowHealthIndicator flowHealthIndicator = new FlowHealthIndicator();
 					bindingHealthContributor.getFlowsHealthContributor().addFlowContributor("flow-0", flowHealthIndicator);
 					flowReceiverContainer.createEventHandler(flowHealthIndicator);
 				}

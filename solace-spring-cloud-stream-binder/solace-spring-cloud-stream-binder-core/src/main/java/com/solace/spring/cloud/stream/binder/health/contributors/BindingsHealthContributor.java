@@ -1,7 +1,5 @@
 package com.solace.spring.cloud.stream.binder.health.contributors;
 
-import com.solace.spring.cloud.stream.binder.properties.SolaceFlowHealthProperties;
-import lombok.Getter;
 import org.springframework.boot.actuate.health.CompositeHealthContributor;
 import org.springframework.boot.actuate.health.HealthContributor;
 import org.springframework.boot.actuate.health.NamedContributor;
@@ -12,13 +10,6 @@ import java.util.Map;
 
 public class BindingsHealthContributor implements CompositeHealthContributor {
 	private final Map<String, BindingHealthContributor> bindingHealthContributor = new HashMap<>();
-
-	@Getter
-	private final SolaceFlowHealthProperties solaceFlowHealthProperties;
-
-	public BindingsHealthContributor(SolaceFlowHealthProperties solaceFlowHealthProperties) {
-		this.solaceFlowHealthProperties = solaceFlowHealthProperties;
-	}
 
 	public void addBindingContributor(String bindingName, BindingHealthContributor bindingHealthContributor) {
 		this.bindingHealthContributor.put(bindingName, bindingHealthContributor);

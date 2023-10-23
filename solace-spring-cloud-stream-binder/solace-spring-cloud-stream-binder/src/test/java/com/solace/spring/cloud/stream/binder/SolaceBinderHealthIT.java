@@ -7,7 +7,6 @@ import com.solace.spring.cloud.stream.binder.health.contributors.BindingsHealthC
 import com.solace.spring.cloud.stream.binder.health.contributors.FlowsHealthContributor;
 import com.solace.spring.cloud.stream.binder.health.indicators.FlowHealthIndicator;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
-import com.solace.spring.cloud.stream.binder.properties.SolaceFlowHealthProperties;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
 import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
@@ -64,7 +63,7 @@ public class SolaceBinderHealthIT {
 
 		SolaceTestBinder binder = context.getBinder();
 
-		BindingsHealthContributor bindingsHealthContributor = new BindingsHealthContributor(new SolaceFlowHealthProperties());
+		BindingsHealthContributor bindingsHealthContributor = new BindingsHealthContributor();
 		binder.getBinder().setBindingsHealthContributor(bindingsHealthContributor);
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
@@ -130,7 +129,7 @@ public class SolaceBinderHealthIT {
 
 		SolaceTestBinder binder = context.getBinder();
 
-		BindingsHealthContributor bindingsHealthContributor = new BindingsHealthContributor(new SolaceFlowHealthProperties());
+		BindingsHealthContributor bindingsHealthContributor = new BindingsHealthContributor();
 		binder.getBinder().setBindingsHealthContributor(bindingsHealthContributor);
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
@@ -187,8 +186,7 @@ public class SolaceBinderHealthIT {
 			TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = context.getBinder();
 
-		BindingsHealthContributor bindingsHealthContributor = Mockito.spy(new BindingsHealthContributor(
-				new SolaceFlowHealthProperties()));
+		BindingsHealthContributor bindingsHealthContributor = Mockito.spy(new BindingsHealthContributor());
 		binder.getBinder().setBindingsHealthContributor(bindingsHealthContributor);
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);

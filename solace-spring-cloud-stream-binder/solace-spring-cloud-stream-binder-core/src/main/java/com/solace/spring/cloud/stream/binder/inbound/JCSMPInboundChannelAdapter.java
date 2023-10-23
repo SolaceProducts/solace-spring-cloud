@@ -147,8 +147,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 		if (bindingHealthContributor != null) {
 			for (int i = 0; i < flowReceivers.size(); i++) {
-				FlowHealthIndicator flowHealthIndicator =
-						new FlowHealthIndicator(bindingsHealthContributor.getSolaceFlowHealthProperties());
+				FlowHealthIndicator flowHealthIndicator = new FlowHealthIndicator();
 				bindingHealthContributor.getFlowsHealthContributor().addFlowContributor("flow-" + i, flowHealthIndicator);
 				flowReceivers.get(i).createEventHandler(flowHealthIndicator);
 			}

@@ -6,9 +6,6 @@ import com.solacesystems.jcsmp.SessionEventArgs;
 import lombok.NoArgsConstructor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.context.properties.ConfigurationProperties;
-import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 import org.springframework.lang.Nullable;
 
 import java.util.Optional;
@@ -27,33 +24,56 @@ public class SessionHealthIndicator extends SolaceHealthIndicator {
 	}
 
 	public void up() {
-		super.healthUp();
-		this.reconnectCount.set(0);
+		writeLock.lock();
+		try {
+			if (logger.isTraceEnabled()) {
+				logger.trace("Reset reconnect count");
+			}
+			this.reconnectCount.set(0);
+			super.healthUp();
+		} finally {
+			writeLock.unlock();
+		}
 	}
 
 	public void reconnecting(@Nullable SessionEventArgs eventArgs) {
-		long reconnectAttempt = this.reconnectCount.incrementAndGet();
-		if (Optional.of(this.solaceHealthSessionProperties.getReconnectAttemptsUntilDown())
-				.filter(maxReconnectAttempts -> maxReconnectAttempts > 0)
-				.filter(maxReconnectAttempts -> reconnectAttempt > maxReconnectAttempts)
-				.isPresent()) {
-			if (logger.isDebugEnabled()) {
-				logger.debug(String.format("Solace connection reconnect attempt %s > %s, changing state to down",
-						reconnectAttempt, solaceHealthSessionProperties.getReconnectAttemptsUntilDown()));
+		writeLock.lock();
+		try {
+			long reconnectAttempt = this.reconnectCount.incrementAndGet();
+			if (Optional.of(this.solaceHealthSessionProperties.getReconnectAttemptsUntilDown())
+					.filter(maxReconnectAttempts -> maxReconnectAttempts > 0)
+					.filter(maxReconnectAttempts -> reconnectAttempt > maxReconnectAttempts)
+					.isPresent()) {
+				if (logger.isDebugEnabled()) {
+					logger.debug(String.format("Solace connection reconnect attempt %s > %s, changing state to down",
+							reconnectAttempt, solaceHealthSessionProperties.getReconnectAttemptsUntilDown()));
+				}
+				this.down(eventArgs, false);
+				return;
 			}
-			this.down(eventArgs);
-			return;
+
+			super.healthReconnecting(eventArgs);
+		} finally {
+			writeLock.unlock();
 		}
-		super.healthReconnecting(eventArgs);
 	}
 
 	public void down(@Nullable SessionEventArgs eventArgs) {
-		super.healthDown(eventArgs);
-		this.reconnectCount.set(0);
+		down(eventArgs, true);
 	}
 
-	@Deprecated
 	public void down(@Nullable SessionEventArgs eventArgs, boolean resetReconnectCount) {
-		super.healthDown(eventArgs);
+		writeLock.lock();
+		try {
+			if (resetReconnectCount) {
+				if (logger.isTraceEnabled()) {
+					logger.trace("Reset reconnect count");
+				}
+				this.reconnectCount.set(0);
+			}
+			super.healthDown(eventArgs);
+		} finally {
+			writeLock.unlock();
+		}
 	}
 }
