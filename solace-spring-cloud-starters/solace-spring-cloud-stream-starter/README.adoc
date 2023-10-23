@@ -454,6 +454,17 @@ See: <<Overview>> for more info on how this binder uses topic-to-queue mapping t
 +
 NOTE: Does not apply when `destinationType=queue`.
 
+==== Solace Connection Health-Check Properties
+
+These properties configure the Solace connection's health indicator configurable under `solace.health-check.connection`.
+
+reconnectAttemptsUntilDown::
+The number of session reconnect attempts until the health goes `DOWN`. This will happen regardless if the underlying session is actually still reconnecting. Setting this to `0` will disable this feature.
++
+This feature operates independently of the PubSub+ session reconnect feature. Meaning that if PubSub+ session reconnect is configured to retry less than the value given to this property, then this feature effectively does nothing.
++
+Default: `0`
+
 === Solace Message Headers
 
 Solace-defined Spring headers to get/set Solace metadata from/to Spring `Message` headers.
