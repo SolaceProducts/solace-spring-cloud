@@ -7,7 +7,6 @@ import com.solace.spring.cloud.stream.binder.health.indicators.FlowHealthIndicat
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
-import com.solace.spring.cloud.stream.binder.properties.SolaceFlowHealthProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
@@ -66,7 +65,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private RetryTemplate retryTemplate;
 	private RecoveryCallback<?> recoveryCallback;
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
-	private BindingsHealthContributor bindingsHealthContributor;
+	@Nullable private BindingsHealthContributor bindingsHealthContributor;
 
 	private static final Log logger = LogFactory.getLog(JCSMPInboundChannelAdapter.class);
 	private static final ThreadLocal<AttributeAccessor> attributesHolder = new ThreadLocal<>();
@@ -118,13 +117,13 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		exponentialBackOff.setMaxInterval(consumerProperties.getExtension().getFlowRebindBackOffMaxInterval());
 		exponentialBackOff.setMultiplier(consumerProperties.getExtension().getFlowRebindBackOffMultiplier());
 
-		BindingHealthContributor bindingContributor;
+		BindingHealthContributor bindingHealthContributor;
 
 		if (bindingsHealthContributor != null) {
-			bindingContributor = new BindingHealthContributor(new FlowsHealthContributor());
-			bindingsHealthContributor.addBindingContributor(consumerProperties.getBindingName(), bindingContributor);
+			bindingHealthContributor = new BindingHealthContributor(new FlowsHealthContributor());
+			bindingsHealthContributor.addBindingContributor(consumerProperties.getBindingName(), bindingHealthContributor);
 		} else {
-			bindingContributor = null;
+			bindingHealthContributor = null;
 		}
 
 		for (int i = 0, numToCreate = consumerProperties.getConcurrency() - flowReceivers.size(); i < numToCreate; i++) {
@@ -146,11 +145,11 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			flowReceivers.add(flowReceiverContainer);
 		}
 
-		if (bindingContributor != null) {
+		if (bindingHealthContributor != null) {
 			for (int i = 0; i < flowReceivers.size(); i++) {
 				FlowHealthIndicator flowHealthIndicator =
 						new FlowHealthIndicator(bindingsHealthContributor.getSolaceFlowHealthProperties());
-				bindingContributor.getFlowsHealthContributor().addFlowContributor("flow-" + i, flowHealthIndicator);
+				bindingHealthContributor.getFlowsHealthContributor().addFlowContributor("flow-" + i, flowHealthIndicator);
 				flowReceivers.get(i).createEventHandler(flowHealthIndicator);
 			}
 		}
@@ -206,7 +205,9 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 				}
 			}
 
-			bindingsHealthContributor.removeBindingContributor(consumerProperties.getBindingName());
+			if (bindingsHealthContributor != null) {
+				bindingsHealthContributor.removeBindingContributor(consumerProperties.getBindingName());
+			}
 
 			// cleanup
 			consumerStopFlags.clear();
