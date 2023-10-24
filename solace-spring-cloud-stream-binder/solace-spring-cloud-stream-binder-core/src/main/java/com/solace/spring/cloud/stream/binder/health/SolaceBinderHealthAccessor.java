@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder.health;
 import com.solace.spring.cloud.stream.binder.health.contributors.BindingHealthContributor;
 import com.solace.spring.cloud.stream.binder.health.contributors.FlowsHealthContributor;
 import com.solace.spring.cloud.stream.binder.health.contributors.SolaceBinderHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.handlers.SolaceFlowHealthEventHandler;
 import com.solace.spring.cloud.stream.binder.health.indicators.FlowHealthIndicator;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 
@@ -33,7 +34,10 @@ public class SolaceBinderHealthAccessor {
 				})
 				.getFlowsHealthContributor()
 				.addFlowContributor(createFlowIdFromConcurrencyIdx(concurrencyIdx), flowHealthIndicator);
-		flowReceiverContainer.createEventHandler(flowHealthIndicator);
+		flowReceiverContainer.createEventHandler(new SolaceFlowHealthEventHandler(
+				flowReceiverContainer.getXMLMessageMapper(),
+				flowReceiverContainer.getId().toString(),
+				flowHealthIndicator));
 	}
 
 	public void removeFlow(String bindingName, int concurrencyIdx) {

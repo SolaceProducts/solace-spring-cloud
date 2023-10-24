@@ -1,7 +1,6 @@
 package com.solace.spring.cloud.stream.binder.util;
 
 import com.solace.spring.cloud.stream.binder.health.handlers.SolaceFlowHealthEventHandler;
-import com.solace.spring.cloud.stream.binder.health.indicators.FlowHealthIndicator;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
@@ -689,8 +688,8 @@ public class FlowReceiverContainer {
 		return xmlMessageMapper;
 	}
 
-	public void createEventHandler(FlowHealthIndicator flowHealthIndicator) {
-		this.eventHandler = new SolaceFlowHealthEventHandler(xmlMessageMapper, id.toString(), flowHealthIndicator);
+	public void createEventHandler(SolaceFlowHealthEventHandler solaceFlowHealthEventHandler) {
+		this.eventHandler = solaceFlowHealthEventHandler;
 	}
 
 	static class FlowReceiverReference {
