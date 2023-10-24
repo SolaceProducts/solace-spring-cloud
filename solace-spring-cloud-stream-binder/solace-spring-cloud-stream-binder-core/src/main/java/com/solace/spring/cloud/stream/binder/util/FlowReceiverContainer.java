@@ -5,6 +5,7 @@ import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.FlowEventHandler;
 import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -70,7 +71,7 @@ public class FlowReceiverContainer {
 
 	private static final Log logger = LogFactory.getLog(FlowReceiverContainer.class);
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
-	private SolaceFlowHealthEventHandler eventHandler;
+	private FlowEventHandler eventHandler;
 
 	public FlowReceiverContainer(JCSMPSession session,
 								 String queueName,
@@ -80,6 +81,7 @@ public class FlowReceiverContainer {
 		this.queueName = queueName;
 		this.endpointProperties = endpointProperties;
 		this.backOff = backOff;
+		this.eventHandler = new SolaceFlowEventHandler(xmlMessageMapper, id.toString());
 	}
 
 	/**
@@ -108,8 +110,8 @@ public class FlowReceiverContainer {
 						.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT)
 						.setStartState(!isPaused.get());
 				FlowReceiver flowReceiver = session.createFlow(null, flowProperties, endpointProperties, eventHandler);
-				if (eventHandler != null) {
-					eventHandler.setHealthStatusUp();
+				if (eventHandler != null && eventHandler instanceof SolaceFlowHealthEventHandler) {
+					((SolaceFlowHealthEventHandler) eventHandler).setHealthStatusUp();
 				}
 				FlowReceiverReference newFlowReceiverReference = new FlowReceiverReference(flowReceiver);
 				flowReceiverAtomicReference.set(newFlowReceiverReference);
@@ -688,8 +690,8 @@ public class FlowReceiverContainer {
 		return xmlMessageMapper;
 	}
 
-	public void createEventHandler(SolaceFlowHealthEventHandler solaceFlowHealthEventHandler) {
-		this.eventHandler = solaceFlowHealthEventHandler;
+	public void setEventHandler(FlowEventHandler eventHandler) {
+		this.eventHandler = eventHandler;
 	}
 
 	static class FlowReceiverReference {

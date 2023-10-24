@@ -34,7 +34,7 @@ public class SolaceBinderHealthAccessor {
 				})
 				.getFlowsHealthContributor()
 				.addFlowContributor(createFlowIdFromConcurrencyIdx(concurrencyIdx), flowHealthIndicator);
-		flowReceiverContainer.createEventHandler(new SolaceFlowHealthEventHandler(
+		flowReceiverContainer.setEventHandler(new SolaceFlowHealthEventHandler(
 				flowReceiverContainer.getXMLMessageMapper(),
 				flowReceiverContainer.getId().toString(),
 				flowHealthIndicator));
