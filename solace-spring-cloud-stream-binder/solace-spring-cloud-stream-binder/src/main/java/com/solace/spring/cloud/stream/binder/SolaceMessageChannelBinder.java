@@ -1,6 +1,6 @@
 package com.solace.spring.cloud.stream.binder;
 
-import com.solace.spring.cloud.stream.binder.health.contributors.BindingsHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.SolaceBinderHealthAccessor;
 import com.solace.spring.cloud.stream.binder.inbound.BatchCollector;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPInboundChannelAdapter;
 import com.solace.spring.cloud.stream.binder.inbound.JCSMPMessageSource;
@@ -34,6 +34,7 @@ import org.springframework.cloud.stream.provisioning.ProducerDestination;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.core.MessageProducer;
 import org.springframework.integration.support.ErrorMessageStrategy;
+import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 
@@ -59,7 +60,7 @@ public class SolaceMessageChannelBinder
 	private SolaceExtendedBindingProperties extendedBindingProperties = new SolaceExtendedBindingProperties();
 	private final RetryableTaskService taskService = new RetryableTaskService();
 	private static final SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
-	private BindingsHealthContributor bindingsHealthContributor;
+	@Nullable private SolaceBinderHealthAccessor solaceBinderHealthAccessor;
 
 	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, SolaceQueueProvisioner solaceQueueProvisioner) {
 		this(jcsmpSession, null, solaceQueueProvisioner);
@@ -120,8 +121,8 @@ public class SolaceMessageChannelBinder
 				getConsumerEndpointProperties(properties),
 				solaceMeterAccessor);
 
-		if (bindingsHealthContributor != null) {
-			adapter.setSolaceBindingsHealthContributor(bindingsHealthContributor);
+		if (solaceBinderHealthAccessor != null) {
+			adapter.setSolaceBinderHealthAccessor(solaceBinderHealthAccessor);
 		}
 
 		adapter.setRemoteStopFlag(consumersRemoteStopFlag);
@@ -167,8 +168,8 @@ public class SolaceMessageChannelBinder
 				endpointProperties,
 				solaceMeterAccessor);
 
-		if (bindingsHealthContributor != null) {
-			messageSource.setSolaceBindingsHealthContributor(bindingsHealthContributor);
+		if (solaceBinderHealthAccessor != null) {
+			messageSource.setSolaceBinderHealthAccessor(solaceBinderHealthAccessor);
 		}
 
 		messageSource.setRemoteStopFlag(consumersRemoteStopFlag::get);
@@ -246,8 +247,8 @@ public class SolaceMessageChannelBinder
 		this.solaceMeterAccessor = solaceMeterAccessor;
 	}
 
-	public void setBindingsHealthContributor(BindingsHealthContributor bindingsHealthContributor) {
-		this.bindingsHealthContributor = bindingsHealthContributor;
+	public void setSolaceBinderHealthAccessor(@Nullable SolaceBinderHealthAccessor solaceBinderHealthAccessor) {
+		this.solaceBinderHealthAccessor = solaceBinderHealthAccessor;
 	}
 
 	/**

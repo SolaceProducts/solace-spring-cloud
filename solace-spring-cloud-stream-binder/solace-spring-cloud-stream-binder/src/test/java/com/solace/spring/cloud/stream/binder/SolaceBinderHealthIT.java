@@ -2,10 +2,13 @@ package com.solace.spring.cloud.stream.binder;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.config.SolaceHealthIndicatorsConfiguration;
+import com.solace.spring.cloud.stream.binder.health.SolaceBinderHealthAccessor;
 import com.solace.spring.cloud.stream.binder.health.contributors.BindingHealthContributor;
 import com.solace.spring.cloud.stream.binder.health.contributors.BindingsHealthContributor;
 import com.solace.spring.cloud.stream.binder.health.contributors.FlowsHealthContributor;
+import com.solace.spring.cloud.stream.binder.health.contributors.SolaceBinderHealthContributor;
 import com.solace.spring.cloud.stream.binder.health.indicators.FlowHealthIndicator;
+import com.solace.spring.cloud.stream.binder.health.indicators.SessionHealthIndicator;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
 import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
@@ -25,6 +28,7 @@ import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.actuate.health.NamedContributor;
 import org.springframework.boot.actuate.health.Status;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.cloud.stream.binder.Binding;
@@ -38,6 +42,7 @@ import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.StreamSupport;
 
 import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -64,7 +69,8 @@ public class SolaceBinderHealthIT {
 		SolaceTestBinder binder = context.getBinder();
 
 		BindingsHealthContributor bindingsHealthContributor = new BindingsHealthContributor();
-		binder.getBinder().setBindingsHealthContributor(bindingsHealthContributor);
+		binder.getBinder().setSolaceBinderHealthAccessor(new SolaceBinderHealthAccessor(
+				new SolaceBinderHealthContributor(new SessionHealthIndicator(), bindingsHealthContributor)));
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
@@ -99,7 +105,13 @@ public class SolaceBinderHealthIT {
 
 		logger.info("Stopping binding...");
 		consumerBinding.stop();
-		assertThat(bindingsHealthContributor.iterator().hasNext()).isFalse();
+		assertThat(bindingsHealthContributor)
+				.asInstanceOf(InstanceOfAssertFactories.type(BindingsHealthContributor.class))
+				.extracting(c -> c.getContributor(consumerProperties.getBindingName()))
+				.extracting(BindingHealthContributor::getFlowsHealthContributor)
+				.extracting(f -> StreamSupport.stream(f.spliterator(), false))
+				.asInstanceOf(InstanceOfAssertFactories.stream(NamedContributor.class))
+				.isEmpty();
 
 		logger.info("Starting binding...");
 		consumerBinding.start();
@@ -130,7 +142,8 @@ public class SolaceBinderHealthIT {
 		SolaceTestBinder binder = context.getBinder();
 
 		BindingsHealthContributor bindingsHealthContributor = new BindingsHealthContributor();
-		binder.getBinder().setBindingsHealthContributor(bindingsHealthContributor);
+		binder.getBinder().setSolaceBinderHealthAccessor(new SolaceBinderHealthAccessor(
+				new SolaceBinderHealthContributor(new SessionHealthIndicator(), bindingsHealthContributor)));
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
@@ -187,7 +200,8 @@ public class SolaceBinderHealthIT {
 		SolaceTestBinder binder = context.getBinder();
 
 		BindingsHealthContributor bindingsHealthContributor = Mockito.spy(new BindingsHealthContributor());
-		binder.getBinder().setBindingsHealthContributor(bindingsHealthContributor);
+		binder.getBinder().setSolaceBinderHealthAccessor(new SolaceBinderHealthAccessor(
+				new SolaceBinderHealthContributor(new SessionHealthIndicator(), bindingsHealthContributor)));
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
 

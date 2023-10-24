@@ -21,7 +21,7 @@ public class FlowsHealthContributor implements CompositeHealthContributor {
 	}
 
 	@Override
-	public HealthContributor getContributor(String flowId) {
+	public FlowHealthIndicator getContributor(String flowId) {
 		return flowHealthContributor.get(flowId);
 	}
 

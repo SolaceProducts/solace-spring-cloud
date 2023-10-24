@@ -20,7 +20,7 @@ public class BindingsHealthContributor implements CompositeHealthContributor {
 	}
 
 	@Override
-	public HealthContributor getContributor(String bindingName) {
+	public BindingHealthContributor getContributor(String bindingName) {
 		return bindingHealthContributor.get(bindingName);
 	}
 

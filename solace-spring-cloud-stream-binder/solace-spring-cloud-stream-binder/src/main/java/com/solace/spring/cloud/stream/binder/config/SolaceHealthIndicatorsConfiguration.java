@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.config;
 
+import com.solace.spring.cloud.stream.binder.health.SolaceBinderHealthAccessor;
 import com.solace.spring.cloud.stream.binder.health.contributors.BindingsHealthContributor;
 import com.solace.spring.cloud.stream.binder.health.contributors.SolaceBinderHealthContributor;
 import com.solace.spring.cloud.stream.binder.health.handlers.SolaceSessionEventHandler;
@@ -21,7 +22,13 @@ public class SolaceHealthIndicatorsConfiguration {
 	private static final Log logger = LogFactory.getLog(SolaceHealthIndicatorsConfiguration.class);
 
 	@Bean
-	public SolaceBinderHealthContributor solaceSessionHealthContributor(
+	public SolaceBinderHealthAccessor solaceBinderHealthAccessor(
+			SolaceBinderHealthContributor solaceBinderHealthContributor) {
+		return new SolaceBinderHealthAccessor(solaceBinderHealthContributor);
+	}
+
+	@Bean
+	public SolaceBinderHealthContributor solaceBinderHealthContributor(
 			SolaceSessionHealthProperties solaceSessionHealthProperties) {
 		if (logger.isDebugEnabled()) {
 			logger.debug("Creating Solace Connection Health Indicators Hierarchy");
