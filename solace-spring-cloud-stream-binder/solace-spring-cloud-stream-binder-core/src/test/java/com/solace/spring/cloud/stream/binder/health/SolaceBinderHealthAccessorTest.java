@@ -12,9 +12,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.actuate.health.NamedContributor;
 
+import java.util.UUID;
 import java.util.stream.StreamSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,6 +26,7 @@ public class SolaceBinderHealthAccessorTest {
 	@CartesianTest(name = "[{index}] bindingHealthContributorExists={0}")
 	public void testAddFlow(@CartesianTest.Values(booleans = {false, true}) boolean bindingHealthContributorExists,
 							@Mock FlowReceiverContainer flowReceiverContainer) {
+		Mockito.when(flowReceiverContainer.getId()).thenReturn(UUID.randomUUID());
 		SolaceBinderHealthContributor healthContributor = new SolaceBinderHealthContributor(
 				new SessionHealthIndicator(),
 				new BindingsHealthContributor());
