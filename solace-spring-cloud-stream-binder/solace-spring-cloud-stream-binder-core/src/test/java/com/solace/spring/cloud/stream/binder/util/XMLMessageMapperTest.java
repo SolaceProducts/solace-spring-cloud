@@ -259,6 +259,12 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.USER_DATA:
 					value = RandomStringUtils.randomAlphanumeric(10).getBytes();
 					break;
+				case SolaceBinderHeaders.PARTITION_KEY:
+					value = RandomStringUtils.randomAlphanumeric(10);
+					// This value is overwritten by binder-defined partition key header
+					messageBuilder.setHeader(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY,
+							RandomStringUtils.randomAlphanumeric(10));
+					break;
 				default:
 					value = null;
 					fail(String.format("no test for header %s", header.getKey()));
@@ -315,6 +321,10 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.USER_DATA:
 					assertEquals(expectedValue, xmlMessage.getUserData());
 					break;
+				case SolaceBinderHeaders.PARTITION_KEY:
+					assertEquals(expectedValue, xmlMessage.getProperties()
+							.getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY));
+					break;
 				default:
 					fail(String.format("no test for header %s", header.getKey()));
 			}
@@ -366,7 +376,7 @@ public class XMLMessageMapperTest {
 					assertFalse(xmlMessage.getRedelivered());
 					break;
 				case SolaceBinderHeaders.MESSAGE_VERSION:
-					assertEquals(new Integer(XMLMessageMapper.MESSAGE_VERSION),
+					assertEquals(Integer.valueOf(XMLMessageMapper.MESSAGE_VERSION),
 							xmlMessage.getProperties().getInteger(header.getKey()));
 					break;
 				case SolaceBinderHeaders.SERIALIZED_HEADERS:
@@ -485,10 +495,21 @@ public class XMLMessageMapperTest {
 				xmlMessageMapper.map(testSpringMessage, null, false);
 				fail(String.format("Expected message mapping to fail for header %s", header.getKey()));
 			} catch (SolaceMessageConversionException e) {
-				assertEquals(e.getMessage(), String.format(
-						"Message %s has an invalid value type for header %s. Expected %s but received %s.",
-						testSpringMessage.getHeaders().getId(), header.getKey(), header.getValue().getType(),
-						Object.class));
+				if (header.getValue() instanceof SolaceHeaderMeta<?>) {
+					assertEquals(e.getMessage(), String.format(
+							"Message %s has an invalid value type for header %s. Expected %s but received %s.",
+							testSpringMessage.getHeaders().getId(), header.getKey(), header.getValue().getType(),
+							Object.class));
+				} else {
+					switch (header.getKey()) {
+						case SolaceBinderHeaders.PARTITION_KEY ->
+								Assertions.assertThat(e).rootCause()
+										.isInstanceOf(IllegalArgumentException.class)
+										.hasMessageContainingAll(header.getKey(), header.getValue().getType().toString());
+						default ->
+								fail(String.format("no test for header %s", header.getKey()));
+					}
+				}
 			}
 		}
 	}
@@ -585,6 +606,7 @@ public class XMLMessageMapperTest {
 			case SolaceHeaders.CORRELATION_ID:
 			case SolaceHeaders.HTTP_CONTENT_ENCODING:
 			case SolaceHeaders.SENDER_ID:
+			case SolaceBinderHeaders.PARTITION_KEY:
 				value = RandomStringUtils.randomAlphanumeric(10);
 				break;
 			case SolaceHeaders.DMQ_ELIGIBLE:
@@ -668,16 +690,22 @@ public class XMLMessageMapperTest {
 			case SolaceHeaders.USER_DATA:
 				assertEquals(expectedValue, xmlMessage.getUserData());
 				break;
+			case SolaceBinderHeaders.PARTITION_KEY:
+				assertEquals(expectedValue, xmlMessage.getProperties()
+						.getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY));
+				break;
 			default:
 				fail(String.format("no test for header %s", header.getKey()));
 			}
 		}
 
-		for (Map.Entry<String, SolaceBinderHeaderMeta<?>> binderHeaderMetaEntry : SolaceBinderHeaderMeta.META.entrySet()) {
-			if (SolaceHeaderMeta.Scope.WIRE.equals(binderHeaderMetaEntry.getValue().getScope())) {
-				assertNotNull(xmlMessage.getProperties().get(binderHeaderMetaEntry.getKey()));
-			}
-		}
+		Assertions.assertThat(SolaceBinderHeaderMeta.META
+						.entrySet()
+						.stream()
+						.filter(e -> SolaceHeaderMeta.Scope.WIRE.equals(e.getValue().getScope()))
+						.filter(e -> !e.getValue().isWritable()) // already tested earlier in this test
+						.map(Map.Entry::getKey))
+				.allSatisfy(h -> Assertions.assertThat(xmlMessage.getProperties().get(h)).isNotNull());
 
 		Mockito.verify(xmlMessageMapper).map(testSpringMessage, excludedHeaders, false);
 	}
@@ -1062,6 +1090,9 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.TARGET_DESTINATION_TYPE:
 					metadata.putString(header.getKey(), "topic");
 					break;
+				case SolaceBinderHeaders.PARTITION_KEY:
+					metadata.putString(header.getKey(), "partitionKey");
+					break;
 				default:
 					fail(String.format("no test for header %s", header.getKey()));
 			}
@@ -1301,6 +1332,17 @@ public class XMLMessageMapperTest {
 			validateSpringPayload(springMessage.getPayload(), expectedPayload);
 			validateSpringHeaders(springMessage.getHeaders(), xmlMessage);
 		}
+	}
+
+	@Test
+	public void testMapMessageHeadersToSDTMap_JMSXGroupID() throws Exception {
+		String jmsxGroupID = "partition-key-value";
+		SDTMap sdtMap = xmlMessageMapper.map(
+				new MessageHeaders(Collections.singletonMap(
+						XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY, jmsxGroupID)),
+				Collections.emptyList(), false);
+		assertThat(sdtMap.keySet(), hasItem(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY));
+		assertEquals(jmsxGroupID, sdtMap.getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY));
 	}
 
 	@Test
@@ -1559,15 +1601,22 @@ public class XMLMessageMapperTest {
 				.filter(h -> h.getValue().isReadable())
 				.collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-		for (Map.Entry<String,Object> header : expectedHeaders.entrySet()) {
-			if (readWriteableSolaceHeaders.containsKey(header.getKey())) {
-				Object value = readWriteableSolaceHeaders.get(header.getKey()).getReadAction().apply(xmlMessage);
-				assertEquals(header.getValue(), value);
-			} else if (!serializedHeaders.contains(header.getKey())) {
-				assertThat(metadata.keySet(), hasItem(header.getKey()));
-				assertEquals(header.getValue(), metadata.get(header.getKey()));
-			}
-		}
+		Assertions.assertThat(expectedHeaders)
+				.allSatisfy((headerKey, headerValue) -> {
+					if (readWriteableSolaceHeaders.containsKey(headerKey)) {
+						Object value = readWriteableSolaceHeaders.get(headerKey).getReadAction().apply(xmlMessage);
+						assertEquals(headerValue, value);
+					} else if (!serializedHeaders.contains(headerKey)) {
+						switch (headerKey) {
+							case SolaceBinderHeaders.PARTITION_KEY ->
+									headerKey = XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY;
+							case XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY ->
+									headerValue = expectedHeaders.getOrDefault(SolaceBinderHeaders.PARTITION_KEY, headerValue);
+						}
+						assertThat(metadata.keySet(), hasItem(headerKey));
+						assertEquals(headerValue, ((ThrowingFunction<String, Object>) metadata::get).apply(headerKey));
+					}
+				});
 	}
 
 	private void validateSpringHeaders(MessageHeaders messageHeaders, XMLMessage xmlMessage)
