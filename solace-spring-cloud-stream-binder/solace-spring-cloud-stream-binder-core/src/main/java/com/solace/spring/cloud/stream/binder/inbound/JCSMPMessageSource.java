@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.health.SolaceBinderHealthAccessor;
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
@@ -53,6 +54,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private FlowReceiverContainer flowReceiverContainer;
 	private JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
 	private XMLMessageMapper xmlMessageMapper;
+	@Nullable private SolaceBinderHealthAccessor solaceBinderHealthAccessor;
 	private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
 	private volatile boolean isRunning = false;
 	private volatile boolean paused = false;
@@ -234,6 +236,11 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 						flowReceiverContainer.pause();
 					}
 				}
+
+				if (solaceBinderHealthAccessor != null) {
+					solaceBinderHealthAccessor.addFlow(consumerProperties.getBindingName(), 0, flowReceiverContainer);
+				}
+
 				flowReceiverContainer.bind();
 			} catch (JCSMPException e) {
 				String msg = String.format("Unable to get a message consumer for session %s", jcsmpSession.getSessionName());
@@ -263,6 +270,9 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			if (!isRunning()) return;
 			logger.info(String.format("Stopping consumer to queue %s <message source ID: %s>", queueName, id));
 			flowReceiverContainer.unbind();
+			if (solaceBinderHealthAccessor != null) {
+				solaceBinderHealthAccessor.removeFlow(consumerProperties.getBindingName(), 0);
+			}
 			isRunning = false;
 		} finally {
 			writeLock.unlock();
@@ -334,5 +344,9 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		} else {
 			return false;
 		}
+	}
+
+	public void setSolaceBinderHealthAccessor(@Nullable SolaceBinderHealthAccessor solaceBinderHealthAccessor) {
+		this.solaceBinderHealthAccessor = solaceBinderHealthAccessor;
 	}
 }

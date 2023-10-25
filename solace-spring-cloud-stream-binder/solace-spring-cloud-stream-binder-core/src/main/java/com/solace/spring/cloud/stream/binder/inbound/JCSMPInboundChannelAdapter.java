@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.health.SolaceBinderHealthAccessor;
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
@@ -61,6 +62,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private RetryTemplate retryTemplate;
 	private RecoveryCallback<?> recoveryCallback;
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
+	@Nullable private SolaceBinderHealthAccessor solaceBinderHealthAccessor;
 
 	private static final Log logger = LogFactory.getLog(JCSMPInboundChannelAdapter.class);
 	private static final ThreadLocal<AttributeAccessor> attributesHolder = new ThreadLocal<>();
@@ -131,6 +133,12 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			flowReceivers.add(flowReceiverContainer);
 		}
 
+		if (solaceBinderHealthAccessor != null) {
+			for (int i = 0; i < flowReceivers.size(); i++) {
+				solaceBinderHealthAccessor.addFlow(consumerProperties.getBindingName(), i, flowReceivers.get(i));
+			}
+		}
+
 		try {
 			for (FlowReceiverContainer flowReceiverContainer : flowReceivers) {
 				flowReceiverContainer.bind();
@@ -182,8 +190,15 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 				}
 			}
 
+			if (solaceBinderHealthAccessor != null) {
+				for (int i = 0; i < flowReceivers.size(); i++) {
+					solaceBinderHealthAccessor.removeFlow(consumerProperties.getBindingName(), i);
+				}
+			}
+
 			// cleanup
 			consumerStopFlags.clear();
+
 		} catch (InterruptedException e) {
 			String msg = String.format("executor service shutdown for inbound adapter %s was interrupted", id);
 			logger.warn(msg);
@@ -220,6 +235,10 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 	public void setRemoteStopFlag(AtomicBoolean remoteStopFlag) {
 		this.remoteStopFlag = remoteStopFlag;
+	}
+
+	public void setSolaceBinderHealthAccessor(@Nullable SolaceBinderHealthAccessor solaceBinderHealthAccessor) {
+		this.solaceBinderHealthAccessor = solaceBinderHealthAccessor;
 	}
 
 	@Override
