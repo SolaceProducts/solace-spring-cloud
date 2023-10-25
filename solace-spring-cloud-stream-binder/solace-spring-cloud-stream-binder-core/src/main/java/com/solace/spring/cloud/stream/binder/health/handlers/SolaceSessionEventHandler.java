@@ -21,7 +21,7 @@ public class SolaceSessionEventHandler implements SessionEventHandler {
 		}
 		switch (eventArgs.getEvent()) {
 			case RECONNECTED -> this.sessionHealthIndicator.up();
-			case SUBSCRIPTION_ERROR, DOWN_ERROR -> this.sessionHealthIndicator.down(eventArgs);
+			case DOWN_ERROR -> this.sessionHealthIndicator.down(eventArgs);
 			case RECONNECTING -> this.sessionHealthIndicator.reconnecting(eventArgs);
 		}
 	}
