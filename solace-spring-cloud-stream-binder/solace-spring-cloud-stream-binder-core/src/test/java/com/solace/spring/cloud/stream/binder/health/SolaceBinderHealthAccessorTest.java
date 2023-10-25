@@ -8,7 +8,6 @@ import com.solace.spring.cloud.stream.binder.health.indicators.FlowHealthIndicat
 import com.solace.spring.cloud.stream.binder.health.indicators.SessionHealthIndicator;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import org.assertj.core.api.InstanceOfAssertFactories;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.mockito.Mock;
@@ -23,8 +22,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
 public class SolaceBinderHealthAccessorTest {
-	@CartesianTest(name = "[{index}] bindingHealthContributorExists={0}")
+	@CartesianTest(name = "[{index}] bindingHealthContributorExists={0} flowHealthExists={1}")
 	public void testAddFlow(@CartesianTest.Values(booleans = {false, true}) boolean bindingHealthContributorExists,
+							@CartesianTest.Values(booleans = {false, true}) boolean flowHealthExists,
 							@Mock FlowReceiverContainer flowReceiverContainer) {
 		Mockito.when(flowReceiverContainer.getId()).thenReturn(UUID.randomUUID());
 		SolaceBinderHealthContributor healthContributor = new SolaceBinderHealthContributor(
@@ -36,8 +36,12 @@ public class SolaceBinderHealthAccessorTest {
 		int concurrencyIdx = 55;
 
 		if (bindingHealthContributorExists) {
+			FlowsHealthContributor flowsHealthContributor = new FlowsHealthContributor();
+			if (flowHealthExists) {
+				flowsHealthContributor.addFlowContributor("flow-" + concurrencyIdx, new FlowHealthIndicator());
+			}
 			healthContributor.getSolaceBindingsHealthContributor()
-					.addBindingContributor(bindingName, new BindingHealthContributor(new FlowsHealthContributor()));
+					.addBindingContributor(bindingName, new BindingHealthContributor(flowsHealthContributor));
 		}
 
 		healthAccessor.addFlow(bindingName, concurrencyIdx, flowReceiverContainer);
@@ -57,8 +61,10 @@ public class SolaceBinderHealthAccessorTest {
 				.isInstanceOf(FlowHealthIndicator.class);
 	}
 
-	@Test
-	public void testRemoveFlow() {
+	@CartesianTest(name = "[{index}] bindingHealthContributorExists={0} flowHealthExists={1}")
+	public void testRemoveFlow(
+			@CartesianTest.Values(booleans = {false, true}) boolean bindingHealthContributorExists,
+			@CartesianTest.Values(booleans = {false, true}) boolean flowHealthExists) {
 		SolaceBinderHealthContributor healthContributor = new SolaceBinderHealthContributor(
 				new SessionHealthIndicator(),
 				new BindingsHealthContributor());
@@ -66,22 +72,32 @@ public class SolaceBinderHealthAccessorTest {
 
 		String bindingName = "binding-name";
 		int concurrencyIdx = 55;
-		FlowsHealthContributor flowsHealthContributor = new FlowsHealthContributor();
-		flowsHealthContributor.addFlowContributor("flow-" + concurrencyIdx, new FlowHealthIndicator());
-		healthContributor.getSolaceBindingsHealthContributor()
-				.addBindingContributor(bindingName, new BindingHealthContributor(flowsHealthContributor));
+
+		if (bindingHealthContributorExists) {
+			FlowsHealthContributor flowsHealthContributor = new FlowsHealthContributor();
+			if (flowHealthExists) {
+				flowsHealthContributor.addFlowContributor("flow-" + concurrencyIdx, new FlowHealthIndicator());
+			}
+			healthContributor.getSolaceBindingsHealthContributor()
+					.addBindingContributor(bindingName, new BindingHealthContributor(flowsHealthContributor));
+		}
 
 		healthAccessor.removeFlow(bindingName, concurrencyIdx);
 
-		assertThat(StreamSupport.stream(healthContributor.getSolaceBindingsHealthContributor().spliterator(), false))
-				.singleElement()
-				.satisfies(n -> assertThat(n.getName()).isEqualTo(bindingName))
-				.extracting(NamedContributor::getContributor)
-				.asInstanceOf(InstanceOfAssertFactories.type(BindingHealthContributor.class))
-				.extracting(BindingHealthContributor::getFlowsHealthContributor)
-				.asInstanceOf(InstanceOfAssertFactories.type(FlowsHealthContributor.class))
-				.extracting(c -> StreamSupport.stream(c.spliterator(), false))
-				.asInstanceOf(InstanceOfAssertFactories.stream(NamedContributor.class))
-				.isEmpty();
+		if (bindingHealthContributorExists) {
+			assertThat(StreamSupport.stream(healthContributor.getSolaceBindingsHealthContributor().spliterator(), false))
+					.singleElement()
+					.satisfies(n -> assertThat(n.getName()).isEqualTo(bindingName))
+					.extracting(NamedContributor::getContributor)
+					.asInstanceOf(InstanceOfAssertFactories.type(BindingHealthContributor.class))
+					.extracting(BindingHealthContributor::getFlowsHealthContributor)
+					.asInstanceOf(InstanceOfAssertFactories.type(FlowsHealthContributor.class))
+					.extracting(c -> StreamSupport.stream(c.spliterator(), false))
+					.asInstanceOf(InstanceOfAssertFactories.stream(NamedContributor.class))
+					.isEmpty();
+		} else {
+			assertThat(StreamSupport.stream(healthContributor.getSolaceBindingsHealthContributor().spliterator(), false))
+					.isEmpty();
+		}
 	}
 }
