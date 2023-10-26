@@ -1,9 +1,9 @@
 = Spring Cloud Stream Binder for Solace PubSub+
-:revnumber: 4.0.0
+:revnumber: 4.1.0
 :toc: preamble
 :toclevels: 3
 :icons: font
-:scst-version: 4.0.2
+:scst-version: 4.0.4
 
 // Github-Specific Settings
 ifdef::env-github[]
@@ -34,8 +34,6 @@ In Solace, the above setup is called topic-to-queue mapping. So a typical messag
 . The PubSub+ broker distributes messages in a round-robin fashion to each consumer binding for a particular consumer group
 +
 NOTE: Round-robin distribution only occurs if the consumer group's queue is configured for non-exclusive access. If the queue has exclusive access, then only one consumer will receive messages.
-
-NOTE: Partitioning is not yet supported by this version of the binder.
 
 IMPORTANT: Since consumer bindings always consumes from queues it is required that Assured Delivery is enabled on the Solace PubSub+ Message VPN being used (Assured Delivery is automatically enabled if using Solace Cloud). Additionally, the client username's client profile must be allowed to send and receive guaranteed messages.
 
@@ -456,6 +454,17 @@ See: <<Overview>> for more info on how this binder uses topic-to-queue mapping t
 +
 NOTE: Does not apply when `destinationType=queue`.
 
+==== Solace Connection Health-Check Properties
+
+These properties configure the Solace connection's health indicator configurable under `solace.health-check.connection`.
+
+reconnectAttemptsUntilDown::
+The number of session reconnect attempts until the health goes `DOWN`. This will happen regardless if the underlying session is actually still reconnecting. Setting this to `0` will disable this feature.
++
+This feature operates independently of the PubSub+ session reconnect feature. Meaning that if PubSub+ session reconnect is configured to retry less than the value given to this property, then this feature effectively does nothing.
++
+Default: `0`
+
 === Solace Message Headers
 
 Solace-defined Spring headers to get/set Solace metadata from/to Spring `Message` headers.
@@ -638,6 +647,12 @@ The consolidated list of message headers for a batch of messages where the heade
 | Read
 |
 | Present and true to indicate when the PubSub+ message payload was null.
+
+| solace_scst_partitionKey
+| String
+| Write
+|
+| The partition key for PubSub+ partitioned queues.
 
 | solace_scst_serializedPayload
 | Boolean
@@ -843,6 +858,34 @@ See <<Native Payload Types>> for more info regarding this binder's natively supp
 ====
 
 To create a batch of messages, the binder will consume messages from the PubSub+ broker until either a maximum batch size or timeout has been achieved. After which, the binder will compose the batch message and send it to the consumer handler for processing. Both these batching parameters can be configured using the `batchMaxSize` and `batchTimeout` consumer config options.
+
+== Partitioning
+
+[NOTE]
+====
+The Solace PubSub+ broker supports partitioning natively.
+
+The partitioning abstraction as described in the https://docs.spring.io/spring-cloud-stream/docs/current/reference/html/spring-cloud-stream.html#partitioning[Spring Cloud Stream documentation] is not supported.
+====
+
+To publish messages that are intended for partitioned queues, you must provide a partition key by setting the `solace_scst_partitionKey` message header (accessible through the `SolaceBinderHeaders.PARTITION_KEY` constant).
+
+For example:
+
+[source,java]
+----
+public class MyMessageBuilder {
+    public Message<String> buildMeAMessage() {
+        return MessageBuilder.withPayload("payload")
+            .setHeader(SolaceBinderHeaders.PARTITION_KEY, "partition-key")
+            .build();
+    }
+}
+----
+
+As for consuming messages from partitioned queues, this is handled transparently by the PubSub+ broker. That is to say, consuming messages from a partitioned queue is no different from consuming messages from any other queue.
+
+See https://docs.solace.com/Messaging/Guaranteed-Msg/Queues.htm#partitioned-queues[Partitioned Queues] for more.
 
 == Manual Message Acknowledgment
 

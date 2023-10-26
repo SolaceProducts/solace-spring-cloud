@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
-import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solacesystems.common.util.ByteArray;
 import com.solacesystems.jcsmp.BytesMessage;
@@ -29,7 +28,6 @@ import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.support.AbstractIntegrationMessageBuilder;
 import org.springframework.integration.support.DefaultMessageBuilderFactory;
-import org.springframework.integration.support.MessageBuilder;
 import org.springframework.integration.support.MessageBuilderFactory;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
@@ -50,10 +48,9 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 public class XMLMessageMapper {
 	private static final Log logger = LogFactory.getLog(XMLMessageMapper.class);
@@ -308,6 +305,12 @@ public class XMLMessageMapper {
 					convertNonSerializableHeadersToString);
 		}
 
+		if (headers.containsKey(SolaceBinderHeaders.PARTITION_KEY)) {
+			rethrowableCall(metadata::putString, XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY,
+					this.<String, Class<String>, String>rethrowableCall(headers::get,
+							SolaceBinderHeaders.PARTITION_KEY, String.class));
+		}
+
 		if (!serializedHeaders.isEmpty()) {
 			rethrowableCall(metadata::putString, SolaceBinderHeaders.SERIALIZED_HEADERS,
 					rethrowableCall(stringSetWriter::writeValueAsString, serializedHeaders));
@@ -406,6 +409,10 @@ public class XMLMessageMapper {
 		return function.apply(var);
 	}
 
+	private <T,U,R> R rethrowableCall(ThrowingBiFunction<T,U,R> function, T var0, U var1) {
+		return function.apply(var0, var1);
+	}
+
 	private <T,U> void rethrowableCall(ThrowingBiConsumer<T,U> consumer, T var0, U var1) {
 		consumer.accept(var0, var1);
 	}
@@ -439,6 +446,23 @@ public class XMLMessageMapper {
 		}
 
 		R applyThrows(T t) throws Exception;
+	}
+
+	@FunctionalInterface
+	private interface ThrowingBiFunction<T,U,R> extends BiFunction<T,U,R> {
+
+		@Override
+		default R apply(T t, U u) {
+			try {
+				return applyThrows(t, u);
+			} catch (Exception e) {
+				SolaceMessageConversionException wrappedException = new SolaceMessageConversionException(e);
+				logger.warn(wrappedException);
+				throw wrappedException;
+			}
+		}
+
+		R applyThrows(T t, U u) throws Exception;
 	}
 
 	@FunctionalInterface

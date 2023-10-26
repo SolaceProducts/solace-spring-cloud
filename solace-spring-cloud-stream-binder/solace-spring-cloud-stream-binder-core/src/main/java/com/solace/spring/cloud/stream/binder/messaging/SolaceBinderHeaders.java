@@ -25,6 +25,14 @@ public final class SolaceBinderHeaders {
 	static final String PREFIX = SolaceHeaders.PREFIX + "scst_";
 
 	/**
+	 * <p><b>Acceptable Value Type:</b> {@link String}</p>
+	 * <p><b>Access:</b> Write</p>
+	 * <br>
+	 * <p>The partition key for PubSub+ partitioned queues.</p>
+	 */
+	public static final String PARTITION_KEY = PREFIX + "partitionKey";
+
+	/**
 	 * <p><b>Acceptable Value Type:</b> {@link Integer}</p>
 	 * <p><b>Access:</b> Read</p>
 	 * <p><b>Default Value: </b>{@code 1}</p>

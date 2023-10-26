@@ -92,14 +92,15 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
-				context.getDestinationNameDelimiter() + "errors";
+		String inputBindingName = RandomStringUtils.randomAlphanumeric(10);
+		String inputErrorChannelName = binder.getBinder().getBinderIdentity() + "." + inputBindingName + ".errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
 		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.populateBindingName(inputBindingName);
 		consumerProperties.setBatchMode(batchMode);
 		consumerProperties.setMaxAttempts(maxAttempts);
 
@@ -112,7 +113,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 
 		// Need to create channel before so that the override actually works
 		final CountDownLatch errorLatch = new CountDownLatch(1);
-		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(inputErrorChannelName, DirectChannel.class, msg -> {
 			logger.info("Got error message: {}", StaticMessageHeaderAccessor.getId(msg));
 			softly.assertThat(msg).satisfies(isValidConsumerErrorMessage(consumerProperties,
 					channelType.isAssignableFrom(PollableSource.class), true, messages));
@@ -169,15 +170,15 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
-				context.getDestinationNameDelimiter() + "errors";
+		String inputBindingName = RandomStringUtils.randomAlphanumeric(10);
+		String inputErrorChannelName = binder.getBinder().getBinderIdentity() + "." + inputBindingName + ".errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
 		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
-		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(inputErrorChannelName, DirectChannel.class, msg -> {
 			logger.info("Got error message: {}", StaticMessageHeaderAccessor.getId(msg));
 			throw new ConsumerInfrastructureUtil.ExpectedMessageHandlerException("test");
 		});
@@ -186,6 +187,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.populateBindingName(inputBindingName);
 		consumerProperties.setBatchMode(batchMode);
 		consumerProperties.setMaxAttempts(maxAttempts);
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
@@ -244,15 +246,15 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
-				context.getDestinationNameDelimiter() + "errors";
+		String inputBindingName = RandomStringUtils.randomAlphanumeric(10);
+		String inputErrorChannelName = binder.getBinder().getBinderIdentity() + "." + inputBindingName + ".errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
 		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
 		// Need to create channel before so that the override actually works
-		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(inputErrorChannelName, DirectChannel.class, msg -> {
 			logger.info("Got error message: {}", StaticMessageHeaderAccessor.getId(msg));
 			throw new RequeueCurrentMessageException("test");
 		});
@@ -261,6 +263,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.populateBindingName(inputBindingName);
 		consumerProperties.setBatchMode(batchMode);
 		consumerProperties.setMaxAttempts(maxAttempts);
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
@@ -321,8 +324,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = destination0 + context.getDestinationNameDelimiter() + group0 +
-				context.getDestinationNameDelimiter() + "errors";
+		String inputBindingName = RandomStringUtils.randomAlphanumeric(10);
+		String inputErrorChannelName = binder.getBinder().getBinderIdentity() + "." + inputBindingName + ".errors";
 		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 
 		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
@@ -331,7 +334,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 		// Need to create channel before so that the override actually works
 		CountDownLatch continueLatch = new CountDownLatch(1);
 		CountDownLatch errorStartLatch = new CountDownLatch(1);
-		context.createChannel(errorDestination0, DirectChannel.class, msg -> {
+		context.createChannel(inputErrorChannelName, DirectChannel.class, msg -> {
 			logger.info("Got error message: {}", StaticMessageHeaderAccessor.getId(msg));
 			errorStartLatch.countDown();
 			try {
@@ -347,6 +350,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+		consumerProperties.populateBindingName(inputBindingName);
 		consumerProperties.setBatchMode(batchMode);
 		consumerProperties.setMaxAttempts(1);
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
@@ -436,19 +440,19 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = binder.getBinder().getBinderIdentity() + context.getDestinationNameDelimiter() +
-				destination0 + context.getDestinationNameDelimiter() + "errors";
+		String outputBindingName = RandomStringUtils.randomAlphanumeric(10);
+		String outputErrorChannelName = binder.getBinder().getBinderIdentity() + "." + outputBindingName + ".errors";
 
 		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
 
 		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
 		producerProperties.setErrorChannelEnabled(true);
-		producerProperties.populateBindingName(destination0);
+		producerProperties.populateBindingName(outputBindingName);
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel,
 				producerProperties);
 
 		final CountDownLatch errorLatch = new CountDownLatch(1);
-		context.createChannel(errorDestination0, PublishSubscribeChannel.class, msg -> {
+		context.createChannel(outputErrorChannelName, PublishSubscribeChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			softly.assertThat(msg).satisfies(isValidProducerErrorMessage(false));
 			errorLatch.countDown();
@@ -474,19 +478,19 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 		SolaceTestBinder binder = context.getBinder();
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-		String errorDestination0 = binder.getBinder().getBinderIdentity() + context.getDestinationNameDelimiter() +
-				destination0 + context.getDestinationNameDelimiter() + "errors";
+		String outputBindingName = RandomStringUtils.randomAlphanumeric(10);
+		String outputErrorChannelName = binder.getBinder().getBinderIdentity() + "." + outputBindingName + ".errors";
 
 		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
 
 		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
 		producerProperties.setErrorChannelEnabled(true);
-		producerProperties.populateBindingName(destination0);
+		producerProperties.populateBindingName(outputBindingName);
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel,
 				producerProperties);
 
 		final CountDownLatch errorLatch = new CountDownLatch(1);
-		context.createChannel(errorDestination0, PublishSubscribeChannel.class, msg -> {
+		context.createChannel(outputErrorChannelName, PublishSubscribeChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
 			softly.assertThat(msg).satisfies(isValidProducerErrorMessage(true));
 			errorLatch.countDown();
