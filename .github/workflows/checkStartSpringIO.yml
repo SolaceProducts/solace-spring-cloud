@@ -23,7 +23,7 @@ jobs:
           echo ${{ steps.checkStartSpringIO.outputs.response }}
           echo ${{ steps.checkStartSpringIO.outputs.headers }}
       - name: Create Issue Action
-        uses: nashmaniac/create-issue-action@v1.1
+        uses: nashmaniac/create-issue-action@v1.2
         if: ${{ failure() }} # only run when this job is failed.
         with:
           title: start.spring.io Request Failed
