@@ -12,6 +12,7 @@ jobs:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Query start.spring.io
         id: checkStartSpringIO
         uses: fjogeleit/http-request-action@v1.11.1
@@ -23,17 +24,14 @@ jobs:
           echo ${{ steps.checkStartSpringIO.outputs.response }}
           echo ${{ steps.checkStartSpringIO.outputs.headers }}
       - name: Create Issue Action
-        uses: nashmaniac/create-issue-action@v1.1
+        uses: JasonEtco/create-an-issue@v2.9.1
         if: ${{ failure() }} # only run when this job is failed.
+        env:
+          GITHUB_JOB: ${{ github.job }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_WORKFLOW: ${{ github.workflow }}
         with:
-          title: start.spring.io Request Failed
-          token: ${{ github.token }}
-#          assignees: ${{ github.actor }}
-#          labels: bug
-          body:  |
-             ### Context
-             [Failed Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
-             Workflow name = `${{ github.workflow }}`
-             Job -           `${{ github.job }}`
-             ### Error Info
-             See Failed Run link above for more info, but the likley culprit is a new version of Spring Boot has been released and we need to open an issue over at [start.spring.io](https://github.com/spring-io/start.spring.io/issues) to have them re-enable Solace. 
+          filename: .github/issue-template-checkStartSpringIO.md
+          update_existing: true
