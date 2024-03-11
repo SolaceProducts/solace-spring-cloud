@@ -180,7 +180,6 @@ abstract class InboundXMLMessageListener implements Runnable {
 					logger.warn(String.format(
 							"Exception thrown while processing XMLMessage %s. Message will be rejected.",
 							bytesXMLMessage.getMessageId()), e);
-					//AckUtils.reject(acknowledgmentCallback);
 					if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 						AckUtils.requeue(acknowledgmentCallback);
 					}
@@ -225,7 +224,6 @@ abstract class InboundXMLMessageListener implements Runnable {
 							logger.warn("Exception thrown while processing batch. Batch's messages will be rejected.",
 									e);
 						}
-						//AckUtils.reject(acknowledgmentCallback);
 						if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 							AckUtils.requeue(acknowledgmentCallback);
 						}

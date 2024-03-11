@@ -187,7 +187,6 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 					.collect(Collectors.toList()), acknowledgmentCallback, true);
 		} catch (Exception e) {
 			logger.warn(e, "Message batch cannot be consumed. It will be rejected");
-			//AckUtils.reject(acknowledgmentCallback);
 			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 				AckUtils.requeue(acknowledgmentCallback);
 			}
