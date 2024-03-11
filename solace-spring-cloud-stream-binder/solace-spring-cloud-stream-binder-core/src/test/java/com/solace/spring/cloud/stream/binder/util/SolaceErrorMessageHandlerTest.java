@@ -12,6 +12,7 @@ import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AcknowledgmentCallback;
+import org.springframework.integration.acks.AcknowledgmentCallback.Status;
 import org.springframework.integration.support.ErrorMessageUtils;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessagingException;
@@ -46,7 +47,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 		Mockito.verify(StaticMessageHeaderAccessor.getAcknowledgmentCallback(inputMessage), Mockito.never())
 				.acknowledge(Mockito.any());
 	}
@@ -62,7 +63,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 
 	@Test
@@ -86,7 +87,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 
 	@Test
@@ -103,7 +104,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 
 	@Test
@@ -119,7 +120,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 
 	@Test
@@ -137,7 +138,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 
 	@Test
@@ -166,9 +167,9 @@ public class SolaceErrorMessageHandlerTest {
 
 		Mockito.doThrow(new SolaceAcknowledgmentException("ack-error", new SolaceStaleMessageException("stale")))
 				.when(acknowledgementCallback)
-				.acknowledge(AcknowledgmentCallback.Status.REJECT);
+				.acknowledge(Status.REQUEUE);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 }

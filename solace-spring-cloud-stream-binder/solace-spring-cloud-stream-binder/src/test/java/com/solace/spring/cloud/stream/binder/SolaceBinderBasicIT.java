@@ -1,5 +1,14 @@
 package com.solace.spring.cloud.stream.binder;
 
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.errorQueueHasMessages;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.hasNestedHeader;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.isValidMessage;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
@@ -35,6 +44,24 @@ import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageConsumer;
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.XMLMessageProducer;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.AfterEach;
@@ -73,35 +100,6 @@ import org.springframework.messaging.SubscribableChannel;
 import org.springframework.messaging.support.ErrorMessage;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.MimeTypeUtils;
-
-import java.time.Duration;
-import java.time.Instant;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
-
-import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
-import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.errorQueueHasMessages;
-import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.hasNestedHeader;
-import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.isValidMessage;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Runs all basic Spring Cloud Stream Binder functionality tests
@@ -419,6 +417,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.setBatchMode(batchMode);
+		consumerProperties.getExtension().setQueueMaxMsgRedelivery(2);
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
 				destination0, null, moduleInputChannel, consumerProperties);
 
@@ -440,7 +439,8 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 				.get(0)
 				.getFlowId();
 
-		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts(),
+		int numMessagesToReceive = consumerProperties.getMaxAttempts() * consumerProperties.getExtension().getQueueMaxMsgRedelivery()+1;
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, numMessagesToReceive,
 				() -> messages.forEach(moduleOutputChannel::send),
 				(msg, callback) -> {
 					callback.run();

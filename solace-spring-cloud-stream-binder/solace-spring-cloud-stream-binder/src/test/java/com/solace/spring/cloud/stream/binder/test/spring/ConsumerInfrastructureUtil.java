@@ -111,12 +111,14 @@ public class ConsumerInfrastructureUtil<T> {
 			throws InterruptedException {
 		if (type.equals(DirectChannel.class)) {
 			final CountDownLatch latch = new CountDownLatch(numMessagesToReceive);
-			((DirectChannel) inputChannel).subscribe(msg -> messageHandler.accept(msg, latch::countDown));
+			MessageHandler handler = msg -> messageHandler.accept(msg, latch::countDown);
+			((DirectChannel) inputChannel).subscribe(handler);
 
 			if (sendMessagesFn != null) {
 				sendMessagesFn.run();
 			}
 			assertThat(latch.await(3, TimeUnit.MINUTES)).isTrue();
+			((DirectChannel) inputChannel).unsubscribe(handler);
 		} else if (type.equals(PollableSource.class)) {
 			if (sendMessagesFn != null) {
 				sendMessagesFn.run();

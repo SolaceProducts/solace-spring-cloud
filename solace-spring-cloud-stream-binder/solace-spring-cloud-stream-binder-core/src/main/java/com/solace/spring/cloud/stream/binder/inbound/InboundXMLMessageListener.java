@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
+import com.solace.spring.cloud.stream.binder.inbound.acknowledge.SolaceAckUtil;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
@@ -17,6 +18,13 @@ import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.StaleSessionException;
 import com.solacesystems.jcsmp.XMLMessage;
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -30,14 +38,6 @@ import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.support.ErrorMessageUtils;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 abstract class InboundXMLMessageListener implements Runnable {
 	final FlowReceiverContainer flowReceiverContainer;
@@ -180,7 +180,10 @@ abstract class InboundXMLMessageListener implements Runnable {
 					logger.warn(String.format(
 							"Exception thrown while processing XMLMessage %s. Message will be rejected.",
 							bytesXMLMessage.getMessageId()), e);
-					AckUtils.reject(acknowledgmentCallback);
+					//AckUtils.reject(acknowledgmentCallback);
+					if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
+						AckUtils.requeue(acknowledgmentCallback);
+					}
 				}
 			} catch (SolaceAcknowledgmentException e1) {
 				e1.addSuppressed(e);
@@ -222,7 +225,10 @@ abstract class InboundXMLMessageListener implements Runnable {
 							logger.warn("Exception thrown while processing batch. Batch's messages will be rejected.",
 									e);
 						}
-						AckUtils.reject(acknowledgmentCallback);
+						//AckUtils.reject(acknowledgmentCallback);
+						if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
+							AckUtils.requeue(acknowledgmentCallback);
+						}
 					}
 				} catch (SolaceAcknowledgmentException e1) {
 					e1.addSuppressed(e);

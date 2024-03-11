@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.solace.spring.cloud</groupId>
         <artifactId>solace-spring-cloud-build</artifactId>
-        <version>3.1.1-SNAPSHOT</version>
+        <version>4.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -23,8 +23,8 @@
         <maven.compiler.target>17</maven.compiler.target>
         <maven.compiler.source>17</maven.compiler.source>
 
-        <solace.jcsmp.version>10.21.0</solace.jcsmp.version>
-        <solace.jms.version>10.21.0</solace.jms.version>
+        <solace.jcsmp.version>10.22.0</solace.jcsmp.version>
+        <solace.jms.version>10.22.0</solace.jms.version>
     </properties>
 
     <dependencyManagement>

@@ -2,6 +2,7 @@ package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.health.SolaceBinderHealthAccessor;
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
+import com.solace.spring.cloud.stream.binder.inbound.acknowledge.SolaceAckUtil;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
@@ -9,7 +10,6 @@ import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
-import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
 import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.ClosedFacilityException;
@@ -19,6 +19,15 @@ import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.Queue;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.context.Lifecycle;
 import org.springframework.integration.acks.AckUtils;
@@ -28,25 +37,12 @@ import org.springframework.integration.endpoint.AbstractMessageSource;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessagingException;
-import org.springframework.util.backoff.ExponentialBackOff;
-
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 public class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle, Pausable {
 	private final String id = UUID.randomUUID().toString();
 	private final String queueName;
 	private final JCSMPSession jcsmpSession;
 	private final BatchCollector batchCollector;
-	private final RetryableTaskService taskService;
 	private final EndpointProperties endpointProperties;
 	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
 	private final boolean hasTemporaryQueue;
@@ -65,14 +61,12 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	public JCSMPMessageSource(SolaceConsumerDestination destination,
 							  JCSMPSession jcsmpSession,
 							  @Nullable BatchCollector batchCollector,
-							  RetryableTaskService taskService,
 							  ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
 							  EndpointProperties endpointProperties,
 							  @Nullable SolaceMeterAccessor solaceMeterAccessor) {
 		this.queueName = destination.getName();
 		this.jcsmpSession = jcsmpSession;
 		this.batchCollector = batchCollector;
-		this.taskService = taskService;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
 		this.hasTemporaryQueue = destination.isTemporary();
@@ -172,7 +166,9 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			//TODO If one day the errorChannel or attributesHolder can be retrieved, use those instead
 			logger.warn(e, String.format("XMLMessage %s cannot be consumed. It will be rejected",
 					messageContainer.getMessage().getMessageId()));
-			AckUtils.reject(acknowledgmentCallback);
+			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
+				AckUtils.requeue(acknowledgmentCallback);
+			}
 			return null;
 		}
 	}
@@ -191,7 +187,10 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 					.collect(Collectors.toList()), acknowledgmentCallback, true);
 		} catch (Exception e) {
 			logger.warn(e, "Message batch cannot be consumed. It will be rejected");
-			AckUtils.reject(acknowledgmentCallback);
+			//AckUtils.reject(acknowledgmentCallback);
+			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
+				AckUtils.requeue(acknowledgmentCallback);
+			}
 			return null;
 		} finally {
 			batchCollector.confirmDelivery();
@@ -216,19 +215,12 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 
 			try {
 				if (flowReceiverContainer == null) {
-					ExponentialBackOff exponentialBackOff = new ExponentialBackOff();
-					exponentialBackOff.setInitialInterval(consumerProperties.getExtension().getFlowRebindBackOffInitialInterval());
-					exponentialBackOff.setMaxInterval(consumerProperties.getExtension().getFlowRebindBackOffMaxInterval());
-					exponentialBackOff.setMultiplier(consumerProperties.getExtension().getFlowRebindBackOffMultiplier());
-
 					flowReceiverContainer = new FlowReceiverContainer(
 							jcsmpSession,
 							queueName,
-							endpointProperties,
-							exponentialBackOff);
+							endpointProperties);
 					this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
-					flowReceiverContainer.setRebindWaitTimeout(consumerProperties.getExtension().getFlowPreRebindWaitTimeout(),
-							TimeUnit.MILLISECONDS);
+
 					if (paused) {
 						logger.info(String.format(
 								"Message source %s is paused, pausing newly created flow receiver container %s",
@@ -252,8 +244,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				postStart.accept(JCSMPFactory.onlyInstance().createQueue(queueName));
 			}
 
-			ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer, hasTemporaryQueue,
-					taskService);
+			ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer);
 			ackCallbackFactory.setErrorQueueInfrastructure(errorQueueInfrastructure);
 
 			isRunning = true;

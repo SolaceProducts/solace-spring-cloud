@@ -1,9 +1,9 @@
 = Spring Cloud Stream Binder for Solace PubSub+
-:revnumber: 4.1.0
+:revnumber: 5.0.0
 :toc: preamble
 :toclevels: 3
 :icons: font
-:scst-version: 4.0.4
+:scst-version: 4.1.x
 
 // Github-Specific Settings
 ifdef::env-github[]
@@ -139,6 +139,10 @@ spring:
 ----
 <1> The latter half of this configuration where the Solace session is configured actually originates from the https://github.com/SolaceProducts/solace-spring-boot/tree/master/solace-spring-boot-starters/solace-java-spring-boot-starter#updating-your-application-properties[JCSMP Spring Boot Auto-Configuration project]. See <<Solace Session Properties>> for more info.
 
+For more samples see https://github.com/SolaceSamples/solace-samples-spring[Solace Spring Cloud Samples] repository.
+
+For step-by-step instructions refer https://tutorials.solace.dev/spring/spring-cloud-stream/[Solace Spring Cloud Stream tutorial] and check out the https://solace.com/blog/?fwp_blog_search=spring%20cloud%20stream[blogs].
+
 == Configuration Options
 
 === Solace Binder Configuration Options
@@ -238,26 +242,6 @@ Maximum wait time for polled consumers to receive a message from their consumer 
 Only applicable when `batchMode` is `false`.
 +
 Default: `100`
-
-flowPreRebindWaitTimeout::
-The maximum time to wait for all unacknowledged messages to be acknowledged before a flow receiver rebind. Will wait forever if set to a value less than `0`.
-+
-Default: `10000`
-
-flowRebindBackOffInitialInterval::
-The initial interval (milliseconds) to back-off when rebinding a flow. +
-+
-Default: `1000`
-
-flowRebindBackOffMaxInterval::
-The maximum interval (milliseconds) to back-off when rebinding a flow. +
-+
-Default: `30000`
-
-flowRebindBackOffMultiplier::
-The multiplier to apply to the back-off interval between each rebind of a flow. +
-+
-Default: `1.5`
 
 batchMaxSize::
 The maximum number of messages per batch. +
@@ -921,12 +905,12 @@ For each acknowledgement status, the binder will perform the following actions:
 | Acknowledge the message.
 
 | REJECT
-| If `autoBindErrorQueue` is `true`, then republish the message onto the error queue and `ACCEPT` it. Otherwise, if the consumer is in a defined consumer group, invoke `REQUEUE`. Otherwise, the consumer is in an anonymous group, and the message will be discarded.
+| If `autoBindErrorQueue` is `true`, then republish the message onto the error queue and `ACCEPT` it. Otherwise, For both, the consumer in a defined consumer group or in an anonymous group, signal the Solace broker to discard/remove the message from queue.
 
 Refer to <<Failed Consumer Message Error Handling>> for more info.
 
 | REQUEUE
-| If the consumer is in a defined consumer group, rebind the consumer flow. Otherwise, a `SolaceAcknowledgmentException` will be thrown.
+| For both, the consumer in a defined consumer group or in an anonymous group, signal the Solace broker to requeue/redeliver the message. The message will be redelivered until it is `ACCEPTed` or the message’s max redelivery count is exceeded.
 
 Refer to <<Message Redelivery>> for more info.
 |===
@@ -938,7 +922,7 @@ Acknowledgements may throw `SolaceAcknowledgmentException` depending on the curr
 *Example:* +
 (refer to <<Message Redelivery>> for background info)
 
-A `SolaceAcknowledgmentException` with cause `SolaceStaleMessageException` may be thrown when trying to asynchronously `ACCEPT` a stale message after the timeout elapses for the `REQUEUE` of another message. Though for this particular example, since the message that failed to `ACCEPT` will be redelivered, this exception can be caught and ignored if you have no business logic to revert.
+A `SolaceAcknowledgmentException` with cause `SolaceStaleMessageException` may be thrown when trying to asynchronously `ACCEPT` a stale message. Though for this particular example, since the message that failed to `ACCEPT` will be redelivered, this exception can be caught and ignored if you have no business logic to revert.
 ====
 
 NOTE: Manual acknowledgements do not support any application-internal error handling strategies (i.e. retry template, error channel forwarding, etc). Also, throwing an exception in the message handler will always acknowledge the message in some way regardless if auto-acknowledgment is disabled.
@@ -976,7 +960,7 @@ NOTE: Those 2 headers are cleared from the message before it is sent off to the 
 
 == Failed Consumer Message Error Handling
 
-The Spring cloud stream framework already provides a number of application-internal reprocessing strategies for failed messages during message consumption such as. You can read more about that https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#spring-cloud-stream-overview-error-handling[here]:
+The Spring cloud stream framework already provides a number of application-internal reprocessing strategies for failed messages during message consumption. You can read more about that https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#spring-cloud-stream-overview-error-handling[here]:
 
 However, after all internal error handling strategies have been exhausted, the Solace implementation of the binder would either:
 
@@ -989,15 +973,15 @@ A simple error handling strategy in which failed messages are redelivered from t
 
 [IMPORTANT]
 ====
-The Solace API used in this binder implementation does not support individual message redelivery.
+The internal implementation of redelivery has changed from Solace Binder v5.0.0.
+Previously, redelivery was initiated by rebinding consumer flows; however, as of v5.0.0 and later, the Solace API now leverages the Solace broker's native NACK (Negative Acknowledgement) capabilities.
 
 Here is what happens under the hood when this is triggered:
 
-1. The Solace flow receiver is stopped.
-2. Wait until all unacknowledged messages have been acknowledged with a maximum timeout of `flowPreRebindWaitTimeout`. If timed out, the remaining unacknowledged messages will be stale and redelivered from the broker.
-3. Rebind the flow.
+1. Say the current message is marked for 'REQUEUE'. Any subsequent messages that are currently spooled on the client side, despite having been acknowledged `ACCEPTed` by binder, the Solace broker will discard their ACK.
+2. The Solace Broker will redeliver all messages starting with the one tagged as 'REQUEUE', if the message's max redelivery count is not exceeded.
 
-Meaning that if unacknowledged messages are not processed in a timely manner, this operation will stall and potentially cause unecessary message duplication.
+The redelivery may result in message duplication, and the application should be designed to handle this.
 ====
 
 === Error Queue Republishing

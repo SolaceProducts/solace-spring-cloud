@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.util;
 
+import com.solace.spring.cloud.stream.binder.inbound.acknowledge.SolaceAckUtil;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
@@ -73,7 +74,9 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 		}
 
 		try {
-			AckUtils.reject(acknowledgmentCallback);
+			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
+				AckUtils.requeue(acknowledgmentCallback);
+			}
 		} catch (SolaceAcknowledgmentException e) {
 			if (ExceptionUtils.indexOfType(e, SolaceStaleMessageException.class) > -1) {
 				if (logger.isDebugEnabled()) {

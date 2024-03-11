@@ -10,7 +10,7 @@
 
     <groupId>com.solace.spring.cloud</groupId>
     <artifactId>solace-spring-cloud-build</artifactId>
-    <version>3.1.1-SNAPSHOT</version>
+    <version>4.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <name>Solace Spring Cloud Build</name>
@@ -21,7 +21,7 @@
         <repoName>SolaceProducts</repoName>
 
         <!-- This is the version of Spring Cloud we have targeted for this build -->
-        <spring.cloud.version>2022.0.4</spring.cloud.version>
+        <spring.cloud.version>2023.0.0</spring.cloud.version>
 
         <!-- This is the version of Solace Spring Boot we have targeted for this build -->
         <!-- This also dictates the expected version of Spring Boot -->
@@ -32,7 +32,7 @@
         <!-- Remove this if the next version of solace-spring-boot works fine -->
         <spring.boot.version>3.1.5</spring.boot.version>
 
-        <solace.spring.cloud.stream-starter.version>4.1.1-SNAPSHOT</solace.spring.cloud.stream-starter.version>
+        <solace.spring.cloud.stream-starter.version>5.0.0-SNAPSHOT</solace.spring.cloud.stream-starter.version>
 
         <solace.integration.test.support.version>1.0.2</solace.integration.test.support.version>
         <solace.integration.test.support.fetch_checkout.skip>false</solace.integration.test.support.fetch_checkout.skip>
