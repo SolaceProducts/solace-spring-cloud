@@ -129,7 +129,6 @@ public class FlowReceiverContainerIT {
 		assertNotNull(flowReference1);
 		assertEquals(flowReferenceId, flowReference1.getId());
 		assertEquals(queue, flowReference1.get().getEndpoint());
-		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
 	}
 
 	@ParameterizedTest
@@ -336,10 +335,8 @@ public class FlowReceiverContainerIT {
 		assertNotNull(receivedMsgs.get(0));
 		receivedMsgs.add(flowReceiverContainer.receive());
 		assertNotNull(receivedMsgs.get(receivedMsgs.size() - 1));
-		assertEquals(2, flowReceiverContainer.getNumUnacknowledgedMessages());
 
 		flowReceiverContainer.unbind();
-		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
 		assertTrue(receivedMsgs.stream().allMatch(MessageContainer::isStale));
 	}
 
@@ -580,7 +577,6 @@ public class FlowReceiverContainerIT {
 		assertNotNull(messageReceived);
 		assertThat(messageReceived.getMessage(), instanceOf(TextMessage.class));
 		assertEquals(flowReferenceId1, messageReceived.getFlowReceiverReferenceId());
-		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
 	}
 
 	@ParameterizedTest
@@ -589,10 +585,8 @@ public class FlowReceiverContainerIT {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
 
-		long startTime = System.currentTimeMillis();
 		UnboundFlowReceiverContainerException exception = assertThrows(UnboundFlowReceiverContainerException.class,
 				flowReceiverContainer::receive);
-		assertThat(System.currentTimeMillis() - startTime, greaterThanOrEqualTo(TimeUnit.SECONDS.toMillis(5)));
 		assertThat(exception.getMessage(), containsString("is not bound"));
 	}
 
@@ -652,71 +646,6 @@ public class FlowReceiverContainerIT {
 
 		flowReceiverContainer.bind();
 		assertNull(flowReceiverContainer.receive(0));
-	}
-
-	@ParameterizedTest
-	@ValueSource(booleans = {false, true})
-	public void testReceiveWithDelayedBind(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue) throws Exception {
-		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
-		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
-
-		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
-
-		ExecutorService executorService = Executors.newSingleThreadExecutor();
-		try {
-			long startTime = System.currentTimeMillis();
-			Future<MessageContainer> future = executorService.submit((Callable<MessageContainer>) flowReceiverContainer::receive);
-
-			Thread.sleep(TimeUnit.SECONDS.toMillis(2));
-			assertFalse(future.isDone());
-			flowReceiverContainer.bind();
-
-			if (!isDurable) {
-				producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
-			}
-
-			assertNotNull(future.get(1, TimeUnit.MINUTES));
-			assertThat(System.currentTimeMillis() - startTime, lessThan(5500L));
-			assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
-		} finally {
-			executorService.shutdownNow();
-		}
-	}
-
-	@ParameterizedTest
-	@ValueSource(booleans = {false, true})
-	public void testReceiveWithTimeoutAndDelayedBind(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue) throws Exception {
-		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
-		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
-
-		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
-
-		ExecutorService executorService = Executors.newSingleThreadExecutor();
-		try {
-			long timeout = TimeUnit.SECONDS.toMillis(10);
-			long bindDelay = TimeUnit.SECONDS.toMillis(5);
-
-			long startTime = System.currentTimeMillis();
-			Future<MessageContainer> future = executorService.submit(() -> flowReceiverContainer.receive((int) timeout));
-
-			Thread.sleep(bindDelay);
-			assertFalse(future.isDone());
-
-			flowReceiverContainer.bind();
-
-			if (isDurable) {
-				assertNotNull(future.get(1, TimeUnit.MINUTES));
-				assertThat(System.currentTimeMillis() - startTime, lessThan(timeout + 500));
-				assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
-			} else {
-				assertNull(future.get(1, TimeUnit.MINUTES));
-				assertThat(System.currentTimeMillis() - startTime,
-						allOf(greaterThanOrEqualTo(timeout), lessThan(timeout + 500)));
-				assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
-			}
-		} finally {
-			executorService.shutdownNow();
-		}
 	}
 
 	@ParameterizedTest
@@ -814,36 +743,6 @@ public class FlowReceiverContainerIT {
 
 	@ParameterizedTest
 	@ValueSource(booleans = {false, true})
-	public void testWaitForBind(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue) throws Exception {
-		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
-		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
-
-		ExecutorService executorService = Executors.newSingleThreadExecutor();
-		try {
-			Future<Boolean> future = executorService.submit(() ->
-					flowReceiverContainer.waitForBind(TimeUnit.HOURS.toMillis(1)));
-			Thread.sleep(TimeUnit.SECONDS.toMillis(5));
-			assertFalse(future.isDone());
-			flowReceiverContainer.bind();
-			assertTrue(future.get(1, TimeUnit.MINUTES));
-		} finally {
-			executorService.shutdownNow();
-		}
-	}
-
-	@ParameterizedTest
-	@ValueSource(booleans = {false, true})
-	public void testWaitForBindNegative(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue) throws Exception {
-		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
-		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
-
-		long startTime = System.currentTimeMillis();
-		assertFalse(flowReceiverContainer.waitForBind(-100));
-		assertThat(System.currentTimeMillis() - startTime, lessThan(500L));
-	}
-
-	@ParameterizedTest
-	@ValueSource(booleans = {false, true})
 	public void testAcknowledgeNull(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue) throws Exception {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
@@ -864,7 +763,6 @@ public class FlowReceiverContainerIT {
 		assertNotNull(messageReceived);
 
 		flowReceiverContainer.unbind();
-		assertEquals(0L, flowReceiverContainer.getNumUnacknowledgedMessages());
 		assertTrue(messageReceived.isStale());
 
 		assertThrows(SolaceStaleMessageException.class, () -> flowReceiverContainer.acknowledge(messageReceived));
@@ -900,14 +798,11 @@ public class FlowReceiverContainerIT {
 				.getData()
 				.isEgressEnabled()));
 
-		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
 		logger.info(String.format("Acknowledging message %s", receivedMessage.getMessage().getMessageId()));
 		flowReceiverContainer.acknowledge(receivedMessage);
 
 		receivedMessage = flowReceiverContainer.receive();
 		flowReceiverContainer.acknowledge(receivedMessage);
-
-		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
 
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
@@ -939,7 +834,6 @@ public class FlowReceiverContainerIT {
 		sempV2Api.action().doMsgVpnClientDisconnect(vpnName, clientName, new ActionMsgVpnClientDisconnect());
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
-		assertEquals(1, flowReceiverContainer.getNumUnacknowledgedMessages());
 		logger.info(String.format("Acknowledging message %s", receivedMessage.getMessage().getMessageId()));
 		//The redelivery flow is kind of Renumber flow, below ack will be discarded by broker
 		flowReceiverContainer.acknowledge(receivedMessage);
@@ -948,7 +842,6 @@ public class FlowReceiverContainerIT {
 		MessageContainer redeliveredMessage = flowReceiverContainer.receive();
 		//Ack redelivered message
 		flowReceiverContainer.acknowledge(redeliveredMessage);
-		assertEquals(0, flowReceiverContainer.getNumUnacknowledgedMessages());
 
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 

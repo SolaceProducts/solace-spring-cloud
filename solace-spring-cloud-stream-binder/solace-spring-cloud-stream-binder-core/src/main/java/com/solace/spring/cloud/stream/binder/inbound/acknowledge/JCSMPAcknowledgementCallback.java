@@ -82,7 +82,7 @@ class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
    * @return {@code true} if successful, {@code false} if {@code errorQueueInfrastructure} is not
    * defined.
    */
-   boolean republishToErrorQueue() throws SolaceStaleMessageException {
+   boolean republishToErrorQueue() {
     if (errorQueueInfrastructure == null) {
       return false;
     }
@@ -93,16 +93,22 @@ class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
           errorQueueInfrastructure.getErrorQueueName()));
     }
 
-    if (messageContainer.isStale()) {
-      throw new SolaceStaleMessageException(
-          String.format("Cannot republish failed message container %s " +
-                  "(XMLMessage %s) to error queue %s. Message is stale and will be redelivered.",
-              messageContainer.getId(), messageContainer.getMessage().getMessageId(),
-              errorQueueInfrastructure.getErrorQueueName()));
-    }
+    try {
+      if (messageContainer.isStale()) {
+        throw new SolaceStaleMessageException(
+            String.format("Cannot republish failed message container %s " +
+                    "(XMLMessage %s) to error queue %s. Message is stale and will be redelivered.",
+                messageContainer.getId(), messageContainer.getMessage().getMessageId(),
+                errorQueueInfrastructure.getErrorQueueName()));
+      }
 
-    errorQueueInfrastructure.createCorrelationKey(messageContainer, flowReceiverContainer)
-        .handleError();
+      errorQueueInfrastructure.createCorrelationKey(messageContainer, flowReceiverContainer)
+          .handleError();
+    } catch (Exception e) {
+      throw new SolaceAcknowledgmentException(
+          String.format("Failed to send XMLMessage %s to error queue",
+              messageContainer.getMessage().getMessageId()), e);
+    }
     return true;
   }
 

@@ -30,28 +30,20 @@ public class SolaceAckUtil {
    * Send the related message to the error queue if enabled for associated message consumer. This
    * could be specially useful for a consumer in client-ack mode
    *
-   * @param acknowledgmentCallback the AcknowledgmentCallback.
+   * @param ackCallback the AcknowledgmentCallback.
    * @return return true if error queue is enabled for the associated message consumer and the
    * message is successfully published to the error queue.
    * @throws SolaceAcknowledgmentException failed to send message to error queue.
    */
-  public static boolean republishToErrorQueue(AcknowledgmentCallback acknowledgmentCallback) {
-    if (!acknowledgmentCallback.isAcknowledged()
-        && acknowledgmentCallback instanceof JCSMPAcknowledgementCallback jcsmpAcknowledgementCallback
-        && jcsmpAcknowledgementCallback.isErrorQueueEnabled()) {
-      try {
-        if (jcsmpAcknowledgementCallback.republishToErrorQueue()) {
-          return true;
-        }
-      } catch (Exception e) {
-        throw new SolaceAcknowledgmentException(
-            String.format("Failed to send XMLMessage %s to error queue",
-                jcsmpAcknowledgementCallback.getMessageContainer().getMessage().getMessageId()), e);
-      }
-    } else if (!acknowledgmentCallback.isAcknowledged()
-        && acknowledgmentCallback instanceof JCSMPBatchAcknowledgementCallback batchAcknowledgementCallback
-        && batchAcknowledgementCallback.isErrorQueueEnabled()) {
-      return batchAcknowledgementCallback.republishToErrorQueue();
+  public static boolean republishToErrorQueue(AcknowledgmentCallback ackCallback) {
+    if (ackCallback.isAcknowledged()) {
+      return false;
+    }
+
+    if (ackCallback instanceof JCSMPAcknowledgementCallback jcsmpAckCallback) {
+      return jcsmpAckCallback.republishToErrorQueue();
+    } else if (ackCallback instanceof JCSMPBatchAcknowledgementCallback jcsmpBatchAckCallback) {
+      return jcsmpBatchAckCallback.republishToErrorQueue();
     }
 
     return false;

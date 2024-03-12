@@ -2,7 +2,6 @@ package com.solace.spring.cloud.stream.binder.util;
 
 import com.solace.spring.cloud.stream.binder.health.handlers.SolaceFlowHealthEventHandler;
 import com.solacesystems.jcsmp.BytesXMLMessage;
-import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.FlowEventHandler;
@@ -11,14 +10,11 @@ import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.XMLMessage.Outcome;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -37,24 +33,10 @@ public class FlowReceiverContainer {
 	private final String queueName;
 	private final EndpointProperties endpointProperties;
 	private final AtomicReference<FlowReceiverReference> flowReceiverAtomicReference = new AtomicReference<>();
-	private final AtomicBoolean isRebinding = new AtomicBoolean(false);
 	private final AtomicBoolean isPaused = new AtomicBoolean(false);
 
-	/* Ideally we would cache the outgoing message IDs and remove them as they get acknowledged,
-	 * but that has way too much overhead at scale (millions or billions of unacknowledged messages).
-	 *
-	 * Using a counter has more risks (e.g. if another object were to create a MessageContainer then send it here for
-	 * acknowledgment) but is an reasonable compromise.
-	 */
-	// Also assuming we won't ever exceed the limit of an unsigned long...
-	private final UnsignedCounterBarrier unacknowledgedMessageTracker = new UnsignedCounterBarrier();
-
-	/**
-	 * Operations which normally expect an active flow to function should use this lock's read lock to seamlessly
-	 * operate as if the flow <b>was not</b> rebinding.
-	 */
+	//Lock to serialize operations like - bind, unbind, pause, resume
 	private final ReadWriteLock readWriteLock = new ReentrantReadWriteLock();
-	private final Condition bindCondition = readWriteLock.writeLock().newCondition();
 
 	private static final Log logger = LogFactory.getLog(FlowReceiverContainer.class);
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
@@ -103,7 +85,6 @@ public class FlowReceiverContainer {
 				FlowReceiverReference newFlowReceiverReference = new FlowReceiverReference(flowReceiver);
 				flowReceiverAtomicReference.set(newFlowReceiverReference);
 				xmlMessageMapper.resetIgnoredProperties(id.toString());
-				bindCondition.signalAll();
 				return newFlowReceiverReference.getId();
 			}
 		} finally {
@@ -123,7 +104,6 @@ public class FlowReceiverContainer {
 				logger.info(String.format("Unbinding flow receiver container %s", id));
 				flowReceiverReference.getStaleMessagesFlag().set(true);
 				flowReceiverReference.get().close();
-				unacknowledgedMessageTracker.reset();
 			}
 		} finally {
 			writeLock.unlock();
@@ -156,111 +136,48 @@ public class FlowReceiverContainer {
 	public MessageContainer receive(Integer timeoutInMillis) throws JCSMPException, UnboundFlowReceiverContainerException {
 		final Long expiry = timeoutInMillis != null ? timeoutInMillis + System.currentTimeMillis() : null;
 
-		FlowReceiverReference flowReceiverReference;
 		Integer realTimeout;
+		FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
+		if (flowReceiverReference == null) {
+			throw new UnboundFlowReceiverContainerException(
+					String.format("Flow receiver container %s is not bound", id));
+		}
 
-		Lock readLock = readWriteLock.readLock();
-		readLock.lock();
-		try {
-			flowReceiverReference = flowReceiverAtomicReference.get();
-			if (flowReceiverReference == null) {
-				Lock writeLock = readWriteLock.writeLock(); // waitForBind() uses a write lock. Upgrade lock.
-				readLock.unlock();
-				writeLock.lock();
-				try {
-					if (waitForBind(expiry == null ? 5000 : expiry - System.currentTimeMillis())) {
-						flowReceiverReference = flowReceiverAtomicReference.get();
-					} else {
-						throw new UnboundFlowReceiverContainerException(
-								String.format("Flow receiver container %s is not bound", id));
-					}
-				} catch (InterruptedException e) {
-					return null;
-				} finally {
-					// downgrade to read lock
-					readLock.lock();
-					writeLock.unlock();
-				}
-			}
-
-			if (expiry != null) {
-				try {
-					realTimeout = Math.toIntExact(expiry - System.currentTimeMillis());
-					if (realTimeout < 0) {
-						realTimeout = 0;
-					}
-				} catch (ArithmeticException e) {
-					logger.debug("Failed to compute real timeout", e);
-					// Always true: expiry - System.currentTimeMillis() < timeoutInMillis
-					// So just set it to 0 (no-wait) if we underflow
+		if (expiry != null) {
+			try {
+				realTimeout = Math.toIntExact(expiry - System.currentTimeMillis());
+				if (realTimeout < 0) {
 					realTimeout = 0;
 				}
-			} else {
-				realTimeout = null;
+			} catch (ArithmeticException e) {
+				logger.debug("Failed to compute real timeout", e);
+				// Always true: expiry - System.currentTimeMillis() < timeoutInMillis
+				// So just set it to 0 (no-wait) if we underflow
+				realTimeout = 0;
 			}
-		} finally {
-			readLock.unlock();
+		} else {
+			realTimeout = null;
 		}
 
 		// The flow's receive shouldn't be locked behind the read lock.
 		// This lets it be interrupt-able if the flow were to be shutdown mid-receive.
 		BytesXMLMessage xmlMessage;
-		try {
-			if (realTimeout == null) {
-				xmlMessage = flowReceiverReference.get().receive();
-			} else if (realTimeout == 0) {
-				xmlMessage = flowReceiverReference.get().receiveNoWait();
-			} else {
-				// realTimeout > 0: Wait until timeout
-				// realTimeout < 0: Equivalent to receiveNoWait()
-				xmlMessage = flowReceiverReference.get().receive(realTimeout);
-			}
-		} catch (JCSMPTransportException | ClosedFacilityException e) {
-			if (isRebinding.get()) {
-				logger.debug(String.format(
-						"Flow receiver container %s was interrupted by a rebind, exception will be ignored", id), e);
-				return null;
-			} else {
-				throw e;
-			}
+		if (realTimeout == null) {
+			xmlMessage = flowReceiverReference.get().receive();
+		} else if (realTimeout == 0) {
+			xmlMessage = flowReceiverReference.get().receiveNoWait();
+		} else {
+			// realTimeout > 0: Wait until timeout
+			// realTimeout < 0: Equivalent to receiveNoWait()
+			xmlMessage = flowReceiverReference.get().receive(realTimeout);
 		}
 
 		if (xmlMessage == null) {
 			return null;
 		}
 
-		MessageContainer messageContainer = new MessageContainer(xmlMessage, flowReceiverReference.getId(),
+		return new MessageContainer(xmlMessage, flowReceiverReference.getId(),
 				flowReceiverReference.getStaleMessagesFlag());
-		unacknowledgedMessageTracker.increment();
-		return messageContainer;
-	}
-
-	/**
-	 * Wait until either this flow receiver container becomes bound or the timeout elapses.
-	 * @param timeoutInMillis maximum wait time. Providing a value less than 0 is equivalent to 0.
-	 * @return true if the container became bound.
-	 * @throws InterruptedException was interrupted.
-	 */
-	public boolean waitForBind(long timeoutInMillis) throws InterruptedException {
-		Lock writeLock = readWriteLock.writeLock();
-		writeLock.lock();
-		try {
-			if (timeoutInMillis > 0) {
-				final long expiry = timeoutInMillis + System.currentTimeMillis();
-				while (!isBound()) {
-					long realTimeout = expiry - System.currentTimeMillis();
-					if (realTimeout <= 0) {
-						return false;
-					}
-					bindCondition.await(realTimeout, TimeUnit.MILLISECONDS);
-				}
-				return true;
-			} else {
-				return isBound();
-			}
-		} finally {
-			writeLock.unlock();
-		}
 	}
 
 	/**
@@ -285,7 +202,6 @@ public class FlowReceiverContainer {
 		} catch (JCSMPException ex) {
 			throw new SolaceAcknowledgmentException("Failed to ACK a message", ex);
 		}
-		unacknowledgedMessageTracker.decrement();
 		messageContainer.setAcknowledged(true);
 	}
 
@@ -316,7 +232,6 @@ public class FlowReceiverContainer {
 			throw new SolaceAcknowledgmentException("Failed to REQUEUE a message", ex);
 		}
 
-		unacknowledgedMessageTracker.decrement();
 		messageContainer.setAcknowledged(true);
 	}
 
@@ -346,18 +261,7 @@ public class FlowReceiverContainer {
 			throw new SolaceAcknowledgmentException("Failed to REJECT a message", ex);
 		}
 
-		unacknowledgedMessageTracker.decrement();
 		messageContainer.setAcknowledged(true);
-	}
-
-	public boolean isBound() {
-		Lock readLock = readWriteLock.readLock();
-		readLock.lock();
-		try {
-			return flowReceiverAtomicReference.get() != null;
-		} finally {
-			readLock.unlock();
-		}
 	}
 
 	public void pause() {
@@ -433,14 +337,6 @@ public class FlowReceiverContainer {
 	@Nullable
 	FlowReceiverReference getFlowReceiverReference() {
 		return flowReceiverAtomicReference.get();
-	}
-
-	/**
-	 * Gets the number of unacknowledged messages. This value is an unsigned.
-	 * @return the number of unacknowledged messages.
-	 */
-	long getNumUnacknowledgedMessages() {
-		return unacknowledgedMessageTracker.getCount();
 	}
 
 	public UUID getId() {
