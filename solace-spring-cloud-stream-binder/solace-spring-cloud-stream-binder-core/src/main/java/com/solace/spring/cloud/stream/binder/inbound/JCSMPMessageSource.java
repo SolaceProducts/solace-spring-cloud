@@ -164,7 +164,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			return xmlMessageMapper.map(messageContainer.getMessage(), acknowledgmentCallback, true);
 		} catch (Exception e) {
 			//TODO If one day the errorChannel or attributesHolder can be retrieved, use those instead
-			logger.warn(e, String.format("XMLMessage %s cannot be consumed. It will be rejected",
+			logger.warn(e, String.format("XMLMessage %s cannot be consumed. It will be requeued",
 					messageContainer.getMessage().getMessageId()));
 			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 				AckUtils.requeue(acknowledgmentCallback);
@@ -186,7 +186,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 					.map(MessageContainer::getMessage)
 					.collect(Collectors.toList()), acknowledgmentCallback, true);
 		} catch (Exception e) {
-			logger.warn(e, "Message batch cannot be consumed. It will be rejected");
+			logger.warn(e, "Message batch cannot be consumed. It will be requeued");
 			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 				AckUtils.requeue(acknowledgmentCallback);
 			}

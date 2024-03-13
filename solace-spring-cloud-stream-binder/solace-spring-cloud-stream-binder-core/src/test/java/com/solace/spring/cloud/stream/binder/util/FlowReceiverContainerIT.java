@@ -765,7 +765,7 @@ public class FlowReceiverContainerIT {
 		flowReceiverContainer.unbind();
 		assertTrue(messageReceived.isStale());
 
-		assertThrows(SolaceStaleMessageException.class, () -> flowReceiverContainer.acknowledge(messageReceived));
+		assertThrows(SolaceAcknowledgmentException.class, () -> flowReceiverContainer.acknowledge(messageReceived));
 	}
 
 	@Test

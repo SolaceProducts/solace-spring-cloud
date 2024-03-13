@@ -186,20 +186,15 @@ public class FlowReceiverContainer {
 	 * may be passed as a parameter to this function. Failure to do so will misalign the timing for when rebinds
 	 * will occur, causing rebinds to unintentionally trigger early/late.</p>
 	 * @param messageContainer The message
-	 * @throws SolaceStaleMessageException the message is stale and cannot be acknowledged
 	 */
-	public void acknowledge(MessageContainer messageContainer) throws SolaceStaleMessageException {
+	public void acknowledge(MessageContainer messageContainer) {
 		if (messageContainer == null || messageContainer.isAcknowledged()) {
 			return;
-		}
-		if (messageContainer.isStale()) {
-			throw new SolaceStaleMessageException(String.format("Message container %s (XMLMessage %s) is stale",
-					messageContainer.getId(), messageContainer.getMessage().getMessageId()));
 		}
 
 		try {
 			messageContainer.getMessage().settle(Outcome.ACCEPTED);
-		} catch (JCSMPException ex) {
+		} catch (JCSMPException | IllegalStateException ex) {
 			throw new SolaceAcknowledgmentException("Failed to ACK a message", ex);
 		}
 		messageContainer.setAcknowledged(true);
@@ -215,20 +210,15 @@ public class FlowReceiverContainer {
 	 * {@link #receive()} may be passed as a parameter to this function.</p>
 	 *
 	 * @param messageContainer The message
-	 * @throws SolaceStaleMessageException the message is stale and cannot be acknowledged
 	 */
-	public void requeue(MessageContainer messageContainer) throws SolaceStaleMessageException {
+	public void requeue(MessageContainer messageContainer) {
 		if (messageContainer == null || messageContainer.isAcknowledged()) {
 			return;
-		}
-		if (messageContainer.isStale()) {
-			throw new SolaceStaleMessageException(String.format("Message container %s (XMLMessage %s) is stale",
-					messageContainer.getId(), messageContainer.getMessage().getMessageId()));
 		}
 
 		try {
 			messageContainer.getMessage().settle(Outcome.FAILED);
-		} catch (JCSMPException ex) {
+		} catch (JCSMPException | IllegalStateException ex) {
 			throw new SolaceAcknowledgmentException("Failed to REQUEUE a message", ex);
 		}
 
@@ -244,20 +234,15 @@ public class FlowReceiverContainer {
 	 * {@link #receive()} may be passed as a parameter to this function.</p>
 	 *
 	 * @param messageContainer The message
-	 * @throws SolaceStaleMessageException the message is stale and cannot be acknowledged
 	 */
-	public void reject(MessageContainer messageContainer) throws SolaceStaleMessageException {
+	public void reject(MessageContainer messageContainer) {
 		if (messageContainer == null || messageContainer.isAcknowledged()) {
 			return;
 		}
-		if (messageContainer.isStale()) {
-			throw new SolaceStaleMessageException(String.format("Message container %s (XMLMessage %s) is stale",
-					messageContainer.getId(), messageContainer.getMessage().getMessageId()));
-		}
 
 		try {
-		messageContainer.getMessage().settle(Outcome.REJECTED);
-		} catch (JCSMPException ex) {
+			messageContainer.getMessage().settle(Outcome.REJECTED);
+		} catch (JCSMPException | IllegalStateException ex) {
 			throw new SolaceAcknowledgmentException("Failed to REJECT a message", ex);
 		}
 

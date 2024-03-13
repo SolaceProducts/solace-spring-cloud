@@ -19,7 +19,6 @@ import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import com.solace.spring.cloud.stream.binder.util.SolaceBatchAcknowledgementException;
-import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
 import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
@@ -456,7 +455,7 @@ public class JCSMPAcknowledgementCallbackIT {
 	}
 
 	@CartesianTest(name = "[{index}] numMessages={0}, isDurable={1}, createErrorQueue={2}")
-	public void testAckStaleMessage(@Values(ints = {1, 255}) int numMessages,
+	public void testAckWhenFlowUnbound(@Values(ints = {1, 255}) int numMessages,
 									@Values(booleans = {false, true}) boolean isDurable,
 									@Values(booleans = {false, true}) boolean createErrorQueue,
 									JCSMPSession jcsmpSession,
@@ -479,10 +478,12 @@ public class JCSMPAcknowledgementCallbackIT {
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers);
 
+		flowReceiverContainer.unbind();
+
 		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
 			SolaceAcknowledgmentException exception = assertThrows(SolaceAcknowledgmentException.class,
 					() -> acknowledgmentCallback.acknowledge(status));
-			Class<? extends Throwable> expectedRootCause = SolaceStaleMessageException.class;
+			Class<? extends Throwable> expectedRootCause = IllegalStateException.class;
 
 			assertThat(acknowledgmentCallback.isAcknowledged())
 					.describedAs("Unexpected ack state for %s re-ack", status)
@@ -491,13 +492,16 @@ public class JCSMPAcknowledgementCallbackIT {
 					.describedAs("Unexpected root cause for %s re-ack", status)
 					.hasRootCauseInstanceOf(expectedRootCause);
 			if (exception instanceof SolaceBatchAcknowledgementException) {
-				assertThat(((SolaceBatchAcknowledgementException) exception).isAllStaleExceptions())
+				assertThat((SolaceBatchAcknowledgementException) exception)
 						.describedAs("Unexpected stale batch state for %s re-ack", status)
-						.isEqualTo(expectedRootCause.equals(SolaceStaleMessageException.class));
+						.hasRootCauseInstanceOf(expectedRootCause);
 			}
-			validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
-			validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
-			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
+
+			if(isDurable) {
+				validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
+				validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
+				validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
+			}
 			if (errorQueueName.isPresent()) {
 				validateNumEnqueuedMessages(sempV2Api, errorQueueName.get(), 0);
 				validateNumRedeliveredMessages(sempV2Api, errorQueueName.get(), 0);
@@ -546,11 +550,7 @@ public class JCSMPAcknowledgementCallbackIT {
 			assertThat(exception)
 					.describedAs("Unexpected root cause for %s re-ack", status)
 					.hasRootCauseInstanceOf(expectedRootCause);
-			if (exception instanceof SolaceBatchAcknowledgementException) {
-				assertThat(((SolaceBatchAcknowledgementException) exception).isAllStaleExceptions())
-						.describedAs("Unexpected stale batch state for %s re-ack", status)
-						.isEqualTo(expectedRootCause.equals(SolaceStaleMessageException.class));
-			}
+
 			validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
 			validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
 			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);

@@ -8,7 +8,6 @@ import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestinat
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
-import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -358,8 +357,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			logger.warn(String.format("Failed to consume a message from destination %s - attempt %s",
 					queueName, context.getRetryCount()));
 			for (Throwable nestedThrowable : ExceptionUtils.getThrowableList(throwable)) {
-				if (nestedThrowable instanceof SolaceMessageConversionException ||
-						nestedThrowable instanceof SolaceStaleMessageException) {
+				if (nestedThrowable instanceof SolaceMessageConversionException) {
 					// Do not retry if these exceptions are thrown
 					context.setExhaustedOnly();
 					break;

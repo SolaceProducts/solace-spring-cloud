@@ -33,15 +33,6 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 		ErrorMessage errorMessage = (ErrorMessage) message;
 		Throwable payload = errorMessage.getPayload();
 
-		if (ExceptionUtils.indexOfType(payload, SolaceStaleMessageException.class) > -1) {
-			if (logger.isDebugEnabled()) {
-				logger.debug(String.format("Spring message %s: Message is stale, nothing to do", springId), payload);
-			} else {
-				logger.info(String.format("Spring message %s: Message is stale, nothing to do", springId));
-			}
-			return;
-		}
-
 		Message<?> failedMsg;
 		if (payload instanceof MessagingException && ((MessagingException) payload).getFailedMessage() != null) {
 			failedMsg = ((MessagingException) payload).getFailedMessage();
@@ -78,7 +69,7 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 				AckUtils.requeue(acknowledgmentCallback);
 			}
 		} catch (SolaceAcknowledgmentException e) {
-			if (ExceptionUtils.indexOfType(e, SolaceStaleMessageException.class) > -1) {
+			if (ExceptionUtils.indexOfType(e, IllegalStateException.class) > -1) {
 				if (logger.isDebugEnabled()) {
 					logger.debug(String.format("Spring message %s: Message is stale, nothing to do", springId), payload);
 				} else {

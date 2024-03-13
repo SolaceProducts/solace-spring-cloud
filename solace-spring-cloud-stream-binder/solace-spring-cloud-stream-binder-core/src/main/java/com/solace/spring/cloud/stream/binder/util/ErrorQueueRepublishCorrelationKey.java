@@ -19,15 +19,15 @@ public class ErrorQueueRepublishCorrelationKey {
 		this.flowReceiverContainer = flowReceiverContainer;
 	}
 
-	public void handleSuccess() throws SolaceStaleMessageException {
+	public void handleSuccess() {
 		flowReceiverContainer.acknowledge(messageContainer);
 	}
 
-	public void handleError() throws SolaceStaleMessageException {
+	public void handleError() {
 		while (true) {
 			if (messageContainer.isStale()) {
-				throw new SolaceStaleMessageException(String.format("Message container %s (XMLMessage %s) is stale",
-						messageContainer.getId(), messageContainer.getMessage().getMessageId()));
+				throw new IllegalStateException(String.format("Message container %s (XMLMessage %s) is stale",
+						messageContainer.getId(), messageContainer.getMessage().getMessageId()), null);
 			} else if (errorQueueDeliveryAttempt >= errorQueueInfrastructure.getMaxDeliveryAttempts()) {
 				fallback();
 				break;
@@ -48,7 +48,7 @@ public class ErrorQueueRepublishCorrelationKey {
 		}
 	}
 
-	private void fallback() throws SolaceStaleMessageException {
+	private void fallback() {
 			logger.info(String.format(
 					"Exceeded max error queue delivery attempts. XMLMessage %s will be re-queued onto queue %s",
 					messageContainer.getMessage().getMessageId(), flowReceiverContainer.getQueueName()));

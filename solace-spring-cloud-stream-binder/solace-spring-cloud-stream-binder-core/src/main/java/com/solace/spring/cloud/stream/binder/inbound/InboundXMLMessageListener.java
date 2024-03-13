@@ -7,9 +7,7 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
-import com.solace.spring.cloud.stream.binder.util.SolaceBatchAcknowledgementException;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
-import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
 import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.BytesXMLMessage;
@@ -168,7 +166,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 					acknowledgmentCallback,
 					false);
 		} catch (SolaceAcknowledgmentException e) {
-			swallowStaleException(e, bytesXMLMessage);
+			throw e;
 		} catch (Exception e) {
 			try {
 				if (ExceptionUtils.indexOfType(e, RequeueCurrentMessageException.class) > -1) {
@@ -178,7 +176,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 					AckUtils.requeue(acknowledgmentCallback);
 				} else {
 					logger.warn(String.format(
-							"Exception thrown while processing XMLMessage %s. Message will be rejected.",
+							"Exception thrown while processing XMLMessage %s. Message will be requeued.",
 							bytesXMLMessage.getMessageId()), e);
 					if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 						AckUtils.requeue(acknowledgmentCallback);
@@ -186,7 +184,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 				}
 			} catch (SolaceAcknowledgmentException e1) {
 				e1.addSuppressed(e);
-				swallowStaleException(e1, bytesXMLMessage);
+				throw e;
 			}
 		}
 	}
@@ -208,36 +206,23 @@ abstract class InboundXMLMessageListener implements Runnable {
 					acknowledgmentCallback,
 					true);
 		} catch (Exception e) {
-			if (e instanceof SolaceBatchAcknowledgementException && ((SolaceBatchAcknowledgementException) e)
-					.isAllStaleExceptions()) {
-				logger.info("Cannot acknowledge batch, all messages are stale", e);
-			} else {
 				try {
 					if (ExceptionUtils.indexOfType(e, RequeueCurrentMessageException.class) > -1) {
 						if (logger.isWarnEnabled()) {
-							logger.warn("Exception thrown while processing batch. Batch's message will be requeued.",
-									e);
+							logger.warn("Exception thrown while processing batch. Batch's message will be requeued.", e);
 						}
 						AckUtils.requeue(acknowledgmentCallback);
 					} else {
 						if (logger.isWarnEnabled()) {
-							logger.warn("Exception thrown while processing batch. Batch's messages will be rejected.",
-									e);
+							logger.warn("Exception thrown while processing batch. Batch's messages will be requeued.", e);
 						}
 						if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 							AckUtils.requeue(acknowledgmentCallback);
 						}
 					}
 				} catch (SolaceAcknowledgmentException e1) {
-					e1.addSuppressed(e);
-					if (e1 instanceof SolaceBatchAcknowledgementException && ((SolaceBatchAcknowledgementException) e1)
-							.isAllStaleExceptions()) {
-						logger.info("Cannot acknowledge batch, all messages are stale", e1);
-					} else {
-						throw e;
-					}
+					throw e;
 				}
-			}
 		} finally {
 			batchCollector.confirmDelivery();
 		}
@@ -305,17 +290,6 @@ abstract class InboundXMLMessageListener implements Runnable {
 				attributes.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_ACKNOWLEDGMENT_CALLBACK,
 						acknowledgmentCallback);
 			}
-		}
-	}
-
-	private void swallowStaleException(SolaceAcknowledgmentException e, BytesXMLMessage bytesXMLMessage) {
-		if (ExceptionUtils.indexOfType(e, SolaceStaleMessageException.class) > -1) {
-			if (logger.isDebugEnabled()) {
-				logger.debug(String.format("Cannot acknowledge stale XMLMessage %s", bytesXMLMessage.getMessageId()),
-						e);
-			}
-		} else {
-			throw e;
 		}
 	}
 

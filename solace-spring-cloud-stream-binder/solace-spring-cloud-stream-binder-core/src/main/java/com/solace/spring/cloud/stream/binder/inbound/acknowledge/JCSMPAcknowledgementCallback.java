@@ -4,7 +4,6 @@ import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
-import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -53,18 +52,12 @@ class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
           }
           break;
         case REQUEUE:
-          if (messageContainer.isStale()) {
-            throw new SolaceStaleMessageException(String.format(
-                "Message container %s (XMLMessage %s) is stale",
-                messageContainer.getId(), messageContainer.getMessage().getMessageId()));
-          } else {
-            if (logger.isDebugEnabled()) {
-              logger.debug(String.format("%s %s: Will be re-queued onto queue %s",
-                  XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
-                  flowReceiverContainer.getQueueName()));
-            }
-            flowReceiverContainer.requeue(messageContainer);
+          if (logger.isDebugEnabled()) {
+            logger.debug(String.format("%s %s: Will be re-queued onto queue %s",
+                XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
+                flowReceiverContainer.getQueueName()));
           }
+          flowReceiverContainer.requeue(messageContainer);
       }
     } catch (SolaceAcknowledgmentException e) {
       throw e;
@@ -93,14 +86,15 @@ class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
           errorQueueInfrastructure.getErrorQueueName()));
     }
 
-    try {
-      if (messageContainer.isStale()) {
-        throw new SolaceStaleMessageException(
-            String.format("Cannot republish failed message container %s " +
-                    "(XMLMessage %s) to error queue %s. Message is stale and will be redelivered.",
-                messageContainer.getId(), messageContainer.getMessage().getMessageId(),
-                errorQueueInfrastructure.getErrorQueueName()));
-      }
+     try {
+       //Check to prevent message from publishing to errorQueue and also redelivered by broker
+       if (messageContainer.isStale()) {
+         throw new IllegalStateException(
+             String.format("Cannot republish failed message container %s " +
+                     "(XMLMessage %s) to error queue %s. Message is stale and will be redelivered.",
+                 messageContainer.getId(), messageContainer.getMessage().getMessageId(),
+                 errorQueueInfrastructure.getErrorQueueName()), null);
+       }
 
       errorQueueInfrastructure.createCorrelationKey(messageContainer, flowReceiverContainer)
           .handleError();

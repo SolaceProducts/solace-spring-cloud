@@ -148,7 +148,7 @@ public class SolaceErrorMessageHandlerTest {
 				.build();
 		attributeAccessor.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, inputMessage);
 		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
-				new MessagingException(inputMessage, new SolaceStaleMessageException("test")),
+				new MessagingException(inputMessage, new SolaceAcknowledgmentException("test", null)),
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
@@ -156,16 +156,18 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testStaleMessage(@Mock AcknowledgmentCallback acknowledgementCallback) {
+	public void testHandleMessageWhenConsumerClosed(
+			@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
-				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
-				.build();
+				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK,
+						acknowledgementCallback).build();
 		attributeAccessor.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, inputMessage);
 		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
 				new MessagingException(inputMessage),
 				attributeAccessor);
 
-		Mockito.doThrow(new SolaceAcknowledgmentException("ack-error", new SolaceStaleMessageException("stale")))
+		Mockito.doThrow(new SolaceAcknowledgmentException("ack-error",
+						new IllegalStateException("Attempted an operation on a closed message consumer")))
 				.when(acknowledgementCallback)
 				.acknowledge(Status.REQUEUE);
 

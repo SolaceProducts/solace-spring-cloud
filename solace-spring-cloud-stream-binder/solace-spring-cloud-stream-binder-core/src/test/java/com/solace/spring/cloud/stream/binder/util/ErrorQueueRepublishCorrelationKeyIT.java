@@ -99,10 +99,10 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 
 		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
 		MessageContainer messageContainer = Mockito.spy(flowReceiverContainer.receive(5000));
-		Mockito.when(messageContainer.isStale()).thenReturn(true);
+		flowReceiverContainer.unbind();
 		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer);
 
-		assertThrows(SolaceStaleMessageException.class, key::handleSuccess);
+		assertThrows(SolaceAcknowledgmentException.class, key::handleSuccess);
 		assertEquals(0, key.getErrorQueueDeliveryAttempt());
 	}
 
@@ -244,7 +244,7 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 		Mockito.when(messageContainer.isStale()).thenReturn(true);
 		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer);
 
-		assertThrows(SolaceStaleMessageException.class, () -> key.handleError());
+		assertThrows(IllegalStateException.class, () -> key.handleError());
 		assertEquals(0, key.getErrorQueueDeliveryAttempt());
 	}
 

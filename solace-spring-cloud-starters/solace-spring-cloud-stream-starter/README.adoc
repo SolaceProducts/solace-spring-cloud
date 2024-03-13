@@ -888,7 +888,7 @@ public void consume(Message<?> message) {
 <1> Get the message's acknowledgement callback header
 <2> Disable auto-acknowledgement
 <3> Acknowledge the message with the `ACCEPT` status
-<4> Handle any acknowledgment exceptions (mostly `SolaceStaleMessageException`)
+<4> Handle any acknowledgment exceptions
 
 Refer to the https://docs.spring.io/spring-integration/api/org/springframework/integration/acks/AckUtils.html[AckUtils documentation] and https://javadoc.io/doc/org.springframework.integration/spring-integration-core/latest/org/springframework/integration/acks/AcknowledgmentCallback.html[AcknowledgmentCallback documentation] for more info on these objects.
 
@@ -922,7 +922,7 @@ Acknowledgements may throw `SolaceAcknowledgmentException` depending on the curr
 *Example:* +
 (refer to <<Message Redelivery>> for background info)
 
-A `SolaceAcknowledgmentException` with cause `SolaceStaleMessageException` may be thrown when trying to asynchronously `ACCEPT` a stale message. Though for this particular example, since the message that failed to `ACCEPT` will be redelivered, this exception can be caught and ignored if you have no business logic to revert.
+A `SolaceAcknowledgmentException` with cause `IllegalStateException` may be thrown when trying to asynchronously `ACCEPT` a message and consumer flow is closed. Though for this particular example, since the message that failed to `ACCEPT` will be redelivered, this exception can be caught and ignored if you have no business logic to revert.
 ====
 
 NOTE: Manual acknowledgements do not support any application-internal error handling strategies (i.e. retry template, error channel forwarding, etc). Also, throwing an exception in the message handler will always acknowledge the message in some way regardless if auto-acknowledgment is disabled.

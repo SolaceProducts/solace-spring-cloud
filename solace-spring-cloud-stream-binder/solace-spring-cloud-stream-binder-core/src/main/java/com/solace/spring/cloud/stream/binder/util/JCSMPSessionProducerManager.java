@@ -4,6 +4,7 @@ import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import com.solacesystems.jcsmp.XMLMessageProducer;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
@@ -53,11 +54,15 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 				ErrorQueueRepublishCorrelationKey key = (ErrorQueueRepublishCorrelationKey) correlationKey;
 				try {
 					key.handleSuccess();
-				} catch (SolaceStaleMessageException e) { // unlikely to happen
-					logger.warn(String.format("Message %s successfully sent to error queue %s, " +
-									"but the reference is now stale. Message is likely duplicated and was/will be" +
-									" redelivered on the original queue.",
-							key.getSourceMessageId(), key.getErrorQueueName()), e);
+				} catch (SolaceAcknowledgmentException e) { // unlikely to happen
+					if (ExceptionUtils.indexOfType(e, IllegalStateException.class) > -1) {
+						logger.warn(String.format("Message %s successfully sent to error queue %s, " +
+										"but the reference is now stale. Message is likely duplicated and was/will be" +
+										" redelivered on the original queue.",
+								key.getSourceMessageId(), key.getErrorQueueName()), e);
+					} else {
+						throw e;
+					}
 				}
 			} else if (logger.isTraceEnabled()) {
 				logger.trace("Producer received response for correlation key: " + correlationKey);
@@ -85,10 +90,14 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 				ErrorQueueRepublishCorrelationKey key = (ErrorQueueRepublishCorrelationKey) correlationKey;
 				try {
 					key.handleError();
-				} catch (SolaceStaleMessageException e) { // unlikely to happen
-					logger.warn(String.format("Cannot republish message %s to error queue %s. " +
-									"It was/will be redelivered on the original queue",
-							key.getSourceMessageId(), key.getErrorQueueName()), e);
+				} catch (SolaceAcknowledgmentException e) { // unlikely to happen
+					if (ExceptionUtils.indexOfType(e, IllegalStateException.class) > -1) {
+						logger.warn(String.format("Cannot republish message %s to error queue %s. " +
+										"It was/will be redelivered on the original queue",
+								key.getSourceMessageId(), key.getErrorQueueName()), e);
+					} else {
+						throw e;
+					}
 				}
 			} else {
 				logger.warn(String.format("Producer received error for correlation key: %s at %s", correlationKey,
