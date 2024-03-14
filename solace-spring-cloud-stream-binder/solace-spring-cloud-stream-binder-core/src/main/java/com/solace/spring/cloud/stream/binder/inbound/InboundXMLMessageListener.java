@@ -184,7 +184,9 @@ abstract class InboundXMLMessageListener implements Runnable {
 				}
 			} catch (SolaceAcknowledgmentException e1) {
 				e1.addSuppressed(e);
-				throw e;
+				logger.warn(String.format("Exception thrown while re-queuing XMLMessage %s.",
+						bytesXMLMessage.getMessageId()), e1);
+				throw e1;
 			}
 		}
 	}
@@ -221,7 +223,9 @@ abstract class InboundXMLMessageListener implements Runnable {
 						}
 					}
 				} catch (SolaceAcknowledgmentException e1) {
-					throw e;
+					e1.addSuppressed(e);
+					logger.warn("Exception thrown while re-queuing batch.", e1);
+					throw e1;
 				}
 		} finally {
 			batchCollector.confirmDelivery();

@@ -34,16 +34,12 @@ class JCSMPBatchAcknowledgementCallback implements AcknowledgmentCallback {
       return;
     }
 
-    boolean hasAtLeastOneSuccessAck = false;
     Set<Integer> failedMessageIndexes = new HashSet<>();
     Throwable firstEncounteredException = null;
     for (int msgIdx = 0; msgIdx < acknowledgementCallbacks.size(); msgIdx++) {
       JCSMPAcknowledgementCallback messageAcknowledgementCallback = acknowledgementCallbacks.get(msgIdx);
       try {
         messageAcknowledgementCallback.acknowledge(status);
-        if (!hasAtLeastOneSuccessAck) {
-					hasAtLeastOneSuccessAck = messageAcknowledgementCallback.getMessageContainer().isAcknowledged();
-        }
       } catch (Exception e) {
         logger.error(String.format("Failed to acknowledge XMLMessage %s",
             messageAcknowledgementCallback.getMessageContainer().getMessage().getMessageId()), e);

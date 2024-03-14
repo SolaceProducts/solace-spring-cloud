@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.util;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.TextMessage;
 import org.junit.jupiter.api.BeforeEach;
@@ -171,7 +172,7 @@ public class SolaceErrorMessageHandlerTest {
 				.when(acknowledgementCallback)
 				.acknowledge(Status.REQUEUE);
 
-		errorMessageHandler.handleMessage(errorMessage);
+		assertThrows(SolaceAcknowledgmentException.class, () -> errorMessageHandler.handleMessage(errorMessage));
 		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 }

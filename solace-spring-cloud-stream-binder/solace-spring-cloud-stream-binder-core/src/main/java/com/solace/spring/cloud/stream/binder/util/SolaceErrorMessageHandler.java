@@ -2,7 +2,7 @@ package com.solace.spring.cloud.stream.binder.util;
 
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.SolaceAckUtil;
 import com.solacesystems.jcsmp.XMLMessage;
-import org.apache.commons.lang3.exception.ExceptionUtils;
+import java.util.UUID;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.integration.StaticMessageHeaderAccessor;
@@ -12,8 +12,6 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.ErrorMessage;
-
-import java.util.UUID;
 
 public class SolaceErrorMessageHandler implements MessageHandler {
 
@@ -69,15 +67,8 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 				AckUtils.requeue(acknowledgmentCallback);
 			}
 		} catch (SolaceAcknowledgmentException e) {
-			if (ExceptionUtils.indexOfType(e, IllegalStateException.class) > -1) {
-				if (logger.isDebugEnabled()) {
-					logger.debug(String.format("Spring message %s: Message is stale, nothing to do", springId), payload);
-				} else {
-					logger.info(String.format("Spring message %s: Message is stale, nothing to do", springId));
-				}
-			} else {
-				throw e;
-			}
+			logger.error(String.format("Spring message %s: exception in error handler", springId), e);
+			throw e;
 		}
 	}
 }
