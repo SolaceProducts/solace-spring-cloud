@@ -4,6 +4,7 @@ import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertion
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
@@ -226,6 +227,37 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 		validateNumEnqueuedMessages(vpnName, queue, 1, sempV2Api);
 
 		//Assert: No rebind
+		retryAssert(() -> assertEquals((Long) 1L, sempV2Api.monitor()
+				.getMsgVpnQueue(vpnName, queue.getName(), null)
+				.getData()
+				.getBindSuccessCount()));
+	}
+
+	@ParameterizedTest
+	@ValueSource(booleans = {false, true})
+	public void testHandleErrorRequeueFallbackFail(boolean isDurable, JCSMPSession jcsmpSession, Queue durableQueue,
+			SempV2Api sempV2Api) throws Exception {
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = createFlowReceiverContainer(jcsmpSession, queue);
+
+		producer.send(JCSMPFactory.onlyInstance().createMessage(TextMessage.class), queue);
+		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
+		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer);
+
+		Mockito.doThrow(new JCSMPException("test")).when(errorQueueInfrastructure).send(messageContainer, key);
+		Mockito.doThrow(new SolaceAcknowledgmentException("test", null)).when(flowReceiverContainer)
+				.requeue(messageContainer);
+
+		assertThrows(SolaceAcknowledgmentException.class, key::handleError);
+
+		int maxDeliveryAttempts = Math.toIntExact(errorQueueInfrastructure.getMaxDeliveryAttempts());
+		Mockito.verify(errorQueueInfrastructure, Mockito.times(maxDeliveryAttempts)).send(messageContainer, key);
+		Mockito.verify(flowReceiverContainer, Mockito.times(1)).requeue(messageContainer);
+
+		assertEquals(maxDeliveryAttempts, key.getErrorQueueDeliveryAttempt());
+		validateNumEnqueuedMessages(vpnName, errorQueue, 0, sempV2Api);
+		validateNumEnqueuedMessages(vpnName, queue, 1, sempV2Api);
 		retryAssert(() -> assertEquals((Long) 1L, sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, queue.getName(), null)
 				.getData()
