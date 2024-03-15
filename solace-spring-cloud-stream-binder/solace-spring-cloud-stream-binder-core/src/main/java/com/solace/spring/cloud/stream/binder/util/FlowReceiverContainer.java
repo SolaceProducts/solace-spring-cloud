@@ -183,8 +183,7 @@ public class FlowReceiverContainer {
 	/**
 	 * <p>Acknowledge the message off the broker and mark the provided message container as acknowledged.</p>
 	 * <p><b>WARNING:</b> Only messages created by this {@link FlowReceiverContainer} instance's {@link #receive()}
-	 * may be passed as a parameter to this function. Failure to do so will misalign the timing for when rebinds
-	 * will occur, causing rebinds to unintentionally trigger early/late.</p>
+	 * may be passed as a parameter to this function.</p>
 	 * @param messageContainer The message
 	 */
 	public void acknowledge(MessageContainer messageContainer) {

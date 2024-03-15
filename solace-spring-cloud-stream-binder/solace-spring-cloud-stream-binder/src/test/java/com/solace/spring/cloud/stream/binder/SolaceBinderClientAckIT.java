@@ -1114,7 +1114,7 @@ public class SolaceBinderClientAckIT<T> {
 						}
 						callback.run();
 					} else {
-						softly.fail("Found leftover messages from before the flow rebind: %s", msg);
+						softly.fail("Found a message that is not marked redelivered: %s", msg);
 					}
 				});
 		assertThat(wasRedelivered.get()).isTrue();
@@ -1123,88 +1123,6 @@ public class SolaceBinderClientAckIT<T> {
 		validateNumEnqueuedMessages(context, sempV2Api, queueName, 0);
 		validateNumUnackedMessages(context, sempV2Api, queueName, 0);
 		validateNumRedeliveredMessages(context, sempV2Api, queueName, messages.size());
-
-		producerBinding.unbind();
-		consumerBinding.unbind();
-	}
-
-	@ParameterizedTest(name = "[{index}] channelType={0}")
-	@ValueSource(classes = {DirectChannel.class, PollableSource.class})
-	public void testBatchIsNotStaleFromAsyncRequeueAndTimeout(
-			Class<T> channelType,
-			SempV2Api sempV2Api,
-			SpringCloudStreamContext context,
-			@ExecSvc(poolSize = 1, scheduled = true) ScheduledExecutorService executorService,
-			SoftAssertions softly,
-			TestInfo testInfo) throws Exception {
-		SolaceTestBinder binder = context.getBinder();
-		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
-
-		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
-		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
-
-		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-
-		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
-
-		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
-		consumerProperties.setBatchMode(true);
-		consumerProperties.getExtension().setBatchTimeout((int) TimeUnit.SECONDS.toMillis(10));
-		consumerProperties.getExtension().setQueueMaxMsgRedelivery(1);
-
-		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder, destination0,
-				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
-
-		List<Message<?>> messages = IntStream.range(0, 2)
-				.mapToObj(i -> MessageBuilder.withPayload(UUID.randomUUID().toString().getBytes())
-						.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
-						.build())
-				.collect(Collectors.toList());
-
-		context.binderBindUnbindLatency();
-		String queueName = binder.getConsumerQueueName(consumerBinding);
-
-		AtomicBoolean firstReceivedMessage = new AtomicBoolean(false);
-		AtomicBoolean wasRedelivered = new AtomicBoolean(false);
-		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, 2,
-				() -> moduleOutputChannel.send(messages.get(0)),
-				(msg, callback) -> {
-					AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
-					Objects.requireNonNull(ackCallback).noAutoAck();
-					if (!firstReceivedMessage.get()) {
-						logger.info("Got first message");
-						softly.assertThat(msg).as("first batch is not valid")
-								.satisfies(isValidMessage(consumerProperties, messages.get(0)));
-						softly.assertThat(moduleOutputChannel.send(messages.get(1))).isTrue();
-						softly.assertThat(queueName).satisfies(q -> retryAssert(() ->
-								validateNumUnackedMessages(context, sempV2Api, q, messages.size())));
-						executorService.schedule(() -> {
-							softly.assertThat(queueName).satisfies(q ->
-									validateNumEnqueuedMessages(context, sempV2Api, q, messages.size()));
-							AckUtils.requeue(ackCallback);
-							callback.run();
-						}, 2, TimeUnit.SECONDS);
-						firstReceivedMessage.set(true);
-					} else {
-						logger.info("Got redelivered message");
-						wasRedelivered.set(true);
-						try {
-							ackCallback.acknowledge(AcknowledgmentCallback.Status.ACCEPT);
-						} catch (Exception e) {
-							softly.fail(String.format(
-									"Exception caught when trying to process redelivered batch %s", msg), e);
-							throw e;
-						}
-						callback.run();
-					}
-				});
-		assertThat(wasRedelivered.get()).isTrue();
-
-		// one leftover message stuck in batch collector
-		validateNumEnqueuedMessages(context, sempV2Api, queueName, 0);
-		validateNumUnackedMessages(context, sempV2Api, queueName, 0);
-		validateNumRedeliveredMessages(context, sempV2Api, queueName, 1);
 
 		producerBinding.unbind();
 		consumerBinding.unbind();

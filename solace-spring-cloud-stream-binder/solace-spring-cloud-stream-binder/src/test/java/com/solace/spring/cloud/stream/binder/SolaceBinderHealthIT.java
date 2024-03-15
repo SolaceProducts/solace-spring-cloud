@@ -254,13 +254,13 @@ public class SolaceBinderHealthIT {
 				});
 
 		Mockito.verify(flowHealthIndicator, Mockito.never()
-				.description("Flow rebind should not have caused health to go down"))
+				.description("Message NACK should not have caused health to go down"))
 				.down(Mockito.any());
 		Mockito.verify(flowsHealthContributor, Mockito.never()
-						.description("Flow rebind should not have caused flow health indicator to be removed"))
+						.description("Message NACK should not have caused flow health indicator to be removed"))
 				.removeFlowContributor(Mockito.any());
 		Mockito.verify(bindingsHealthContributor, Mockito.never()
-						.description("Flow rebind should not have caused health component to be removed"))
+						.description("Message NACK should not have caused health component to be removed"))
 				.removeBindingContributor(Mockito.any());
 
 		assertThat(bindingsHealthContributor)
