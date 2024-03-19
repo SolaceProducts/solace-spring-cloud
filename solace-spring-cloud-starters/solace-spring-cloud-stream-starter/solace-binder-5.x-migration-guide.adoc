@@ -1,0 +1,60 @@
+= Solace PubSub+ Binder 5.0 Migration Guide
+
+This document is meant to help you migrate your application to Solace PubSub+ Binder 5.0.
+
+== Upgrade to Solace PubSub+ Binder 5.0
+
+Update the binder dependencies, if you are not using any of the impacted features documented below your application should work as it is.
+
+If your application was using below Consumer Binding features in the previous version, you must read further.
+
+* xref:README.adoc#_manual_message_acknowledgment[Manual Message Acknowledgment mode]
+* Anonymous consumer groups
+
+Table below tries to summarize what has changed.
+
+[cols="1m,3,3,3", options="header"]
+|===
+| ACK Status
+| Before
+| Now
+| What has changed?
+
+| `ACCEPT`
+| Acknowledge the message.
+| Acknowledge the message.
+| No Change.
+
+| `REJECT`
+| If `autoBindErrorQueue` is `true`, then republish the message onto the error queue and `ACCEPT` it.
+
+Otherwise, if the consumer is in a defined consumer group, invoke `REQUEUE`.
+
+Otherwise, the consumer is in an anonymous group, and the message will be discarded.
+
+| If `autoBindErrorQueue` is `true`, then republish the message onto the error queue and `ACCEPT` it.
+
+Otherwise, for both, the consumer in a defined consumer group or in an anonymous group, signal the Solace broker to discard/remove the message from queue.
+
+Refer to xref:README.adoc#_failed_consumer_message_error_handling[Failed Consumer Message Error Handling] for more info.
+
+| Earlier, if `autoBindErrorQueue` is false, in case of defined consumer group, `REQUEUE` was called internally.
+
+Now, for both the consumer in defined or anonymous consumer group, the message will be rejected/discarded.
+
+If your application want requeue behaviour, explicitly call `REQUEUE`.
+
+| `REQUEUE`
+| If the consumer is in a defined consumer group, rebind the consumer flow. Otherwise, a `SolaceAcknowledgmentException` will be thrown.
+| For both the consumer in defined or anonymous consumer group, requeue the message.
+
+Refer to xref:README.adoc#_message_redelivery[Message Redelivery] for more info.
+| Now, both defined and anonymous consumer group supports `REQUEUE`.
+
+If your application was using anonymous consumer group, you should note the change in behaviour, and you may like to review your application in this context.
+|===
+
+=== Removed Solace Consumer Binding properties
+
+The Solace consumer rebind related configuration properties `flowPreRebindWaitTimeout`, `flowRebindBackOffInitialInterval`, `flowRebindBackOffMaxInterval`, `flowRebindBackOffMultiplier` has been removed as consumer rebind mechanism is no longer used. Presence of these properties would not make a difference and ideally should be removed from application configuration. Refer xref:README.adoc#_solace_consumer_properties [Solace Consumer configuration properties].
+
