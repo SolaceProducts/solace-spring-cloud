@@ -346,6 +346,11 @@ The number of milliseconds before republished messages are discarded or moved to
 +
 Default: `null`
 
+headerExclusions::
+The list of headers to exclude when converting consumed Solace message to Spring message.
++
+Default: Empty `List&lt;String&gt;`
+
 ==== Solace Producer Properties
 
 The following properties are available for Solace producers only and must be prefixed with `spring.cloud.stream.solace.bindings.&lt;bindingName&gt;.producer.` where `bindingName` looks something like `functionName-out-0` as defined in https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_functional_binding_names[Functional Binding Names].
