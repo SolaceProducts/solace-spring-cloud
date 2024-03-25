@@ -1,5 +1,5 @@
 = Spring Cloud Stream Binder for Solace PubSub+
-:revnumber: 4.1.0
+:revnumber: 4.2.0
 :toc: preamble
 :toclevels: 3
 :icons: font
@@ -345,6 +345,11 @@ errorMsgTtl::
 The number of milliseconds before republished messages are discarded or moved to a Dead Message Queue.
 +
 Default: `null`
+
+headerExclusions::
+The list of headers to exclude when converting consumed Solace message to Spring message.
++
+Default: Empty `List&lt;String&gt;`
 
 ==== Solace Producer Properties
 

@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
@@ -35,6 +36,7 @@ import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageConsumer;
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.XMLMessageProducer;
+import java.util.Objects;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.AfterEach;
@@ -1379,6 +1381,81 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 			if (producerBinding != null) producerBinding.unbind();
 		}
 	}
+
+	@CartesianTest(name = "[{index}] channelType={0}, batchMode={1}")
+	@Execution(ExecutionMode.CONCURRENT)
+	public <T> void testConsumerHeaderExclusion(
+			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
+			@Values(booleans = {false, true}) boolean batchMode,
+			JCSMPProperties jcsmpProperties,
+			SempV2Api sempV2Api,
+			SoftAssertions softly,
+			TestInfo testInfo) throws Exception {
+		List<String> excludedHeaders = List.of("headerKey1", "headerKey2", "headerKey5",
+				"solace_expiration", "solace_discardIndication", "solace_redelivered",
+				"solace_dmqEligible", "solace_priority");
+
+		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = createConsumerInfrastructureUtil(channelType);
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setBatchMode(batchMode);
+		consumerProperties.getExtension().setHeaderExclusions(excludedHeaders);
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
+
+		List<Message<?>> messages = IntStream.range(0,
+						batchMode ? consumerProperties.getExtension().getBatchMaxSize() : 1)
+				.mapToObj(i -> {
+					MessageBuilder<byte[]> messageBuilder =
+							MessageBuilder.withPayload(UUID.randomUUID().toString().getBytes())
+									.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
+					for (int ind = 0; ind < 10; ind++) {
+						messageBuilder.setHeader("headerKey" + ind, UUID.randomUUID().toString());
+					}
+					return messageBuilder.build();
+				}).collect(Collectors.toList());
+
+		binderBindUnbindLatency();
+
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, 1,
+				() -> messages.forEach(msg -> {
+					softly.assertThat(msg.getHeaders()).containsKeys("headerKey1", "headerKey2", "headerKey5");
+					moduleOutputChannel.send(msg);
+				}),
+				msg -> {
+					softly.assertThat(msg).satisfies(isValidMessage(consumerProperties, messages));
+
+					MessageHeaders springMessageHeaders;
+					if(batchMode) {
+						Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(
+								msg.getHeaders().get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+						springMessageHeaders = new MessageHeaders(messageHeaders);
+					} else {
+						springMessageHeaders = msg.getHeaders();
+					}
+					softly.assertThat(springMessageHeaders)
+							.doesNotContainKeys(excludedHeaders.toArray(new String[0]));
+				}
+		);
+
+		retryAssert(() -> assertThat(sempV2Api.monitor()
+				.getMsgVpnQueueMsgs(jcsmpProperties.getStringProperty(JCSMPProperties.VPN_NAME),
+						binder.getConsumerQueueName(consumerBinding), 2, null, null, null)
+				.getData())
+				.hasSize(0));
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
 
 	private List<MonitorMsgVpnQueueTxFlow> getTxFlows(SempV2Api sempV2Api, String vpnName, String queueName, Integer count) throws ApiException {
 		return sempV2Api.monitor()
