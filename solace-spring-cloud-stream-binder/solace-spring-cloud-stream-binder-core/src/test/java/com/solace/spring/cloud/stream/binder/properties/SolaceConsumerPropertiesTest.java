@@ -1,10 +1,12 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SolaceConsumerPropertiesTest {
 	@ParameterizedTest
@@ -80,5 +82,10 @@ public class SolaceConsumerPropertiesTest {
 	public void testFailSetFlowRebindBackOffMultiplier(double multiplier) {
 		assertThrows(IllegalArgumentException.class, () -> new SolaceConsumerProperties()
 				.setFlowRebindBackOffMultiplier(multiplier));
+	}
+
+	@Test
+	void testDefaultHeaderExclusionsListIsEmpty() {
+		assertTrue(new SolaceConsumerProperties().getHeaderExclusions().isEmpty());
 	}
 }
