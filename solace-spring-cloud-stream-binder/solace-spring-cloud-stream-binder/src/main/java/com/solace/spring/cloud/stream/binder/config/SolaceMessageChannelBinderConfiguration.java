@@ -1,5 +1,8 @@
 package com.solace.spring.cloud.stream.binder.config;
 
+import static com.solacesystems.jcsmp.XMLMessage.Outcome.ACCEPTED;
+import static com.solacesystems.jcsmp.XMLMessage.Outcome.FAILED;
+import static com.solacesystems.jcsmp.XMLMessage.Outcome.REJECTED;
 import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
 import com.solace.spring.cloud.stream.binder.health.SolaceBinderHealthAccessor;
 import com.solace.spring.cloud.stream.binder.health.handlers.SolaceSessionEventHandler;
@@ -12,7 +15,10 @@ import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.XMLMessage.Outcome;
+import com.solacesystems.jcsmp.impl.JCSMPBasicSession;
 import jakarta.annotation.PostConstruct;
+import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -64,6 +70,11 @@ public class SolaceMessageChannelBinderConfiguration {
 				// as the call closing JCSMP session also delete the context
 				// and terminates the application
 				solaceSessionEventHandler.setSessionHealthUp();
+			}
+
+			if (jcsmpSession instanceof JCSMPBasicSession session &&
+					!session.isRequiredSettlementCapable(Set.of(ACCEPTED,FAILED,REJECTED))) {
+				logger.warn("The connected Solace PubSub+ Broker is not compatible. It doesn't support message NACK capability. Consumer bindings will fail to start.");
 			}
 		} catch (Exception e) {
 			if (context != null) {

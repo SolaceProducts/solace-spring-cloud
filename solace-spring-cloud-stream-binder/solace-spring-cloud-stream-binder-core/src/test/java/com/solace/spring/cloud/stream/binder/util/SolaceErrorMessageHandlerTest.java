@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.util;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.TextMessage;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,7 @@ import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AcknowledgmentCallback;
+import org.springframework.integration.acks.AcknowledgmentCallback.Status;
 import org.springframework.integration.support.ErrorMessageUtils;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessagingException;
@@ -46,7 +48,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 		Mockito.verify(StaticMessageHeaderAccessor.getAcknowledgmentCallback(inputMessage), Mockito.never())
 				.acknowledge(Mockito.any());
 	}
@@ -62,7 +64,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 
 	@Test
@@ -86,7 +88,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 
 	@Test
@@ -103,7 +105,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 
 	@Test
@@ -119,7 +121,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 
 	@Test
@@ -137,7 +139,7 @@ public class SolaceErrorMessageHandlerTest {
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 
 	@Test
@@ -147,7 +149,7 @@ public class SolaceErrorMessageHandlerTest {
 				.build();
 		attributeAccessor.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, inputMessage);
 		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
-				new MessagingException(inputMessage, new SolaceStaleMessageException("test")),
+				new MessagingException(inputMessage, new SolaceAcknowledgmentException("test", null)),
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
@@ -155,20 +157,22 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testStaleMessage(@Mock AcknowledgmentCallback acknowledgementCallback) {
+	public void testHandleMessageWhenConsumerClosed(
+			@Mock AcknowledgmentCallback acknowledgementCallback) {
 		Message<?> inputMessage = MessageBuilder.withPayload("test")
-				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
-				.build();
+				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK,
+						acknowledgementCallback).build();
 		attributeAccessor.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, inputMessage);
 		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
 				new MessagingException(inputMessage),
 				attributeAccessor);
 
-		Mockito.doThrow(new SolaceAcknowledgmentException("ack-error", new SolaceStaleMessageException("stale")))
+		Mockito.doThrow(new SolaceAcknowledgmentException("ack-error",
+						new IllegalStateException("Attempted an operation on a closed message consumer")))
 				.when(acknowledgementCallback)
-				.acknowledge(AcknowledgmentCallback.Status.REJECT);
+				.acknowledge(Status.REQUEUE);
 
-		errorMessageHandler.handleMessage(errorMessage);
-		Mockito.verify(acknowledgementCallback).acknowledge(AcknowledgmentCallback.Status.REJECT);
+		assertThrows(SolaceAcknowledgmentException.class, () -> errorMessageHandler.handleMessage(errorMessage));
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
 	}
 }

@@ -213,20 +213,19 @@ public class SolaceQueueProvisioner
 	}
 
 	public void addSubscriptionToQueue(Queue queue, String topicName, SolaceCommonProperties properties, boolean isDestinationSubscription) {
-		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topicName));
-
 		if (!isDestinationSubscription && queue.isDurable() && !properties.isAddDestinationAsSubscriptionToQueue()) {
-			logger.warn(String.format("Provision subscriptions to durable queues was disabled, queue %s will not be subscribed to topic %s",
+			logger.debug(String.format("Provision subscriptions to durable queues was disabled, queue %s will not be subscribed to topic %s",
 					queue.getName(), topicName));
 			return;
 		}
 
 		if (isDestinationSubscription && !properties.isAddDestinationAsSubscriptionToQueue()) {
-			logger.warn(String.format("Adding destination as subscription was disabled, queue %s will not be subscribed to topic %s",
+			logger.debug(String.format("Adding destination as subscription was disabled, queue %s will not be subscribed to topic %s",
 					queue.getName(), topicName));
 			return;
 		}
 
+		logger.info(String.format("Subscribing queue %s to topic %s", queue.getName(), topicName));
 		try {
 			Topic topic = JCSMPFactory.onlyInstance().createTopic(topicName);
 			try {

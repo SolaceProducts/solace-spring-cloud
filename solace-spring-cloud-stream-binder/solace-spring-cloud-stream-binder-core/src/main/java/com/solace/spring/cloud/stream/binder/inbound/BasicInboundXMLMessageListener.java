@@ -1,6 +1,7 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
+import com.solace.spring.cloud.stream.binder.inbound.acknowledge.SolaceAckUtil;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
@@ -65,7 +66,9 @@ public class BasicInboundXMLMessageListener extends InboundXMLMessageListener {
 				logger.warn(String.format("Failed to map %s to a Spring Message and no error channel " +
 						"was configured. Message will be rejected.", isBatched ? "a batch of XMLMessages" :
 						"an XMLMessage"), e);
-				AckUtils.reject(acknowledgmentCallback);
+				if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
+					AckUtils.requeue(acknowledgmentCallback);
+				}
 			}
 			return;
 		}

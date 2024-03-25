@@ -14,7 +14,6 @@ import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
-import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solacesystems.jcsmp.Context;
@@ -58,7 +57,6 @@ public class SolaceMessageChannelBinder
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
 	private SolaceMeterAccessor solaceMeterAccessor;
 	private SolaceExtendedBindingProperties extendedBindingProperties = new SolaceExtendedBindingProperties();
-	private final RetryableTaskService taskService = new RetryableTaskService();
 	private static final SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
 	@Nullable private SolaceBinderHealthAccessor solaceBinderHealthAccessor;
 
@@ -80,7 +78,6 @@ public class SolaceMessageChannelBinder
 	@Override
 	public void destroy() {
 		logger.info(String.format("Closing JCSMP session %s", jcsmpSession.getSessionName()));
-		if (taskService != null) taskService.close();
 		sessionProducerManager.release(errorHandlerProducerKey);
 		consumersRemoteStopFlag.set(true);
 		jcsmpSession.closeSession();
@@ -116,7 +113,6 @@ public class SolaceMessageChannelBinder
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(
 				solaceDestination,
 				jcsmpSession,
-				taskService,
 				properties,
 				getConsumerEndpointProperties(properties),
 				solaceMeterAccessor);
@@ -133,8 +129,7 @@ public class SolaceMessageChannelBinder
 					sessionProducerManager,
 					errorHandlerProducerKey,
 					solaceDestination.getErrorQueueName(),
-					properties.getExtension(),
-					taskService));
+					properties.getExtension()));
 		}
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
@@ -163,7 +158,6 @@ public class SolaceMessageChannelBinder
 		JCSMPMessageSource messageSource = new JCSMPMessageSource(solaceDestination,
 				jcsmpSession,
 				consumerProperties.isBatchMode() ? new BatchCollector(consumerProperties.getExtension()) : null,
-				taskService,
 				consumerProperties,
 				endpointProperties,
 				solaceMeterAccessor);
@@ -179,8 +173,7 @@ public class SolaceMessageChannelBinder
 			messageSource.setErrorQueueInfrastructure(new ErrorQueueInfrastructure(sessionProducerManager,
 					errorHandlerProducerKey,
 					solaceDestination.getErrorQueueName(),
-					consumerProperties.getExtension(),
-					taskService));
+					consumerProperties.getExtension()));
 		}
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, consumerProperties, true);

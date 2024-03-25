@@ -1,12 +1,11 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 public class SolaceConsumerPropertiesTest {
 	@ParameterizedTest
@@ -37,51 +36,6 @@ public class SolaceConsumerPropertiesTest {
 	public void testFailSetBatchTimeout(int batchTimeout) {
 		assertThrows(IllegalArgumentException.class, () -> new SolaceConsumerProperties()
 				.setBatchTimeout(batchTimeout));
-	}
-
-	@ParameterizedTest
-	@ValueSource(ints = {1, 1000})
-	public void testSetFlowRebindBackOffInitialInterval(int time) {
-		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
-		consumerProperties.setFlowRebindBackOffInitialInterval(time);
-		assertEquals(time, consumerProperties.getFlowRebindBackOffInitialInterval());
-	}
-
-	@ParameterizedTest
-	@ValueSource(ints = {-1, 0})
-	public void testFailSetFlowRebindBackOffInitialInterval(int time) {
-		assertThrows(IllegalArgumentException.class, () -> new SolaceConsumerProperties()
-				.setFlowRebindBackOffInitialInterval(time));
-	}
-
-	@ParameterizedTest
-	@ValueSource(ints = {1, 1000})
-	public void testSetFlowRebindBackOffMaxInterval(int time) {
-		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
-		consumerProperties.setFlowRebindBackOffMaxInterval(time);
-		assertEquals(time, consumerProperties.getFlowRebindBackOffMaxInterval());
-	}
-
-	@ParameterizedTest
-	@ValueSource(ints = {-1, 0})
-	public void testFailSetFlowRebindBackOffMaxInterval(int time) {
-		assertThrows(IllegalArgumentException.class, () -> new SolaceConsumerProperties()
-				.setFlowRebindBackOffMaxInterval(time));
-	}
-
-	@ParameterizedTest
-	@ValueSource(doubles = {1.0, 1.5, 1000})
-	public void testSetFlowRebindBackOffMultiplier(double multiplier) {
-		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
-		consumerProperties.setFlowRebindBackOffMultiplier(multiplier);
-		assertEquals(multiplier, consumerProperties.getFlowRebindBackOffMultiplier());
-	}
-
-	@ParameterizedTest
-	@ValueSource(doubles = {-1000, -1.5, -1, -0.5, 0, 0.5})
-	public void testFailSetFlowRebindBackOffMultiplier(double multiplier) {
-		assertThrows(IllegalArgumentException.class, () -> new SolaceConsumerProperties()
-				.setFlowRebindBackOffMultiplier(multiplier));
 	}
 
 	@Test

@@ -9,4 +9,3 @@ updates:
       - dependency-name: "com.solace.*"
       - dependency-name: "com.solacesystems:*"
       - dependency-name: "org.springframework.*"
-      - dependency-name: "org.apache.logging.log4j:*"

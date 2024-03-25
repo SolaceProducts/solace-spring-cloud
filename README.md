@@ -12,6 +12,7 @@ For information about Solace Projects that are only for Spring Boot, please visi
 * [Repository Contents](#repository-contents)
 * [Building Locally](#building-locally)
 * [Release Process](#release-process)
+* [Samples](#solace-spring-cloud-samples)
 * [Contributing](#contributing)
 * [Authors](#authors)
 * [License](#license)
@@ -102,7 +103,9 @@ Parallel test execution is disabled by default. Add the `-Djunit.jupiter.executi
     ```shell script
     mvn -B release:prepare
     ```
+## Solace Spring Cloud Samples
 
+See [solace-samples-spring](https://github.com/SolaceSamples/solace-samples-spring) repository for samples. 
 
 ## Contributing
 
@@ -144,11 +147,13 @@ For more information about Spring Cloud try these resources:
 
 For more information about Solace technology for Spring Boot please visit these resources:
 - [Solace Spring Boot](//github.com/SolaceProducts/solace-spring-boot)
+- [Solace Spring Samples](https://github.com/SolaceSamples/solace-samples-spring)
 
 For more information about Solace technology in general please visit these resources:
 
 - The [Solace Developer Portal](https://solace.dev)
 - Ask the [Solace community](https://solace.community/)
+- Checkout the [Solace Blogs](https://solace.com/blog/?fwp_blog_search=spring%20cloud%20stream)
 
 ```
 .......................HELLO FROM THE OTTER SIDE...........
