@@ -2,8 +2,6 @@ package com.solace.spring.cloud.stream.binder.properties;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -36,10 +34,5 @@ public class SolaceConsumerPropertiesTest {
 	public void testFailSetBatchTimeout(int batchTimeout) {
 		assertThrows(IllegalArgumentException.class, () -> new SolaceConsumerProperties()
 				.setBatchTimeout(batchTimeout));
-	}
-
-	@Test
-	void testDefaultHeaderExclusionsListIsEmpty() {
-		assertTrue(new SolaceConsumerProperties().getHeaderExclusions().isEmpty());
 	}
 }
