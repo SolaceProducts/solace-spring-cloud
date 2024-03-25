@@ -26,6 +26,7 @@ Consult the table below to determine which version of the BOM you need to use:
 | 2021.0.6     | 2.5.0                      | 2.7.x       |
 | 2022.0.2     | 3.0.0                      | 3.0.x       |
 | 2022.0.4     | 3.1.0                      | 3.1.x       |
+| 2022.0.4     | 3.2.0                      | 3.1.x       |
 | 2023.0.0     | 4.0.0                      | 3.2.x       |
 
 ## Including the BOM
