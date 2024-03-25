@@ -3,6 +3,8 @@ package com.solace.spring.cloud.stream.binder.properties;
 import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties.DEFAULTS_PREFIX;
 import com.solacesystems.jcsmp.EndpointProperties;
 import jakarta.validation.constraints.Min;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.Assert;
 
@@ -107,6 +109,10 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	private Long errorMsgTtl = null;
 	// ------------------------
 
+	/**
+	 * The list of headers to exclude when converting consumed Solace message to Spring message.
+	 */
+	private List<String> headerExclusions = new ArrayList<>();
 
 	public int getBatchMaxSize() {
 		return batchMaxSize;
@@ -252,5 +258,13 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setErrorMsgTtl(Long errorMsgTtl) {
 		this.errorMsgTtl = errorMsgTtl;
+	}
+
+	public List<String> getHeaderExclusions() {
+		return headerExclusions;
+	}
+
+	public void setHeaderExclusions(List<String> headerExclusions) {
+		this.headerExclusions = headerExclusions;
 	}
 }
