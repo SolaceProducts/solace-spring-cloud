@@ -234,13 +234,13 @@ abstract class InboundXMLMessageListener implements Runnable {
 
 	Message<?> createOneMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
 		setAttributesIfNecessary(bytesXMLMessage, acknowledgmentCallback);
-		return xmlMessageMapper.map(bytesXMLMessage, acknowledgmentCallback, consumerProperties.getExtension());
+		return xmlMessageMapper.map(bytesXMLMessage, acknowledgmentCallback);
 	}
 
 	Message<?> createBatchMessage(List<BytesXMLMessage> bytesXMLMessages,
 								  AcknowledgmentCallback acknowledgmentCallback) {
 		setAttributesIfNecessary(bytesXMLMessages, acknowledgmentCallback);
-		return xmlMessageMapper.mapBatchMessage(bytesXMLMessages, acknowledgmentCallback, consumerProperties.getExtension());
+		return xmlMessageMapper.mapBatchMessage(bytesXMLMessages, acknowledgmentCallback);
 	}
 
 	void sendOneToConsumer(final Message<?> message, final BytesXMLMessage bytesXMLMessage)

@@ -164,18 +164,18 @@ public class XMLMessageMapper {
 	}
 
 	public Message<List<?>> mapBatchMessage(List<? extends XMLMessage> xmlMessages,
-											AcknowledgmentCallback acknowledgmentCallback, SolaceConsumerProperties solaceConsumerProperties)
+											AcknowledgmentCallback acknowledgmentCallback)
 			throws SolaceMessageConversionException {
-		return mapBatchMessage(xmlMessages, acknowledgmentCallback, false, solaceConsumerProperties);
+		return mapBatchMessage(xmlMessages, acknowledgmentCallback, false);
 	}
 
 	public Message<List<?>> mapBatchMessage(List<? extends XMLMessage> xmlMessages,
 											AcknowledgmentCallback acknowledgmentCallback,
-											boolean setRawMessageHeader, SolaceConsumerProperties solaceConsumerProperties) throws SolaceMessageConversionException {
+											boolean setRawMessageHeader) throws SolaceMessageConversionException {
 		List<Map<String, Object>> batchedHeaders = new ArrayList<>();
 		List<Object> batchedPayloads = new ArrayList<>();
 		for (XMLMessage xmlMessage : xmlMessages) {
-			Message<?> message = mapInternal(xmlMessage, solaceConsumerProperties).build();
+			Message<?> message = mapInternal(xmlMessage).build();
 			batchedHeaders.add(message.getHeaders());
 			batchedPayloads.add(message.getPayload());
 		}
@@ -186,21 +186,20 @@ public class XMLMessageMapper {
 				.build();
 	}
 
-	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback, SolaceConsumerProperties solaceConsumerProperties)
+	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback)
 			throws SolaceMessageConversionException {
-		return map(xmlMessage, acknowledgmentCallback, false, solaceConsumerProperties);
+		return map(xmlMessage, acknowledgmentCallback, false);
 	}
 
 	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback,
-						  boolean setRawMessageHeader, SolaceConsumerProperties solaceConsumerProperties) throws SolaceMessageConversionException {
-		return injectRootMessageHeaders(mapInternal(xmlMessage, solaceConsumerProperties), acknowledgmentCallback, setRawMessageHeader ?
+						  boolean setRawMessageHeader) throws SolaceMessageConversionException {
+		return injectRootMessageHeaders(mapInternal(xmlMessage), acknowledgmentCallback, setRawMessageHeader ?
 				xmlMessage : null).build();
 	}
 
-	private AbstractIntegrationMessageBuilder<?> mapInternal(XMLMessage xmlMessage, SolaceConsumerProperties solaceConsumerProperties)
+	private AbstractIntegrationMessageBuilder<?> mapInternal(XMLMessage xmlMessage)
 			throws SolaceMessageConversionException {
 		SDTMap metadata = xmlMessage.getProperties();
-		List<String> excludedHeaders = solaceConsumerProperties.getHeaderExclusions();
 
 		Object payload;
 		if (xmlMessage instanceof BytesMessage) {
@@ -248,7 +247,7 @@ public class XMLMessageMapper {
 
 		AbstractIntegrationMessageBuilder<?> builder = MESSAGE_BUILDER_FACTORY
 				.withPayload(payload)
-				.copyHeaders(map(metadata, excludedHeaders))
+				.copyHeaders(map(metadata))
 				.setHeaderIfAbsent(MessageHeaders.CONTENT_TYPE, xmlMessage.getHTTPContentType());
 
 		if (isNullPayload) {
@@ -260,9 +259,6 @@ public class XMLMessageMapper {
 
 		for (Map.Entry<String, SolaceHeaderMeta<?>> header : SolaceHeaderMeta.META.entrySet()) {
 			if (!header.getValue().isReadable()) {
-				continue;
-			}
-			if (excludedHeaders != null && excludedHeaders.contains(header.getKey())) {
 				continue;
 			}
 			if (ignoredHeaderProperties.contains(header.getKey())) {
@@ -324,19 +320,15 @@ public class XMLMessageMapper {
 		return metadata;
 	}
 
-	MessageHeaders map(SDTMap metadata, Collection<String> excludedHeaders) {
+	MessageHeaders map(SDTMap metadata) {
 		if (metadata == null) {
 			return new MessageHeaders(Collections.emptyMap());
 		}
 
-		final Collection<String> exclusionList =
-				excludedHeaders != null ? excludedHeaders : Collections.emptyList();
-
 		Map<String,Object> headers = new HashMap<>();
 
 		// Deserialize headers
-		if (!exclusionList.contains(SolaceBinderHeaders.SERIALIZED_HEADERS) &&
-				metadata.containsKey(SolaceBinderHeaders.SERIALIZED_HEADERS)) {
+		if (metadata.containsKey(SolaceBinderHeaders.SERIALIZED_HEADERS)) {
 			Encoder encoder = null;
 			if (metadata.containsKey(SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING)) {
 				String encoding = rethrowableCall(metadata::getString, SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING);
@@ -353,9 +345,7 @@ public class XMLMessageMapper {
 					rethrowableCall(metadata::getString, SolaceBinderHeaders.SERIALIZED_HEADERS));
 
 			for (String headerName : serializedHeaders) {
-				if (exclusionList.contains(headerName)) {
-					continue;
-				} else if (metadata.containsKey(headerName)) {
+				if (metadata.containsKey(headerName)) {
 					byte[] serializedValue = encoder != null ?
 							encoder.decode(rethrowableCall(metadata::getString, headerName)) :
 							rethrowableCall(metadata::getBytes, headerName);
@@ -369,7 +359,6 @@ public class XMLMessageMapper {
 		}
 
 		metadata.keySet().stream()
-				.filter(h -> !exclusionList.contains(h))
 				.filter(h -> !headers.containsKey(h))
 				.filter(h -> !SolaceBinderHeaderMeta.META.containsKey(h))
 				.filter(h -> !SolaceHeaderMeta.META.containsKey(h))
@@ -381,8 +370,7 @@ public class XMLMessageMapper {
 					headers.put(h, value);
 				});
 
-		if (!exclusionList.contains(SolaceBinderHeaders.MESSAGE_VERSION) &&
-				metadata.containsKey(SolaceBinderHeaders.MESSAGE_VERSION)) {
+		if (metadata.containsKey(SolaceBinderHeaders.MESSAGE_VERSION)) {
 			int messageVersion = rethrowableCall(metadata::getInteger, SolaceBinderHeaders.MESSAGE_VERSION);
 			headers.put(SolaceBinderHeaders.MESSAGE_VERSION, messageVersion);
 		}
