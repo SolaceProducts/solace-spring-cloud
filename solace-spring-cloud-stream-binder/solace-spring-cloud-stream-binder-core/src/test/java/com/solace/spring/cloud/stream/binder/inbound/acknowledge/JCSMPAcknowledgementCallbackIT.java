@@ -1,20 +1,26 @@
 package com.solace.spring.cloud.stream.binder.inbound.acknowledge;
 
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
-import com.solace.spring.cloud.stream.binder.util.RetryableAckRebindTask;
-import com.solace.spring.cloud.stream.binder.util.RetryableRebindTask;
-import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import com.solace.spring.cloud.stream.binder.util.SolaceBatchAcknowledgementException;
-import com.solace.spring.cloud.stream.binder.util.SolaceStaleMessageException;
 import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
-import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
@@ -22,6 +28,7 @@ import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueMsg;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueMsgsResponse;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorSempMeta;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorSempPaging;
+import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -29,9 +36,17 @@ import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.TextMessage;
+import com.solacesystems.jcsmp.XMLMessage.Outcome;
 import com.solacesystems.jcsmp.XMLMessageProducer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.junit.function.ThrowingRunnable;
@@ -47,25 +62,6 @@ import org.mockito.Mockito;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
-import org.springframework.util.backoff.FixedBackOff;
-
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.stream.Collectors;
-
-import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
 		initializers = ConfigDataApplicationContextInitializer.class)
@@ -73,7 +69,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @ExtendWith(PubSubPlusExtension.class)
 @Timeout(value = 2, unit = TimeUnit.MINUTES)
 public class JCSMPAcknowledgementCallbackIT {
-	private RetryableTaskService retryableTaskService;
 	private final AtomicReference<FlowReceiverContainer> flowReceiverContainerReference = new AtomicReference<>();
 	private XMLMessageProducer producer;
 	private String vpnName;
@@ -83,7 +78,6 @@ public class JCSMPAcknowledgementCallbackIT {
 
 	@BeforeEach
 	public void setup(JCSMPSession jcsmpSession) throws Exception {
-		retryableTaskService = Mockito.spy(new RetryableTaskService());
 		producer = jcsmpSession.getMessageProducer(new JCSMPSessionProducerManager.CloudStreamEventHandler());
 		vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 	}
@@ -107,7 +101,7 @@ public class JCSMPAcknowledgementCallbackIT {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, !isDurable, retryableTaskService);
+				flowReceiverContainer);
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers);
@@ -129,7 +123,7 @@ public class JCSMPAcknowledgementCallbackIT {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, !isDurable, retryableTaskService);
+				flowReceiverContainer);
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers);
@@ -137,17 +131,10 @@ public class JCSMPAcknowledgementCallbackIT {
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
 		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 
-		if (isDurable) {
-			// Message was redelivered
-			validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
-			validateQueueBindSuccesses(sempV2Api, queue.getName(), 2);
-			validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
-		} else {
-			// Message was discarded
-			validateNumEnqueuedMessages(sempV2Api, queue.getName(), 0);
-			validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
-			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
-		}
+		//Message won't be redelivered
+		validateNumEnqueuedMessages(sempV2Api, queue.getName(), 0);
+		validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
+		validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
 	}
 
 	@ParameterizedTest(name = "[{index}] numMessages={0}")
@@ -158,7 +145,7 @@ public class JCSMPAcknowledgementCallbackIT {
 							   SempV2Api sempV2Api) throws Exception {
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, !queue.isDurable(), retryableTaskService);
+				flowReceiverContainer);
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers);
@@ -174,13 +161,6 @@ public class JCSMPAcknowledgementCallbackIT {
 		logger.info("Acknowledging messages");
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
 		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
-
-		logger.info(String.format("Verifying %s message containers haven't been ack'd", numMessages));
-		assertThat(messageContainers).allSatisfy(messageContainer -> {
-			assertThat(messageContainer.isAcknowledged()).isFalse();
-			assertThat(messageContainer.isStale()).isTrue();
-		});
 
 		validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
 		validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
@@ -198,7 +178,6 @@ public class JCSMPAcknowledgementCallbackIT {
 				.getMsgVpnQueue(vpnName, queue.getName(), null)
 				.getData()
 				.isEgressEnabled()));
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5)); // rebind task retry interval
 
 		// Message was redelivered
 		logger.info("Verifying message was redelivered");
@@ -216,7 +195,7 @@ public class JCSMPAcknowledgementCallbackIT {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, !isDurable, retryableTaskService);
+				flowReceiverContainer);
 
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
 		ErrorQueueInfrastructure errorQueueInfrastructure = initializeErrorQueueInfrastructure(jcsmpSession,
@@ -243,7 +222,7 @@ public class JCSMPAcknowledgementCallbackIT {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, !isDurable, retryableTaskService);
+				flowReceiverContainer);
 
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
 		ErrorQueueInfrastructure errorQueueInfrastructure = initializeErrorQueueInfrastructure(jcsmpSession,
@@ -264,20 +243,11 @@ public class JCSMPAcknowledgementCallbackIT {
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
 		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 
-		if (isDurable) {
-			// Message was redelivered
-			logger.info("Verifying message was redelivered");
-			validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
-			validateQueueBindSuccesses(sempV2Api, queue.getName(), 2);
-			validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
-		} else {
-			// Message was discarded
-			logger.info("Verifying message was discarded");
-			validateNumEnqueuedMessages(sempV2Api, queue.getName(), 0);
-			validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
-			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
-		}
+		validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
+		validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
+		validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
 
+		//Validate Error Queue Stats
 		validateNumEnqueuedMessages(sempV2Api, errorQueueInfrastructure.getErrorQueueName(), 0);
 		validateNumRedeliveredMessages(sempV2Api, errorQueueInfrastructure.getErrorQueueName(), 0);
 	}
@@ -291,26 +261,17 @@ public class JCSMPAcknowledgementCallbackIT {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, !isDurable, retryableTaskService);
+				flowReceiverContainer);
 
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers);
 
-		if (isDurable) {
-			acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
-			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-			validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
-			validateQueueBindSuccesses(sempV2Api, queue.getName(), 2);
-			validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
-		} else {
-			SolaceAcknowledgmentException thrown = assertThrows(SolaceAcknowledgmentException.class,
-					() -> acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE));
-			assertThat(acknowledgmentCallback.isAcknowledged()).isFalse();
-			assertThat(thrown).hasRootCauseInstanceOf(UnsupportedOperationException.class);
-			assertThat(ExceptionUtils.getRootCause(thrown.getCause()))
-					.hasMessageContaining("not supported with temporary queues");
-		}
+		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
+		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+		validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
+		validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
+		validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
 	}
 
 	@ParameterizedTest(name = "[{index}] numMessages={0}")
@@ -319,7 +280,7 @@ public class JCSMPAcknowledgementCallbackIT {
 			throws Exception {
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, false, retryableTaskService);
+				flowReceiverContainer);
 
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
@@ -336,13 +297,7 @@ public class JCSMPAcknowledgementCallbackIT {
 		logger.info("Acknowledging messages");
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
 		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
 
-		logger.info(String.format("Verifying %s message containers haven't been ack'd", numMessages));
-		assertThat(messageContainers).allSatisfy(messageContainer -> {
-			assertThat(messageContainer.isAcknowledged()).isFalse();
-			assertThat(messageContainer.isStale()).isTrue();
-		});
 		validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
 		validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
 		validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
@@ -359,76 +314,6 @@ public class JCSMPAcknowledgementCallbackIT {
 				.getMsgVpnQueue(vpnName, queue.getName(), null)
 				.getData()
 				.isEgressEnabled()));
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5)); // rebind task retry interval
-
-		// Message was redelivered
-		logger.info("Verifying message was redelivered");
-		validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
-		validateQueueBindSuccesses(sempV2Api, queue.getName(), 2);
-		validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
-	}
-
-	@ParameterizedTest(name = "[{index}] numMessages={0}")
-	@ValueSource(ints = {1, 255})
-	public void testRequeueDelegateWhileRebinding(int numMessages,
-												  JCSMPSession jcsmpSession,
-												  Queue queue,
-												  SempV2Api sempV2Api,
-												  @ExecSvc(poolSize = 1) ExecutorService executorService)
-			throws Exception {
-		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
-		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, false, retryableTaskService);
-
-		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
-		MessageContainer blockingContainer = sendAndReceiveMessages(queue, flowReceiverContainer, 1).get(0);
-		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
-				messageContainers);
-
-		Future<UUID> rebindFuture = executorService.submit(() ->
-				flowReceiverContainer.rebind(messageContainers.get(0).getFlowReceiverReferenceId()));
-		Thread.sleep(1000);
-		assertFalse(rebindFuture.isDone());
-
-		for (MessageContainer messageContainer : messageContainers) {
-			// force async rebind
-			Mockito.doReturn(null).doCallRealMethod().when(flowReceiverContainer)
-					.acknowledgeRebind(messageContainer, true);
-		}
-
-		logger.info(String.format("Acknowledging %s message containers", messageContainers.size()));
-		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
-		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-
-		if (acknowledgmentCallback instanceof JCSMPBatchAcknowledgementCallback) {
-			Mockito.verify(retryableTaskService, Mockito.times(2)).submit(
-					new RetryableRebindTask(flowReceiverContainer,
-							messageContainers.get(0).getFlowReceiverReferenceId(), retryableTaskService));
-		} else {
-			for (MessageContainer messageContainer : messageContainers) {
-				Mockito.verify(retryableTaskService).submit(
-						new RetryableAckRebindTask(flowReceiverContainer, messageContainer, retryableTaskService));
-			}
-		}
-
-		Thread.sleep(TimeUnit.SECONDS.toMillis(3));
-
-		logger.info(String.format("Verifying %s message containers haven't been ack'd", messageContainers.size()));
-		assertThat(messageContainers).allSatisfy(messageContainer -> {
-			assertThat(messageContainer.isAcknowledged())
-					.isEqualTo(acknowledgmentCallback instanceof JCSMPAcknowledgementCallback ||
-							messageContainer.equals(messageContainers.get(messageContainers.size() - 1)));
-			assertThat(messageContainer.isStale()).isFalse();
-		});
-		assertFalse(rebindFuture.isDone());
-		validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages + 1);
-		validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
-		validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
-
-		logger.info("Acknowledging blocking message");
-		flowReceiverContainer.acknowledge(blockingContainer);
-		Thread.sleep(TimeUnit.SECONDS.toMillis(5)); // rebind task retry interval
-		assertNotNull(rebindFuture.get(1, TimeUnit.MINUTES));
 
 		// Message was redelivered
 		logger.info("Verifying message was redelivered");
@@ -446,7 +331,7 @@ public class JCSMPAcknowledgementCallbackIT {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, !isDurable, retryableTaskService);
+				flowReceiverContainer);
 
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
@@ -478,24 +363,16 @@ public class JCSMPAcknowledgementCallbackIT {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, !isDurable, retryableTaskService);
+				flowReceiverContainer);
 
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers);
 
 		ThrowingRunnable verifyExpectedState = () -> {
-			if (isDurable) {
-				// Message was redelivered
-				validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
-				validateQueueBindSuccesses(sempV2Api, queue.getName(), 2);
-				validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
-			} else {
-				// Message was discarded
-				validateNumEnqueuedMessages(sempV2Api, queue.getName(), 0);
-				validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
-				validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
-			}
+			validateNumEnqueuedMessages(sempV2Api, queue.getName(), 0);
+			validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
+			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
 		};
 
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
@@ -518,7 +395,7 @@ public class JCSMPAcknowledgementCallbackIT {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, !isDurable, retryableTaskService);
+				flowReceiverContainer);
 
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
 		ErrorQueueInfrastructure errorQueueInfrastructure = initializeErrorQueueInfrastructure(jcsmpSession,
@@ -545,15 +422,16 @@ public class JCSMPAcknowledgementCallbackIT {
 		}
 	}
 
-	@ParameterizedTest(name = "[{index}] numMessages={0}")
-	@ValueSource(ints = {1, 255})
-	public void testReAckAfterRequeue(int numMessages,
+	@CartesianTest(name = "[{index}] numMessages={0}, isDurable={1}")
+	public void testReAckAfterRequeue(@Values(ints = {1, 255}) int numMessages,
+										@Values(booleans = {false, true}) boolean isDurable,
 									  JCSMPSession jcsmpSession,
-									  Queue queue,
+									  Queue durableQueue,
 									  SempV2Api sempV2Api) throws Throwable {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, false, retryableTaskService);
+				flowReceiverContainer);
 
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages);
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
@@ -561,7 +439,7 @@ public class JCSMPAcknowledgementCallbackIT {
 
 		ThrowingRunnable verifyExpectedState = () -> {
 			validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
-			validateQueueBindSuccesses(sempV2Api, queue.getName(), 2);
+			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
 			validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
 		};
 
@@ -577,7 +455,7 @@ public class JCSMPAcknowledgementCallbackIT {
 	}
 
 	@CartesianTest(name = "[{index}] numMessages={0}, isDurable={1}, createErrorQueue={2}")
-	public void testAckStaleMessage(@Values(ints = {1, 255}) int numMessages,
+	public void testAckWhenFlowUnbound(@Values(ints = {1, 255}) int numMessages,
 									@Values(booleans = {false, true}) boolean isDurable,
 									@Values(booleans = {false, true}) boolean createErrorQueue,
 									JCSMPSession jcsmpSession,
@@ -586,12 +464,12 @@ public class JCSMPAcknowledgementCallbackIT {
 		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
 		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
 		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
-				flowReceiverContainer, !isDurable, retryableTaskService);
+				flowReceiverContainer);
 
 		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages)
 				.stream()
 				.map(Mockito::spy)
-				.peek(m -> Mockito.when(m.isStale()).thenReturn(true))
+				.peek(m -> when(m.isStale()).thenReturn(true))
 				.collect(Collectors.toList());
 		Optional<String> errorQueueName = Optional.of(createErrorQueue)
 				.filter(e -> e)
@@ -600,12 +478,12 @@ public class JCSMPAcknowledgementCallbackIT {
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers);
 
+		flowReceiverContainer.unbind();
+
 		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
 			SolaceAcknowledgmentException exception = assertThrows(SolaceAcknowledgmentException.class,
 					() -> acknowledgmentCallback.acknowledge(status));
-			Class<? extends Throwable> expectedRootCause = !isDurable &&
-					status.equals(AcknowledgmentCallback.Status.REQUEUE) ? UnsupportedOperationException.class :
-					SolaceStaleMessageException.class;
+			Class<? extends Throwable> expectedRootCause = IllegalStateException.class;
 
 			assertThat(acknowledgmentCallback.isAcknowledged())
 					.describedAs("Unexpected ack state for %s re-ack", status)
@@ -614,17 +492,68 @@ public class JCSMPAcknowledgementCallbackIT {
 					.describedAs("Unexpected root cause for %s re-ack", status)
 					.hasRootCauseInstanceOf(expectedRootCause);
 			if (exception instanceof SolaceBatchAcknowledgementException) {
-				assertThat(((SolaceBatchAcknowledgementException) exception).isAllStaleExceptions())
+				assertThat((SolaceBatchAcknowledgementException) exception)
 						.describedAs("Unexpected stale batch state for %s re-ack", status)
-						.isEqualTo(expectedRootCause.equals(SolaceStaleMessageException.class));
+						.hasRootCauseInstanceOf(expectedRootCause);
 			}
-			validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
-			validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
-			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
+
+			if(isDurable) {
+				validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
+				validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
+				validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
+			}
 			if (errorQueueName.isPresent()) {
 				validateNumEnqueuedMessages(sempV2Api, errorQueueName.get(), 0);
 				validateNumRedeliveredMessages(sempV2Api, errorQueueName.get(), 0);
 			}
+		}
+	}
+
+	@CartesianTest(name = "[{index}] numMessages={0}, isDurable={1}")
+	public void testAckThrowsException(@Values(ints = {1, 255}) int numMessages,
+			@Values(booleans = {false, true}) boolean isDurable,
+			JCSMPSession jcsmpSession, Queue durableQueue, SempV2Api sempV2Api) throws Exception {
+		Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+		FlowReceiverContainer flowReceiverContainer = initializeFlowReceiverContainer(jcsmpSession, queue);
+		JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
+				flowReceiverContainer);
+
+		List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer, numMessages)
+				.stream()
+				.map(Mockito::spy)
+				.peek(m -> {
+					BytesXMLMessage bytesXMLMessage = spy(m.getMessage());
+					when(m.getMessage()).thenReturn(bytesXMLMessage);
+					try {
+						doThrow(new JCSMPException("expected exception")).when(bytesXMLMessage)
+								.settle(any(Outcome.class));
+					} catch (Exception e) {
+						fail("Unwanted exception");
+					}
+				}).collect(Collectors.toList());
+
+		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
+				messageContainers);
+
+		assertThat(acknowledgmentCallback.isAcknowledged()).isFalse();
+		assertThat(acknowledgmentCallback.isAutoAck()).isTrue();
+		assertThat(SolaceAckUtil.isErrorQueueEnabled(acknowledgmentCallback)).isFalse();
+
+		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
+			SolaceAcknowledgmentException exception = assertThrows(SolaceAcknowledgmentException.class,
+					() -> acknowledgmentCallback.acknowledge(status));
+			Class<? extends Throwable> expectedRootCause = JCSMPException.class;
+
+			assertThat(acknowledgmentCallback.isAcknowledged())
+					.describedAs("Unexpected ack state for %s re-ack", status)
+					.isFalse();
+			assertThat(exception)
+					.describedAs("Unexpected root cause for %s re-ack", status)
+					.hasRootCauseInstanceOf(expectedRootCause);
+
+			validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
+			validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
+			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
 		}
 	}
 
@@ -668,11 +597,10 @@ public class JCSMPAcknowledgementCallbackIT {
 
 	private FlowReceiverContainer initializeFlowReceiverContainer(JCSMPSession jcsmpSession, Queue queue)
 			throws JCSMPException {
-		if (flowReceiverContainerReference.compareAndSet(null, Mockito.spy(new FlowReceiverContainer(
+		if (flowReceiverContainerReference.compareAndSet(null, spy(new FlowReceiverContainer(
 				jcsmpSession,
 				queue.getName(),
-				new EndpointProperties(),
-				new FixedBackOff(1, Long.MAX_VALUE))))) {
+				new EndpointProperties())))) {
 			flowReceiverContainerReference.get().bind();
 		}
 		return flowReceiverContainerReference.get();
@@ -687,8 +615,7 @@ public class JCSMPAcknowledgementCallbackIT {
 		String producerManagerKey = UUID.randomUUID().toString();
 		JCSMPSessionProducerManager jcsmpSessionProducerManager = new JCSMPSessionProducerManager(jcsmpSession);
 		ErrorQueueInfrastructure errorQueueInfrastructure = new ErrorQueueInfrastructure(jcsmpSessionProducerManager,
-				producerManagerKey, RandomStringUtils.randomAlphanumeric(20), new SolaceConsumerProperties(),
-				new RetryableTaskService());
+				producerManagerKey, RandomStringUtils.randomAlphanumeric(20), new SolaceConsumerProperties());
 		Queue errorQueue = JCSMPFactory.onlyInstance().createQueue(errorQueueInfrastructure.getErrorQueueName());
 		ackCallbackFactory.setErrorQueueInfrastructure(errorQueueInfrastructure);
 		closeErrorQueueInfrastructureCallback = () -> {

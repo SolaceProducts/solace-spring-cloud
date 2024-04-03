@@ -3,21 +3,16 @@ package com.solace.spring.cloud.stream.binder.util;
 import java.util.Set;
 
 public class SolaceBatchAcknowledgementException extends SolaceAcknowledgmentException {
-	private final Set<Integer> failedMessageIndexes;
-	private final boolean allStaleExceptions;
 
-	public SolaceBatchAcknowledgementException(Set<Integer> failedMessageIndexes, boolean allStaleExceptions,
-											   String message, Throwable cause) {
-		super(message, cause);
-		this.failedMessageIndexes = failedMessageIndexes;
-		this.allStaleExceptions = allStaleExceptions;
-	}
+  private final Set<Integer> failedMessageIndexes;
 
-	public Set<Integer> getFailedMessageIndexes() {
-		return failedMessageIndexes;
-	}
+  public SolaceBatchAcknowledgementException(Set<Integer> failedMessageIndexes, String message,
+      Throwable cause) {
+    super(message, cause);
+    this.failedMessageIndexes = failedMessageIndexes;
+  }
 
-	public boolean isAllStaleExceptions() {
-		return allStaleExceptions;
-	}
+  public Set<Integer> getFailedMessageIndexes() {
+    return failedMessageIndexes;
+  }
 }

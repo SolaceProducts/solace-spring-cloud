@@ -1,15 +1,12 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
+import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties.DEFAULTS_PREFIX;
 import com.solacesystems.jcsmp.EndpointProperties;
+import jakarta.validation.constraints.Min;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.Assert;
-
-import jakarta.validation.constraints.Min;
-import java.util.concurrent.TimeUnit;
-
-import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties.DEFAULTS_PREFIX;
 
 @SuppressWarnings("ConfigurationProperties")
 @ConfigurationProperties(DEFAULTS_PREFIX + ".consumer")
@@ -35,29 +32,6 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * <p>Only applicable when {@code batchMode} is {@code false}.</p>
 	 */
 	private int polledConsumerWaitTimeInMillis = 100;
-	/**
-	 * The maximum time to wait for all unacknowledged messages to be acknowledged before a flow receiver rebind.
-	 * Will wait forever if set to a value less than 0.
-	 */
-	private long flowPreRebindWaitTimeout = TimeUnit.SECONDS.toMillis(10);
-
-	/**
-	 * The initial interval (milliseconds) to back-off when rebinding a flow.
-	 */
-	@Min(1)
-	private long flowRebindBackOffInitialInterval = TimeUnit.SECONDS.toMillis(1);
-
-	/**
-	 * The maximum interval (milliseconds) to back-off when rebinding a flow.
-	 */
-	@Min(1)
-	private long flowRebindBackOffMaxInterval = TimeUnit.SECONDS.toMillis(30);
-
-	/**
-	 * The multiplier to apply to the back-off interval between each rebind of a flow.
-	 */
-	@Min(1)
-	private double flowRebindBackOffMultiplier = 1.5;
 
 	/**
 	 * An array of additional topic subscriptions to be applied on the consumer group queue.
@@ -164,44 +138,6 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setPolledConsumerWaitTimeInMillis(int polledConsumerWaitTimeInMillis) {
 		this.polledConsumerWaitTimeInMillis = polledConsumerWaitTimeInMillis;
-	}
-
-	public long getFlowPreRebindWaitTimeout() {
-		return flowPreRebindWaitTimeout;
-	}
-
-	public void setFlowPreRebindWaitTimeout(long flowPreRebindWaitTimeout) {
-		this.flowPreRebindWaitTimeout = flowPreRebindWaitTimeout;
-	}
-
-	public long getFlowRebindBackOffInitialInterval() {
-		return flowRebindBackOffInitialInterval;
-	}
-
-	public void setFlowRebindBackOffInitialInterval(long flowRebindBackOffInitialInterval) {
-		Assert.isTrue(flowRebindBackOffInitialInterval >= 1,
-				"flow rebind back-off initial interval must be greater than or equal to 1");
-		this.flowRebindBackOffInitialInterval = flowRebindBackOffInitialInterval;
-	}
-
-	public long getFlowRebindBackOffMaxInterval() {
-		return flowRebindBackOffMaxInterval;
-	}
-
-	public void setFlowRebindBackOffMaxInterval(long flowRebindBackOffMaxInterval) {
-		Assert.isTrue(flowRebindBackOffMaxInterval >= 1,
-				"flow rebind back-off max interval must be greater than or equal to 1");
-		this.flowRebindBackOffMaxInterval = flowRebindBackOffMaxInterval;
-	}
-
-	public double getFlowRebindBackOffMultiplier() {
-		return flowRebindBackOffMultiplier;
-	}
-
-	public void setFlowRebindBackOffMultiplier(double flowRebindBackOffMultiplier) {
-		Assert.isTrue(flowRebindBackOffMultiplier >= 1.0,
-				"flow rebind back-off multiplier must be greater than or equal to 1.0");
-		this.flowRebindBackOffMultiplier = flowRebindBackOffMultiplier;
 	}
 
 	public String[] getQueueAdditionalSubscriptions() {
