@@ -55,7 +55,7 @@ class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
           if (logger.isDebugEnabled()) {
             logger.debug(String.format("%s %s: Will be re-queued onto queue %s",
                 XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
-                flowReceiverContainer.getQueueName()));
+                flowReceiverContainer.getEndpointName()));
           }
           flowReceiverContainer.requeue(messageContainer);
       }

@@ -4,27 +4,19 @@ import com.solace.spring.cloud.stream.binder.health.SolaceBinderHealthAccessor;
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.provisioning.EndpointProvider;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
+import com.solacesystems.jcsmp.ConsumerFlowProperties;
+import com.solacesystems.jcsmp.Endpoint;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.XMLMessage.Outcome;
 import com.solacesystems.jcsmp.impl.JCSMPBasicSession;
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.Consumer;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -42,6 +34,17 @@ import org.springframework.retry.RetryListener;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.util.Assert;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
+
 public class JCSMPInboundChannelAdapter extends MessageProducerSupport implements OrderlyShutdownCapable, Pausable {
 	private final String id = UUID.randomUUID().toString();
 	private final SolaceConsumerDestination consumerDestination;
@@ -53,7 +56,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 	private final List<FlowReceiverContainer> flowReceivers;
 	private final Set<AtomicBoolean> consumerStopFlags;
 	private final AtomicBoolean paused = new AtomicBoolean(false);
-	private Consumer<Queue> postStart;
+	private Consumer<Endpoint> postStart;
 	private ExecutorService executorService;
 	private AtomicBoolean remoteStopFlag;
 	private RetryTemplate retryTemplate;
@@ -80,9 +83,10 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
 	@Override
 	protected void doStart() {
-		final String queueName = consumerDestination.getName();
-		logger.info(String.format("Creating %s consumer flows for queue %s <inbound adapter %s>",
-				consumerProperties.getConcurrency(), queueName, id));
+		final String endpointName = consumerDestination.getName();
+		logger.info(String.format("Creating %s consumer flows for %s %s <inbound adapter %s>",
+				consumerProperties.getExtension().getEndpointType(),
+				consumerProperties.getConcurrency(), endpointName, id));
 
 		if (isRunning()) {
 			logger.warn(String.format("Nothing to do. Inbound message channel adapter %s is already running", id));
@@ -109,15 +113,28 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			stopAllConsumers();
 		}
 
-		Queue queue = JCSMPFactory.onlyInstance().createQueue(queueName);
+		EndpointProvider<?> endpointProvider = EndpointProvider.from(consumerProperties.getExtension().getEndpointType());
+
+		if (endpointProvider == null) {
+			String msg = String.format("Consumer not supported for destination type %s <inbound adapter %s>",
+					consumerProperties.getExtension().getEndpointType(), id);
+			logger.warn(msg);
+			throw new MessagingException(msg);
+		}
+
+		Endpoint endpoint = endpointProvider.createInstance(endpointName);
+
+		ConsumerFlowProperties consumerFlowProperties = SolaceProvisioningUtil.getConsumerFlowProperties(
+				consumerDestination.getBindingDestinationName(), consumerProperties);
 
 		for (int i = 0, numToCreate = consumerProperties.getConcurrency() - flowReceivers.size(); i < numToCreate; i++) {
 			logger.info(String.format("Creating consumer %s of %s for inbound adapter %s",
 					i + 1, consumerProperties.getConcurrency(), id));
 			FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(
 					jcsmpSession,
-					queueName,
-					endpointProperties);
+					endpoint,
+					endpointProperties,
+					consumerFlowProperties);
 
 			if (paused.get()) {
 				logger.info(String.format(
@@ -146,7 +163,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		}
 
 		if (retryTemplate != null) {
-			retryTemplate.registerListener(new SolaceRetryListener(queueName));
+			retryTemplate.registerListener(new SolaceRetryListener(endpointName));
 		}
 
 		executorService = Executors.newFixedThreadPool(consumerProperties.getConcurrency());
@@ -159,7 +176,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		executorService.shutdown(); // All tasks have been submitted
 
 		if (postStart != null) {
-			postStart.accept(queue);
+			postStart.accept(endpoint);
 		}
 	}
 
@@ -212,7 +229,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		return 0;
 	}
 
-	public void setPostStart(Consumer<Queue> postStart) {
+	public void setPostStart(Consumer<Endpoint> postStart) {
 		this.postStart = postStart;
 	}
 

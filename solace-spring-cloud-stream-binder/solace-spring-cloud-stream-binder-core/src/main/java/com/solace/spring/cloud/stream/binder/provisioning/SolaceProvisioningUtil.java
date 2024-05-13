@@ -3,7 +3,10 @@ package com.solace.spring.cloud.stream.binder.provisioning;
 import com.solace.spring.cloud.stream.binder.properties.SolaceCommonProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
+import com.solace.spring.cloud.stream.binder.util.EndpointType;
+import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.JCSMPFactory;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.provisioning.ProvisioningException;
@@ -42,12 +45,33 @@ public class SolaceProvisioningUtil {
 		return endpointProperties;
 	}
 
-	public static boolean isAnonQueue(String groupName) {
+	public static ConsumerFlowProperties getConsumerFlowProperties(
+			String destinationName,
+			ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
+		ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+		consumerFlowProperties.setSelector(properties.getExtension().getFlowSelector());
+
+		if (EndpointType.TOPIC_ENDPOINT.equals(properties.getExtension().getEndpointType())) {
+			String subscription;
+			if (properties.getExtension().isAddDestinationAsSubscriptionToQueue()) {
+				subscription = destinationName;
+			} else if (properties.getExtension().getQueueAdditionalSubscriptions().length == 1) {
+				subscription = properties.getExtension().getQueueAdditionalSubscriptions()[0];
+			} else {
+				throw new IllegalArgumentException("Exactly one subscription must be provided for topic endpoints");
+			}
+			consumerFlowProperties.setNewSubscription(JCSMPFactory.onlyInstance().createTopic(subscription));
+		}
+
+		return consumerFlowProperties;
+	}
+
+	public static boolean isAnonEndpoint(String groupName) {
 		return !StringUtils.hasText(groupName);
 	}
 
-	public static boolean isDurableQueue(String groupName) {
-		return !isAnonQueue(groupName);
+	public static boolean isDurableEndpoint(String groupName) {
+		return !isAnonEndpoint(groupName);
 	}
 
 	public static String getTopicName(String baseTopicName, SolaceCommonProperties properties) {

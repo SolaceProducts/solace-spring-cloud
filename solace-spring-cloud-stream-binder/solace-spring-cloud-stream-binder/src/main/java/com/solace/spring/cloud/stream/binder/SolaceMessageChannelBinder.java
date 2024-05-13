@@ -11,12 +11,13 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingPro
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
-import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisioner;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solacesystems.jcsmp.Context;
+import com.solacesystems.jcsmp.Endpoint;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
@@ -46,7 +47,7 @@ public class SolaceMessageChannelBinder
 		extends AbstractMessageChannelBinder<
 						ExtendedConsumerProperties<SolaceConsumerProperties>,
 						ExtendedProducerProperties<SolaceProducerProperties>,
-						SolaceQueueProvisioner>
+		SolaceEndpointProvisioner>
 		implements ExtendedPropertiesBinder<MessageChannel, SolaceConsumerProperties, SolaceProducerProperties>,
 				DisposableBean {
 
@@ -60,11 +61,11 @@ public class SolaceMessageChannelBinder
 	private static final SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
 	@Nullable private SolaceBinderHealthAccessor solaceBinderHealthAccessor;
 
-	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, SolaceQueueProvisioner solaceQueueProvisioner) {
-		this(jcsmpSession, null, solaceQueueProvisioner);
+	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, SolaceEndpointProvisioner solaceEndpointProvisioner) {
+		this(jcsmpSession, null, solaceEndpointProvisioner);
 	}
-	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, Context jcsmpContext, SolaceQueueProvisioner solaceQueueProvisioner) {
-		super(new String[0], solaceQueueProvisioner);
+	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, Context jcsmpContext, SolaceEndpointProvisioner solaceEndpointProvisioner) {
+		super(new String[0], solaceEndpointProvisioner);
 		this.jcsmpSession = jcsmpSession;
 		this.jcsmpContext = jcsmpContext;
 		this.sessionProducerManager = new JCSMPSessionProducerManager(jcsmpSession);
@@ -258,14 +259,16 @@ public class SolaceMessageChannelBinder
 		Temporary endpoints are only provisioned when the consumer is created.
 		Ideally, these should be done within the provisioningProvider itself.
 	*/
-	private Consumer<Queue> getConsumerPostStart(SolaceConsumerDestination destination,
-												 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
-		return (queue) -> {
-			provisioningProvider.addSubscriptionToQueue(queue, destination.getBindingDestinationName(), properties.getExtension(), true);
+	private Consumer<Endpoint> getConsumerPostStart(SolaceConsumerDestination destination,
+													ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
+		return (endpoint) -> {
+			if (endpoint instanceof Queue queue) {
+				provisioningProvider.addSubscriptionToQueue(queue, destination.getBindingDestinationName(), properties.getExtension(), true);
 
-			//Process additional subscriptions
-			for (String subscription : destination.getAdditionalSubscriptions()) {
-				provisioningProvider.addSubscriptionToQueue(queue, subscription, properties.getExtension(), false);
+				//Process additional subscriptions
+				for (String subscription : destination.getAdditionalSubscriptions()) {
+					provisioningProvider.addSubscriptionToQueue(queue, subscription, properties.getExtension(), false);
+				}
 			}
 		};
 	}

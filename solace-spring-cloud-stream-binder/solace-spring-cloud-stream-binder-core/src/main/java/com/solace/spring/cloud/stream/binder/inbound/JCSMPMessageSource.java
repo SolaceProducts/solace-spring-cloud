@@ -5,7 +5,9 @@ import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledg
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.SolaceAckUtil;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.provisioning.EndpointProvider;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
@@ -13,21 +15,12 @@ import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.ClosedFacilityException;
+import com.solacesystems.jcsmp.ConsumerFlowProperties;
+import com.solacesystems.jcsmp.Endpoint;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPTransportException;
-import com.solacesystems.jcsmp.Queue;
-import java.util.List;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.context.Lifecycle;
 import org.springframework.integration.acks.AckUtils;
@@ -38,14 +31,23 @@ import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessagingException;
 
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
+
 public class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle, Pausable {
 	private final String id = UUID.randomUUID().toString();
-	private final String queueName;
+	private final SolaceConsumerDestination consumerDestination;
 	private final JCSMPSession jcsmpSession;
 	private final BatchCollector batchCollector;
 	private final EndpointProperties endpointProperties;
 	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
-	private final boolean hasTemporaryQueue;
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
 	private FlowReceiverContainer flowReceiverContainer;
 	private JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
@@ -56,20 +58,19 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private volatile boolean paused = false;
 	private Supplier<Boolean> remoteStopFlag;
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
-	private Consumer<Queue> postStart;
+	private Consumer<Endpoint> postStart;
 
-	public JCSMPMessageSource(SolaceConsumerDestination destination,
+	public JCSMPMessageSource(SolaceConsumerDestination consumerDestination,
 							  JCSMPSession jcsmpSession,
 							  @Nullable BatchCollector batchCollector,
 							  ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
 							  EndpointProperties endpointProperties,
 							  @Nullable SolaceMeterAccessor solaceMeterAccessor) {
-		this.queueName = destination.getName();
+		this.consumerDestination = consumerDestination;
 		this.jcsmpSession = jcsmpSession;
 		this.batchCollector = batchCollector;
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
-		this.hasTemporaryQueue = destination.isTemporary();
 		this.solaceMeterAccessor = solaceMeterAccessor;
 	}
 
@@ -136,7 +137,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				}
 				return null;
 			} else {
-				String msg = String.format("Unable to consume message from queue %s", queueName);
+				String msg = String.format("Unable to consume message from queue %s", consumerDestination.getName());
 				logger.warn(e, msg);
 				throw new MessagingException(msg, e);
 			}
@@ -144,7 +145,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			if (logger.isDebugEnabled()) {
 				// Might be thrown when async rebinding and this is configured with a super short timeout.
 				// Hide this so we don't flood the logger.
-				logger.debug(e, String.format("Unable to receive message from queue %s", queueName));
+				logger.debug(e, String.format("Unable to receive message from queue %s", consumerDestination.getName()));
 			}
 			return null;
 		}
@@ -206,18 +207,34 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
-			logger.info(String.format("Creating consumer to queue %s <message source ID: %s>", queueName, id));
+			logger.info(String.format("Creating consumer to %s %s <message source ID: %s>",
+					consumerProperties.getExtension().getEndpointType(), consumerDestination.getName(), id));
 			if (isRunning()) {
 				logger.warn(String.format("Nothing to do, message source %s is already running", id));
 				return;
 			}
 
 			try {
+				EndpointProvider<?> endpointProvider = EndpointProvider.from(consumerProperties.getExtension().getEndpointType());
+
+				if (endpointProvider == null) {
+					String msg = String.format("Consumer not supported for destination type %s <inbound adapter %s>",
+							consumerProperties.getExtension().getEndpointType(), id);
+					logger.warn(msg);
+					throw new IllegalArgumentException(msg);
+				}
+
+				Endpoint endpoint = endpointProvider.createInstance(consumerDestination.getName());
+
 				if (flowReceiverContainer == null) {
+					ConsumerFlowProperties consumerFlowProperties = SolaceProvisioningUtil.getConsumerFlowProperties(
+							consumerDestination.getBindingDestinationName(), consumerProperties);
+
 					flowReceiverContainer = new FlowReceiverContainer(
 							jcsmpSession,
-							queueName,
-							endpointProperties);
+							endpoint,
+							endpointProperties,
+							consumerFlowProperties);
 					this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
 
 					if (paused) {
@@ -233,14 +250,14 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				}
 
 				flowReceiverContainer.bind();
+
+				if (postStart != null) {
+					postStart.accept(endpoint);
+				}
 			} catch (JCSMPException e) {
 				String msg = String.format("Unable to get a message consumer for session %s", jcsmpSession.getSessionName());
 				logger.warn(e, msg);
 				throw new RuntimeException(msg, e);
-			}
-
-			if (postStart != null) {
-				postStart.accept(JCSMPFactory.onlyInstance().createQueue(queueName));
 			}
 
 			ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer);
@@ -258,7 +275,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		writeLock.lock();
 		try {
 			if (!isRunning()) return;
-			logger.info(String.format("Stopping consumer to queue %s <message source ID: %s>", queueName, id));
+			logger.info(String.format("Stopping consumer to queue %s <message source ID: %s>", consumerDestination.getName(), id));
 			flowReceiverContainer.unbind();
 			if (solaceBinderHealthAccessor != null) {
 				solaceBinderHealthAccessor.removeFlow(consumerProperties.getBindingName(), 0);
@@ -278,7 +295,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		this.errorQueueInfrastructure = errorQueueInfrastructure;
 	}
 
-	public void setPostStart(Consumer<Queue> postStart) {
+	public void setPostStart(Consumer<Endpoint> postStart) {
 		this.postStart = postStart;
 	}
 

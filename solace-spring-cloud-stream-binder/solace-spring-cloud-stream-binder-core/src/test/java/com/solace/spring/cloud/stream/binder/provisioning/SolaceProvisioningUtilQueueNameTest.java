@@ -146,7 +146,7 @@ public class SolaceProvisioningUtilQueueNameTest {
         String group = "    aGroupWithSpaces    ";
 
         SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(destination, group, consumerProperties,
-                SolaceProvisioningUtil.isAnonQueue(group));
+                SolaceProvisioningUtil.isAnonEndpoint(group));
 
         assertEquals("scst/wk/aGroupWithSpaces/plain/destination/with/spaces", queueNames.getConsumerGroupQueueName());
         assertEquals("scst/error/wk/aGroupWithSpaces/plain/destination/with/spaces", queueNames.getErrorQueueName());
@@ -160,7 +160,7 @@ public class SolaceProvisioningUtilQueueNameTest {
         String group = "    ";
 
         SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil
-                .getQueueNames(destination, group, consumerProperties, SolaceProvisioningUtil.isAnonQueue(group));
+                .getQueueNames(destination, group, consumerProperties, SolaceProvisioningUtil.isAnonEndpoint(group));
 
         assertThat(queueNames.getConsumerGroupQueueName(), matchesRegex("scst\\/an\\/\\b[0-9a-f]{8}\\b(?:-[0-9a-f]{4}){3}-\\b[0-9a-f]{12}\\b\\/plain\\/simple\\/destination"));
         assertThat(queueNames.getErrorQueueName(), matchesRegex("scst\\/error\\/an\\/\\b[0-9a-f]{8}\\b(?:-[0-9a-f]{4}){3}-\\b[0-9a-f]{12}\\b\\/plain\\/simple\\/destination"));
@@ -174,7 +174,7 @@ public class SolaceProvisioningUtilQueueNameTest {
         String group = null;
 
         SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil
-                .getQueueNames(destination, group, consumerProperties, SolaceProvisioningUtil.isAnonQueue(group));
+                .getQueueNames(destination, group, consumerProperties, SolaceProvisioningUtil.isAnonEndpoint(group));
 
         assertThat(queueNames.getConsumerGroupQueueName(), matchesRegex("scst\\/an\\/\\b[0-9a-f]{8}\\b(?:-[0-9a-f]{4}){3}-\\b[0-9a-f]{12}\\b\\/plain\\/simple\\/destination"));
         assertThat(queueNames.getErrorQueueName(), matchesRegex("scst\\/error\\/an\\/\\b[0-9a-f]{8}\\b(?:-[0-9a-f]{4}){3}-\\b[0-9a-f]{12}\\b\\/plain\\/simple\\/destination"));

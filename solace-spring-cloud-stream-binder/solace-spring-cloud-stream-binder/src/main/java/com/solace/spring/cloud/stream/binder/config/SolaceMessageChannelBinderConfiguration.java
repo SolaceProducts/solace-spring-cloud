@@ -1,24 +1,19 @@
 package com.solace.spring.cloud.stream.binder.config;
 
-import static com.solacesystems.jcsmp.XMLMessage.Outcome.ACCEPTED;
-import static com.solacesystems.jcsmp.XMLMessage.Outcome.FAILED;
-import static com.solacesystems.jcsmp.XMLMessage.Outcome.REJECTED;
 import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
 import com.solace.spring.cloud.stream.binder.health.SolaceBinderHealthAccessor;
 import com.solace.spring.cloud.stream.binder.health.handlers.SolaceSessionEventHandler;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties;
-import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisioner;
 import com.solacesystems.jcsmp.Context;
 import com.solacesystems.jcsmp.ContextProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.XMLMessage.Outcome;
 import com.solacesystems.jcsmp.impl.JCSMPBasicSession;
 import jakarta.annotation.PostConstruct;
-import java.util.Set;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -26,6 +21,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.lang.Nullable;
+
+import java.util.Set;
+
+import static com.solacesystems.jcsmp.XMLMessage.Outcome.ACCEPTED;
+import static com.solacesystems.jcsmp.XMLMessage.Outcome.FAILED;
+import static com.solacesystems.jcsmp.XMLMessage.Outcome.REJECTED;
 
 @Configuration
 @Import(SolaceHealthIndicatorsConfiguration.class)
@@ -85,10 +86,10 @@ public class SolaceMessageChannelBinderConfiguration {
 	}
 
 	@Bean
-	SolaceMessageChannelBinder solaceMessageChannelBinder(SolaceQueueProvisioner solaceQueueProvisioner,
-	                                                      @Nullable SolaceBinderHealthAccessor solaceBinderHealthAccessor,
-	                                                      @Nullable SolaceMeterAccessor solaceMeterAccessor) {
-		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, context, solaceQueueProvisioner);
+	SolaceMessageChannelBinder solaceMessageChannelBinder(SolaceEndpointProvisioner solaceEndpointProvisioner,
+														  @Nullable SolaceBinderHealthAccessor solaceBinderHealthAccessor,
+														  @Nullable SolaceMeterAccessor solaceMeterAccessor) {
+		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, context, solaceEndpointProvisioner);
 		binder.setExtendedBindingProperties(solaceExtendedBindingProperties);
 		binder.setSolaceMeterAccessor(solaceMeterAccessor);
 		if (solaceBinderHealthAccessor != null) {
@@ -98,8 +99,8 @@ public class SolaceMessageChannelBinderConfiguration {
 	}
 
 	@Bean
-	SolaceQueueProvisioner provisioningProvider() {
-		return new SolaceQueueProvisioner(jcsmpSession);
+	SolaceEndpointProvisioner provisioningProvider() {
+		return new SolaceEndpointProvisioner(jcsmpSession);
 	}
 
 }
