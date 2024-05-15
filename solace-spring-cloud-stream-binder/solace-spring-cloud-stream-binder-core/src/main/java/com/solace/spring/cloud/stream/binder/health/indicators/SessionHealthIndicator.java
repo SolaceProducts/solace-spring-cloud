@@ -3,7 +3,6 @@ package com.solace.spring.cloud.stream.binder.health.indicators;
 import com.solace.spring.cloud.stream.binder.health.base.SolaceHealthIndicator;
 import com.solace.spring.cloud.stream.binder.properties.SolaceSessionHealthProperties;
 import com.solacesystems.jcsmp.SessionEventArgs;
-import lombok.NoArgsConstructor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.lang.Nullable;
@@ -12,7 +11,6 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
-@NoArgsConstructor
 public class SessionHealthIndicator extends SolaceHealthIndicator {
 	private final AtomicInteger reconnectCount = new AtomicInteger(0);
 	private SolaceSessionHealthProperties solaceHealthSessionProperties;
