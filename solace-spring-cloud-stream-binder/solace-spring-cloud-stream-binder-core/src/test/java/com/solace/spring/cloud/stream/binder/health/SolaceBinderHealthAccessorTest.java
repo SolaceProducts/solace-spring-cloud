@@ -6,6 +6,7 @@ import com.solace.spring.cloud.stream.binder.health.contributors.FlowsHealthCont
 import com.solace.spring.cloud.stream.binder.health.contributors.SolaceBinderHealthContributor;
 import com.solace.spring.cloud.stream.binder.health.indicators.FlowHealthIndicator;
 import com.solace.spring.cloud.stream.binder.health.indicators.SessionHealthIndicator;
+import com.solace.spring.cloud.stream.binder.properties.SolaceSessionHealthProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -28,7 +29,7 @@ public class SolaceBinderHealthAccessorTest {
 							@Mock FlowReceiverContainer flowReceiverContainer) {
 		Mockito.when(flowReceiverContainer.getId()).thenReturn(UUID.randomUUID());
 		SolaceBinderHealthContributor healthContributor = new SolaceBinderHealthContributor(
-				new SessionHealthIndicator(),
+				new SessionHealthIndicator(new SolaceSessionHealthProperties()),
 				new BindingsHealthContributor());
 		SolaceBinderHealthAccessor healthAccessor = new SolaceBinderHealthAccessor(healthContributor);
 
@@ -66,7 +67,7 @@ public class SolaceBinderHealthAccessorTest {
 			@CartesianTest.Values(booleans = {false, true}) boolean bindingHealthContributorExists,
 			@CartesianTest.Values(booleans = {false, true}) boolean flowHealthExists) {
 		SolaceBinderHealthContributor healthContributor = new SolaceBinderHealthContributor(
-				new SessionHealthIndicator(),
+				new SessionHealthIndicator(new SolaceSessionHealthProperties()),
 				new BindingsHealthContributor());
 		SolaceBinderHealthAccessor healthAccessor = new SolaceBinderHealthAccessor(healthContributor);
 

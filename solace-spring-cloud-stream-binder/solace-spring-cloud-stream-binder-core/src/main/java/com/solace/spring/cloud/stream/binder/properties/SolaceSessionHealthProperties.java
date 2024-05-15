@@ -1,8 +1,6 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
 import jakarta.validation.constraints.Min;
-import lombok.Getter;
-import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.validation.annotation.Validated;
 
@@ -17,7 +15,13 @@ public class SolaceSessionHealthProperties {
 	 * effectively does nothing.</p>
 	 */
 	@Min(0)
-	@Getter
-	@Setter
 	private long reconnectAttemptsUntilDown = 0;
+
+	public long getReconnectAttemptsUntilDown() {
+		return reconnectAttemptsUntilDown;
+	}
+
+	public void setReconnectAttemptsUntilDown(long reconnectAttemptsUntilDown) {
+		this.reconnectAttemptsUntilDown = reconnectAttemptsUntilDown;
+	}
 }

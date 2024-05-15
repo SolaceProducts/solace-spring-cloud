@@ -10,6 +10,7 @@ import com.solace.spring.cloud.stream.binder.health.contributors.SolaceBinderHea
 import com.solace.spring.cloud.stream.binder.health.indicators.FlowHealthIndicator;
 import com.solace.spring.cloud.stream.binder.health.indicators.SessionHealthIndicator;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.properties.SolaceSessionHealthProperties;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
 import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
@@ -70,7 +71,8 @@ public class SolaceBinderHealthIT {
 
 		BindingsHealthContributor bindingsHealthContributor = new BindingsHealthContributor();
 		binder.getBinder().setSolaceBinderHealthAccessor(new SolaceBinderHealthAccessor(
-				new SolaceBinderHealthContributor(new SessionHealthIndicator(), bindingsHealthContributor)));
+				new SolaceBinderHealthContributor(new SessionHealthIndicator(new SolaceSessionHealthProperties()),
+						bindingsHealthContributor)));
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
@@ -143,7 +145,8 @@ public class SolaceBinderHealthIT {
 
 		BindingsHealthContributor bindingsHealthContributor = new BindingsHealthContributor();
 		binder.getBinder().setSolaceBinderHealthAccessor(new SolaceBinderHealthAccessor(
-				new SolaceBinderHealthContributor(new SessionHealthIndicator(), bindingsHealthContributor)));
+				new SolaceBinderHealthContributor(new SessionHealthIndicator(new SolaceSessionHealthProperties()),
+						bindingsHealthContributor)));
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
@@ -201,7 +204,8 @@ public class SolaceBinderHealthIT {
 
 		BindingsHealthContributor bindingsHealthContributor = Mockito.spy(new BindingsHealthContributor());
 		binder.getBinder().setSolaceBinderHealthAccessor(new SolaceBinderHealthAccessor(
-				new SolaceBinderHealthContributor(new SessionHealthIndicator(), bindingsHealthContributor)));
+				new SolaceBinderHealthContributor(new SessionHealthIndicator(new SolaceSessionHealthProperties()),
+						bindingsHealthContributor)));
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
 

@@ -1,6 +1,5 @@
 package com.solace.spring.cloud.stream.binder.health.contributors;
 
-import lombok.Getter;
 import org.springframework.boot.actuate.health.CompositeHealthContributor;
 import org.springframework.boot.actuate.health.HealthContributor;
 import org.springframework.boot.actuate.health.NamedContributor;
@@ -10,7 +9,6 @@ import java.util.Iterator;
 import java.util.Set;
 
 public class BindingHealthContributor implements CompositeHealthContributor {
-	@Getter
 	private final FlowsHealthContributor flowsHealthContributor;
 	private static final String FLOWS = "flows";
 
@@ -28,5 +26,9 @@ public class BindingHealthContributor implements CompositeHealthContributor {
 		Set<NamedContributor<HealthContributor>> contributors = Collections
 				.singleton(NamedContributor.of(FLOWS, flowsHealthContributor));
 		return contributors.iterator();
+	}
+
+	public FlowsHealthContributor getFlowsHealthContributor() {
+		return flowsHealthContributor;
 	}
 }
