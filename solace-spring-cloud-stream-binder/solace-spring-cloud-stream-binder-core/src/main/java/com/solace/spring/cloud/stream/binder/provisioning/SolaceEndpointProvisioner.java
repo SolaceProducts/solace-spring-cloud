@@ -28,6 +28,7 @@ import org.springframework.cloud.stream.provisioning.ProvisioningProvider;
 import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -142,13 +143,9 @@ public class SolaceEndpointProvisioner
 		Endpoint endpoint = provisionEndpoint(groupQueueName, endpointProvider, isDurableEndpoint, endpointProperties,
 				consumerFlowProperties, properties.getExtension().isProvisionDurableQueue(), properties.isAutoStartup());
 
-		if (!EndpointType.QUEUE.equals(endpointType) &&
-				properties.getExtension().getQueueAdditionalSubscriptions().length > 0) {
-			throw new ProvisioningException(String.format(
-					"Destination type %s does not support additional subscriptions", endpointType));
-		}
-
-		Set<String> additionalSubscriptions = new HashSet<>(Arrays.asList(properties.getExtension().getQueueAdditionalSubscriptions()));
+		Set<String> additionalSubscriptions = EndpointType.QUEUE.equals(endpointType) ?
+				Set.of(properties.getExtension().getQueueAdditionalSubscriptions()) :
+				Collections.emptySet();
 
 		String errorQueueName = null;
 		if (properties.getExtension().isAutoBindErrorQueue()) {
