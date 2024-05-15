@@ -13,7 +13,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class SessionHealthIndicator extends SolaceHealthIndicator {
 	private final AtomicInteger reconnectCount = new AtomicInteger(0);
-	private SolaceSessionHealthProperties solaceHealthSessionProperties;
+	private final SolaceSessionHealthProperties solaceHealthSessionProperties;
 	private final ReentrantLock writeLock = new ReentrantLock();
 	private static final Log logger = LogFactory.getLog(SessionHealthIndicator.class);
 
