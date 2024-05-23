@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder.outbound;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
 import com.solace.spring.cloud.stream.binder.util.CorrelationData;
 import com.solace.spring.cloud.stream.binder.util.DestinationType;
@@ -155,7 +156,9 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		}
 
 		try {
-			producer = producerManager.get(id);
+			producerManager.get(id);
+			producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
+					new JCSMPSessionProducerManager.CloudStreamEventHandler());
 		} catch (Exception e) {
 			String msg = String.format("Unable to get a message producer for session %s", jcsmpSession.getSessionName());
 			logger.warn(msg, e);
@@ -169,6 +172,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	public void stop() {
 		if (!isRunning()) return;
 		logger.info(String.format("Stopping producer to %s %s <message handler ID: %s>", configDestinationType, configDestination.getName(), id));
+		producer.close();
 		producerManager.release(id);
 		isRunning = false;
 	}

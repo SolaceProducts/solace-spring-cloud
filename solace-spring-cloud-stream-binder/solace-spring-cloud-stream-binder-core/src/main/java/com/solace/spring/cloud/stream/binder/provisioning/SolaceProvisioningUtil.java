@@ -4,6 +4,9 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceCommonProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.JCSMPProperties;
+import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.ProducerFlowProperties;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.provisioning.ProvisioningException;
@@ -40,6 +43,24 @@ public class SolaceProvisioningUtil {
 		endpointProperties.setQuota(properties.getErrorQueueQuota());
 		endpointProperties.setRespectsMsgTTL(properties.getErrorQueueRespectsMsgTtl());
 		return endpointProperties;
+	}
+
+	public static ProducerFlowProperties getProducerFlowProperties(JCSMPSession jcsmpSession) {
+		ProducerFlowProperties producerFlowProperties = new ProducerFlowProperties();
+
+		// SOL-118898:
+		// PUB_ACK_WINDOW_SIZE & ACK_EVENT_MODE aren't automatically used as default values for
+		// ProducerFlowProperties.
+		Integer pubAckWindowSize = (Integer) jcsmpSession.getProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE);
+		if (pubAckWindowSize != null) {
+			producerFlowProperties.setWindowSize(pubAckWindowSize);
+		}
+		String ackEventMode = (String) jcsmpSession.getProperty(JCSMPProperties.ACK_EVENT_MODE);
+		if (ackEventMode != null) {
+			producerFlowProperties.setAckEventMode(ackEventMode);
+		}
+
+		return producerFlowProperties;
 	}
 
 	public static boolean isAnonQueue(String groupName) {
