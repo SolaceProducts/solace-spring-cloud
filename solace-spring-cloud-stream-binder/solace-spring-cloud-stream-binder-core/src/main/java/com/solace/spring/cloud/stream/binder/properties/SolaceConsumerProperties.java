@@ -55,7 +55,10 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 */
 	private String queueNameExpression = "'scst/' + (isAnonymous ? 'an/' : 'wk/') + (group?.trim() + '/') + 'plain/' + destination.trim().replaceAll('[*>]', '_')";
 
-	private String flowSelector = null;
+	/**
+	 * A SQL-92 selector expression to use for selection of messages for consumption. Max of 2000 characters.
+	 */
+	private String selector = null;
 
 	// Error Queue Properties ---------
 	/**
@@ -174,12 +177,12 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.queueNameExpression = queueNameExpression;
 	}
 
-	public String getFlowSelector() {
-		return flowSelector;
+	public String getSelector() {
+		return selector;
 	}
 
-	public void setFlowSelector(String flowSelector) {
-		this.flowSelector = flowSelector;
+	public void setSelector(String selector) {
+		this.selector = selector;
 	}
 
 	public boolean isAutoBindErrorQueue() {
