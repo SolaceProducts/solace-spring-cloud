@@ -1455,5 +1455,5 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
         ).as("Unexpected selector on endpoint %s", endpointName)
                 .isEqualTo(selector));
     }
-    
+
 }
