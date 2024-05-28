@@ -30,7 +30,7 @@ public interface EndpointProvider<T extends Endpoint> {
 
 		@Override
 		public Queue createTemporaryEndpoint(String name, JCSMPSession jcsmpSession) throws JCSMPException {
-			return jcsmpSession.createTemporaryQueue();
+			return jcsmpSession.createTemporaryQueue(name);
 		}
 	}
 
