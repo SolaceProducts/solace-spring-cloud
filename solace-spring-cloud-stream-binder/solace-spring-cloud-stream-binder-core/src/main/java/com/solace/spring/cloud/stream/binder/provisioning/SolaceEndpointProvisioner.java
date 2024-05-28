@@ -71,7 +71,7 @@ public class SolaceEndpointProvisioner
 
 				for (String groupName : requiredGroups) {
 					String queueName = SolaceProvisioningUtil.getQueueName(topicName, groupName, properties);
-					LOGGER.info("Creating durable queue {} for required consumer group {}", queueName, groupName);
+					LOGGER.info("Creating durable endpoint {} for required consumer group {}", queueName, groupName);
 					Queue queue = provisionQueueIfRequired(queueName, properties);
 					addSubscriptionToQueue(queue, topicName, properties.getExtension(), true);
 

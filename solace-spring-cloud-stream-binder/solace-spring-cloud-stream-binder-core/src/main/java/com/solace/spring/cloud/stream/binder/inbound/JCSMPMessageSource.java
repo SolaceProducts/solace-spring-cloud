@@ -137,7 +137,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				}
 				return null;
 			} else {
-				String msg = String.format("Unable to consume message from queue %s", consumerDestination.getName());
+				String msg = String.format("Unable to consume message from endpoint %s", consumerDestination.getName());
 				logger.warn(e, msg);
 				throw new MessagingException(msg, e);
 			}
@@ -145,7 +145,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			if (logger.isDebugEnabled()) {
 				// Might be thrown when async rebinding and this is configured with a super short timeout.
 				// Hide this so we don't flood the logger.
-				logger.debug(e, String.format("Unable to receive message from queue %s", consumerDestination.getName()));
+				logger.debug(e, String.format("Unable to receive message from endpoint %s", consumerDestination.getName()));
 			}
 			return null;
 		}
@@ -275,7 +275,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		writeLock.lock();
 		try {
 			if (!isRunning()) return;
-			logger.info(String.format("Stopping consumer to queue %s <message source ID: %s>", consumerDestination.getName(), id));
+			logger.info(String.format("Stopping consumer to endpoint %s <message source ID: %s>", consumerDestination.getName(), id));
 			flowReceiverContainer.unbind();
 			if (solaceBinderHealthAccessor != null) {
 				solaceBinderHealthAccessor.removeFlow(consumerProperties.getBindingName(), 0);
