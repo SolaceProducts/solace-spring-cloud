@@ -88,6 +88,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
     @AfterEach
     void tearDown() {
+        super.cleanup();
         close();
     }
 
