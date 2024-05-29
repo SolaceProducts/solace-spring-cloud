@@ -25,7 +25,6 @@ import com.solacesystems.jcsmp.StreamMessage;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLContentMessage;
 import com.solacesystems.jcsmp.XMLMessage;
-import java.util.UUID;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.logging.Log;
@@ -75,6 +74,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
@@ -230,48 +230,42 @@ public class XMLMessageMapperTest {
 		assertNotEquals(0, writeableHeaders.size(), "Test header set was empty");
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
-			Object value;
-			switch (header.getKey()) {
-				case SolaceHeaders.APPLICATION_MESSAGE_ID:
-				case SolaceHeaders.APPLICATION_MESSAGE_TYPE:
-				case SolaceHeaders.CORRELATION_ID:
-				case SolaceHeaders.HTTP_CONTENT_ENCODING:
-				case SolaceHeaders.SENDER_ID:
-					value = RandomStringUtils.randomAlphanumeric(10);
-					break;
-				case SolaceHeaders.DMQ_ELIGIBLE:
-					value = !(Boolean) ((SolaceHeaderMeta<?>) header.getValue()).getDefaultValueOverride();
-					break;
-				case SolaceHeaders.IS_REPLY:
-					value = true; //The opposite of what a Solace message defaults to
-					break;
-				case SolaceHeaders.EXPIRATION:
-				case SolaceHeaders.SENDER_TIMESTAMP:
-				case SolaceHeaders.SEQUENCE_NUMBER:
-				case SolaceHeaders.TIME_TO_LIVE:
-					value = (long) RandomUtils.nextInt(0, 10000);
-					break;
-				case SolaceHeaders.PRIORITY:
-					value = RandomUtils.nextInt(0, 255);
-					break;
-				case SolaceHeaders.REPLY_TO:
-					value = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(10));
-					break;
-				case SolaceHeaders.USER_DATA:
-					value = RandomStringUtils.randomAlphanumeric(10).getBytes();
-					break;
-				case SolaceBinderHeaders.PARTITION_KEY:
-					value = RandomStringUtils.randomAlphanumeric(10);
+			messageBuilder.setHeader(header.getKey(), Objects.requireNonNull(switch (header.getKey()) {
+				case SolaceHeaders.APPLICATION_MESSAGE_ID,
+					 SolaceHeaders.APPLICATION_MESSAGE_TYPE,
+					 SolaceHeaders.CORRELATION_ID,
+					 SolaceHeaders.HTTP_CONTENT_ENCODING,
+					 SolaceHeaders.SENDER_ID,
+					 SolaceBinderHeaders.TARGET_DESTINATION_TYPE ->
+						RandomStringUtils.randomAlphanumeric(10);
+				case SolaceHeaders.DMQ_ELIGIBLE ->
+						!(Boolean) ((SolaceHeaderMeta<?>) header.getValue()).getDefaultValueOverride();
+				case SolaceHeaders.IS_REPLY ->
+						true; //The opposite of what a Solace message defaults to
+				case SolaceHeaders.EXPIRATION,
+					 SolaceHeaders.SENDER_TIMESTAMP,
+					 SolaceHeaders.SEQUENCE_NUMBER,
+					 SolaceHeaders.TIME_TO_LIVE ->
+						(long) RandomUtils.nextInt(0, 10000);
+				case SolaceHeaders.PRIORITY ->
+						RandomUtils.nextInt(0, 255);
+				case SolaceHeaders.REPLY_TO ->
+						JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(10));
+				case SolaceHeaders.USER_DATA ->
+						RandomStringUtils.randomAlphanumeric(10).getBytes();
+				case SolaceBinderHeaders.CONFIRM_CORRELATION ->
+						new CorrelationData();
+				case SolaceBinderHeaders.PARTITION_KEY -> {
 					// This value is overwritten by binder-defined partition key header
 					messageBuilder.setHeader(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY,
 							RandomStringUtils.randomAlphanumeric(10));
-					break;
-				default:
-					value = null;
+					yield RandomStringUtils.randomAlphanumeric(10);
+				}
+				default -> {
 					fail(String.format("no test for header %s", header.getKey()));
-			}
-			assertNotNull(value);
-			messageBuilder.setHeader(header.getKey(), value);
+					yield null;
+				}
+			}));
 		}
 
 		Message<?> testSpringMessage = messageBuilder.build();
@@ -280,54 +274,42 @@ public class XMLMessageMapperTest {
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
 			Object expectedValue = testSpringMessage.getHeaders().get(header.getKey());
 			switch (header.getKey()) {
-				case SolaceHeaders.APPLICATION_MESSAGE_ID:
-					assertEquals(expectedValue, xmlMessage.getApplicationMessageId());
-					break;
-				case SolaceHeaders.APPLICATION_MESSAGE_TYPE:
-					assertEquals(expectedValue, xmlMessage.getApplicationMessageType());
-					break;
-				case SolaceHeaders.CORRELATION_ID:
-					assertEquals(expectedValue, xmlMessage.getCorrelationId());
-					break;
-				case SolaceHeaders.DMQ_ELIGIBLE:
-					assertEquals(expectedValue, xmlMessage.isDMQEligible());
-					break;
-				case SolaceHeaders.EXPIRATION:
-					assertEquals(expectedValue, xmlMessage.getExpiration());
-					break;
-				case SolaceHeaders.IS_REPLY:
-					assertEquals(expectedValue, xmlMessage.isReplyMessage());
-					break;
-				case SolaceHeaders.HTTP_CONTENT_ENCODING:
-					assertEquals(expectedValue, xmlMessage.getHTTPContentEncoding());
-					break;
-				case SolaceHeaders.PRIORITY:
-					assertEquals(expectedValue, xmlMessage.getPriority());
-					break;
-				case SolaceHeaders.REPLY_TO:
-					assertEquals(expectedValue, xmlMessage.getReplyTo());
-					break;
-				case SolaceHeaders.SENDER_ID:
-					assertEquals(expectedValue, xmlMessage.getSenderId());
-					break;
-				case SolaceHeaders.SENDER_TIMESTAMP:
-					assertEquals(expectedValue, xmlMessage.getSenderTimestamp());
-					break;
-				case SolaceHeaders.SEQUENCE_NUMBER:
-					assertEquals(expectedValue, xmlMessage.getSequenceNumber());
-					break;
-				case SolaceHeaders.TIME_TO_LIVE:
-					assertEquals(expectedValue, xmlMessage.getTimeToLive());
-					break;
-				case SolaceHeaders.USER_DATA:
-					assertEquals(expectedValue, xmlMessage.getUserData());
-					break;
-				case SolaceBinderHeaders.PARTITION_KEY:
-					assertEquals(expectedValue, xmlMessage.getProperties()
-							.getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY));
-					break;
-				default:
-					fail(String.format("no test for header %s", header.getKey()));
+				case SolaceHeaders.APPLICATION_MESSAGE_ID ->
+						assertEquals(expectedValue, xmlMessage.getApplicationMessageId());
+				case SolaceHeaders.APPLICATION_MESSAGE_TYPE ->
+						assertEquals(expectedValue, xmlMessage.getApplicationMessageType());
+				case SolaceHeaders.CORRELATION_ID ->
+						assertEquals(expectedValue, xmlMessage.getCorrelationId());
+				case SolaceHeaders.DMQ_ELIGIBLE ->
+						assertEquals(expectedValue, xmlMessage.isDMQEligible());
+				case SolaceHeaders.EXPIRATION ->
+						assertEquals(expectedValue, xmlMessage.getExpiration());
+				case SolaceHeaders.IS_REPLY ->
+						assertEquals(expectedValue, xmlMessage.isReplyMessage());
+				case SolaceHeaders.HTTP_CONTENT_ENCODING ->
+						assertEquals(expectedValue, xmlMessage.getHTTPContentEncoding());
+				case SolaceHeaders.PRIORITY ->
+						assertEquals(expectedValue, xmlMessage.getPriority());
+				case SolaceHeaders.REPLY_TO ->
+						assertEquals(expectedValue, xmlMessage.getReplyTo());
+				case SolaceHeaders.SENDER_ID ->
+						assertEquals(expectedValue, xmlMessage.getSenderId());
+				case SolaceHeaders.SENDER_TIMESTAMP ->
+						assertEquals(expectedValue, xmlMessage.getSenderTimestamp());
+				case SolaceHeaders.SEQUENCE_NUMBER ->
+						assertEquals(expectedValue, xmlMessage.getSequenceNumber());
+				case SolaceHeaders.TIME_TO_LIVE ->
+						assertEquals(expectedValue, xmlMessage.getTimeToLive());
+				case SolaceHeaders.USER_DATA ->
+						assertEquals(expectedValue, xmlMessage.getUserData());
+				case SolaceBinderHeaders.PARTITION_KEY ->
+						assertEquals(expectedValue, xmlMessage.getProperties()
+								.getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY));
+				case SolaceBinderHeaders.CONFIRM_CORRELATION,
+					 SolaceBinderHeaders.TARGET_DESTINATION_TYPE ->
+						// These Spring headers aren't ever reflected in the SMF message
+						assertNull(xmlMessage.getProperties().get(header.getKey()));
+				default -> fail(String.format("no test for header %s", header.getKey()));
 			}
 		}
 
@@ -485,6 +467,7 @@ public class XMLMessageMapperTest {
 					SolaceBinderHeaderMeta.META.entrySet().stream())
 				.flatMap(h -> h)
 				.filter(h -> h.getValue().isWritable())
+				.filter(h -> h.getValue().getScope().equals(HeaderMeta.Scope.WIRE))
 				.collect(Collectors.toSet());
 		assertNotEquals(0, writeableHeaders.size(), "Test header set was empty");
 
@@ -596,47 +579,38 @@ public class XMLMessageMapperTest {
 				SolaceBinderHeaderMeta.META.entrySet().stream())
 				.flatMap(h -> h)
 				.filter(h -> h.getValue().isWritable())
+				.filter(h -> h.getValue().getScope().equals(HeaderMeta.Scope.WIRE))
 				.collect(Collectors.toSet());
 		assertNotEquals(0, writeableHeaders.size(), "Test header set was empty");
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
-			Object value;
-			switch (header.getKey()) {
-			case SolaceHeaders.APPLICATION_MESSAGE_ID:
-			case SolaceHeaders.APPLICATION_MESSAGE_TYPE:
-			case SolaceHeaders.CORRELATION_ID:
-			case SolaceHeaders.HTTP_CONTENT_ENCODING:
-			case SolaceHeaders.SENDER_ID:
-			case SolaceBinderHeaders.PARTITION_KEY:
-				value = RandomStringUtils.randomAlphanumeric(10);
-				break;
-			case SolaceHeaders.DMQ_ELIGIBLE:
-				value = !(Boolean) ((SolaceHeaderMeta<?>) header.getValue()).getDefaultValueOverride();
-				break;
-			case SolaceHeaders.IS_REPLY:
-				value = true; //The opposite of what a Solace message defaults to
-				break;
-			case SolaceHeaders.EXPIRATION:
-			case SolaceHeaders.SENDER_TIMESTAMP:
-			case SolaceHeaders.SEQUENCE_NUMBER:
-			case SolaceHeaders.TIME_TO_LIVE:
-				value = (long) RandomUtils.nextInt(0, 10000);
-				break;
-			case SolaceHeaders.PRIORITY:
-				value = RandomUtils.nextInt(0, 255);
-				break;
-			case SolaceHeaders.REPLY_TO:
-				value = JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(10));
-				break;
-			case SolaceHeaders.USER_DATA:
-				value = RandomStringUtils.randomAlphanumeric(10).getBytes();
-				break;
-			default:
-				value = null;
-				fail(String.format("no test for header %s", header.getKey()));
-			}
-			assertNotNull(value);
-			messageBuilder.setHeader(header.getKey(), value);
+			messageBuilder.setHeader(header.getKey(), Objects.requireNonNull(switch (header.getKey()) {
+				case SolaceHeaders.APPLICATION_MESSAGE_ID,
+					 SolaceHeaders.APPLICATION_MESSAGE_TYPE,
+					 SolaceHeaders.CORRELATION_ID,
+					 SolaceHeaders.HTTP_CONTENT_ENCODING,
+					 SolaceHeaders.SENDER_ID,
+					 SolaceBinderHeaders.PARTITION_KEY ->
+						RandomStringUtils.randomAlphanumeric(10);
+				case SolaceHeaders.DMQ_ELIGIBLE ->
+						!(Boolean) ((SolaceHeaderMeta<?>) header.getValue()).getDefaultValueOverride();
+				case SolaceHeaders.IS_REPLY -> true; //The opposite of what a Solace message defaults to
+				case SolaceHeaders.EXPIRATION,
+					 SolaceHeaders.SENDER_TIMESTAMP,
+					 SolaceHeaders.SEQUENCE_NUMBER,
+					 SolaceHeaders.TIME_TO_LIVE ->
+						(long) RandomUtils.nextInt(0, 10000);
+				case SolaceHeaders.PRIORITY ->
+						RandomUtils.nextInt(0, 255);
+				case SolaceHeaders.REPLY_TO ->
+						JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(10));
+				case SolaceHeaders.USER_DATA ->
+						RandomStringUtils.randomAlphanumeric(10).getBytes();
+				default -> {
+					fail(String.format("no test for header %s", header.getKey()));
+					yield null;
+				}
+			}));
 		}
 
 		List<String> excludedHeaders = writeableHeaders.stream()
@@ -649,54 +623,39 @@ public class XMLMessageMapperTest {
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : writeableHeaders) {
 			Object expectedValue = testSpringMessage.getHeaders().get(header.getKey());
 			switch (header.getKey()) {
-			case SolaceHeaders.APPLICATION_MESSAGE_ID:
-				assertEquals(expectedValue, xmlMessage.getApplicationMessageId());
-				break;
-			case SolaceHeaders.APPLICATION_MESSAGE_TYPE:
-				assertEquals(expectedValue, xmlMessage.getApplicationMessageType());
-				break;
-			case SolaceHeaders.CORRELATION_ID:
-				assertEquals(expectedValue, xmlMessage.getCorrelationId());
-				break;
-			case SolaceHeaders.DMQ_ELIGIBLE:
-				assertEquals(expectedValue, xmlMessage.isDMQEligible());
-				break;
-			case SolaceHeaders.EXPIRATION:
-				assertEquals(expectedValue, xmlMessage.getExpiration());
-				break;
-			case SolaceHeaders.HTTP_CONTENT_ENCODING:
-				assertEquals(expectedValue, xmlMessage.getHTTPContentEncoding());
-				break;
-			case SolaceHeaders.IS_REPLY:
-				assertEquals(expectedValue, xmlMessage.isReplyMessage());
-				break;
-			case SolaceHeaders.PRIORITY:
-				assertEquals(expectedValue, xmlMessage.getPriority());
-				break;
-			case SolaceHeaders.REPLY_TO:
-				assertEquals(expectedValue, xmlMessage.getReplyTo());
-				break;
-			case SolaceHeaders.SENDER_ID:
-				assertEquals(expectedValue, xmlMessage.getSenderId());
-				break;
-			case SolaceHeaders.SENDER_TIMESTAMP:
-				assertEquals(expectedValue, xmlMessage.getSenderTimestamp());
-				break;
-			case SolaceHeaders.SEQUENCE_NUMBER:
-				assertEquals(expectedValue, xmlMessage.getSequenceNumber());
-				break;
-			case SolaceHeaders.TIME_TO_LIVE:
-				assertEquals(expectedValue, xmlMessage.getTimeToLive());
-				break;
-			case SolaceHeaders.USER_DATA:
-				assertEquals(expectedValue, xmlMessage.getUserData());
-				break;
-			case SolaceBinderHeaders.PARTITION_KEY:
-				assertEquals(expectedValue, xmlMessage.getProperties()
-						.getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY));
-				break;
-			default:
-				fail(String.format("no test for header %s", header.getKey()));
+				case SolaceHeaders.APPLICATION_MESSAGE_ID ->
+						assertEquals(expectedValue, xmlMessage.getApplicationMessageId());
+				case SolaceHeaders.APPLICATION_MESSAGE_TYPE ->
+						assertEquals(expectedValue, xmlMessage.getApplicationMessageType());
+				case SolaceHeaders.CORRELATION_ID ->
+						assertEquals(expectedValue, xmlMessage.getCorrelationId());
+				case SolaceHeaders.DMQ_ELIGIBLE ->
+						assertEquals(expectedValue, xmlMessage.isDMQEligible());
+				case SolaceHeaders.EXPIRATION ->
+						assertEquals(expectedValue, xmlMessage.getExpiration());
+				case SolaceHeaders.HTTP_CONTENT_ENCODING ->
+						assertEquals(expectedValue, xmlMessage.getHTTPContentEncoding());
+				case SolaceHeaders.IS_REPLY ->
+						assertEquals(expectedValue, xmlMessage.isReplyMessage());
+				case SolaceHeaders.PRIORITY ->
+					assertEquals(expectedValue, xmlMessage.getPriority());
+				case SolaceHeaders.REPLY_TO ->
+						assertEquals(expectedValue, xmlMessage.getReplyTo());
+				case SolaceHeaders.SENDER_ID ->
+						assertEquals(expectedValue, xmlMessage.getSenderId());
+				case SolaceHeaders.SENDER_TIMESTAMP ->
+						assertEquals(expectedValue, xmlMessage.getSenderTimestamp());
+				case SolaceHeaders.SEQUENCE_NUMBER ->
+						assertEquals(expectedValue, xmlMessage.getSequenceNumber());
+				case SolaceHeaders.TIME_TO_LIVE ->
+						assertEquals(expectedValue, xmlMessage.getTimeToLive());
+				case SolaceHeaders.USER_DATA ->
+						assertEquals(expectedValue, xmlMessage.getUserData());
+				case SolaceBinderHeaders.PARTITION_KEY ->
+						assertEquals(expectedValue, xmlMessage.getProperties()
+								.getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY));
+				default ->
+						fail(String.format("no test for header %s", header.getKey()));
 			}
 		}
 
@@ -1726,6 +1685,12 @@ public class XMLMessageMapperTest {
 									headerKey = XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY;
 							case XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY ->
 									headerValue = expectedHeaders.getOrDefault(SolaceBinderHeaders.PARTITION_KEY, headerValue);
+							case SolaceBinderHeaders.CONFIRM_CORRELATION,
+								 SolaceBinderHeaders.TARGET_DESTINATION_TYPE -> {
+								// These Spring headers aren't ever reflected in the SMF message
+								assertThat(metadata.keySet(), not(hasItem(headerKey)));
+								return;
+							}
 						}
 						assertThat(metadata.keySet(), hasItem(headerKey));
 						assertEquals(headerValue, ((ThrowingFunction<String, Object>) metadata::get).apply(headerKey));
