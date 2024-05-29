@@ -51,6 +51,7 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 
 	/**
 	 * When set to true, messages will be sent using local transactions.
+	 * The maximum transaction size is 256 messages.
 	 */
 	private boolean transacted = false;
 

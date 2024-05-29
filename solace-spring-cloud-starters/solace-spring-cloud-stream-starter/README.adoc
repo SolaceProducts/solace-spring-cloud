@@ -382,6 +382,8 @@ transacted::
 When set to `true`, messages will be delivered using local transactions.
 +
 Default: `false`
++
+NOTE: The maximum transaction size is 256 messages.
 
 provisionDurableQueue::
 Whether to provision durable queues for non-anonymous consumer groups or queue destinations. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker.
