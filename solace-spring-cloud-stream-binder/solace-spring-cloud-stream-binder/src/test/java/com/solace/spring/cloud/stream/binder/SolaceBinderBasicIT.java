@@ -20,11 +20,31 @@ import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.ApiException;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueTxFlow;
+import com.solacesystems.jcsmp.BytesMessage;
+import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.ClosedFacilityException;
+import com.solacesystems.jcsmp.Destination;
+import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.FlowReceiver;
+import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.JCSMPInterruptedException;
+import com.solacesystems.jcsmp.JCSMPProperties;
+import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.PropertyMismatchException;
 import com.solacesystems.jcsmp.Queue;
-import com.solacesystems.jcsmp.*;
+import com.solacesystems.jcsmp.Requestor;
+import com.solacesystems.jcsmp.TextMessage;
+import com.solacesystems.jcsmp.XMLMessageConsumer;
+import com.solacesystems.jcsmp.XMLMessageListener;
+import com.solacesystems.jcsmp.XMLMessageProducer;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.assertj.core.api.SoftAssertions;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
@@ -35,7 +55,12 @@ import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
-import org.springframework.cloud.stream.binder.*;
+import org.springframework.cloud.stream.binder.BinderHeaders;
+import org.springframework.cloud.stream.binder.Binding;
+import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
+import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
+import org.springframework.cloud.stream.binder.PartitionCapableBinderTests;
+import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.cloud.stream.provisioning.ProvisioningException;
 import org.springframework.integration.StaticMessageHeaderAccessor;
@@ -43,14 +68,25 @@ import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.context.IntegrationContextUtils;
 import org.springframework.integration.support.MessageBuilder;
 import org.springframework.messaging.Message;
-import org.springframework.messaging.*;
+import org.springframework.messaging.MessageChannel;
+import org.springframework.messaging.MessageHandler;
+import org.springframework.messaging.MessageHeaders;
+import org.springframework.messaging.MessagingException;
+import org.springframework.messaging.SubscribableChannel;
 import org.springframework.messaging.support.ErrorMessage;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.MimeTypeUtils;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -62,10 +98,15 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
-import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.*;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.errorQueueHasMessages;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.hasNestedHeader;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.isValidMessage;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.fail;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Runs all basic Spring Cloud Stream Binder functionality tests
@@ -107,13 +148,13 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
      *
      * @see #testSendAndReceive(TestInfo)
      */
-    @CartesianTest(name = "[{index}] channelType={0}, endpointType={1} ,batchMode={2}")
+    @CartesianTest(name = "[{index}] channelType={0}, endpointType={1}, batchMode={2}, transactedProducer={3}")
     @Execution(ExecutionMode.CONCURRENT)
     public <T> void testSendAndReceive(
             @Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
             @CartesianTest.Enum(EndpointType.class) EndpointType endpointType,
             @Values(booleans = {false, true}) boolean batchMode,
-            JCSMPProperties jcsmpProperties,
+			@Values(booleans = {false, true}) boolean transactedProducer,
             SempV2Api sempV2Api,
             SoftAssertions softly,
             TestInfo testInfo) throws Exception {
@@ -125,8 +166,11 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
         String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties(testInfo);
+		producerProperties.getExtension().setTransacted(transactedProducer);
         Binding<MessageChannel> producerBinding = binder.bindProducer(
-                destination0, moduleOutputChannel, createProducerProperties(testInfo));
+				destination0, moduleOutputChannel, producerProperties);
+
         ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
         consumerProperties.setBatchMode(batchMode);
         consumerProperties.getExtension().setEndpointType(endpointType);
@@ -146,16 +190,37 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
                 () -> messages.forEach(moduleOutputChannel::send),
                 msg -> softly.assertThat(msg).satisfies(isValidMessage(consumerProperties, messages)));
 
+		String vpnName = (String) getJcsmpSession().getProperty(JCSMPProperties.VPN_NAME);
+
         retryAssert(() -> assertThat(switch (endpointType) {
             case QUEUE -> sempV2Api.monitor()
-                    .getMsgVpnQueueMsgs(jcsmpProperties.getStringProperty(JCSMPProperties.VPN_NAME),
-                            binder.getConsumerQueueName(consumerBinding), 2, null, null, null)
+                    .getMsgVpnQueueMsgs(vpnName, binder.getConsumerQueueName(consumerBinding), 2, null, null, null)
                     .getData();
             case TOPIC_ENDPOINT -> sempV2Api.monitor()
-                    .getMsgVpnTopicEndpointMsgs(jcsmpProperties.getStringProperty(JCSMPProperties.VPN_NAME),
-                            binder.getConsumerQueueName(consumerBinding), 2, null, null, null)
+                    .getMsgVpnTopicEndpointMsgs(vpnName, binder.getConsumerQueueName(consumerBinding), 2, null, null, null)
                     .getData();
         }).hasSize(0));
+
+		if (transactedProducer) {
+			String clientName = (String) getJcsmpSession().getProperty(JCSMPProperties.CLIENT_NAME);
+			assertThat(sempV2Api.monitor().getMsgVpnClientRxFlows(vpnName, clientName, null, null, null, null)
+					.getData())
+					.filteredOn(f -> f.getSessionName() != null)
+					.singleElement()
+					.satisfies(
+							f -> assertThat(f.getGuaranteedMsgCount()).isEqualTo(messages.size()),
+							f -> assertThat(sempV2Api.monitor().getMsgVpnClientTransactedSession(
+											vpnName, clientName, f.getSessionName(), null)
+									.getData())
+									.satisfies(
+											s -> assertThat(s.getSuccessCount()).isEqualTo(messages.size()),
+											s -> assertThat(s.getCommitCount()).isEqualTo(messages.size()),
+											s -> assertThat(s.getFailureCount()).isEqualTo(0),
+											s -> assertThat(s.getPublishedMsgCount()).isEqualTo(messages.size()),
+											s -> assertThat(s.getPendingPublishedMsgCount()).isEqualTo(0)
+									)
+					);
+		}
 
         producerBinding.unbind();
         consumerBinding.unbind();
@@ -218,9 +283,12 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
         consumerBinding.unbind();
     }
 
-    @Test
+	@CartesianTest(name = "[{index}] transacted={0}")
     @Execution(ExecutionMode.CONCURRENT)
-    public void testProducerErrorChannel(JCSMPSession jcsmpSession, TestInfo testInfo) throws Exception {
+	public void testProducerErrorChannel(
+			@Values(booleans = {false, true}) boolean transacted,
+			JCSMPSession jcsmpSession,
+			TestInfo testInfo) throws Exception {
         SolaceTestBinder binder = getBinder();
 
         DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
@@ -230,6 +298,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
                 getDestinationNameDelimiter(), destination0, getDestinationNameDelimiter());
 
         ExtendedProducerProperties<SolaceProducerProperties> producerProps = createProducerProperties(testInfo);
+		producerProps.getExtension().setTransacted(transacted);
         producerProps.setErrorChannelEnabled(true);
         producerProps.populateBindingName(destination0);
         Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProps);
@@ -254,17 +323,24 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
         jcsmpSession.closeSession();
 
-        try {
-            moduleOutputChannel.send(message);
-            fail("Expected the producer to fail to send the message...");
-        } catch (Exception e) {
-            logger.info("Successfully threw an exception during message publishing!");
-        }
+		assertThatThrownBy(() -> moduleOutputChannel.send(message));
 
         assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
-        assertThat(errorMessage.get()).isInstanceOf(ErrorMessage.class);
-        assertThat(errorMessage.get().getPayload()).isInstanceOf(MessagingException.class);
-        assertThat((MessagingException) errorMessage.get().getPayload()).hasCauseInstanceOf(ClosedFacilityException.class);
+		assertThat(errorMessage.get())
+				.asInstanceOf(InstanceOfAssertFactories.type(ErrorMessage.class))
+				.extracting(ErrorMessage::getPayload)
+				.asInstanceOf(InstanceOfAssertFactories.throwable(MessagingException.class))
+				.cause()
+				.isInstanceOf(ClosedFacilityException.class)
+				.satisfies(e -> {
+					if (transacted) {
+						assertThat(e.getSuppressed())
+								.singleElement()
+								.asInstanceOf(InstanceOfAssertFactories.throwable(ClosedFacilityException.class))
+								.hasMessageContaining("Operation ROLLBACK disallowed");
+					}
+				});
+
         producerBinding.unbind();
     }
 

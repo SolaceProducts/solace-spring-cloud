@@ -378,6 +378,11 @@ Default: `false`
 +
 IMPORTANT: Non-serializable headers should have a meaningful `toString()` implementation. Otherwise enabling this feature may result in potential data loss.
 
+transacted::
+When set to `true`, messages will be delivered using local transactions.
++
+Default: `false`
+
 provisionDurableQueue::
 Whether to provision durable queues for non-anonymous consumer groups or queue destinations. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker.
 +

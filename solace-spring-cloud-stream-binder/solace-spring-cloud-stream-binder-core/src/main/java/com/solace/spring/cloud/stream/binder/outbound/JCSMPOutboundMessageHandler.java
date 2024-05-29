@@ -17,8 +17,9 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import com.solacesystems.jcsmp.transaction.TransactedSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
@@ -43,11 +44,12 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	private final ExtendedProducerProperties<SolaceProducerProperties> properties;
 	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
 	private XMLMessageProducer producer;
+	@Nullable private TransactedSession transactedSession;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private boolean isRunning = false;
 	private ErrorMessageStrategy errorMessageStrategy;
 
-	private static final Log logger = LogFactory.getLog(JCSMPOutboundMessageHandler.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(JCSMPOutboundMessageHandler.class);
 
 	public JCSMPOutboundMessageHandler(ProducerDestination destination,
 									   JCSMPSession jcsmpSession,
@@ -98,13 +100,26 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		correlationKey.setRawMessage(xmlMessage);
 		xmlMessage.setCorrelationKey(correlationKey);
 
-		if (logger.isDebugEnabled()) {
-			logger.debug(String.format("Publishing message to destination [ %s:%s ]", targetDestination instanceof Topic ? "TOPIC" : "QUEUE", targetDestination));
-		}
+		LOGGER.debug("Publishing message to destination [ {}:{} ]",
+				targetDestination instanceof Topic ? "TOPIC" : "QUEUE", targetDestination);
 
 		try {
 			producer.send(xmlMessage, targetDestination);
+			if (transactedSession != null) {
+				LOGGER.debug("Committing transaction <message handler ID: {}>", id);
+				transactedSession.commit();
+			}
 		} catch (JCSMPException e) {
+			if (transactedSession != null) {
+				try {
+					LOGGER.debug("Rolling back transaction <message handler ID: {}>", id);
+					transactedSession.rollback();
+				} catch (JCSMPException ex) {
+					LOGGER.debug("Failed to rollback transaction", ex);
+					e.addSuppressed(ex);
+				}
+			}
+
 			throw handleMessagingException(correlationKey,
 					String.format("Unable to send message to destination %s %s",
 							targetDestination instanceof Topic ? "TOPIC" : "QUEUE", targetDestination.getName()), e);
@@ -149,19 +164,27 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 
 	@Override
 	public void start() {
-		logger.info(String.format("Creating producer to %s %s <message handler ID: %s>", configDestinationType, configDestination.getName(), id));
+		LOGGER.info("Creating producer to {} {} <message handler ID: {}>", configDestinationType, configDestination.getName(), id);
 		if (isRunning()) {
-			logger.warn(String.format("Nothing to do, message handler %s is already running", id));
+			LOGGER.warn("Nothing to do, message handler {} is already running", id);
 			return;
 		}
 
 		try {
 			producerManager.get(id);
-			producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
-					new JCSMPSessionProducerManager.CloudStreamEventHandler());
+			if (properties.getExtension().isTransacted()) {
+				LOGGER.info("Creating transacted session  <message handler ID: {}>", id);
+				transactedSession = jcsmpSession.createTransactedSession();
+				producer = transactedSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
+						new JCSMPSessionProducerManager.CloudStreamEventHandler());
+			} else {
+				producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
+						new JCSMPSessionProducerManager.CloudStreamEventHandler());
+			}
 		} catch (Exception e) {
 			String msg = String.format("Unable to get a message producer for session %s", jcsmpSession.getSessionName());
-			logger.warn(msg, e);
+			LOGGER.warn(msg, e);
+			closeResources();
 			throw new RuntimeException(msg, e);
 		}
 
@@ -171,10 +194,21 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	@Override
 	public void stop() {
 		if (!isRunning()) return;
-		logger.info(String.format("Stopping producer to %s %s <message handler ID: %s>", configDestinationType, configDestination.getName(), id));
-		producer.close();
-		producerManager.release(id);
+		closeResources();
 		isRunning = false;
+	}
+
+	private void closeResources() {
+		LOGGER.info("Stopping producer to {} {} <message handler ID: {}>", configDestinationType, configDestination.getName(), id);
+		if (producer != null) {
+			LOGGER.info("Closing producer <message handler ID: {}>", id);
+			producer.close();
+		}
+		if (transactedSession != null) {
+			LOGGER.info("Closing transacted session <message handler ID: {}>", id);
+			transactedSession.close();
+		}
+		producerManager.release(id);
 	}
 
 	@Override
@@ -188,7 +222,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 
 	private MessagingException handleMessagingException(ErrorChannelSendingCorrelationKey key, String msg, Exception e)
 			throws MessagingException {
-		logger.warn(msg, e);
+		LOGGER.warn(msg, e);
 		return key.send(msg, e);
 	}
 }
