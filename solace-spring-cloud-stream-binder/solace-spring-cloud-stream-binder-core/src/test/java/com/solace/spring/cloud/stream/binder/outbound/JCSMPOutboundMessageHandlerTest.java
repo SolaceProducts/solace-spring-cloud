@@ -18,6 +18,7 @@ import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
+import com.solacesystems.jcsmp.transaction.RollbackException;
 import com.solacesystems.jcsmp.transaction.TransactedSession;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -229,18 +230,20 @@ public class JCSMPOutboundMessageHandlerTest {
 		correlationDataB.getFuture().get(100, TimeUnit.MILLISECONDS);
 	}
 
-	@Test
-	public void test_transactionRollback_onError() throws Exception {
+	@ParameterizedTest
+	@ValueSource(classes = {JCSMPException.class, RollbackException.class})
+	public void test_transactionRollback_onError(Class<JCSMPException> commitError) throws Exception {
 		producerProperties.getExtension().setTransacted(true);
 		messageHandler.start();
 
-		JCSMPException exception = new JCSMPException("test");
+		JCSMPException exception = commitError.getConstructor(String.class).newInstance("test");
 		Mockito.doThrow(exception).when(transactedSession).commit();
 
 		assertThatThrownBy(() -> messageHandler.handleMessage(getMessage(new CorrelationData())))
 				.isInstanceOf(MessagingException.class)
 				.hasRootCause(exception);
-		Mockito.verify(transactedSession).rollback();
+
+		Mockito.verify(transactedSession, Mockito.times(commitError.equals(RollbackException.class) ? 0 : 1)).rollback();
 	}
 
 	@Test

@@ -17,6 +17,7 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
+import com.solacesystems.jcsmp.transaction.RollbackException;
 import com.solacesystems.jcsmp.transaction.TransactedSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,7 +111,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 				transactedSession.commit();
 			}
 		} catch (JCSMPException e) {
-			if (transactedSession != null) {
+			if (transactedSession != null && !(e instanceof RollbackException)) {
 				try {
 					LOGGER.debug("Rolling back transaction <message handler ID: {}>", id);
 					transactedSession.rollback();
