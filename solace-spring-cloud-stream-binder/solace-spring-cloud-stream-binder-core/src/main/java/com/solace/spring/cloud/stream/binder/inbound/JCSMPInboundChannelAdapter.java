@@ -156,7 +156,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 			retryTemplate.registerListener(new SolaceRetryListener(queueName));
 		}
 
-		executorService = buildThreadPool(consumerProperties.getConcurrency(), consumerDestination.getBindingDestinationName());
+		executorService = buildThreadPool(consumerProperties.getConcurrency(), consumerProperties.getBindingName());
 		flowReceivers.stream()
 				.map(this::buildListener)
 				.forEach(listener -> {
@@ -170,8 +170,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 		}
 	}
 
-	private ExecutorService buildThreadPool(int concurrency, String topic) {
-		ThreadFactory threadFactory = new CustomizableThreadFactory("binder-" + topic);
+	private ExecutorService buildThreadPool(int concurrency, String bindingName) {
+		ThreadFactory threadFactory = new CustomizableThreadFactory("solace-scst-consumer-" + bindingName);
 		return Executors.newFixedThreadPool(concurrency, threadFactory);
 	}
 
