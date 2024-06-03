@@ -49,6 +49,12 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 	 */
 	private boolean nonserializableHeaderConvertToString = false;
 
+	/**
+	 * When set to true, messages will be sent using local transactions.
+	 * The maximum transaction size is 256 messages.
+	 */
+	private boolean transacted = false;
+
 	public DestinationType getDestinationType() {
 		return destinationType;
 	}
@@ -95,5 +101,13 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 
 	public void setNonserializableHeaderConvertToString(boolean nonserializableHeaderConvertToString) {
 		this.nonserializableHeaderConvertToString = nonserializableHeaderConvertToString;
+	}
+
+	public boolean isTransacted() {
+		return transacted;
+	}
+
+	public void setTransacted(boolean transacted) {
+		this.transacted = transacted;
 	}
 }
