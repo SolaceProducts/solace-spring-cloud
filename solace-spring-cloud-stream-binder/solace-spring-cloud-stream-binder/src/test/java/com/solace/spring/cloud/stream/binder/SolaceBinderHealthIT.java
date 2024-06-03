@@ -10,11 +10,13 @@ import com.solace.spring.cloud.stream.binder.health.contributors.SolaceBinderHea
 import com.solace.spring.cloud.stream.binder.health.indicators.FlowHealthIndicator;
 import com.solace.spring.cloud.stream.binder.health.indicators.SessionHealthIndicator;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.properties.SolaceSessionHealthProperties;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
 import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
@@ -59,10 +61,13 @@ public class SolaceBinderHealthIT {
 	@CartesianTest(name = "[{index}] channelType={0}, autoStart={1} concurrency={2}")
 	public <T> void testConsumerFlowHealthProvisioning(
 			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
+			@CartesianTest.Enum(EndpointType.class) EndpointType endpointType,
 			@Values(booleans = {true, false}) boolean autoStart,
 			@Values(ints = {1, 3}) int concurrency,
 			SpringCloudStreamContext context) throws Exception {
-		if (concurrency > 1 && channelType.equals(PollableSource.class)) {
+		if (concurrency > 1 && ( channelType.equals(PollableSource.class) ||
+				// skip for concurrency >1
+				EndpointType.TOPIC_ENDPOINT.equals(endpointType))) {
 			return;
 		}
 
@@ -70,7 +75,8 @@ public class SolaceBinderHealthIT {
 
 		BindingsHealthContributor bindingsHealthContributor = new BindingsHealthContributor();
 		binder.getBinder().setSolaceBinderHealthAccessor(new SolaceBinderHealthAccessor(
-				new SolaceBinderHealthContributor(new SessionHealthIndicator(), bindingsHealthContributor)));
+				new SolaceBinderHealthContributor(new SessionHealthIndicator(new SolaceSessionHealthProperties()),
+						bindingsHealthContributor)));
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
@@ -81,6 +87,7 @@ public class SolaceBinderHealthIT {
 		consumerProperties.populateBindingName(RandomStringUtils.randomAlphanumeric(10));
 		consumerProperties.setAutoStartup(autoStart);
 		consumerProperties.setConcurrency(concurrency);
+		consumerProperties.getExtension().setEndpointType(endpointType);
 
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
 				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
@@ -143,7 +150,8 @@ public class SolaceBinderHealthIT {
 
 		BindingsHealthContributor bindingsHealthContributor = new BindingsHealthContributor();
 		binder.getBinder().setSolaceBinderHealthAccessor(new SolaceBinderHealthAccessor(
-				new SolaceBinderHealthContributor(new SessionHealthIndicator(), bindingsHealthContributor)));
+				new SolaceBinderHealthContributor(new SessionHealthIndicator(new SolaceSessionHealthProperties()),
+						bindingsHealthContributor)));
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
@@ -201,7 +209,8 @@ public class SolaceBinderHealthIT {
 
 		BindingsHealthContributor bindingsHealthContributor = Mockito.spy(new BindingsHealthContributor());
 		binder.getBinder().setSolaceBinderHealthAccessor(new SolaceBinderHealthAccessor(
-				new SolaceBinderHealthContributor(new SessionHealthIndicator(), bindingsHealthContributor)));
+				new SolaceBinderHealthContributor(new SessionHealthIndicator(new SolaceSessionHealthProperties()),
+						bindingsHealthContributor)));
 
 		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = context.createConsumerInfrastructureUtil(channelType);
 
@@ -254,13 +263,13 @@ public class SolaceBinderHealthIT {
 				});
 
 		Mockito.verify(flowHealthIndicator, Mockito.never()
-				.description("Flow rebind should not have caused health to go down"))
+				.description("Message NACK should not have caused health to go down"))
 				.down(Mockito.any());
 		Mockito.verify(flowsHealthContributor, Mockito.never()
-						.description("Flow rebind should not have caused flow health indicator to be removed"))
+						.description("Message NACK should not have caused flow health indicator to be removed"))
 				.removeFlowContributor(Mockito.any());
 		Mockito.verify(bindingsHealthContributor, Mockito.never()
-						.description("Flow rebind should not have caused health component to be removed"))
+						.description("Message NACK should not have caused health component to be removed"))
 				.removeBindingContributor(Mockito.any());
 
 		assertThat(bindingsHealthContributor)

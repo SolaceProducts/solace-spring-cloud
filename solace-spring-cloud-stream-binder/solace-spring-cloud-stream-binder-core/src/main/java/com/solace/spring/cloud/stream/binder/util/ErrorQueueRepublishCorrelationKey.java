@@ -7,35 +7,29 @@ public class ErrorQueueRepublishCorrelationKey {
 	private final ErrorQueueInfrastructure errorQueueInfrastructure;
 	private final MessageContainer messageContainer;
 	private final FlowReceiverContainer flowReceiverContainer;
-	private final boolean hasTemporaryQueue;
-	private final RetryableTaskService retryableTaskService;
 	private long errorQueueDeliveryAttempt = 0;
 
 	private static final Log logger = LogFactory.getLog(ErrorQueueRepublishCorrelationKey.class);
 
 	public ErrorQueueRepublishCorrelationKey(ErrorQueueInfrastructure errorQueueInfrastructure,
 											 MessageContainer messageContainer,
-											 FlowReceiverContainer flowReceiverContainer,
-											 boolean hasTemporaryQueue,
-											 RetryableTaskService retryableTaskService) {
+											 FlowReceiverContainer flowReceiverContainer) {
 		this.errorQueueInfrastructure = errorQueueInfrastructure;
 		this.messageContainer = messageContainer;
 		this.flowReceiverContainer = flowReceiverContainer;
-		this.hasTemporaryQueue = hasTemporaryQueue;
-		this.retryableTaskService = retryableTaskService;
 	}
 
-	public void handleSuccess() throws SolaceStaleMessageException {
+	public void handleSuccess() {
 		flowReceiverContainer.acknowledge(messageContainer);
 	}
 
-	public void handleError(boolean skipSyncFallbackAttempt) throws SolaceStaleMessageException {
+	public void handleError() {
 		while (true) {
 			if (messageContainer.isStale()) {
-				throw new SolaceStaleMessageException(String.format("Message container %s (XMLMessage %s) is stale",
-						messageContainer.getId(), messageContainer.getMessage().getMessageId()));
+				throw new IllegalStateException(String.format("Message container %s (XMLMessage %s) is stale",
+						messageContainer.getId(), messageContainer.getMessage().getMessageId()), null);
 			} else if (errorQueueDeliveryAttempt >= errorQueueInfrastructure.getMaxDeliveryAttempts()) {
-				fallback(skipSyncFallbackAttempt);
+				fallback();
 				break;
 			} else {
 				errorQueueDeliveryAttempt++;
@@ -54,29 +48,11 @@ public class ErrorQueueRepublishCorrelationKey {
 		}
 	}
 
-	private void fallback(boolean skipSyncAttempt) throws SolaceStaleMessageException {
-		if (hasTemporaryQueue) {
-			logger.info(String.format(
-					"Exceeded max error queue delivery attempts and cannot requeue XMLMessage %s since queue %s is " +
-							"temporary. Failed message will be discarded.",
-					messageContainer.getMessage().getMessageId(), flowReceiverContainer.getQueueName()));
-			flowReceiverContainer.acknowledge(messageContainer);
-		} else {
+	private void fallback() {
 			logger.info(String.format(
 					"Exceeded max error queue delivery attempts. XMLMessage %s will be re-queued onto queue %s",
-					messageContainer.getMessage().getMessageId(), flowReceiverContainer.getQueueName()));
-
-			RetryableAckRebindTask rebindTask = new RetryableAckRebindTask(flowReceiverContainer, messageContainer,
-					retryableTaskService);
-			try {
-				if (skipSyncAttempt || !rebindTask.run(0)) {
-					retryableTaskService.submit(rebindTask);
-				}
-			} catch (InterruptedException interruptedException) {
-				logger.info(String.format("Interrupt received while rebinding to queue %s with message %s",
-						flowReceiverContainer.getQueueName(), messageContainer.getMessage().getMessageId()));
-			}
-		}
+					messageContainer.getMessage().getMessageId(), flowReceiverContainer.getEndpointName()));
+			flowReceiverContainer.requeue(messageContainer);
 	}
 
 	public String getSourceMessageId() {

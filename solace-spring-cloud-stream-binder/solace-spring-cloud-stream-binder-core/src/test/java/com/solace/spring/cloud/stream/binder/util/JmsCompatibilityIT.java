@@ -6,6 +6,7 @@ import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.HeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
+import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.SerializableFoo;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solacesystems.jcsmp.BytesMessage;
@@ -339,6 +340,7 @@ public class JmsCompatibilityIT {
 			messages.add(mapMessage);
 		}
 
+		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
 		XMLMessageConsumer messageConsumer = null;
 		try {
 			Set<Class<? extends XMLMessage>> processedMessageTypes = new HashSet<>();
@@ -349,7 +351,7 @@ public class JmsCompatibilityIT {
 				public void onReceive(BytesXMLMessage bytesXMLMessage) {
 					logger.info("Got message " + bytesXMLMessage);
 					try {
-						Message<?> msg = xmlMessageMapper.map(bytesXMLMessage, null);
+						Message<?> msg = xmlMessageMapper.map(bytesXMLMessage, null, consumerProperties);
 						if (msg.getPayload() instanceof byte[]) {
 							softly.assertThat(msg.getPayload()).isEqualTo("test".getBytes());
 							processedMessageTypes.add(BytesMessage.class);
@@ -428,6 +430,7 @@ public class JmsCompatibilityIT {
 		ObjectMessage message = jmsSession.createObjectMessage(payload);
 		message.setBooleanProperty(SolaceBinderHeaders.SERIALIZED_PAYLOAD, true);
 
+		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
 		XMLMessageConsumer messageConsumer = null;
 		try {
 			AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
@@ -437,7 +440,7 @@ public class JmsCompatibilityIT {
 				public void onReceive(BytesXMLMessage bytesXMLMessage) {
 					logger.info("Got message " + bytesXMLMessage);
 					try {
-						softly.assertThat(xmlMessageMapper.map(bytesXMLMessage, null).getPayload())
+						softly.assertThat(xmlMessageMapper.map(bytesXMLMessage, null, consumerProperties).getPayload())
 								.isEqualTo(payload);
 					} catch (Exception e) {
 						exceptionAtomicReference.set(e);

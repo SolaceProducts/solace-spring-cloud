@@ -1,17 +1,24 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
+import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solacesystems.jcsmp.EndpointProperties;
+import jakarta.validation.constraints.Min;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.Assert;
 
-import jakarta.validation.constraints.Min;
-import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.List;
 
 import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties.DEFAULTS_PREFIX;
 
 @SuppressWarnings("ConfigurationProperties")
 @ConfigurationProperties(DEFAULTS_PREFIX + ".consumer")
 public class SolaceConsumerProperties extends SolaceCommonProperties {
+	/**
+	 * The type of endpoint messages are consumed from.
+	 */
+	private EndpointType endpointType = EndpointType.QUEUE;
+
 	/**
 	 * <p>The maximum number of messages per batch.</p>
 	 * <p>Only applicable when {@code batchMode} is {@code true}.</p>
@@ -33,29 +40,6 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * <p>Only applicable when {@code batchMode} is {@code false}.</p>
 	 */
 	private int polledConsumerWaitTimeInMillis = 100;
-	/**
-	 * The maximum time to wait for all unacknowledged messages to be acknowledged before a flow receiver rebind.
-	 * Will wait forever if set to a value less than 0.
-	 */
-	private long flowPreRebindWaitTimeout = TimeUnit.SECONDS.toMillis(10);
-
-	/**
-	 * The initial interval (milliseconds) to back-off when rebinding a flow.
-	 */
-	@Min(1)
-	private long flowRebindBackOffInitialInterval = TimeUnit.SECONDS.toMillis(1);
-
-	/**
-	 * The maximum interval (milliseconds) to back-off when rebinding a flow.
-	 */
-	@Min(1)
-	private long flowRebindBackOffMaxInterval = TimeUnit.SECONDS.toMillis(30);
-
-	/**
-	 * The multiplier to apply to the back-off interval between each rebind of a flow.
-	 */
-	@Min(1)
-	private double flowRebindBackOffMultiplier = 1.5;
 
 	/**
 	 * An array of additional topic subscriptions to be applied on the consumer group queue.
@@ -70,6 +54,11 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
 	 */
 	private String queueNameExpression = "'scst/' + (isAnonymous ? 'an/' : 'wk/') + (group?.trim() + '/') + 'plain/' + destination.trim().replaceAll('[*>]', '_')";
+
+	/**
+	 * A SQL-92 selector expression to use for selection of messages for consumption. Max of 2000 characters.
+	 */
+	private String selector = null;
 
 	// Error Queue Properties ---------
 	/**
@@ -133,6 +122,18 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	private Long errorMsgTtl = null;
 	// ------------------------
 
+	public EndpointType getEndpointType() {
+		return endpointType;
+	}
+
+	public void setEndpointType(EndpointType endpointType) {
+		this.endpointType = endpointType;
+	}
+
+	/**
+	 * The list of headers to exclude when converting consumed Solace message to Spring message.
+	 */
+	private List<String> headerExclusions = new ArrayList<>();
 
 	public int getBatchMaxSize() {
 		return batchMaxSize;
@@ -160,44 +161,6 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 		this.polledConsumerWaitTimeInMillis = polledConsumerWaitTimeInMillis;
 	}
 
-	public long getFlowPreRebindWaitTimeout() {
-		return flowPreRebindWaitTimeout;
-	}
-
-	public void setFlowPreRebindWaitTimeout(long flowPreRebindWaitTimeout) {
-		this.flowPreRebindWaitTimeout = flowPreRebindWaitTimeout;
-	}
-
-	public long getFlowRebindBackOffInitialInterval() {
-		return flowRebindBackOffInitialInterval;
-	}
-
-	public void setFlowRebindBackOffInitialInterval(long flowRebindBackOffInitialInterval) {
-		Assert.isTrue(flowRebindBackOffInitialInterval >= 1,
-				"flow rebind back-off initial interval must be greater than or equal to 1");
-		this.flowRebindBackOffInitialInterval = flowRebindBackOffInitialInterval;
-	}
-
-	public long getFlowRebindBackOffMaxInterval() {
-		return flowRebindBackOffMaxInterval;
-	}
-
-	public void setFlowRebindBackOffMaxInterval(long flowRebindBackOffMaxInterval) {
-		Assert.isTrue(flowRebindBackOffMaxInterval >= 1,
-				"flow rebind back-off max interval must be greater than or equal to 1");
-		this.flowRebindBackOffMaxInterval = flowRebindBackOffMaxInterval;
-	}
-
-	public double getFlowRebindBackOffMultiplier() {
-		return flowRebindBackOffMultiplier;
-	}
-
-	public void setFlowRebindBackOffMultiplier(double flowRebindBackOffMultiplier) {
-		Assert.isTrue(flowRebindBackOffMultiplier >= 1.0,
-				"flow rebind back-off multiplier must be greater than or equal to 1.0");
-		this.flowRebindBackOffMultiplier = flowRebindBackOffMultiplier;
-	}
-
 	public String[] getQueueAdditionalSubscriptions() {
 		return queueAdditionalSubscriptions;
 	}
@@ -212,6 +175,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setQueueNameExpression(String queueNameExpression) {
 		this.queueNameExpression = queueNameExpression;
+	}
+
+	public String getSelector() {
+		return selector;
+	}
+
+	public void setSelector(String selector) {
+		this.selector = selector;
 	}
 
 	public boolean isAutoBindErrorQueue() {
@@ -316,5 +287,13 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setErrorMsgTtl(Long errorMsgTtl) {
 		this.errorMsgTtl = errorMsgTtl;
+	}
+
+	public List<String> getHeaderExclusions() {
+		return headerExclusions;
+	}
+
+	public void setHeaderExclusions(List<String> headerExclusions) {
+		this.headerExclusions = headerExclusions;
 	}
 }

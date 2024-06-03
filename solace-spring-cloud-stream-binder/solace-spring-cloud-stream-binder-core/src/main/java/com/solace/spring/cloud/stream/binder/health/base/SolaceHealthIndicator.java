@@ -1,8 +1,5 @@
 package com.solace.spring.cloud.stream.binder.health.base;
 
-import lombok.AccessLevel;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -14,12 +11,10 @@ import org.springframework.lang.Nullable;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Optional;
 
-@NoArgsConstructor
 public class SolaceHealthIndicator implements HealthIndicator {
 	private static final String STATUS_RECONNECTING = "RECONNECTING";
 	private static final String INFO = "info";
 	private static final String RESPONSE_CODE = "responseCode";
-	@Setter(AccessLevel.PACKAGE)
 	private volatile Health health;
 	private static final Log logger = LogFactory.getLog(SolaceHealthIndicator.class);
 
@@ -66,5 +61,9 @@ public class SolaceHealthIndicator implements HealthIndicator {
 	@Override
 	public Health health() {
 		return health;
+	}
+
+	void setHealth(Health health) {
+		this.health = health;
 	}
 }

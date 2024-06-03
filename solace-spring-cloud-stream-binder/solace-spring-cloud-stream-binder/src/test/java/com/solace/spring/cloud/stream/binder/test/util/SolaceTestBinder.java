@@ -3,15 +3,13 @@ package com.solace.spring.cloud.stream.binder.test.util;
 import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
-import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
+import com.solace.spring.cloud.stream.binder.provisioning.EndpointProvider;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisioner;
+import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.ApiException;
-import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPFactory;
-import com.solacesystems.jcsmp.JCSMPProperties;
-import com.solacesystems.jcsmp.JCSMPSession;
-import com.solacesystems.jcsmp.Queue;
+import com.solacesystems.jcsmp.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.binder.AbstractPollableConsumerTestBinder;
@@ -24,13 +22,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.integration.config.EnableIntegration;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
-import org.springframework.util.StringUtils;
 
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -42,7 +37,7 @@ public class SolaceTestBinder
 	private final JCSMPSession jcsmpSession;
 	private final SempV2Api sempV2Api;
 	private final AnnotationConfigApplicationContext applicationContext;
-	private final Set<String> queues = new HashSet<>();
+	private final Map<String, EndpointType> endpoints = new HashMap<>();
 	private final Map<String, String> bindingNameToQueueName = new HashMap<>();
 	private final Map<String, String> bindingNameToErrorQueueName = new HashMap<>();
 	private static final Log logger = LogFactory.getLog(SolaceTestBinder.class);
@@ -51,7 +46,7 @@ public class SolaceTestBinder
 		this.applicationContext = new AnnotationConfigApplicationContext(Config.class);
 		this.jcsmpSession = jcsmpSession;
 		this.sempV2Api = sempV2Api;
-		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, new SolaceQueueProvisioner(jcsmpSession));
+		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, new SolaceEndpointProvisioner(jcsmpSession));
 		binder.setApplicationContext(this.applicationContext);
 		this.setPollableConsumerBinder(binder);
 	}
@@ -99,39 +94,39 @@ public class SolaceTestBinder
 	}
 
 	private void preBindCaptureConsumerResources(String name, String group, ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties) {
-		if (SolaceProvisioningUtil.isAnonQueue(group)) return; // we don't know any anon resource names before binding
+		if (SolaceProvisioningUtil.isAnonEndpoint(group)) return; // we don't know any anon resource names before binding
 
 		SolaceProvisioningUtil.QueueNames queueNames = SolaceProvisioningUtil.getQueueNames(name, group, consumerProperties, false);
 
 		// values set here may be overwritten after binding
-		queues.add(queueNames.getConsumerGroupQueueName());
+		endpoints.put(queueNames.getConsumerGroupQueueName(), consumerProperties.getExtension().getEndpointType());
 		if (consumerProperties.getExtension().isAutoBindErrorQueue()) {
-			queues.add(queueNames.getErrorQueueName());
+			endpoints.put(queueNames.getErrorQueueName(), EndpointType.QUEUE);
 		}
 	}
 
 	private void captureConsumerResources(Binding<?> binding, String group, SolaceConsumerProperties consumerProperties) {
-		String queueName = extractBindingDestination(binding);
-		bindingNameToQueueName.put(binding.getBindingName(), queueName);
-		if (!SolaceProvisioningUtil.isAnonQueue(group)) {
-			queues.add(queueName);
+		String endpointName = extractBindingDestination(binding);
+		bindingNameToQueueName.put(binding.getBindingName(), endpointName);
+		if (!SolaceProvisioningUtil.isAnonEndpoint(group)) {
+			endpoints.put(endpointName, consumerProperties.getEndpointType());
 		}
 		if (consumerProperties.isAutoBindErrorQueue()) {
 			String errorQueueName = extractErrorQueueName(binding);
-			queues.add(errorQueueName);
+			endpoints.put(errorQueueName, EndpointType.QUEUE);
 			bindingNameToErrorQueueName.put(binding.getBindingName(), errorQueueName);
 		}
 	}
 
 	private void preBindCaptureProducerResources(String name, String group, ExtendedProducerProperties<SolaceProducerProperties> producerProperties) {
 		String queueName = SolaceProvisioningUtil.getQueueName(name, group, producerProperties);
-		queues.add(queueName);
+		endpoints.put(queueName, EndpointType.QUEUE);
 	}
 
 	private String extractBindingDestination(Binding<?> binding) {
 		String destination = (String) binding.getExtendedInfo().getOrDefault("bindingDestination", "");
 		assertThat(destination).startsWith("SolaceConsumerDestination");
-		Matcher matcher = Pattern.compile("queueName='(.*?)'").matcher(destination);
+		Matcher matcher = Pattern.compile("endpointName='(.*?)'").matcher(destination);
 		assertThat(matcher.find()).isTrue();
 		return matcher.group(1);
 	}
@@ -146,22 +141,25 @@ public class SolaceTestBinder
 
 	@Override
 	public void cleanup() {
-		for (String queueName : queues) {
+		for (Map.Entry<String, EndpointType> endpointEntry : endpoints.entrySet()) {
 			try {
-				logger.info(String.format("De-provisioning queue %s", queueName));
-				Queue queue;
+				logger.info(String.format("De-provisioning endpoint %s", endpointEntry));
+				Endpoint endpoint;
 				try {
-					queue = JCSMPFactory.onlyInstance().createQueue(queueName);
+					endpoint = EndpointProvider.from(endpointEntry.getValue()).createInstance(endpointEntry.getKey());
 				} catch (Exception e) {
-					//This is possible as we eagerly add queues to cleanup in preBindCaptureConsumerResources()
-					logger.info(String.format("Skipping de-provisioning as queue name is invalid; queue was never provisioned", queueName));
+					//This is possible as we eagerly add endpoints to cleanup in preBindCaptureConsumerResources()
+					logger.info(String.format("Skipping de-provisioning as queue name is invalid; queue was never provisioned", endpointEntry));
 					continue;
 				}
-				jcsmpSession.deprovision(queue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
-			} catch (JCSMPException e) {
+				jcsmpSession.deprovision(endpoint, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
+			} catch (JCSMPException| AccessDeniedException e) {
 				try {
-					sempV2Api.config().deleteMsgVpnQueue(
-							(String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME), queueName);
+					String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+					switch (endpointEntry.getValue()) {
+						case QUEUE -> sempV2Api.config().deleteMsgVpnQueue(vpnName, endpointEntry.getKey());
+						case TOPIC_ENDPOINT -> sempV2Api.config().deleteMsgVpnTopicEndpoint(vpnName, endpointEntry.getKey());
+					}
 				} catch (ApiException e1) {
 					RuntimeException toThrow = new RuntimeException(e);
 					toThrow.addSuppressed(e1);

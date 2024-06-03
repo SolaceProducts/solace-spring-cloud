@@ -8,16 +8,16 @@ import java.util.StringJoiner;
 public class SolaceConsumerDestination implements ConsumerDestination {
 	private final String bindingDestinationName;
 	private final String physicalGroupName;
-	private final String queueName;
+	private final String endpointName;
 	private final boolean isTemporary;
 	private final String errorQueueName;
 	private final Set<String> additionalSubscriptions;
 
-	SolaceConsumerDestination(String queueName, String bindingDestinationName, String physicalGroupName,
+	SolaceConsumerDestination(String endpointName, String bindingDestinationName, String physicalGroupName,
 							  boolean isTemporary, String errorQueueName, Set<String> additionalSubscriptions) {
 		this.bindingDestinationName = bindingDestinationName;
 		this.physicalGroupName = physicalGroupName;
-		this.queueName = queueName;
+		this.endpointName = endpointName;
 		this.isTemporary = isTemporary;
 		this.errorQueueName = errorQueueName;
 		this.additionalSubscriptions = additionalSubscriptions;
@@ -25,7 +25,7 @@ public class SolaceConsumerDestination implements ConsumerDestination {
 
 	@Override
 	public String getName() {
-		return queueName;
+		return endpointName;
 	}
 
 	public String getBindingDestinationName() {
@@ -53,7 +53,7 @@ public class SolaceConsumerDestination implements ConsumerDestination {
 		return new StringJoiner(", ", SolaceConsumerDestination.class.getSimpleName() + "[", "]")
 				.add("bindingDestinationName='" + bindingDestinationName + "'")
 				.add("physicalGroupName='" + physicalGroupName + "'")
-				.add("queueName='" + queueName + "'")
+				.add("endpointName='" + endpointName + "'")
 				.add("isTemporary=" + isTemporary)
 				.add("errorQueueName='" + errorQueueName + "'")
 				.toString();

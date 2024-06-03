@@ -11,13 +11,13 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingPro
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
-import com.solace.spring.cloud.stream.binder.provisioning.SolaceQueueProvisioner;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisioner;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
-import com.solace.spring.cloud.stream.binder.util.RetryableTaskService;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solacesystems.jcsmp.Context;
+import com.solacesystems.jcsmp.Endpoint;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
@@ -47,7 +47,7 @@ public class SolaceMessageChannelBinder
 		extends AbstractMessageChannelBinder<
 						ExtendedConsumerProperties<SolaceConsumerProperties>,
 						ExtendedProducerProperties<SolaceProducerProperties>,
-						SolaceQueueProvisioner>
+		SolaceEndpointProvisioner>
 		implements ExtendedPropertiesBinder<MessageChannel, SolaceConsumerProperties, SolaceProducerProperties>,
 				DisposableBean {
 
@@ -58,15 +58,14 @@ public class SolaceMessageChannelBinder
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
 	private SolaceMeterAccessor solaceMeterAccessor;
 	private SolaceExtendedBindingProperties extendedBindingProperties = new SolaceExtendedBindingProperties();
-	private final RetryableTaskService taskService = new RetryableTaskService();
 	private static final SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
 	@Nullable private SolaceBinderHealthAccessor solaceBinderHealthAccessor;
 
-	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, SolaceQueueProvisioner solaceQueueProvisioner) {
-		this(jcsmpSession, null, solaceQueueProvisioner);
+	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, SolaceEndpointProvisioner solaceEndpointProvisioner) {
+		this(jcsmpSession, null, solaceEndpointProvisioner);
 	}
-	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, Context jcsmpContext, SolaceQueueProvisioner solaceQueueProvisioner) {
-		super(new String[0], solaceQueueProvisioner);
+	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, Context jcsmpContext, SolaceEndpointProvisioner solaceEndpointProvisioner) {
+		super(new String[0], solaceEndpointProvisioner);
 		this.jcsmpSession = jcsmpSession;
 		this.jcsmpContext = jcsmpContext;
 		this.sessionProducerManager = new JCSMPSessionProducerManager(jcsmpSession);
@@ -80,7 +79,6 @@ public class SolaceMessageChannelBinder
 	@Override
 	public void destroy() {
 		logger.info(String.format("Closing JCSMP session %s", jcsmpSession.getSessionName()));
-		if (taskService != null) taskService.close();
 		sessionProducerManager.release(errorHandlerProducerKey);
 		consumersRemoteStopFlag.set(true);
 		jcsmpSession.closeSession();
@@ -116,7 +114,6 @@ public class SolaceMessageChannelBinder
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(
 				solaceDestination,
 				jcsmpSession,
-				taskService,
 				properties,
 				getConsumerEndpointProperties(properties),
 				solaceMeterAccessor);
@@ -133,8 +130,7 @@ public class SolaceMessageChannelBinder
 					sessionProducerManager,
 					errorHandlerProducerKey,
 					solaceDestination.getErrorQueueName(),
-					properties.getExtension(),
-					taskService));
+					properties.getExtension()));
 		}
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
@@ -163,7 +159,6 @@ public class SolaceMessageChannelBinder
 		JCSMPMessageSource messageSource = new JCSMPMessageSource(solaceDestination,
 				jcsmpSession,
 				consumerProperties.isBatchMode() ? new BatchCollector(consumerProperties.getExtension()) : null,
-				taskService,
 				consumerProperties,
 				endpointProperties,
 				solaceMeterAccessor);
@@ -179,8 +174,7 @@ public class SolaceMessageChannelBinder
 			messageSource.setErrorQueueInfrastructure(new ErrorQueueInfrastructure(sessionProducerManager,
 					errorHandlerProducerKey,
 					solaceDestination.getErrorQueueName(),
-					consumerProperties.getExtension(),
-					taskService));
+					consumerProperties.getExtension()));
 		}
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, consumerProperties, true);
@@ -265,14 +259,16 @@ public class SolaceMessageChannelBinder
 		Temporary endpoints are only provisioned when the consumer is created.
 		Ideally, these should be done within the provisioningProvider itself.
 	*/
-	private Consumer<Queue> getConsumerPostStart(SolaceConsumerDestination destination,
-												 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
-		return (queue) -> {
-			provisioningProvider.addSubscriptionToQueue(queue, destination.getBindingDestinationName(), properties.getExtension(), true);
+	private Consumer<Endpoint> getConsumerPostStart(SolaceConsumerDestination destination,
+													ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
+		return (endpoint) -> {
+			if (endpoint instanceof Queue queue) {
+				provisioningProvider.addSubscriptionToQueue(queue, destination.getBindingDestinationName(), properties.getExtension(), true);
 
-			//Process additional subscriptions
-			for (String subscription : destination.getAdditionalSubscriptions()) {
-				provisioningProvider.addSubscriptionToQueue(queue, subscription, properties.getExtension(), false);
+				//Process additional subscriptions
+				for (String subscription : destination.getAdditionalSubscriptions()) {
+					provisioningProvider.addSubscriptionToQueue(queue, subscription, properties.getExtension(), false);
+				}
 			}
 		};
 	}
