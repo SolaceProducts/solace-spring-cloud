@@ -118,9 +118,10 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
             throw new MessagingException(msg);
         }
 
-
         Endpoint endpoint = null;
         try {
+            // JCSMP applies naming rules for queues not for topic endpoints.
+            // this code is to prevent queue endpoints get bad names and temp topic endpoints stay temporary
             endpoint = (EndpointType.TOPIC_ENDPOINT.equals(endpointType) && consumerDestination.isTemporary()) ?
                     endpointProvider.createTemporaryEndpoint(endpointName, jcsmpSession)
                     : endpointProvider.createInstance(endpointName);
