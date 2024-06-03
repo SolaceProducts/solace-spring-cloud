@@ -1,16 +1,24 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
-import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties.DEFAULTS_PREFIX;
+import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solacesystems.jcsmp.EndpointProperties;
 import jakarta.validation.constraints.Min;
-import java.util.ArrayList;
-import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.Assert;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties.DEFAULTS_PREFIX;
 
 @SuppressWarnings("ConfigurationProperties")
 @ConfigurationProperties(DEFAULTS_PREFIX + ".consumer")
 public class SolaceConsumerProperties extends SolaceCommonProperties {
+	/**
+	 * The type of endpoint messages are consumed from.
+	 */
+	private EndpointType endpointType = EndpointType.QUEUE;
+
 	/**
 	 * <p>The maximum number of messages per batch.</p>
 	 * <p>Only applicable when {@code batchMode} is {@code true}.</p>
@@ -46,6 +54,11 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * directly using the SpEL expression string is not supported. The default value for this config option is subject to change without notice.
 	 */
 	private String queueNameExpression = "'scst/' + (isAnonymous ? 'an/' : 'wk/') + (group?.trim() + '/') + 'plain/' + destination.trim().replaceAll('[*>]', '_')";
+
+	/**
+	 * A SQL-92 selector expression to use for selection of messages for consumption. Max of 2000 characters.
+	 */
+	private String selector = null;
 
 	// Error Queue Properties ---------
 	/**
@@ -109,6 +122,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	private Long errorMsgTtl = null;
 	// ------------------------
 
+	public EndpointType getEndpointType() {
+		return endpointType;
+	}
+
+	public void setEndpointType(EndpointType endpointType) {
+		this.endpointType = endpointType;
+	}
+
 	/**
 	 * The list of headers to exclude when converting consumed Solace message to Spring message.
 	 */
@@ -154,6 +175,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setQueueNameExpression(String queueNameExpression) {
 		this.queueNameExpression = queueNameExpression;
+	}
+
+	public String getSelector() {
+		return selector;
+	}
+
+	public void setSelector(String selector) {
+		this.selector = selector;
 	}
 
 	public boolean isAutoBindErrorQueue() {

@@ -1,20 +1,5 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
-import static org.hamcrest.CoreMatchers.containsString;
-import static org.hamcrest.CoreMatchers.instanceOf;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.allOf;
-import static org.hamcrest.Matchers.greaterThanOrEqualTo;
-import static org.hamcrest.Matchers.hasSize;
-import static org.hamcrest.Matchers.lessThan;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer.FlowReceiverReference;
@@ -29,6 +14,7 @@ import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueTxFlow;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorSempMetaOnlyResponse;
 import com.solacesystems.jcsmp.Consumer;
+import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -40,6 +26,21 @@ import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jcsmp.impl.flow.FlowHandle;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.junitpioneer.jupiter.cartesian.CartesianTest;
+import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
+import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
+import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -58,22 +59,19 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-import org.junitpioneer.jupiter.cartesian.CartesianTest;
-import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
-import org.mockito.Mockito;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
-import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
-import org.springframework.util.backoff.BackOff;
-import org.springframework.util.backoff.FixedBackOff;
+
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.hasSize;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
 		initializers = ConfigDataApplicationContextInitializer.class)
@@ -852,17 +850,13 @@ public class FlowReceiverContainerIT {
 		assertEquals((Long) 1L, txFlows.get(0).getRedeliveredMsgCount());
 	}
 
-	private FlowReceiverContainer createFlowReceiverContainer(JCSMPSession jcsmpSession, Queue queue) {
-		return createFlowReceiverContainer(jcsmpSession, queue, new FixedBackOff(1, Long.MAX_VALUE));
-	}
-
 	private FlowReceiverContainer createFlowReceiverContainer(JCSMPSession jcsmpSession,
-															  Queue queue,
-															  BackOff backOff) {
+															  Queue queue) {
 		if (flowReceiverContainerReference.compareAndSet(null, Mockito.spy(new FlowReceiverContainer(
 				jcsmpSession,
-				queue.getName(),
-				new EndpointProperties())))) {
+				JCSMPFactory.onlyInstance().createQueue(queue.getName()),
+				new EndpointProperties(),
+				new ConsumerFlowProperties())))) {
 			logger.info("Created new FlowReceiverContainer " + flowReceiverContainerReference.get().getId());
 		}
 		return flowReceiverContainerReference.get();

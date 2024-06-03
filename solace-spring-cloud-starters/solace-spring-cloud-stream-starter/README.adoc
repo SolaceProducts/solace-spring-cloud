@@ -1,5 +1,5 @@
 = Spring Cloud Stream Binder for Solace PubSub+
-:revnumber: 5.0.0
+:revnumber: 5.1.0
 :toc: preamble
 :toclevels: 3
 :icons: font
@@ -172,6 +172,13 @@ The following properties are available for Solace consumers only and must be pre
 
 See link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceCommonProperties.java[SolaceCommonProperties] and link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core/src/main/java/com/solace/spring/cloud/stream/binder/properties/SolaceConsumerProperties.java[SolaceConsumerProperties] for the most updated list.
 
+endpointType::
+Specifies whether the configured type of endpoint messages are consumed from is a `queue` or a `topic_endpoint`.
++
+When set to `topic_endpoint`, then instead of provisioning a queue for the consumer group’s endpoint, the binder will instead provision a topic endpoint.
++
+Default: `queue`
+
 provisionDurableQueue::
 Whether to provision durable queues for non-anonymous consumer groups. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker.
 +
@@ -182,6 +189,15 @@ addDestinationAsSubscriptionToQueue::
 Whether to add the Destination as a subscription to queue during provisioning.
 +
 Default: `true`
+
+selector::
+If specified, enables client applications to choose which messages they are interested in receiving, as determined by the messages’ header field and property values.
++
+A selector has a conditional expression syntax that is a subset of SQL92
+Selector can be used with Queue or a Topic Endpoint Subscription
++
+Default: `null`
+See: https://docs.solace.com/API/Solace-JMS-API/Selectors.htm
 
 queueNameExpression::
 A SpEL expression for creating the consumer group’s queue name.
@@ -804,6 +820,7 @@ Though note that there are few limitations:
 . `concurrency` &gt; 1 is not supported for exclusive queues.
 . `concurrency` &gt; 1 is not supported for consumer bindings which are a part of anonymous consumer groups.
 . `concurrency` &gt; 1 is ignored for polled consumers.
+. `concurrency` &gt; 1 is not supported with auto-provisioned topic endpoints.
 . Setting `provisionDurableQueue` to `false` disables endpoint configuration validation. Meaning that point 1 cannot be validated. In this scenario, it is the developer's responsibility to ensure that point 1 is followed.
 
 == Batch Consumers

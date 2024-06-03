@@ -3,19 +3,25 @@ package com.solace.spring.cloud.stream.binder.provisioning;
 import com.solace.spring.cloud.stream.binder.properties.SolaceCommonProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
+import com.solace.spring.cloud.stream.binder.util.EndpointType;
+import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.ProducerFlowProperties;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.provisioning.ProvisioningException;
-import org.springframework.expression.*;
+import org.springframework.expression.EvaluationContext;
+import org.springframework.expression.Expression;
+import org.springframework.expression.ExpressionException;
+import org.springframework.expression.ExpressionParser;
 import org.springframework.expression.spel.standard.SpelExpressionParser;
 import org.springframework.expression.spel.support.StandardEvaluationContext;
 import org.springframework.util.StringUtils;
 
-import java.util.*;
+import java.util.UUID;
 
 public class SolaceProvisioningUtil {
 
@@ -63,12 +69,38 @@ public class SolaceProvisioningUtil {
 		return producerFlowProperties;
 	}
 
-	public static boolean isAnonQueue(String groupName) {
+	public static ConsumerFlowProperties getConsumerFlowProperties(
+			String destinationName,
+			ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
+		ConsumerFlowProperties consumerFlowProperties = new ConsumerFlowProperties();
+		final String selector = properties.getExtension().getSelector();
+		consumerFlowProperties.setSelector((selector == null || selector.isBlank()) ? null : selector);
+
+		if (EndpointType.TOPIC_ENDPOINT.equals(properties.getExtension().getEndpointType())) {
+			String subscription;
+			// default case
+			if (properties.getExtension().isAddDestinationAsSubscriptionToQueue()) {
+				subscription = destinationName;
+				if (properties.getExtension().getQueueAdditionalSubscriptions().length > 0) {
+					throw new IllegalArgumentException("No additional queue subscriptions permitted for topic endpoints");
+				}
+			} else {
+				if (properties.getExtension().getQueueAdditionalSubscriptions().length != 1)
+					throw new IllegalArgumentException("Exactly one subscription must be provided for topic endpoints");
+					subscription = properties.getExtension().getQueueAdditionalSubscriptions()[0];
+				}
+				consumerFlowProperties.setNewSubscription(JCSMPFactory.onlyInstance().createTopic(subscription));
+			}
+
+			return consumerFlowProperties;
+    }
+
+	public static boolean isAnonEndpoint(String groupName) {
 		return !StringUtils.hasText(groupName);
 	}
 
-	public static boolean isDurableQueue(String groupName) {
-		return !isAnonQueue(groupName);
+	public static boolean isDurableEndpoint(String groupName) {
+		return !isAnonEndpoint(groupName);
 	}
 
 	public static String getTopicName(String baseTopicName, SolaceCommonProperties properties) {

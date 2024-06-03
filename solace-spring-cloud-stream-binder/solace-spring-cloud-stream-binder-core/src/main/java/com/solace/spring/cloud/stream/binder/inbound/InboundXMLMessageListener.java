@@ -16,13 +16,6 @@ import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.StaleSessionException;
 import com.solacesystems.jcsmp.XMLMessage;
-import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
-import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -36,6 +29,14 @@ import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.support.ErrorMessageUtils;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
+
+import java.util.List;
+import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 abstract class InboundXMLMessageListener implements Runnable {
 	final FlowReceiverContainer flowReceiverContainer;
@@ -127,7 +128,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 			throw e;
 		} catch (JCSMPException e) {
 			String msg = String.format("Received error while trying to read message from endpoint %s",
-					flowReceiverContainer.getQueueName());
+					flowReceiverContainer.getEndpointName());
 			if ((e instanceof JCSMPTransportException || e instanceof ClosedFacilityException) && !keepPolling()) {
 				logger.debug(msg, e);
 			} else {

@@ -3,14 +3,18 @@ package com.solace.spring.cloud.stream.binder.util;
 import com.solace.spring.cloud.stream.binder.health.handlers.SolaceFlowHealthEventHandler;
 import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.ConsumerFlowProperties;
+import com.solacesystems.jcsmp.Endpoint;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.FlowEventHandler;
 import com.solacesystems.jcsmp.FlowReceiver;
 import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.XMLMessage.Outcome;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+import org.springframework.lang.Nullable;
+
 import java.util.Objects;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -18,9 +22,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.springframework.lang.Nullable;
 
 /**
  * <p>A {@link FlowReceiver} wrapper object which allows for flow rebinds.</p>
@@ -30,8 +31,9 @@ import org.springframework.lang.Nullable;
 public class FlowReceiverContainer {
 	private final UUID id = UUID.randomUUID();
 	private final JCSMPSession session;
-	private final String queueName;
+	private final Endpoint endpoint;
 	private final EndpointProperties endpointProperties;
+	private final ConsumerFlowProperties consumerFlowProperties;
 	private final AtomicReference<FlowReceiverReference> flowReceiverAtomicReference = new AtomicReference<>();
 	private final AtomicBoolean isPaused = new AtomicBoolean(false);
 
@@ -43,11 +45,15 @@ public class FlowReceiverContainer {
 	private FlowEventHandler eventHandler;
 
 	public FlowReceiverContainer(JCSMPSession session,
-								 String queueName,
-								 EndpointProperties endpointProperties) {
+								 Endpoint endpoint,
+								 EndpointProperties endpointProperties,
+								 ConsumerFlowProperties consumerFlowProperties) {
 		this.session = session;
-		this.queueName = queueName;
+		this.endpoint = endpoint;
 		this.endpointProperties = endpointProperties;
+		this.consumerFlowProperties = consumerFlowProperties
+				.setEndpoint(endpoint)
+				.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT);
 		this.eventHandler = new SolaceFlowEventHandler(xmlMessageMapper, id.toString());
 	}
 
@@ -72,13 +78,10 @@ public class FlowReceiverContainer {
 				return existingFlowRefId;
 			} else {
 				logger.info(String.format("Flow receiver container %s started in state '%s'", id, isPaused.get() ? "Paused" : "Running"));
-				final ConsumerFlowProperties flowProperties = new ConsumerFlowProperties()
-						.setEndpoint(JCSMPFactory.onlyInstance().createQueue(queueName))
-						.setAckMode(JCSMPProperties.SUPPORTED_MESSAGE_ACK_CLIENT)
-						.setStartState(!isPaused.get());
-				flowProperties.addRequiredSettlementOutcomes(Outcome.ACCEPTED, Outcome.FAILED, Outcome.REJECTED);
+				consumerFlowProperties.setStartState(!isPaused.get());
+				consumerFlowProperties.addRequiredSettlementOutcomes(Outcome.ACCEPTED, Outcome.FAILED, Outcome.REJECTED);
 
-				FlowReceiver flowReceiver = session.createFlow(null, flowProperties, endpointProperties, eventHandler);
+				FlowReceiver flowReceiver = session.createFlow(null, consumerFlowProperties, endpointProperties, eventHandler);
 				if (eventHandler != null && eventHandler instanceof SolaceFlowHealthEventHandler) {
 					((SolaceFlowHealthEventHandler) eventHandler).setHealthStatusUp();
 				}
@@ -327,8 +330,8 @@ public class FlowReceiverContainer {
 		return id;
 	}
 
-	public String getQueueName() {
-		return queueName;
+	public String getEndpointName() {
+		return endpoint.getName();
 	}
 
 	public XMLMessageMapper getXMLMessageMapper() {

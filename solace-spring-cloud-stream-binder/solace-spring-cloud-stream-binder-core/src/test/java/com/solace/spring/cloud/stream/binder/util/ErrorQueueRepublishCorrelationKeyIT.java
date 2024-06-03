@@ -1,18 +1,12 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solacesystems.jcsmp.Consumer;
+import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -21,11 +15,6 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
-import java.util.Optional;
-import java.util.UUID;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicReference;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -37,6 +26,19 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
+
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
 		initializers = ConfigDataApplicationContextInitializer.class)
@@ -284,8 +286,9 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 			throws JCSMPException {
 		if (flowReceiverContainerReference.compareAndSet(null, Mockito.spy(new FlowReceiverContainer(
 				jcsmpSession,
-				queue.getName(),
-				new EndpointProperties())))) {
+				JCSMPFactory.onlyInstance().createQueue(queue.getName()),
+				new EndpointProperties(),
+				new ConsumerFlowProperties())))) {
 			flowReceiverContainerReference.get().bind();
 		}
 		return flowReceiverContainerReference.get();

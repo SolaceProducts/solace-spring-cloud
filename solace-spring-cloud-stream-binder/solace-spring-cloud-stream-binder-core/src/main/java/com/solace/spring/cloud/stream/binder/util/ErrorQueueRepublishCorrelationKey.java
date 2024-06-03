@@ -51,7 +51,7 @@ public class ErrorQueueRepublishCorrelationKey {
 	private void fallback() {
 			logger.info(String.format(
 					"Exceeded max error queue delivery attempts. XMLMessage %s will be re-queued onto queue %s",
-					messageContainer.getMessage().getMessageId(), flowReceiverContainer.getQueueName()));
+					messageContainer.getMessage().getMessageId(), flowReceiverContainer.getEndpointName()));
 			flowReceiverContainer.requeue(messageContainer);
 	}
 
