@@ -16,6 +16,7 @@ import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureU
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
@@ -60,10 +61,13 @@ public class SolaceBinderHealthIT {
 	@CartesianTest(name = "[{index}] channelType={0}, autoStart={1} concurrency={2}")
 	public <T> void testConsumerFlowHealthProvisioning(
 			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
+			@CartesianTest.Enum(EndpointType.class) EndpointType endpointType,
 			@Values(booleans = {true, false}) boolean autoStart,
 			@Values(ints = {1, 3}) int concurrency,
 			SpringCloudStreamContext context) throws Exception {
-		if (concurrency > 1 && channelType.equals(PollableSource.class)) {
+		if (concurrency > 1 && ( channelType.equals(PollableSource.class) ||
+				// skip for concurrency >1
+				EndpointType.TOPIC_ENDPOINT.equals(endpointType))) {
 			return;
 		}
 
@@ -83,6 +87,7 @@ public class SolaceBinderHealthIT {
 		consumerProperties.populateBindingName(RandomStringUtils.randomAlphanumeric(10));
 		consumerProperties.setAutoStartup(autoStart);
 		consumerProperties.setConcurrency(concurrency);
+		consumerProperties.getExtension().setEndpointType(endpointType);
 
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
 				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);

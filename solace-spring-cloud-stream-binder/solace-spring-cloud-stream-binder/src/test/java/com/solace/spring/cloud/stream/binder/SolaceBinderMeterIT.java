@@ -12,6 +12,7 @@ import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContex
 import com.solace.spring.cloud.stream.binder.test.spring.configuration.TestMeterRegistryConfiguration;
 import com.solace.spring.cloud.stream.binder.test.util.SimpleJCSMPEventHandler;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
@@ -92,6 +93,7 @@ public class SolaceBinderMeterIT {
 	@CartesianTest(name = "[{index}] channelType={0}, batchMode={1}")
 	public <T> void testConsumerMeters(
 			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
+			@CartesianTest.Enum(EndpointType.class) EndpointType endpointType,
 			@Values(booleans = {false, true}) boolean batchMode,
 			@Autowired SimpleMeterRegistry meterRegistry,
 			JCSMPSession jcsmpSession,
@@ -108,6 +110,7 @@ public class SolaceBinderMeterIT {
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
 		consumerProperties.setBatchMode(batchMode);
+		consumerProperties.getExtension().setEndpointType(endpointType);
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
 				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 

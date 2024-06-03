@@ -1440,21 +1440,4 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
                 .getData();
     }
 
-
-    private void validateSelector(SpringCloudStreamContext context,
-                                  SempV2Api sempV2Api,
-                                  JCSMPProperties jcsmpProperties,
-                                  String endpointName,
-                                  EndpointType endpointType,
-                                  String selector) throws InterruptedException {
-        retryAssert(() -> assertThat(
-                switch (endpointType) {
-                    case QUEUE -> getQueueTxFlows(sempV2Api, jcsmpProperties.getStringProperty(JCSMPProperties.VPN_NAME), endpointName, 1).get(0).getSelector();
-                    case TOPIC_ENDPOINT -> sempV2Api.monitor().getMsgVpnTopicEndpoint((String) context.getJcsmpSession().getProperty(JCSMPProperties.VPN_NAME),
-                            endpointName, null).getData().getSelector();
-                }
-        ).as("Unexpected selector on endpoint %s", endpointName)
-                .isEqualTo(selector));
-    }
-
 }

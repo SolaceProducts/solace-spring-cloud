@@ -9,10 +9,7 @@ import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisio
 import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.ApiException;
-import com.solacesystems.jcsmp.Endpoint;
-import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPProperties;
-import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.*;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.cloud.stream.binder.AbstractPollableConsumerTestBinder;
@@ -156,7 +153,7 @@ public class SolaceTestBinder
 					continue;
 				}
 				jcsmpSession.deprovision(endpoint, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
-			} catch (JCSMPException e) {
+			} catch (JCSMPException| AccessDeniedException e) {
 				try {
 					String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
 					switch (endpointEntry.getValue()) {

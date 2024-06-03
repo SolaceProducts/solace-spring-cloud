@@ -4,6 +4,7 @@ import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
+import com.solace.spring.cloud.stream.binder.provisioning.EndpointProvider;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
 import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
@@ -15,6 +16,7 @@ import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
+import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnTopicEndpoint;
 import com.solace.test.integration.semp.v2.monitor.ApiException;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueMsg;
@@ -30,6 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.parallel.Execution;
 import org.junit.jupiter.api.parallel.ExecutionMode;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
@@ -67,15 +70,18 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 /**
  * All tests which modify the default provisioning lifecycle.
  */
-@SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigDataApplicationContextInitializer.class)
+@SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
+        initializers = ConfigDataApplicationContextInitializer.class)
 @ExtendWith(PubSubPlusExtension.class)
 @ExtendWith(SpringCloudStreamExtension.class)
 public class SolaceBinderProvisioningLifecycleIT {
     private static final Logger logger = LoggerFactory.getLogger(SolaceBinderProvisioningLifecycleIT.class);
 
-    @Test
-    public void testConsumerProvisionDurableQueue(JCSMPSession jcsmpSession, SpringCloudStreamContext context,
-                                                  TestInfo testInfo) throws Exception {
+    @ParameterizedTest
+    @EnumSource(EndpointType.class)
+    public void testConsumerProvisionDurableEndpoint(EndpointType endpointType, JCSMPSession jcsmpSession,
+                                                     SpringCloudStreamContext context,
+                                                     TestInfo testInfo) throws Exception {
         SolaceTestBinder binder = context.getBinder();
 
         DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
@@ -87,10 +93,20 @@ public class SolaceBinderProvisioningLifecycleIT {
         ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
         assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
         consumerProperties.getExtension().setProvisionDurableQueue(false);
+        consumerProperties.getExtension().setEndpointType(endpointType);
 
-        Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-                .getQueueNames(destination0, group0, consumerProperties, false)
-                .getConsumerGroupQueueName());
+        Endpoint endpoint = null;
+
+        switch (endpointType) {
+            case QUEUE -> endpoint = EndpointProvider.QUEUE_PROVIDER.createInstance(SolaceProvisioningUtil
+                    .getQueueNames(destination0, group0, consumerProperties, false)
+                    .getConsumerGroupQueueName());
+            case TOPIC_ENDPOINT -> endpoint = EndpointProvider.TOPIC_ENDPOINT_PROVIDER.createInstance(SolaceProvisioningUtil
+                    .getQueueNames(destination0, group0, consumerProperties, false)
+                    .getConsumerGroupQueueName());
+        }
+
+
         EndpointProperties endpointProperties = new EndpointProperties();
         endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
 
@@ -98,8 +114,8 @@ public class SolaceBinderProvisioningLifecycleIT {
         Binding<MessageChannel> consumerBinding = null;
 
         try {
-            logger.info(String.format("Pre-provisioning queue %s with Permission %s", queue.getName(), endpointProperties.getPermission()));
-            jcsmpSession.provision(queue, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
+            logger.info(String.format("Pre-provisioning endpoint %s with Permission %s", endpoint.getName(), endpointProperties.getPermission()));
+            jcsmpSession.provision(endpoint, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
 
             producerBinding = binder.bindProducer(destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
             consumerBinding = binder.bindConsumer(destination0, group0, moduleInputChannel, consumerProperties);
@@ -122,7 +138,7 @@ public class SolaceBinderProvisioningLifecycleIT {
         } finally {
             if (producerBinding != null) producerBinding.unbind();
             if (consumerBinding != null) consumerBinding.unbind();
-            jcsmpSession.deprovision(queue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
+            jcsmpSession.deprovision(endpoint, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
         }
     }
 
@@ -183,10 +199,14 @@ public class SolaceBinderProvisioningLifecycleIT {
         }
     }
 
-    @Test
-    public void testPolledConsumerProvisionDurableQueue(JCSMPSession jcsmpSession, SpringCloudStreamContext context,
+
+    @ParameterizedTest
+    @EnumSource(EndpointType.class)
+    public void testPolledConsumerProvisionDurableEndpoint(EndpointType endpointType,
+                                                        JCSMPSession jcsmpSession, SpringCloudStreamContext context,
                                                         TestInfo testInfo) throws Exception {
         SolaceTestBinder binder = context.getBinder();
+
 
         DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
         PollableSource<MessageHandler> moduleInputChannel = context.createBindableMessageSource("input", new BindingProperties());
@@ -197,10 +217,20 @@ public class SolaceBinderProvisioningLifecycleIT {
         ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
         assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
         consumerProperties.getExtension().setProvisionDurableQueue(false);
+        consumerProperties.getExtension().setEndpointType(endpointType);
 
-        Queue queue = JCSMPFactory.onlyInstance().createQueue(SolaceProvisioningUtil
-                .getQueueNames(destination0, group0, consumerProperties, false)
-                .getConsumerGroupQueueName());
+        Endpoint endpoint = null;
+
+        switch (endpointType) {
+            case QUEUE -> endpoint = EndpointProvider.QUEUE_PROVIDER.createInstance(SolaceProvisioningUtil
+                    .getQueueNames(destination0, group0, consumerProperties, false)
+                    .getConsumerGroupQueueName());
+            case TOPIC_ENDPOINT -> endpoint = EndpointProvider.TOPIC_ENDPOINT_PROVIDER.createInstance(SolaceProvisioningUtil
+                    .getQueueNames(destination0, group0, consumerProperties, false)
+                    .getConsumerGroupQueueName());
+        }
+
+
         EndpointProperties endpointProperties = new EndpointProperties();
         endpointProperties.setPermission(EndpointProperties.PERMISSION_MODIFY_TOPIC);
 
@@ -208,8 +238,8 @@ public class SolaceBinderProvisioningLifecycleIT {
         Binding<PollableSource<MessageHandler>> consumerBinding = null;
 
         try {
-            logger.info(String.format("Pre-provisioning queue %s with Permission %s", queue.getName(), endpointProperties.getPermission()));
-            jcsmpSession.provision(queue, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
+            logger.info(String.format("Pre-provisioning endpoint %s with Permission %s", endpoint.getName(), endpointProperties.getPermission()));
+            jcsmpSession.provision(endpoint, endpointProperties, JCSMPSession.WAIT_FOR_CONFIRM);
 
             producerBinding = binder.bindProducer(destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
             consumerBinding = binder.bindPollableConsumer(destination0, group0, moduleInputChannel, consumerProperties);
@@ -231,12 +261,16 @@ public class SolaceBinderProvisioningLifecycleIT {
         } finally {
             if (producerBinding != null) producerBinding.unbind();
             if (consumerBinding != null) consumerBinding.unbind();
-            jcsmpSession.deprovision(queue, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
+            jcsmpSession.deprovision(endpoint, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);
         }
     }
 
-    @Test
-    public void testAnonConsumerProvisionDurableQueue(SpringCloudStreamContext context, TestInfo testInfo) throws Exception {
+
+    @ParameterizedTest
+    @EnumSource(EndpointType.class)
+    public void testAnonConsumerProvisionEndpoint(EndpointType endpointType,
+                                                  SpringCloudStreamContext context,
+                                                  TestInfo testInfo) throws Exception {
         SolaceTestBinder binder = context.getBinder();
 
         DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
@@ -247,6 +281,7 @@ public class SolaceBinderProvisioningLifecycleIT {
         ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
         assertThat(consumerProperties.getExtension().isProvisionDurableQueue()).isTrue();
         consumerProperties.getExtension().setProvisionDurableQueue(false); // Expect this parameter to do nothing
+        consumerProperties.getExtension().setEndpointType(endpointType);
 
         Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
         Binding<MessageChannel> consumerBinding = binder.bindConsumer(destination0, null, moduleInputChannel, consumerProperties);
@@ -577,14 +612,123 @@ public class SolaceBinderProvisioningLifecycleIT {
         consumerBinding.unbind();
     }
 
+
+    @Test
+    @Execution(ExecutionMode.SAME_THREAD)
+    public void testFailConsumerConcurrencyWithAutoprovisionedDurableTopicEndpoint(SpringCloudStreamContext context) throws Exception {
+        SolaceTestBinder binder = context.getBinder();
+
+        String destination0 = RandomStringUtils.randomAlphanumeric(50);
+        String group0 = RandomStringUtils.randomAlphanumeric(10);
+
+        DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
+
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+        consumerProperties.getExtension().setProvisionDurableQueue(true);
+        consumerProperties.setConcurrency(3);
+        consumerProperties.getExtension().setEndpointType(EndpointType.TOPIC_ENDPOINT);
+
+        try {
+            Binding<MessageChannel> consumerBinding = binder.bindConsumer(
+                    destination0, group0, moduleInputChannel, consumerProperties);
+            consumerBinding.unbind();
+            fail("Expected consumer provisioning to fail");
+        } catch (ProvisioningException e) {
+            assertThat(e).hasNoCause();
+            assertThat(e.getMessage()).containsIgnoringCase("not supported");
+            assertThat(e.getMessage()).containsIgnoringCase("concurrency > 1");
+            assertThat(e.getMessage()).containsIgnoringCase("topic endpoint");
+        }
+    }
+
+
+    @Test
+    @Execution(ExecutionMode.SAME_THREAD)
+    public void testFailBindConsumerConcurrencyOverLimitWithExistingDurableTopicEndpoint(
+            SempV2Api sempV2Api,
+            JCSMPSession jcsmpSession,
+            SpringCloudStreamContext context) throws Exception {
+        SolaceTestBinder binder = context.getBinder();
+
+        String destination0 = RandomStringUtils.randomAlphanumeric(50);
+        String group0 = RandomStringUtils.randomAlphanumeric(10);
+
+        DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
+
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+        consumerProperties.getExtension().setProvisionDurableQueue(false);
+
+        consumerProperties.setConcurrency(3);
+        consumerProperties.getExtension().setEndpointType(EndpointType.TOPIC_ENDPOINT);
+
+        String endpoint0 = SolaceProvisioningUtil
+                .getQueueNames(destination0, group0, consumerProperties, false)
+                .getConsumerGroupQueueName();
+
+        String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+        operatorProvisionTopicEndpoint(sempV2Api, vpnName, endpoint0, destination0, 1);
+        Binding<MessageChannel> consumerBinding = null;
+        try {
+            consumerBinding = binder.bindConsumer(
+                    destination0, group0, moduleInputChannel, consumerProperties);
+            fail("Expected consumer provisioning to fail");
+        } catch (BinderException e) {
+            assertThat(e).hasCauseInstanceOf(MessagingException.class);
+            assertThat(e.getCause().getMessage()).containsIgnoringCase("failed to get message consumer");
+            assertThat(e.getCause()).hasCauseInstanceOf(JCSMPErrorResponseException.class);
+            assertThat(((JCSMPErrorResponseException) e.getCause().getCause()).getSubcodeEx())
+                    .isEqualTo(JCSMPErrorResponseSubcodeEx.MAX_CLIENTS_FOR_TE);
+        } finally {
+            if (consumerBinding != null) consumerBinding.unbind();
+        }
+    }
+
+    @Test
+    @Execution(ExecutionMode.SAME_THREAD)
+    public void testBindConsumerConcurrencyWithExistingDurableTopicEndpoint(
+            SempV2Api sempV2Api,
+            JCSMPSession jcsmpSession,
+            SpringCloudStreamContext context) throws Exception {
+        SolaceTestBinder binder = context.getBinder();
+
+        String destination0 = RandomStringUtils.randomAlphanumeric(50);
+        String group0 = RandomStringUtils.randomAlphanumeric(10);
+
+        DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
+
+        ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = context.createConsumerProperties();
+        consumerProperties.getExtension().setProvisionDurableQueue(false);
+
+        consumerProperties.setConcurrency(3);
+        consumerProperties.getExtension().setEndpointType(EndpointType.TOPIC_ENDPOINT);
+
+        String endpoint0 = SolaceProvisioningUtil
+                .getQueueNames(destination0, group0, consumerProperties, false)
+                .getConsumerGroupQueueName();
+
+        String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+        operatorProvisionTopicEndpoint(sempV2Api, vpnName, endpoint0, destination0, 5);
+        Binding<MessageChannel> consumerBinding = null;
+        try {
+            consumerBinding = binder.bindConsumer(
+                    destination0, group0, moduleInputChannel, consumerProperties);
+
+        } finally {
+            if (consumerBinding != null) consumerBinding.unbind();
+        }
+    }
+
+
     @ParameterizedTest(name = "[{index}] batchMode={0}")
     @ValueSource(booleans = {false, true})
     @Execution(ExecutionMode.SAME_THREAD)
-    public void testConsumerConcurrency(boolean batchMode,
-                                        SempV2Api sempV2Api,
-                                        SpringCloudStreamContext context,
-                                        SoftAssertions softly,
-                                        TestInfo testInfo) throws Exception {
+    public void testQueueConsumerConcurrency(boolean batchMode,
+                                             SempV2Api sempV2Api,
+                                             SpringCloudStreamContext context,
+                                             SoftAssertions softly,
+                                             TestInfo testInfo) throws Exception {
         SolaceTestBinder binder = context.getBinder();
 
         DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
@@ -658,7 +802,6 @@ public class SolaceBinderProvisioningLifecycleIT {
                 synchronized (foundPayloads) {
                     foundPayloads.put(payload, timestamp);
                 }
-
                 latch.countDown();
             }
         });
@@ -2213,4 +2356,20 @@ public class SolaceBinderProvisioningLifecycleIT {
             if (producerBinding != null) producerBinding.unbind();
         }
     }
+
+    void operatorProvisionTopicEndpoint(SempV2Api sempV2Api, String vpnName, String endpointName, String subscription, long maxBindCount) throws
+            com.solace.test.integration.semp.v2.config.ApiException {
+
+        final ConfigMsgVpnTopicEndpoint config = new ConfigMsgVpnTopicEndpoint();
+        config.setAccessType(ConfigMsgVpnTopicEndpoint.AccessTypeEnum.NON_EXCLUSIVE);
+        config.setPermission(ConfigMsgVpnTopicEndpoint.PermissionEnum.DELETE);
+        config.setMaxBindCount(maxBindCount);
+        config.setTopicEndpointName(endpointName);
+        config.setIngressEnabled(true);
+        config.setEgressEnabled(true);
+        config.setMsgVpnName(vpnName);
+        // assume TE is created, when not created test will catch it
+        sempV2Api.config().createMsgVpnTopicEndpoint(vpnName, config, null);
+    }
+
 }

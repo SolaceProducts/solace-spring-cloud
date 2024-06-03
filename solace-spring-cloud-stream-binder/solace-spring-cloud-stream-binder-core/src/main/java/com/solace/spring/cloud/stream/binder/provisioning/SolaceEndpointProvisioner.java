@@ -120,6 +120,7 @@ public class SolaceEndpointProvisioner
 			consumerFlowProperties.setNewSubscription(JCSMPFactory.onlyInstance().createTopic(name));
 		}
 
+
 		EndpointProvider<?> endpointProvider = EndpointProvider.from(endpointType);
 
 		if (properties.getConcurrency() > 1) {
@@ -131,6 +132,14 @@ public class SolaceEndpointProvisioner
 			} else if (!StringUtils.hasText(group)) {
 				String msg = "Concurrency > 1 is not supported when using anonymous consumer groups, " +
 						"either configure a concurrency of 1 or define a consumer group";
+				LOGGER.warn(msg);
+				throw new ProvisioningException(msg);
+			} else if (EndpointType.TOPIC_ENDPOINT.equals(endpointType) &&
+					properties.getExtension().isProvisionDurableQueue()){
+				// JCSMP can't set max client number >1 while provisioning topic endpoints
+				String msg = "Concurrency > 1 is not supported with auto-provisioned topic endpoints. "
+						+"Either configure a concurrency of 1, or administratively provision a topic endpoint "
+						+"and set the maximum number of connected clients to fit your use case.";
 				LOGGER.warn(msg);
 				throw new ProvisioningException(msg);
 			}
