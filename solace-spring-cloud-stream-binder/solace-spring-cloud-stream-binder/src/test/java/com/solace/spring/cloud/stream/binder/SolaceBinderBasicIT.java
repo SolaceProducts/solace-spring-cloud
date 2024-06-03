@@ -7,9 +7,11 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
+import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SimpleJCSMPEventHandler;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.spring.cloud.stream.binder.util.CorrelationData;
 import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
@@ -37,6 +39,7 @@ import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageConsumer;
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.XMLMessageProducer;
+import com.solacesystems.jcsmp.transaction.RollbackException;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.assertj.core.api.SoftAssertions;
@@ -79,21 +82,23 @@ import org.springframework.util.MimeTypeUtils;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -148,13 +153,13 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 	 *
 	 * @see #testSendAndReceive(TestInfo)
 	 */
-	@CartesianTest(name = "[{index}] channelType={0}, endpointType={1}, batchMode={2}, transactedProducer={3}")
+	@CartesianTest(name = "[{index}] channelType={0}, endpointType={1}, numMessages={2}, batchMode={3}, transactedProducer={4}")
 	@Execution(ExecutionMode.CONCURRENT)
-	public <T> void testSendAndReceive(
+	public <T> void testReceive(
 			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
 			@CartesianTest.Enum(EndpointType.class) EndpointType endpointType,
+			@Values(ints = {1, 256}) int numMessages,
 			@Values(booleans = {false, true}) boolean batchMode,
-			@Values(booleans = {false, true}) boolean transactedProducer,
 			SempV2Api sempV2Api,
 			SoftAssertions softly,
 			TestInfo testInfo) throws Exception {
@@ -165,20 +170,17 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-
-		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties(testInfo);
-		producerProperties.getExtension().setTransacted(transactedProducer);
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, producerProperties);
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.setBatchMode(batchMode);
 		consumerProperties.getExtension().setEndpointType(endpointType);
+		consumerProperties.getExtension().setBatchMaxSize(numMessages);
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
 				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
-		List<Message<?>> messages = IntStream.range(0,
-						batchMode ? consumerProperties.getExtension().getBatchMaxSize() : 1)
+		List<Message<?>> messages = IntStream.range(0, numMessages)
 				.mapToObj(i -> MessageBuilder.withPayload(UUID.randomUUID().toString().getBytes())
 						.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
 						.build())
@@ -186,9 +188,12 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		binderBindUnbindLatency();
 
-		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, 1,
+		Iterator<Message<?>> messageIterator = messages.iterator();
+
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, batchMode ? 1 : numMessages,
 				() -> messages.forEach(moduleOutputChannel::send),
-				msg -> softly.assertThat(msg).satisfies(isValidMessage(consumerProperties, messages)));
+				msg -> softly.assertThat(msg).satisfies(isValidMessage(consumerProperties,
+						batchMode ? messages : List.of(messageIterator.next()))));
 
 		String vpnName = (String) getJcsmpSession().getProperty(JCSMPProperties.VPN_NAME);
 
@@ -201,27 +206,6 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 					.getData();
 		}).hasSize(0));
 
-		if (transactedProducer) {
-			String clientName = (String) getJcsmpSession().getProperty(JCSMPProperties.CLIENT_NAME);
-			assertThat(sempV2Api.monitor().getMsgVpnClientRxFlows(vpnName, clientName, null, null, null, null)
-					.getData())
-					.filteredOn(f -> f.getSessionName() != null)
-					.singleElement()
-					.satisfies(
-							f -> assertThat(f.getGuaranteedMsgCount()).isEqualTo(messages.size()),
-							f -> assertThat(sempV2Api.monitor().getMsgVpnClientTransactedSession(
-											vpnName, clientName, f.getSessionName(), null)
-									.getData())
-									.satisfies(
-											s -> assertThat(s.getSuccessCount()).isEqualTo(messages.size()),
-											s -> assertThat(s.getCommitCount()).isEqualTo(messages.size()),
-											s -> assertThat(s.getFailureCount()).isEqualTo(0),
-											s -> assertThat(s.getPublishedMsgCount()).isEqualTo(messages.size()),
-											s -> assertThat(s.getPendingPublishedMsgCount()).isEqualTo(0)
-									)
-					);
-		}
-
 		producerBinding.unbind();
 		consumerBinding.unbind();
 	}
@@ -229,7 +213,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 	@CartesianTest(name = "[{index}] channelType={0}, batchMode={1}, namedConsumerGroup={2}")
 	@Execution(ExecutionMode.CONCURRENT)
-	public <T> void testSendAndReceiveBad(
+	public <T> void testReceiveBad(
 			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
 			@Values(booleans = {false, true}) boolean batchMode,
 			@Values(booleans = {false, true}) boolean namedConsumerGroup,
@@ -283,51 +267,170 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		consumerBinding.unbind();
 	}
 
-	@CartesianTest(name = "[{index}] transacted={0}")
+	@CartesianTest(name = "[{index}] numMessages={0}, batched={1}, transacted={2} withConfirmCorrelation={3}")
+	public void testSend(@Values(ints = {1, 256}) int numMessages,
+						 @Values(booleans = {false, true}) boolean batched,
+						 @Values(booleans = {false, true}) boolean transacted,
+						 @Values(booleans = {false, true}) boolean withConfirmCorrelation,
+						 SempV2Api sempV2Api,
+						 SoftAssertions softly,
+						 TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<DirectChannel> consumerInfrastructureUtil = createConsumerInfrastructureUtil(
+				DirectChannel.class);
+
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties(testInfo);
+		producerProperties.setUseNativeEncoding(true);
+		producerProperties.getExtension().setTransacted(transacted);
+		BindingProperties producerBindingProperties = new BindingProperties();
+		producerBindingProperties.setProducer(producerProperties);
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", producerBindingProperties);
+		DirectChannel moduleInputChannel = consumerInfrastructureUtil
+				.createChannel("input", new BindingProperties());
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, producerProperties);
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		Binding<DirectChannel> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel,
+				consumerProperties);
+
+		List<CorrelationData> correlationDataList = new ArrayList<>();
+
+		List<Message<?>> messages = IntStream.range(0, numMessages)
+				.mapToObj(i -> {
+					CorrelationData correlationData;
+					if (withConfirmCorrelation && !batched) {
+						correlationData = new CorrelationData();
+						correlationDataList.add(correlationData);
+					} else {
+						correlationData = null;
+					}
+
+					return MessageBuilder.withPayload(UUID.randomUUID().toString().getBytes())
+							.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+							.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
+							.build();
+				})
+				.collect(Collectors.toList());
+
+		binderBindUnbindLatency();
+
+		Iterator<Message<?>> messageIterator = messages.iterator();
+
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, numMessages, () -> {
+			if (batched) {
+				CorrelationData correlationData;
+				if (withConfirmCorrelation) {
+					correlationData = new CorrelationData();
+					correlationDataList.add(correlationData);
+				} else {
+					correlationData = null;
+				}
+
+				moduleOutputChannel.send(MessageBuilder.withPayload(messages.stream().map(Message::getPayload).toList())
+						.setHeader(SolaceBinderHeaders.BATCHED_HEADERS,
+								messages.stream().map(Message::getHeaders).toList())
+						.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
+						.build());
+			} else {
+				messages.forEach(moduleOutputChannel::send);
+			}
+		}, msg -> softly.assertThat(msg).satisfies(isValidMessage(consumerProperties, messageIterator.next())));
+
+		String vpnName = (String) getJcsmpSession().getProperty(JCSMPProperties.VPN_NAME);
+
+		retryAssert(() -> assertThat(sempV2Api.monitor()
+				.getMsgVpnQueueMsgs(vpnName, binder.getConsumerQueueName(consumerBinding), 2, null, null, null)
+				.getData())
+				.hasSize(0));
+
+		if (transacted) {
+			String clientName = (String) getJcsmpSession().getProperty(JCSMPProperties.CLIENT_NAME);
+			assertThat(sempV2Api.monitor().getMsgVpnClientRxFlows(vpnName, clientName, null, null, null, null)
+					.getData())
+					.filteredOn(f -> f.getSessionName() != null)
+					.singleElement()
+					.satisfies(
+							f -> assertThat(f.getGuaranteedMsgCount()).isEqualTo(numMessages),
+							f -> assertThat(sempV2Api.monitor().getMsgVpnClientTransactedSession(
+											vpnName, clientName, f.getSessionName(), null)
+									.getData())
+									.satisfies(
+											s -> assertThat(s.getSuccessCount()).isEqualTo(batched ? 1 : numMessages),
+											s -> assertThat(s.getCommitCount()).isEqualTo(batched ? 1 : numMessages),
+											s -> assertThat(s.getFailureCount()).isEqualTo(0),
+											s -> assertThat(s.getPublishedMsgCount()).isEqualTo(numMessages),
+											s -> assertThat(s.getPendingPublishedMsgCount()).isEqualTo(0)
+									)
+					);
+		}
+
+		assertThat(correlationDataList)
+				.hasSize(withConfirmCorrelation ? (batched ? 1 : messages.size()) : 0)
+				.allSatisfy(c -> assertThat(c.getFuture()).succeedsWithin(1, TimeUnit.MINUTES));
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@CartesianTest(name = "[{index}] batched={0}, transacted={1}")
 	@Execution(ExecutionMode.CONCURRENT)
 	public void testProducerErrorChannel(
+			@Values(booleans = {false, true}) boolean batched,
 			@Values(booleans = {false, true}) boolean transacted,
 			JCSMPSession jcsmpSession,
 			TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
-		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
-
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		String destination0EC = String.format("%s%s%s%serrors", binder.getBinder().getBinderIdentity(),
 				getDestinationNameDelimiter(), destination0, getDestinationNameDelimiter());
 
-		ExtendedProducerProperties<SolaceProducerProperties> producerProps = createProducerProperties(testInfo);
-		producerProps.getExtension().setTransacted(transacted);
-		producerProps.setErrorChannelEnabled(true);
-		producerProps.populateBindingName(destination0);
-		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProps);
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties(testInfo);
+		producerProperties.getExtension().setTransacted(transacted);
+		producerProperties.setErrorChannelEnabled(true);
+		producerProperties.setUseNativeEncoding(true);
+		producerProperties.populateBindingName(destination0);
 
-		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
-				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
-				.build();
+		BindingProperties bindingProperties = new BindingProperties();
+		bindingProperties.setProducer(producerProperties);
 
-		final CountDownLatch latch = new CountDownLatch(2);
+		DirectChannel moduleOutputChannel = createBindableChannel("output", bindingProperties);
+		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProperties);
 
-		final AtomicReference<Message<?>> errorMessage = new AtomicReference<>();
+		Message<?> message = MessageGenerator.generateMessage(
+				() -> UUID.randomUUID().toString().getBytes(),
+				() -> Map.of(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE),
+				new MessageGenerator.BatchingConfig().setEnabled(batched));
+
+		final CompletableFuture<Message<?>> bindingSpecificErrorMessage = new CompletableFuture<>();
+		logger.info("Subscribing to binding-specific error channel");
 		binder.getApplicationContext()
 				.getBean(destination0EC, SubscribableChannel.class)
-				.subscribe(message1 -> {
-					errorMessage.set(message1);
-					latch.countDown();
-				});
+				.subscribe(bindingSpecificErrorMessage::complete);
 
+		final CompletableFuture<Message<?>> globalErrorMessage = new CompletableFuture<>();
+		logger.info("Subscribing to global error channel");
 		binder.getApplicationContext()
 				.getBean(IntegrationContextUtils.ERROR_CHANNEL_BEAN_NAME, SubscribableChannel.class)
-				.subscribe(message12 -> latch.countDown());
+				.subscribe(globalErrorMessage::complete);
 
 		jcsmpSession.closeSession();
 
 		assertThatThrownBy(() -> moduleOutputChannel.send(message));
 
-		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
-		assertThat(errorMessage.get())
+		assertThat(bindingSpecificErrorMessage)
+				.succeedsWithin(10, TimeUnit.SECONDS)
+				.satisfies(m -> assertThat(globalErrorMessage)
+						.succeedsWithin(10, TimeUnit.SECONDS)
+						.as("Expected error message sent to global and binding specific channels to be the same")
+						.isEqualTo(m))
 				.asInstanceOf(InstanceOfAssertFactories.type(ErrorMessage.class))
+				.satisfies(m -> assertThat(m.getOriginalMessage()).isEqualTo(message))
 				.extracting(ErrorMessage::getPayload)
 				.asInstanceOf(InstanceOfAssertFactories.throwable(MessagingException.class))
 				.cause()
@@ -338,8 +441,78 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 								.singleElement()
 								.asInstanceOf(InstanceOfAssertFactories.throwable(ClosedFacilityException.class))
 								.hasMessageContaining("Operation ROLLBACK disallowed");
+					} else {
+						assertThat(e).hasNoSuppressedExceptions();
 					}
 				});
+
+		producerBinding.unbind();
+	}
+
+	@CartesianTest(name = "[{index}] numberOfMessages={0}")
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testSendBatchOverTransactionLimit(
+			@Values(ints = {257, 300}) int numberOfMessages,
+			SempV2Api sempV2Api,
+			TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String destination0EC = String.format("%s%s%s%serrors", binder.getBinder().getBinderIdentity(),
+				getDestinationNameDelimiter(), destination0, getDestinationNameDelimiter());
+
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties(testInfo);
+		producerProperties.getExtension().setTransacted(true);
+		producerProperties.setErrorChannelEnabled(true);
+		producerProperties.setUseNativeEncoding(true);
+		producerProperties.populateBindingName(destination0);
+
+		BindingProperties bindingProperties = new BindingProperties();
+		bindingProperties.setProducer(producerProperties);
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", bindingProperties);
+		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProperties);
+
+		Message<?> message = MessageGenerator.generateMessage(
+				() -> UUID.randomUUID().toString().getBytes(),
+				() -> Map.of(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE),
+				new MessageGenerator.BatchingConfig().setEnabled(true).setNumberOfMessages(numberOfMessages));
+
+		final CompletableFuture<Message<?>> bindingSpecificErrorMessage = new CompletableFuture<>();
+		logger.info("Subscribing to binding-specific error channel");
+		binder.getApplicationContext()
+				.getBean(destination0EC, SubscribableChannel.class)
+				.subscribe(bindingSpecificErrorMessage::complete);
+
+		assertThatThrownBy(() -> moduleOutputChannel.send(message));
+
+		assertThat(bindingSpecificErrorMessage)
+				.succeedsWithin(10, TimeUnit.SECONDS)
+				.asInstanceOf(InstanceOfAssertFactories.type(ErrorMessage.class))
+				.satisfies(m -> assertThat(m.getOriginalMessage()).isEqualTo(message))
+				.extracting(ErrorMessage::getPayload)
+				.asInstanceOf(InstanceOfAssertFactories.throwable(MessagingException.class))
+				.cause()
+				.isInstanceOf(RollbackException.class);
+
+		String vpnName = (String) getJcsmpSession().getProperty(JCSMPProperties.VPN_NAME);
+		String clientName = (String) getJcsmpSession().getProperty(JCSMPProperties.CLIENT_NAME);
+		assertThat(sempV2Api.monitor().getMsgVpnClientRxFlows(vpnName, clientName, null, null, null, null)
+				.getData())
+				.filteredOn(f -> f.getSessionName() != null)
+				.singleElement()
+				.satisfies(
+						f -> assertThat(f.getGuaranteedMsgCount()).isEqualTo(numberOfMessages),
+						f -> assertThat(sempV2Api.monitor().getMsgVpnClientTransactedSession(
+										vpnName, clientName, f.getSessionName(), null)
+								.getData())
+								.satisfies(
+										s -> assertThat(s.getSuccessCount()).isEqualTo(0),
+										s -> assertThat(s.getFailureCount()).isEqualTo(1),
+										s -> assertThat(s.getPublishedMsgCount()).isEqualTo(0),
+										s -> assertThat(s.getPendingPublishedMsgCount()).isEqualTo(0)
+								)
+				);
 
 		producerBinding.unbind();
 	}

@@ -45,12 +45,14 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 
 public class XMLMessageMapper {
 	private static final Log logger = LogFactory.getLog(XMLMessageMapper.class);
@@ -78,9 +80,21 @@ public class XMLMessageMapper {
 	}
 
 	public XMLMessage map(Message<?> message, Collection<String> excludedHeaders, boolean convertNonSerializableHeadersToString) {
+		return map(message.getPayload(),
+				message.getHeaders(),
+				message.getHeaders().getId(),
+				excludedHeaders,
+				convertNonSerializableHeadersToString);
+	}
+
+	// exposed for testing
+	XMLMessage map(Object payload,
+				   Map<String, Object> headers,
+				   UUID messageId,
+				   Collection<String> excludedHeaders,
+				   boolean convertNonSerializableHeadersToString) {
 		XMLMessage xmlMessage;
-		Object payload = message.getPayload();
-		SDTMap metadata = map(message.getHeaders(), excludedHeaders, convertNonSerializableHeadersToString);
+		SDTMap metadata = map(headers, excludedHeaders, convertNonSerializableHeadersToString);
 		rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
 
 		if (payload instanceof byte[]) {
@@ -119,9 +133,12 @@ public class XMLMessageMapper {
 			throw exception;
 		}
 
-		MimeType contentType = StaticMessageHeaderAccessor.getContentType(message);
+		Object contentType = headers.get(MessageHeaders.CONTENT_TYPE);
 		if (contentType != null) {
-			xmlMessage.setHTTPContentType(contentType.toString());
+			// derived from StaticMessageHeaderAccessor.getContentType(Message<?>)
+			xmlMessage.setHTTPContentType(contentType instanceof MimeType ?
+					contentType.toString() :
+					MimeType.valueOf(contentType.toString()).toString());
 		}
 
 		// Copy Solace properties from Spring Message to JCSMP XMLMessage
@@ -130,12 +147,12 @@ public class XMLMessageMapper {
 				continue;
 			}
 
-			Object value = message.getHeaders().get(header.getKey());
+			Object value = headers.get(header.getKey());
 			if (value != null) {
 				if (!header.getValue().getType().isInstance(value)) {
 					String msg = String.format(
 							"Message %s has an invalid value type for header %s. Expected %s but received %s.",
-							message.getHeaders().getId(), header.getKey(), header.getValue().getType(),
+							messageId, header.getKey(), header.getValue().getType(),
 							value.getClass());
 					SolaceMessageConversionException exception = new SolaceMessageConversionException(msg);
 					logger.warn(msg, exception);
@@ -151,7 +168,7 @@ public class XMLMessageMapper {
 				header.getValue().getWriteAction().accept(xmlMessage, value);
 			} catch (Exception e) {
 				String msg = String.format("Could not set %s property from header %s of message %s",
-						XMLMessage.class.getSimpleName(), header.getKey(), message.getHeaders().getId());
+						XMLMessage.class.getSimpleName(), header.getKey(), messageId);
 				SolaceMessageConversionException exception = new SolaceMessageConversionException(msg, e);
 				logger.warn(msg, exception);
 				throw exception;
@@ -161,6 +178,48 @@ public class XMLMessageMapper {
 		xmlMessage.setProperties(metadata);
 		xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
 		return xmlMessage;
+	}
+
+	public List<XMLMessage> mapBatchMessage(Message<?> message,
+											Collection<String> excludedHeaders,
+											boolean convertNonSerializableHeadersToString)
+			throws SolaceMessageConversionException {
+		try {
+			if (!(message.getPayload() instanceof List)) {
+				throw new IllegalArgumentException(String.format(
+						"Expected payload of batched message %s to be of type List<?>",
+						StaticMessageHeaderAccessor.getId(message)));
+			}
+
+			@SuppressWarnings("unchecked")
+			Message<List<?>> batchedMessage = (Message<List<?>>) message;
+
+			@SuppressWarnings("unchecked") List<Map<String, Object>> batchedHeaders = (List<Map<String, Object>>)
+					batchedMessage.getHeaders().get(SolaceBinderHeaders.BATCHED_HEADERS, List.class);
+
+			if (batchedHeaders != null && batchedHeaders.size() != batchedMessage.getPayload().size()) {
+				throw new IllegalArgumentException(String.format(
+						"Batched message %s must have matching lengths for payload (was %s) and the %s header (was %s)",
+						StaticMessageHeaderAccessor.getId(batchedMessage), batchedMessage.getPayload().size(),
+						SolaceBinderHeaders.BATCHED_HEADERS, batchedHeaders.size()));
+			}
+
+			return IntStream.range(0, batchedMessage.getPayload().size())
+					.mapToObj(i -> map(
+							batchedMessage.getPayload().get(i),
+							batchedHeaders != null ? batchedHeaders.get(i) : Collections.emptyMap(),
+							StaticMessageHeaderAccessor.getId(batchedMessage),
+							excludedHeaders,
+							convertNonSerializableHeadersToString))
+					.toList();
+		} catch (Throwable t) {
+			if (t instanceof SolaceMessageConversionException) {
+				throw t;
+			} else {
+				throw new SolaceMessageConversionException("Failed to convert batch message " +
+						StaticMessageHeaderAccessor.getId(message), t);
+			}
+		}
 	}
 
 	public Message<List<?>> mapBatchMessage(List<? extends XMLMessage> xmlMessages,
@@ -290,7 +349,7 @@ public class XMLMessageMapper {
 				.setHeader(IntegrationMessageHeaderAccessor.SOURCE_DATA, sourceData);
 	}
 
-	SDTMap map(MessageHeaders headers, Collection<String> excludedHeaders, boolean convertNonSerializableHeadersToString) {
+	SDTMap map(Map<String, Object> headers, Collection<String> excludedHeaders, boolean convertNonSerializableHeadersToString) {
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
 		Set<String> serializedHeaders = new HashSet<>();
 		for (Map.Entry<String,Object> header : headers.entrySet()) {
@@ -310,9 +369,19 @@ public class XMLMessageMapper {
 		}
 
 		if (headers.containsKey(SolaceBinderHeaders.PARTITION_KEY)) {
-			rethrowableCall(metadata::putString, XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY,
-					this.<String, Class<String>, String>rethrowableCall(headers::get,
-							SolaceBinderHeaders.PARTITION_KEY, String.class));
+			Object partitionKeyObj = headers.get(SolaceBinderHeaders.PARTITION_KEY);
+			if (partitionKeyObj instanceof String partitionKey) {
+				rethrowableCall(metadata::putString,
+						XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY,
+						partitionKey);
+			} else {
+				String msg = String.format("Incorrect type specified for header '%s'. Expected [%s] but actual type is [%s]",
+						SolaceBinderHeaders.PARTITION_KEY, String.class, partitionKeyObj.getClass());
+				SolaceMessageConversionException exception = new SolaceMessageConversionException(
+						new IllegalArgumentException(msg));
+				logger.warn(msg, exception);
+				throw exception;
+			}
 		}
 
 		if (!serializedHeaders.isEmpty()) {

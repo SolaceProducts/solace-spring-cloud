@@ -16,7 +16,7 @@ public class SolaceBinderHeaderMeta<T> implements HeaderMeta<T> {
 			{SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING, new SolaceBinderHeaderMeta<>(String.class, false, false, Scope.WIRE)},
 			{SolaceBinderHeaders.CONFIRM_CORRELATION, new SolaceBinderHeaderMeta<>(CorrelationData.class, false, true, Scope.LOCAL)},
 			{SolaceBinderHeaders.NULL_PAYLOAD, new SolaceBinderHeaderMeta<>(Boolean.class, true, false, Scope.LOCAL)},
-			{SolaceBinderHeaders.BATCHED_HEADERS, new SolaceBinderHeaderMeta<>(List.class, true, false, Scope.LOCAL)},
+			{SolaceBinderHeaders.BATCHED_HEADERS, new SolaceBinderHeaderMeta<>(List.class, true, true, Scope.LOCAL)},
 			{SolaceBinderHeaders.TARGET_DESTINATION_TYPE, new SolaceBinderHeaderMeta<>(String.class, false, true, Scope.LOCAL)}
 	}).collect(Collectors.toMap(d -> (String) d[0], d -> (SolaceBinderHeaderMeta<?>) d[1]));
 

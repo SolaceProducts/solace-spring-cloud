@@ -9,11 +9,13 @@ import com.solace.spring.cloud.stream.binder.util.CorrelationData;
 import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.spring.cloud.stream.binder.util.ErrorChannelSendingCorrelationKey;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
+import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager.CloudStreamEventHandler;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
@@ -33,6 +35,7 @@ import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
 import org.springframework.util.StringUtils;
 
+import java.util.List;
 import java.util.UUID;
 
 public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
@@ -43,6 +46,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	private final MessageChannel errorChannel;
 	private final JCSMPSessionProducerManager producerManager;
 	private final ExtendedProducerProperties<SolaceProducerProperties> properties;
+	private final JCSMPStreamingPublishCorrelatingEventHandler producerEventHandler = new CloudStreamEventHandler();
 	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
 	private XMLMessageProducer producer;
 	@Nullable private TransactedSession transactedSession;
@@ -86,7 +90,8 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		}
 
 		try {
-			CorrelationData correlationData = message.getHeaders().get(SolaceBinderHeaders.CONFIRM_CORRELATION, CorrelationData.class);
+			CorrelationData correlationData = message.getHeaders()
+					.get(SolaceBinderHeaders.CONFIRM_CORRELATION, CorrelationData.class);
 			if (correlationData != null) {
 				correlationData.setMessage(message);
 				correlationKey.setConfirmCorrelation(correlationData);
@@ -96,19 +101,43 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 					String.format("Unable to parse header %s", SolaceBinderHeaders.CONFIRM_CORRELATION), e);
 		}
 
-		XMLMessage xmlMessage = xmlMessageMapper.map(message, properties.getExtension().getHeaderExclusions(),
-				properties.getExtension().isNonserializableHeaderConvertToString());
-		correlationKey.setRawMessage(xmlMessage);
-		xmlMessage.setCorrelationKey(correlationKey);
+		List<XMLMessage> smfMessages;
 
-		LOGGER.debug("Publishing message to destination [ {}:{} ]",
-				targetDestination instanceof Topic ? "TOPIC" : "QUEUE", targetDestination);
+		if (message.getHeaders().containsKey(SolaceBinderHeaders.BATCHED_HEADERS)) {
+			LOGGER.debug("Detected header {}, handling as batched message (Message<List<?>>) <message handler ID: {}>",
+					SolaceBinderHeaders.BATCHED_HEADERS, id);
+			smfMessages = xmlMessageMapper.mapBatchMessage(
+					message,
+					properties.getExtension().getHeaderExclusions(),
+					properties.getExtension().isNonserializableHeaderConvertToString());
+		} else {
+			smfMessages = List.of(xmlMessageMapper.map(
+					message,
+					properties.getExtension().getHeaderExclusions(),
+					properties.getExtension().isNonserializableHeaderConvertToString()));
+		}
 
 		try {
-			producer.send(xmlMessage, targetDestination);
+			for (int i = 0; i < smfMessages.size(); i++) {
+				XMLMessage smfMessage = smfMessages.get(i);
+				correlationKey.setRawMessage(smfMessage);
+				smfMessage.setCorrelationKey(correlationKey);
+
+				LOGGER.debug("Publishing message {} of {} to destination [ {}:{} ] <message handler ID: {}>",
+						i + 1, smfMessages.size(), targetDestination instanceof Topic ? "TOPIC" : "QUEUE",
+						targetDestination, id);
+
+				producer.send(smfMessage, targetDestination);
+			}
+
 			if (transactedSession != null) {
 				LOGGER.debug("Committing transaction <message handler ID: {}>", id);
 				transactedSession.commit();
+
+				// Need to resolve the correlation key manually.
+				// Transacted producers do not call the event handler callbacks.
+				// See JCSMPStreamingPublishCorrelatingEventHandler javadocs for more info.
+				producerEventHandler.responseReceivedEx(correlationKey);
 			}
 		} catch (JCSMPException e) {
 			if (transactedSession != null && !(e instanceof RollbackException)) {
@@ -126,7 +155,9 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 							targetDestination instanceof Topic ? "TOPIC" : "QUEUE", targetDestination.getName()), e);
 		} finally {
 			if (solaceMeterAccessor != null) {
-				solaceMeterAccessor.recordMessage(properties.getBindingName(), xmlMessage);
+				for (XMLMessage smfMessage : smfMessages) {
+					solaceMeterAccessor.recordMessage(properties.getBindingName(), smfMessage);
+				}
 			}
 		}
 	}
@@ -177,10 +208,10 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 				LOGGER.info("Creating transacted session  <message handler ID: {}>", id);
 				transactedSession = jcsmpSession.createTransactedSession();
 				producer = transactedSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
-						new JCSMPSessionProducerManager.CloudStreamEventHandler());
+						producerEventHandler);
 			} else {
 				producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
-						new JCSMPSessionProducerManager.CloudStreamEventHandler());
+						producerEventHandler);
 			}
 		} catch (Exception e) {
 			String msg = String.format("Unable to get a message producer for session %s", jcsmpSession.getSessionName());
