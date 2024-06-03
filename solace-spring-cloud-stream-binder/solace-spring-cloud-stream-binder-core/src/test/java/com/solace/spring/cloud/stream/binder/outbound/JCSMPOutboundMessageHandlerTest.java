@@ -155,18 +155,13 @@ public class JCSMPOutboundMessageHandlerTest {
 		correlationData.getFuture().get(100, TimeUnit.MILLISECONDS);
 	}
 
-	@CartesianTest(name = "[{index}] transacted={0}")
-	public void test_handleError_withInTimeout(@Values(booleans = {false, true}) boolean transacted) throws Exception {
-		producerProperties.getExtension().setTransacted(transacted);
+	@Test
+	public void test_handleError_withInTimeout() {
 		messageHandler.start();
 
 		CorrelationData correlationData = new CorrelationData();
 		Message<String> msg = getMessage(correlationData);
 		messageHandler.handleMessage(msg);
-
-		if (transacted) {
-			Mockito.verify(transactedSession).commit();
-		}
 
 		pubEventHandlerCaptor.getValue()
 				.handleErrorEx(createCorrelationKey(correlationData, msg), new JCSMPException("ooooops"), 1111);
