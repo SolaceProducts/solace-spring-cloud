@@ -305,7 +305,7 @@ public class SolaceSpringCloudStreamAssertions {
 	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[])
 	 * @return meter evaluator
 	 */
-	public static ThrowingConsumer<Meter> isValidMessageSizeMeter(String nameTagValue, double value) {
+	public static ThrowingConsumer<Meter> isValidMessageSizeMeter(String nameTagValue, int count, double value) {
 		return meter -> assertThat(meter).satisfies(
 				m -> assertThat(m.getId())
 						.as("Checking ID for meter %s", meter)
@@ -313,8 +313,7 @@ public class SolaceSpringCloudStreamAssertions {
 								meterId -> assertThat(meterId.getType()).isEqualTo(Meter.Type.DISTRIBUTION_SUMMARY),
 								meterId -> assertThat(meterId.getBaseUnit()).isEqualTo("bytes"),
 								meterId -> assertThat(meterId.getTags())
-										.hasSize(1)
-										.first()
+										.singleElement()
 										.satisfies(
 												tag -> assertThat(tag.getKey())
 														.isEqualTo(SolaceMessageMeterBinder.TAG_NAME),
@@ -322,9 +321,16 @@ public class SolaceSpringCloudStreamAssertions {
 										)
 						),
 				m -> assertThat(m.measure())
-						.as("Checking measurements for meter %s", meter)
+						.as("Checking count stat measurement for meter %s", meter)
+						.filteredOn(measurement -> measurement.getStatistic().equals(Statistic.COUNT))
+						.singleElement()
+						.extracting(Measurement::getValue)
+						.asInstanceOf(DOUBLE)
+						.isEqualTo(count),
+				m -> assertThat(m.measure())
+						.as("Checking total stat measurement for meter %s", meter)
 						.filteredOn(measurement -> measurement.getStatistic().equals(Statistic.TOTAL))
-						.first()
+						.singleElement()
 						.extracting(Measurement::getValue)
 						.asInstanceOf(DOUBLE)
 						.isEqualTo(value)

@@ -8,6 +8,7 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
 import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
+import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.spring.configuration.TestMeterRegistryConfiguration;
 import com.solace.spring.cloud.stream.binder.test.util.SimpleJCSMPEventHandler;
@@ -34,7 +35,6 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
@@ -52,11 +52,12 @@ import org.springframework.integration.channel.DirectChannel;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHeaders;
-import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.MimeTypeUtils;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -114,8 +115,8 @@ public class SolaceBinderMeterIT {
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
 				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
-		List<XMLMessage> messages = IntStream.range(0,
-						batchMode ? consumerProperties.getExtension().getBatchMaxSize() : 1)
+		int numMessages = batchMode ? consumerProperties.getExtension().getBatchMaxSize() : 1;
+		List<XMLMessage> messages = IntStream.range(0, numMessages)
 				.mapToObj(i -> JCSMPFactory.onlyInstance().createMessage(BytesMessage.class))
 				.peek(m -> {
 					byte[] data = UUID.randomUUID().toString().getBytes();
@@ -176,7 +177,7 @@ public class SolaceBinderMeterIT {
 					.first()
 					.as("Checking meter %s with name %s",
 							SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE, consumerProperties.getBindingName())
-					.satisfies(isValidMessageSizeMeter(consumerProperties.getBindingName(),
+					.satisfies(isValidMessageSizeMeter(consumerProperties.getBindingName(), numMessages,
 							messages.stream()
 									.map(m -> m.getContentLength() + m.getAttachmentContentLength())
 									.mapToLong(l -> l)
@@ -189,7 +190,7 @@ public class SolaceBinderMeterIT {
 					.first()
 					.as("Checking meter %s with name %s",
 							SolaceMessageMeterBinder.METER_NAME_TOTAL_SIZE, consumerProperties.getBindingName())
-					.satisfies(isValidMessageSizeMeter(consumerProperties.getBindingName(),
+					.satisfies(isValidMessageSizeMeter(consumerProperties.getBindingName(), numMessages,
 							messages.stream()
 									.map(m -> m.getContentLength() + m.getAttachmentContentLength() +
 											m.getBinaryMetadataContentLength(0))
@@ -200,8 +201,9 @@ public class SolaceBinderMeterIT {
 		consumerBinding.unbind();
 	}
 
-	@Test
-	public void testProducerMeters(@Autowired SimpleMeterRegistry meterRegistry,
+	@CartesianTest(name = "[{index}] batched={0}")
+	public void testProducerMeters(@Values(booleans = {false, true}) boolean batched,
+								   @Autowired SimpleMeterRegistry meterRegistry,
 								   JCSMPSession jcsmpSession,
 								   SpringCloudStreamContext context,
 								   Queue queue,
@@ -216,12 +218,15 @@ public class SolaceBinderMeterIT {
 
 		SolaceTestBinder binder = context.getBinder();
 
-		DirectChannel moduleOutputChannel = context.createBindableChannel(
-				RandomStringUtils.randomAlphanumeric(100),
-				new BindingProperties());
-
 		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context
 				.createProducerProperties(testInfo);
+		producerProperties.setUseNativeEncoding(true);
+
+		BindingProperties bindingProperties = new BindingProperties();
+		bindingProperties.setProducer(producerProperties);
+
+		DirectChannel moduleOutputChannel = context.createBindableChannel(
+				RandomStringUtils.randomAlphanumeric(100), bindingProperties);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
 				destination0, moduleOutputChannel, producerProperties);
@@ -229,46 +234,64 @@ public class SolaceBinderMeterIT {
 		context.binderBindUnbindLatency();
 		producerProperties.populateBindingName(producerBinding.getBindingName());
 
-		Message<?> message = MessageBuilder.withPayload(RandomStringUtils.randomAlphanumeric(100))
-				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
-				.build();
+		MessageGenerator.BatchingConfig batchingConfig = new MessageGenerator.BatchingConfig()
+				.setEnabled(batched);
+		Message<?> message = MessageGenerator.generateMessage(
+				() -> RandomStringUtils.randomAlphanumeric(100),
+				() -> Map.of(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE),
+				batchingConfig);
+		int numMessages = batched ? batchingConfig.getNumberOfMessages() : 1;
 
 		moduleOutputChannel.send(message);
 
 		FlowReceiver flowReceiver = jcsmpSession.createFlow(null,
 				new ConsumerFlowProperties().setEndpoint(queue).setStartState(true));
-		BytesXMLMessage receivedMessage;
+		List<BytesXMLMessage> receivedMessages = new ArrayList<>();
 		try {
 			logger.info("Consuming messages");
-
-			receivedMessage = flowReceiver.receive((int) TimeUnit.MINUTES.toMillis(1));
+			for (int i = 0; i < numMessages; i++) {
+				BytesXMLMessage receivedMessage = flowReceiver.receive((int) TimeUnit.MINUTES.toMillis(1));
+				assertThat(receivedMessage).as("Didn't receive message within timeout").isNotNull();
+				receivedMessages.add(receivedMessage);
+			}
 		} finally {
 			flowReceiver.close();
 		}
+
+		assertThat(receivedMessages).hasSize(numMessages);
+
+		int aggregateContentLength = receivedMessages.stream()
+				.mapToInt(XMLMessage::getContentLength)
+				.sum();
+		int aggregateAttachmentContentLength = receivedMessages.stream()
+				.mapToInt(XMLMessage::getAttachmentContentLength)
+				.sum();
+		int aggregateBinaryMetadataContentLength = receivedMessages.stream()
+				.mapToInt(m -> m.getBinaryMetadataContentLength(0))
+				.sum();
+
 
 		logger.info("Validating message size meters");
 		retryAssert(() -> {
 			assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE)
 					.tag(SolaceMessageMeterBinder.TAG_NAME, producerProperties.getBindingName())
 					.meters())
-					.hasSize(1)
-					.first()
+					.singleElement()
 					.as("Checking meter %s with name %s",
 							SolaceMessageMeterBinder.METER_NAME_PAYLOAD_SIZE, producerProperties.getBindingName())
-					.satisfies(isValidMessageSizeMeter(producerProperties.getBindingName(),
-							receivedMessage.getContentLength() + receivedMessage.getAttachmentContentLength()));
+					.satisfies(isValidMessageSizeMeter(producerProperties.getBindingName(), numMessages,
+							aggregateContentLength + aggregateAttachmentContentLength));
 
 			assertThat(meterRegistry.find(SolaceMessageMeterBinder.METER_NAME_TOTAL_SIZE)
 					.tag(SolaceMessageMeterBinder.TAG_NAME, producerProperties.getBindingName())
 					.meters())
-					.hasSize(1)
-					.first()
+					.singleElement()
 					.as("Checking meter %s with name %s",
 							SolaceMessageMeterBinder.METER_NAME_TOTAL_SIZE, producerProperties.getBindingName())
-					.satisfies(isValidMessageSizeMeter(producerProperties.getBindingName(),
-							receivedMessage.getContentLength() +
-									receivedMessage.getAttachmentContentLength() +
-									receivedMessage.getBinaryMetadataContentLength(0)));
+					.satisfies(isValidMessageSizeMeter(producerProperties.getBindingName(), numMessages,
+							aggregateContentLength +
+									aggregateAttachmentContentLength +
+									aggregateBinaryMetadataContentLength));
 		});
 
 		producerBinding.unbind();

@@ -187,8 +187,8 @@ public class XMLMessageMapper {
 		try {
 			if (!(message.getPayload() instanceof List)) {
 				throw new IllegalArgumentException(String.format(
-						"Expected payload of batched message %s to be of type List<?>",
-						StaticMessageHeaderAccessor.getId(message)));
+						"Expected payload of batched message %s to be of type List<?>, but was %s",
+						StaticMessageHeaderAccessor.getId(message), message.getPayload().getClass().getName()));
 			}
 
 			@SuppressWarnings("unchecked")
