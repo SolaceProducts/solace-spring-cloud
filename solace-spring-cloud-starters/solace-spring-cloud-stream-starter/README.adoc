@@ -383,7 +383,8 @@ When set to `true`, messages will be delivered using local transactions.
 +
 Default: `false`
 +
-NOTE: The maximum transaction size is 256 messages.
+NOTE: The maximum transaction size is 256 messages. +
+The size of the transaction is 1 when the binding receives a regular Spring message. Otherwise, if it receives a <<Batch Producers, batched message>>, then the transaction size is equal to the batch size.
 
 provisionDurableQueue::
 Whether to provision durable queues for non-anonymous consumer groups or queue destinations. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker.
@@ -830,7 +831,8 @@ Though note that there are few limitations:
 . `concurrency` &gt; 1 is not supported with auto-provisioned topic endpoints.
 . Setting `provisionDurableQueue` to `false` disables endpoint configuration validation. Meaning that point 1 cannot be validated. In this scenario, it is the developer's responsibility to ensure that point 1 is followed.
 
-== Batch Consumers
+== Batched Messaging
+=== Batch Consumers
 
 https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_batch_consumers[Batch consumers] can be enabled by setting `spring.cloud.stream.bindings.<binding-name>.consumer.batch-mode` to `true`. In which case, batched messages may be consumed as follows:
 
@@ -871,6 +873,43 @@ See <<Native Payload Types>> for more info regarding this binder's natively supp
 ====
 
 To create a batch of messages, the binder will consume messages from the PubSub+ broker until either a maximum batch size or timeout has been achieved. After which, the binder will compose the batch message and send it to the consumer handler for processing. Both these batching parameters can be configured using the `batchMaxSize` and `batchTimeout` consumer config options.
+
+=== Batch Producers
+
+Similar to batch consumers, batched messages may also be published through the producer binding:
+
+[source,java]
+----
+@Bean
+Supplier<Message<List<Payload>>> output() {
+	return () -> {
+		List<Payload> batchedPayloads = new ArrayList<>();
+		List<Map<String, Object>> batchedHeaders = new ArrayList<>();
+
+		for (int i = 0; i < 100; i++) {
+			// Create batched message contents
+			batchedPayloads.add(new Payload(i));
+			batchedHeaders.add(Map.of("my-header", "my-header-value"));
+		}
+
+		// construct batched message
+		return MessageBuilder.withPayload(batchedPayloads)
+				.setHeader(SolaceBinderHeaders.BATCHED_HEADERS, batchedHeaders)
+				.build();
+	};
+}
+----
+
+The producer binding will look for the `solace_scst_batchedHeaders` message header to determine if the supplied Spring message is either a batched Spring message or a regular Spring message.
+
+If the producer binding detects that it has received a batched Spring message, then it will individually publish each item in the batch.
+
+[NOTE]
+====
+.Publishing Batched Messages using Transacted Producer Bindings
+
+When `transacted=true`, the size of the transaction is equal to the size of the batched Spring message.
+====
 
 == Partitioning
 
