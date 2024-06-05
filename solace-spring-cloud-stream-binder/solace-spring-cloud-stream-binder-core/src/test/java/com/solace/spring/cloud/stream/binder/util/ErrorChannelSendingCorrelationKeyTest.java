@@ -1,9 +1,12 @@
 package com.solace.spring.cloud.stream.binder.util;
 
+import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.TextMessage;
+import com.solacesystems.jcsmp.XMLMessage;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
+import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.channel.DirectChannel;
@@ -13,13 +16,16 @@ import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.ErrorMessage;
 import org.springframework.messaging.support.MessageBuilder;
 
+import java.util.Map;
+import java.util.stream.IntStream;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class ErrorChannelSendingCorrelationKeyTest {
 	private final ErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
 
 	@Test
-	public void testNoErrorChannel() {
+	void testNoErrorChannel() {
 		Message<?> message = MessageBuilder.withPayload("test").build();
 		ErrorChannelSendingCorrelationKey key = new ErrorChannelSendingCorrelationKey(message, null,
 				errorMessageStrategy);
@@ -34,7 +40,7 @@ public class ErrorChannelSendingCorrelationKeyTest {
 	}
 
 	@Test
-	public void testErrorChannel(SoftAssertions softly) {
+	void testErrorChannel(SoftAssertions softly) {
 		Message<?> message = MessageBuilder.withPayload("test").build();
 		DirectChannel errorChannel = new DirectChannel();
 		ErrorChannelSendingCorrelationKey key = new ErrorChannelSendingCorrelationKey(message, errorChannel,
@@ -59,20 +65,46 @@ public class ErrorChannelSendingCorrelationKeyTest {
 		assertThat(exception.getFailedMessage()).isEqualTo(message);
 	}
 
-	@SuppressWarnings("ThrowableNotThrown")
-	@Test
-	public void testRawMessageHeader(SoftAssertions softly) {
-		Message<?> message = MessageBuilder.withPayload("test").build();
+	@CartesianTest(name = "[{index}] messageLayout={0}")
+	void testRawMessageHeader(
+			@CartesianTest.Enum(MessageLayout.class) MessageLayout messageLayout,
+			SoftAssertions softly) {
+		MessageGenerator.BatchingConfig batchingConfig = new MessageGenerator.BatchingConfig()
+				.setEnabled(messageLayout.isBatched());
+		if (messageLayout == MessageLayout.BATCH_MULTI) {
+			batchingConfig.setNumberOfMessages(100);
+		} else if (messageLayout == MessageLayout.BATCH_SINGLE) {
+			batchingConfig.setNumberOfMessages(1);
+		}
+
+		Message<?> message = MessageGenerator.generateMessage(() -> "test", Map::of, batchingConfig).build();
+
 		DirectChannel errorChannel = new DirectChannel();
 		ErrorChannelSendingCorrelationKey key = new ErrorChannelSendingCorrelationKey(message, errorChannel,
 				errorMessageStrategy);
-		key.setRawMessage(JCSMPFactory.onlyInstance().createMessage(TextMessage.class));
+		key.setRawMessages(IntStream.range(0, messageLayout.isBatched() ? batchingConfig.getNumberOfMessages() : 1)
+				.mapToObj(i -> (XMLMessage) JCSMPFactory.onlyInstance().createMessage(TextMessage.class))
+				.toList());
 
 		errorChannel.subscribe(msg -> {
 			softly.assertThat(msg.getHeaders()).containsKey(IntegrationMessageHeaderAccessor.SOURCE_DATA);
-			softly.assertThat((Object) StaticMessageHeaderAccessor.getSourceData(msg)).isEqualTo(key.getRawMessage());
+			softly.assertThat((Object) StaticMessageHeaderAccessor.getSourceData(msg))
+					.isEqualTo(messageLayout.isBatched() ? key.getRawMessages() : key.getRawMessages().get(0));
 		});
 
 		key.send("some failure", new RuntimeException("test"));
+	}
+
+	private enum MessageLayout {
+		SERIAL_SINGLE(false), BATCH_MULTI(true), BATCH_SINGLE(true);
+		private final boolean isBatched;
+
+		MessageLayout(boolean isBatched) {
+			this.isBatched = isBatched;
+		}
+
+		public boolean isBatched() {
+			return isBatched;
+		}
 	}
 }

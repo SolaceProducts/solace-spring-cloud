@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder.outbound;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
+import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator;
 import com.solace.spring.cloud.stream.binder.util.CorrelationData;
 import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.spring.cloud.stream.binder.util.ErrorChannelSendingCorrelationKey;
@@ -42,9 +43,12 @@ import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.MessageBuilder;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -138,33 +142,69 @@ public class JCSMPOutboundMessageHandlerTest {
 		}
 	}
 
-	@CartesianTest(name = "[{index}] transacted={0}")
-	public void test_responseReceived_withInTimeout(@Values(booleans = {false, true}) boolean transacted) throws Exception {
+	@CartesianTest(name = "[{index}] batched={0} transacted={1} payloadType={2}")
+	public void test_responseReceived_withInTimeout(
+			@Values(booleans = {false, true}) boolean batched,
+			@Values(booleans = {false, true}) boolean transacted,
+			@Values(classes = {String.class, List.class}) Class<?> payloadType) throws Exception {
 		producerProperties.getExtension().setTransacted(transacted);
 		messageHandler.start();
 
 		CorrelationData correlationData = new CorrelationData();
-		messageHandler.handleMessage(getMessage(correlationData));
+		MessageGenerator.BatchingConfig batchingConfig = new MessageGenerator.BatchingConfig().setEnabled(batched);
+		messageHandler.handleMessage(MessageGenerator.generateMessage(
+						() -> {
+							if (payloadType.equals(List.class)) {
+								return List.of("test-0", "test-1", "test-2");
+							} else if (payloadType.equals(String.class)) {
+								return "test";
+							} else {
+								throw new IllegalArgumentException("No test for payload type " + payloadType);
+							}
+						},
+						Map::of,
+						batchingConfig)
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
+				.build());
+
+		AtomicInteger timesSuccessResolved = new AtomicInteger(0);
+		AtomicInteger timesFailureResolved = new AtomicInteger(0);
+		correlationData.getFuture().addCallback(
+				v -> timesSuccessResolved.incrementAndGet(),
+				e -> timesFailureResolved.incrementAndGet());
 
 		if (transacted) {
 			Mockito.verify(transactedSession).commit();
 		}
 
-		pubEventHandlerCaptor.getValue().responseReceivedEx(getCorrelationKey());
+		getCorrelationKeys().forEach(pubEventHandlerCaptor.getValue()::responseReceivedEx);
+		assertThat(xmlMessageCaptor.getAllValues()).hasSize(batched ? batchingConfig.getNumberOfMessages() : 1);
 
 		correlationData.getFuture().get(100, TimeUnit.MILLISECONDS);
+		assertThat(timesSuccessResolved).hasValue(1);
+		assertThat(timesFailureResolved).hasValue(0);
 	}
 
-	@Test
-	public void test_handleError_withInTimeout() {
+	@CartesianTest(name = "[{index}] batched={0}")
+	public void test_handleError_withInTimeout(@Values(booleans = {false, true}) boolean batched) throws Exception {
 		messageHandler.start();
 
 		CorrelationData correlationData = new CorrelationData();
-		Message<String> msg = getMessage(correlationData);
-		messageHandler.handleMessage(msg);
+		messageHandler.handleMessage(MessageGenerator.generateMessage(
+						() -> RandomStringUtils.randomAlphanumeric(100),
+						Map::of,
+						new MessageGenerator.BatchingConfig().setEnabled(batched))
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
+				.build());
 
-		pubEventHandlerCaptor.getValue()
-				.handleErrorEx(createCorrelationKey(correlationData, msg), new JCSMPException("ooooops"), 1111);
+		AtomicInteger timesSuccessResolved = new AtomicInteger(0);
+		AtomicInteger timesFailureResolved = new AtomicInteger(0);
+		correlationData.getFuture().addCallback(
+				v -> timesSuccessResolved.incrementAndGet(),
+				e -> timesFailureResolved.incrementAndGet());
+
+		getCorrelationKeys().forEach(k -> pubEventHandlerCaptor.getValue()
+				.handleErrorEx(k, new JCSMPException("ooooops"), 1111));
 
 		assertThatThrownBy(() -> correlationData.getFuture().get(100, TimeUnit.MILLISECONDS))
 				.isInstanceOf(ExecutionException.class)
@@ -173,6 +213,51 @@ public class JCSMPOutboundMessageHandlerTest {
 				.cause()
 				.isInstanceOf(JCSMPException.class)
 				.hasMessage("ooooops");
+
+		assertThat(timesSuccessResolved).hasValue(0);
+		assertThat(timesFailureResolved).hasValue(1);
+	}
+
+	@Test
+	public void test_handleError_middleOfBatch() throws Exception {
+		messageHandler.start();
+
+		CorrelationData correlationData = new CorrelationData();
+		messageHandler.handleMessage(MessageGenerator.generateMessage(
+						() -> RandomStringUtils.randomAlphanumeric(100),
+						Map::of,
+						new MessageGenerator.BatchingConfig().setEnabled(true).setNumberOfMessages(10))
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
+				.build());
+
+		AtomicInteger timesSuccessResolved = new AtomicInteger(0);
+		AtomicInteger timesFailureResolved = new AtomicInteger(0);
+		correlationData.getFuture().addCallback(
+				v -> timesSuccessResolved.incrementAndGet(),
+				e -> timesFailureResolved.incrementAndGet());
+
+
+		List<Object> correlationKeys = getCorrelationKeys();
+		JCSMPStreamingPublishCorrelatingEventHandler pubEventHandler = pubEventHandlerCaptor.getValue();
+		for (int i = 0; i < correlationKeys.size(); i++) {
+			Object correlationKey = correlationKeys.get(i);
+			if (i == (correlationKeys.size() / 2)) {
+				pubEventHandler.handleErrorEx(correlationKey, new JCSMPException("ooooops"), 1111);
+			} else {
+				pubEventHandler.responseReceivedEx(correlationKey);
+			}
+		}
+
+		assertThatThrownBy(() -> correlationData.getFuture().get(100, TimeUnit.MILLISECONDS))
+				.isInstanceOf(ExecutionException.class)
+				.cause()
+				.isInstanceOf(MessagingException.class)
+				.cause()
+				.isInstanceOf(JCSMPException.class)
+				.hasMessage("ooooops");
+
+		assertThat(timesSuccessResolved).hasValue(0);
+		assertThat(timesFailureResolved).hasValue(1);
 	}
 
 	@Test()
@@ -180,7 +265,9 @@ public class JCSMPOutboundMessageHandlerTest {
 		messageHandler.start();
 
 		CorrelationData correlationData = new CorrelationData();
-		messageHandler.handleMessage(getMessage(correlationData));
+		messageHandler.handleMessage(MessageBuilder.withPayload("the payload")
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
+				.build());
 
 		assertThrows(TimeoutException.class, () -> correlationData.getFuture().get(100, TimeUnit.MILLISECONDS));
 	}
@@ -190,11 +277,17 @@ public class JCSMPOutboundMessageHandlerTest {
 		messageHandler.start();
 
 		CorrelationData correlationDataA = new CorrelationData();
-		messageHandler.handleMessage(getMessage(correlationDataA));
+		messageHandler.handleMessage(MessageBuilder.withPayload("the payload")
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationDataA)
+				.build());
 		CorrelationData correlationDataB = new CorrelationData();
-		messageHandler.handleMessage(getMessage(correlationDataB));
+		messageHandler.handleMessage(MessageBuilder.withPayload("the payload")
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationDataB)
+				.build());
 		CorrelationData correlationDataC = new CorrelationData();
-		messageHandler.handleMessage(getMessage(correlationDataC));
+		messageHandler.handleMessage(MessageBuilder.withPayload("the payload")
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationDataC)
+				.build());
 
 		JCSMPStreamingPublishCorrelatingEventHandler pubEventHandler = pubEventHandlerCaptor.getValue();
 		pubEventHandler.responseReceivedEx(createCorrelationKey(correlationDataB));
@@ -212,14 +305,18 @@ public class JCSMPOutboundMessageHandlerTest {
 		JCSMPStreamingPublishCorrelatingEventHandler pubEventHandler = pubEventHandlerCaptor.getValue();
 
 		CorrelationData correlationDataA = new CorrelationData();
-		messageHandler.handleMessage(getMessage(correlationDataA));
+		messageHandler.handleMessage(MessageBuilder.withPayload("the payload")
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationDataA)
+				.build());
 		pubEventHandler.responseReceivedEx(createCorrelationKey(correlationDataA));
 
 		correlationDataA.getFuture().get(100, TimeUnit.MILLISECONDS);
 
 
 		CorrelationData correlationDataB = new CorrelationData();
-		messageHandler.handleMessage(getMessage(correlationDataB));
+		messageHandler.handleMessage(MessageBuilder.withPayload("the payload")
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationDataB)
+				.build());
 		pubEventHandler.responseReceivedEx(createCorrelationKey(correlationDataB));
 
 		correlationDataB.getFuture().get(100, TimeUnit.MILLISECONDS);
@@ -234,7 +331,9 @@ public class JCSMPOutboundMessageHandlerTest {
 		JCSMPException exception = commitError.getConstructor(String.class).newInstance("test");
 		Mockito.doThrow(exception).when(transactedSession).commit();
 
-		assertThatThrownBy(() -> messageHandler.handleMessage(getMessage(new CorrelationData())))
+		assertThatThrownBy(() -> messageHandler.handleMessage(MessageBuilder.withPayload("the payload")
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, new CorrelationData())
+				.build()))
 				.isInstanceOf(MessagingException.class)
 				.hasRootCause(exception);
 
@@ -252,7 +351,9 @@ public class JCSMPOutboundMessageHandlerTest {
 		JCSMPException rollbackException = new JCSMPException("rollback error");
 		Mockito.doThrow(rollbackException).when(transactedSession).rollback();
 
-		assertThatThrownBy(() -> messageHandler.handleMessage(getMessage(new CorrelationData())))
+		assertThatThrownBy(() -> messageHandler.handleMessage(MessageBuilder.withPayload("the payload")
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, new CorrelationData())
+				.build()))
 				.isInstanceOf(MessagingException.class)
 				.rootCause()
 				.isEqualTo(commitException)
@@ -404,12 +505,6 @@ public class JCSMPOutboundMessageHandlerTest {
 						p -> assertThat(p.getAckEventMode()).isEqualTo(ackEventMode));
 	}
 
-	Message<String> getMessage(CorrelationData correlationData) {
-		return MessageBuilder.withPayload("the payload")
-				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
-				.build();
-	}
-
 	private Message<String> getMessageForDynamicDestination(Object targetDestination, Object targetDestinationType) {
 		MessageBuilder<String> builder = MessageBuilder.withPayload("the payload");
 		if (targetDestination != null) {
@@ -421,9 +516,12 @@ public class JCSMPOutboundMessageHandlerTest {
 		return builder.build();
 	}
 
-	private ErrorChannelSendingCorrelationKey getCorrelationKey() throws JCSMPException {
-		Mockito.verify(messageProducer).send(xmlMessageCaptor.capture(), any(Destination.class));
-		return (ErrorChannelSendingCorrelationKey) xmlMessageCaptor.getValue().getCorrelationKey();
+	private List<Object> getCorrelationKeys() throws JCSMPException {
+		Mockito.verify(messageProducer, Mockito.atLeastOnce()).send(xmlMessageCaptor.capture(), any(Destination.class));
+		return xmlMessageCaptor.getAllValues()
+				.stream()
+				.map(XMLMessage::getCorrelationKey)
+				.toList();
 	}
 
 	private ErrorChannelSendingCorrelationKey createCorrelationKey(CorrelationData correlationData, Message<?> msg) {

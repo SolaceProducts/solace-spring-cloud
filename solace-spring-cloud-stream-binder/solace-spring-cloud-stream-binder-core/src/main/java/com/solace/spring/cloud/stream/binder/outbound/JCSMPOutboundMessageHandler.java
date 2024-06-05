@@ -4,6 +4,7 @@ import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
+import com.solace.spring.cloud.stream.binder.util.BatchProxyCorrelationKey;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
 import com.solace.spring.cloud.stream.binder.util.CorrelationData;
 import com.solace.spring.cloud.stream.binder.util.DestinationType;
@@ -102,7 +103,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		}
 
 		List<XMLMessage> smfMessages;
-
+		Object proxyCorrelationKey;
 		if (message.getHeaders().containsKey(SolaceBinderHeaders.BATCHED_HEADERS)) {
 			LOGGER.debug("Detected header {}, handling as batched message (Message<List<?>>) <message handler ID: {}>",
 					SolaceBinderHeaders.BATCHED_HEADERS, id);
@@ -110,18 +111,23 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 					message,
 					properties.getExtension().getHeaderExclusions(),
 					properties.getExtension().isNonserializableHeaderConvertToString());
+
+			proxyCorrelationKey = transactedSession != null ?
+					correlationKey : new BatchProxyCorrelationKey(correlationKey, smfMessages.size());
 		} else {
 			smfMessages = List.of(xmlMessageMapper.map(
 					message,
 					properties.getExtension().getHeaderExclusions(),
 					properties.getExtension().isNonserializableHeaderConvertToString()));
+			proxyCorrelationKey = correlationKey;
 		}
+
+		correlationKey.setRawMessages(smfMessages);
 
 		try {
 			for (int i = 0; i < smfMessages.size(); i++) {
 				XMLMessage smfMessage = smfMessages.get(i);
-				correlationKey.setRawMessage(smfMessage);
-				smfMessage.setCorrelationKey(correlationKey);
+				smfMessage.setCorrelationKey(proxyCorrelationKey);
 
 				LOGGER.debug("Publishing message {} of {} to destination [ {}:{} ] <message handler ID: {}>",
 						i + 1, smfMessages.size(), targetDestination instanceof Topic ? "TOPIC" : "QUEUE",
@@ -137,7 +143,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 				// Need to resolve the correlation key manually.
 				// Transacted producers do not call the event handler callbacks.
 				// See JCSMPStreamingPublishCorrelatingEventHandler javadocs for more info.
-				producerEventHandler.responseReceivedEx(correlationKey);
+				producerEventHandler.responseReceivedEx(proxyCorrelationKey);
 			}
 		} catch (JCSMPException e) {
 			if (transactedSession != null && !(e instanceof RollbackException)) {

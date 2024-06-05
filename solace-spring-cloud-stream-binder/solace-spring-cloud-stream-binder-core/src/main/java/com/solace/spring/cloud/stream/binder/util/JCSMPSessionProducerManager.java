@@ -39,6 +39,10 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 
 		@Override
 		public void responseReceivedEx(Object correlationKey) {
+			if (correlationKey instanceof BatchProxyCorrelationKey batchProxyCorrelationKey) {
+				correlationKey = batchProxyCorrelationKey.getCorrelationKeyForSuccess();
+			}
+
 			if (correlationKey instanceof ErrorChannelSendingCorrelationKey key) {
 				if (logger.isTraceEnabled()) {
 					logger.trace("Producer received response for message " +
@@ -64,14 +68,17 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 
 		@Override
 		public void handleErrorEx(Object correlationKey, JCSMPException cause, long timestamp) {
+			if (correlationKey instanceof BatchProxyCorrelationKey batchProxyCorrelationKey) {
+				correlationKey = batchProxyCorrelationKey.getCorrelationKeyForFailure();
+			}
+
 			if (correlationKey instanceof ErrorChannelSendingCorrelationKey key) {
-				String messageId = key.getRawMessage() != null ? key.getRawMessage().getMessageId() : null;
 				UUID springMessageId = Optional.ofNullable(key.getInputMessage())
 						.map(Message::getHeaders)
 						.map(MessageHeaders::getId)
 						.orElse(null);
-				String msg = String.format("Producer received error for message %s (Spring message %s) at %s",
-						messageId, springMessageId, timestamp);
+				String msg = String.format("Producer received error during publishing (Spring message %s) at %s",
+						springMessageId, timestamp);
 				logger.warn(msg, cause);
 				MessagingException messagingException = key.send(msg, cause);
 

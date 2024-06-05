@@ -36,6 +36,7 @@ import com.solacesystems.jcsmp.PropertyMismatchException;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.Requestor;
 import com.solacesystems.jcsmp.TextMessage;
+import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageConsumer;
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.XMLMessageProducer;
@@ -66,6 +67,7 @@ import org.springframework.cloud.stream.binder.PartitionCapableBinderTests;
 import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.cloud.stream.provisioning.ProvisioningException;
+import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.context.IntegrationContextUtils;
@@ -377,9 +379,10 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		consumerBinding.unbind();
 	}
 
-	@CartesianTest(name = "[{index}] batched={0}, transacted={1}")
+	@CartesianTest(name = "[{index}] numMessages={0} batched={1}, transacted={2}")
 	@Execution(ExecutionMode.CONCURRENT)
 	public void testProducerErrorChannel(
+			@Values(ints = {1, 256}) int numMessages,
 			@Values(booleans = {false, true}) boolean batched,
 			@Values(booleans = {false, true}) boolean transacted,
 			JCSMPSession jcsmpSession,
@@ -402,10 +405,13 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		DirectChannel moduleOutputChannel = createBindableChannel("output", bindingProperties);
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProperties);
 
+		MessageGenerator.BatchingConfig batchingConfig = new MessageGenerator.BatchingConfig()
+				.setEnabled(batched)
+				.setNumberOfMessages(numMessages);
 		Message<?> message = MessageGenerator.generateMessage(
 				() -> UUID.randomUUID().toString().getBytes(),
 				() -> Map.of(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE),
-				new MessageGenerator.BatchingConfig().setEnabled(batched));
+				batchingConfig);
 
 		final CompletableFuture<Message<?>> bindingSpecificErrorMessage = new CompletableFuture<>();
 		logger.info("Subscribing to binding-specific error channel");
@@ -430,7 +436,18 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 						.as("Expected error message sent to global and binding specific channels to be the same")
 						.isEqualTo(m))
 				.asInstanceOf(InstanceOfAssertFactories.type(ErrorMessage.class))
-				.satisfies(m -> assertThat(m.getOriginalMessage()).isEqualTo(message))
+				.satisfies(
+						m -> assertThat(m.getOriginalMessage()).isEqualTo(message),
+						m -> assertThat(m.getHeaders().get(IntegrationMessageHeaderAccessor.SOURCE_DATA))
+								.satisfies(d -> {
+									if (batched) {
+										assertThat(d)
+												.asInstanceOf(InstanceOfAssertFactories.list(XMLMessage.class))
+												.hasSize(batchingConfig.getNumberOfMessages());
+									} else {
+										assertThat(d).isInstanceOf(XMLMessage.class);
+									}
+								}))
 				.extracting(ErrorMessage::getPayload)
 				.asInstanceOf(InstanceOfAssertFactories.throwable(MessagingException.class))
 				.cause()
