@@ -146,13 +146,20 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 				producerEventHandler.responseReceivedEx(proxyCorrelationKey);
 			}
 		} catch (JCSMPException e) {
-			if (transactedSession != null && !(e instanceof RollbackException)) {
+			if (transactedSession != null) {
 				try {
-					LOGGER.debug("Rolling back transaction <message handler ID: {}>", id);
-					transactedSession.rollback();
+					if (!(e instanceof RollbackException)) {
+						LOGGER.debug("Rolling back transaction <message handler ID: {}>", id);
+						transactedSession.rollback();
+					}
 				} catch (JCSMPException ex) {
 					LOGGER.debug("Failed to rollback transaction", ex);
 					e.addSuppressed(ex);
+				} finally {
+					// Need to resolve the correlation key manually.
+					// Transacted producers do not call the event handler callbacks.
+					// See JCSMPStreamingPublishCorrelatingEventHandler javadocs for more info.
+					producerEventHandler.handleErrorEx(proxyCorrelationKey, e, System.currentTimeMillis());
 				}
 			}
 

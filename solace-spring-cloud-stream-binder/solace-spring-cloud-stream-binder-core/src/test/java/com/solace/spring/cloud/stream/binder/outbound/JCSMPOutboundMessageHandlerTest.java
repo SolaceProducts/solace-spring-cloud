@@ -180,7 +180,7 @@ public class JCSMPOutboundMessageHandlerTest {
 		getCorrelationKeys().forEach(pubEventHandlerCaptor.getValue()::responseReceivedEx);
 		assertThat(xmlMessageCaptor.getAllValues()).hasSize(batched ? batchingConfig.getNumberOfMessages() : 1);
 
-		correlationData.getFuture().get(100, TimeUnit.MILLISECONDS);
+		assertThat(correlationData.getFuture()).succeedsWithin(100, TimeUnit.MILLISECONDS);
 		assertThat(timesSuccessResolved).hasValue(1);
 		assertThat(timesFailureResolved).hasValue(0);
 	}
@@ -203,16 +203,16 @@ public class JCSMPOutboundMessageHandlerTest {
 				v -> timesSuccessResolved.incrementAndGet(),
 				e -> timesFailureResolved.incrementAndGet());
 
+		JCSMPException exception = new JCSMPException("ooooops");
 		getCorrelationKeys().forEach(k -> pubEventHandlerCaptor.getValue()
-				.handleErrorEx(k, new JCSMPException("ooooops"), 1111));
+				.handleErrorEx(k, exception, 1111));
 
-		assertThatThrownBy(() -> correlationData.getFuture().get(100, TimeUnit.MILLISECONDS))
-				.isInstanceOf(ExecutionException.class)
-				.cause()
+		assertThat(correlationData.getFuture())
+				.failsWithin(100, TimeUnit.MILLISECONDS)
+				.withThrowableOfType(ExecutionException.class)
+				.havingCause()
 				.isInstanceOf(MessagingException.class)
-				.cause()
-				.isInstanceOf(JCSMPException.class)
-				.hasMessage("ooooops");
+				.withCause(exception);
 
 		assertThat(timesSuccessResolved).hasValue(0);
 		assertThat(timesFailureResolved).hasValue(1);
@@ -269,11 +269,14 @@ public class JCSMPOutboundMessageHandlerTest {
 				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
 				.build());
 
-		assertThrows(TimeoutException.class, () -> correlationData.getFuture().get(100, TimeUnit.MILLISECONDS));
+		assertThat(correlationData.getFuture())
+				.failsWithin(100, TimeUnit.MILLISECONDS)
+				.withThrowableThat()
+				.isInstanceOf(TimeoutException.class);
 	}
 
 	@Test()
-	public void test_responseReceived_raceCondition() throws ExecutionException, InterruptedException, TimeoutException {
+	public void test_responseReceived_raceCondition() {
 		messageHandler.start();
 
 		CorrelationData correlationDataA = new CorrelationData();
@@ -294,13 +297,13 @@ public class JCSMPOutboundMessageHandlerTest {
 		pubEventHandler.responseReceivedEx(createCorrelationKey(correlationDataA));
 		pubEventHandler.responseReceivedEx(createCorrelationKey(correlationDataC));
 
-		correlationDataA.getFuture().get(100, TimeUnit.MILLISECONDS);
-		correlationDataB.getFuture().get(100, TimeUnit.MILLISECONDS);
-		correlationDataC.getFuture().get(100, TimeUnit.MILLISECONDS);
+		assertThat(correlationDataA.getFuture()).succeedsWithin(100, TimeUnit.MILLISECONDS);
+		assertThat(correlationDataB.getFuture()).succeedsWithin(100, TimeUnit.MILLISECONDS);
+		assertThat(correlationDataC.getFuture()).succeedsWithin(100, TimeUnit.MILLISECONDS);
 	}
 
 	@Test()
-	public void test_responseReceived_messageIdCollision_oneAfterTheOther() throws ExecutionException, InterruptedException, TimeoutException {
+	public void test_responseReceived_messageIdCollision_oneAfterTheOther() {
 		messageHandler.start();
 		JCSMPStreamingPublishCorrelatingEventHandler pubEventHandler = pubEventHandlerCaptor.getValue();
 
@@ -310,7 +313,7 @@ public class JCSMPOutboundMessageHandlerTest {
 				.build());
 		pubEventHandler.responseReceivedEx(createCorrelationKey(correlationDataA));
 
-		correlationDataA.getFuture().get(100, TimeUnit.MILLISECONDS);
+		assertThat(correlationDataA.getFuture()).succeedsWithin(100, TimeUnit.MILLISECONDS);
 
 
 		CorrelationData correlationDataB = new CorrelationData();
@@ -319,7 +322,7 @@ public class JCSMPOutboundMessageHandlerTest {
 				.build());
 		pubEventHandler.responseReceivedEx(createCorrelationKey(correlationDataB));
 
-		correlationDataB.getFuture().get(100, TimeUnit.MILLISECONDS);
+		assertThat(correlationDataB.getFuture()).succeedsWithin(100, TimeUnit.MILLISECONDS);
 	}
 
 	@ParameterizedTest
@@ -331,13 +334,20 @@ public class JCSMPOutboundMessageHandlerTest {
 		JCSMPException exception = commitError.getConstructor(String.class).newInstance("test");
 		Mockito.doThrow(exception).when(transactedSession).commit();
 
+		CorrelationData correlationData = new CorrelationData();
 		assertThatThrownBy(() -> messageHandler.handleMessage(MessageBuilder.withPayload("the payload")
-				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, new CorrelationData())
+				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
 				.build()))
 				.isInstanceOf(MessagingException.class)
 				.hasRootCause(exception);
 
 		Mockito.verify(transactedSession, Mockito.times(commitError.equals(RollbackException.class) ? 0 : 1)).rollback();
+		assertThat(correlationData.getFuture())
+				.failsWithin(1, TimeUnit.MINUTES)
+				.withThrowableThat()
+				.isInstanceOf(ExecutionException.class)
+				.havingRootCause()
+				.isEqualTo(exception);
 	}
 
 	@Test
