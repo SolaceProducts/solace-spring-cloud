@@ -1107,6 +1107,18 @@ public void send(String payload, long timeout, TimeUnit unit) {
     }
 }
 ----
+
+.CorrelationData with Batched Messages
+[NOTE]
+====
+When using <<Batch Producers>>, the `SolaceBinderHeaders.CONFIRM_CORRELATION` header must be set at the root of the batched message, and **not** in the `SolaceBinderHeaders.BATCHED_HEADERS` header.
+
+The `CorrelationData.getFuture()` will be resolved:
+
+* Successfully once all messages in the batch have been successfully delivered to the destination.
+* Failed upon the first delivery error encountered while publishing the batch of messages.
+====
+
 == Solace Binder Health Indicator
 Solace binders can report health statuses via the https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_health_indicator[Spring Boot Actuator health endpoint]. To enable this feature, add Spring Boot Actuator to the classpath. To manually disable this feature, set `management.health.binders.enabled=false`.
 
