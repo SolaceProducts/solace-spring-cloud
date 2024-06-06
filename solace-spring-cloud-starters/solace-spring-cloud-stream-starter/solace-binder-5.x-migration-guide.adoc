@@ -2,6 +2,13 @@
 
 This document is meant to help you migrate your application to Solace PubSub+ Binder 5.0.
 
+[IMPORTANT]
+====
+* Spring Cloud Stream consumer bindings with Solace PubSub+ Binder v5.x and later requires a Solace PubSub+ Broker version 10.2.1 or newer. The https://docs.solace.com/Release-Notes/Release-Info-appliance-sw-releases.htm#Event_Broker_Releases#:~:text=Broker%20Support%20For%20Message%20NACK[Native Message NACK] feature on which Solace consumer binding depends on, was introduced in Solace PubSub+ Broker version 10.2.1.
+
+* Spring Cloud Stream producer bindings with Solace PubSub+ Binder v5.x and later is compatible with PubSub+ Broker version prior to 10.2.1.
+====
+
 == Upgrade to Solace PubSub+ Binder 5.0
 
 Update the binder dependencies, if you are not using any of the impacted features documented below your application should work as it is.

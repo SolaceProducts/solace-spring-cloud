@@ -16,6 +16,15 @@ endif::[]
 
 An implementation of Spring's Cloud Stream Binder for integrating with Solace PubSub+ message brokers. The Spring Cloud Stream Binder project provides a higher-level abstraction towards messaging that standardizes the development of distributed message-based systems.
 
+[IMPORTANT]
+====
+* Spring Cloud Stream consumer bindings with Solace PubSub+ Binder v5.x and later requires a Solace PubSub+ Broker version 10.2.1 or newer. The https://docs.solace.com/Release-Notes/Release-Info-appliance-sw-releases.htm#Event_Broker_Releases#:~:text=Broker%20Support%20For%20Message%20NACK[Native Message NACK] feature on which Solace consumer binding depends on, was introduced in Solace PubSub+ Broker version 10.2.1.
+
+* Spring Cloud Stream producer bindings with Solace PubSub+ Binder v5.x and later is compatible with PubSub+ Broker version prior to 10.2.1.
+
+* See xref:solace-binder-5.x-migration-guide.adoc#_solace_pubsub_binder_5_0_migration_guide[Solace PubSub+ Binder 5.0 Migration Guide] for details, if you are upgrading from older version to Solace Binder v5.x or later.
+====
+
 == Overview
 
 The Solace implementation of the Spring Cloud Stream Binder maps the following concepts from Spring to Solace:
