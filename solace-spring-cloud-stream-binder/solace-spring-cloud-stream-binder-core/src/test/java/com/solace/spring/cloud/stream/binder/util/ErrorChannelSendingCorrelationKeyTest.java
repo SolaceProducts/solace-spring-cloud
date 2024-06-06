@@ -77,7 +77,7 @@ public class ErrorChannelSendingCorrelationKeyTest {
 			batchingConfig.setNumberOfMessages(1);
 		}
 
-		Message<?> message = MessageGenerator.generateMessage(() -> "test", Map::of, batchingConfig).build();
+		Message<?> message = MessageGenerator.generateMessage(i -> "test", i -> Map.of(), batchingConfig).build();
 
 		DirectChannel errorChannel = new DirectChannel();
 		ErrorChannelSendingCorrelationKey key = new ErrorChannelSendingCorrelationKey(message, errorChannel,

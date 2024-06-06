@@ -11,6 +11,7 @@ import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.spring.cloud.stream.binder.util.ErrorChannelSendingCorrelationKey;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager.CloudStreamEventHandler;
+import com.solace.spring.cloud.stream.binder.util.StaticMessageHeaderMapAccessor;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -36,7 +37,10 @@ import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
 import org.springframework.util.StringUtils;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 
 public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
@@ -85,11 +89,6 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 			throw handleMessagingException(correlationKey, msg0, new ClosedChannelBindingException(msg1));
 		}
 
-		Destination targetDestination = checkDynamicDestination(message, correlationKey);
-		if (targetDestination == null) {
-			targetDestination = configDestination;
-		}
-
 		try {
 			CorrelationData correlationData = message.getHeaders()
 					.get(SolaceBinderHeaders.CONFIRM_CORRELATION, CorrelationData.class);
@@ -103,6 +102,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		}
 
 		List<XMLMessage> smfMessages;
+		List<Destination> dynamicDestinations;
 		Object proxyCorrelationKey;
 		if (message.getHeaders().containsKey(SolaceBinderHeaders.BATCHED_HEADERS)) {
 			LOGGER.debug("Detected header {}, handling as batched message (Message<List<?>>) <message handler ID: {}>",
@@ -112,6 +112,18 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 					properties.getExtension().getHeaderExclusions(),
 					properties.getExtension().isNonserializableHeaderConvertToString());
 
+			// after successfully running xmlMessageMapper.mapBatchMessage(),
+			// SolaceBinderHeaders.BATCHED_HEADERS is verified to be well-formed
+
+			@SuppressWarnings("unchecked")
+			List<Map<String, Object>> batchedHeaders = (List<Map<String, Object>>) message.getHeaders()
+					.getOrDefault(SolaceBinderHeaders.BATCHED_HEADERS,
+							Collections.nCopies(smfMessages.size(), Collections.emptyMap()));
+
+			dynamicDestinations = batchedHeaders.stream()
+					.map(h -> getDynamicDestination(h, correlationKey))
+					.toList();
+
 			proxyCorrelationKey = transactedSession != null ?
 					correlationKey : new BatchProxyCorrelationKey(correlationKey, smfMessages.size());
 		} else {
@@ -119,6 +131,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 					message,
 					properties.getExtension().getHeaderExclusions(),
 					properties.getExtension().isNonserializableHeaderConvertToString()));
+			dynamicDestinations = Collections.singletonList(getDynamicDestination(message.getHeaders(), correlationKey));
 			proxyCorrelationKey = correlationKey;
 		}
 
@@ -127,6 +140,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		try {
 			for (int i = 0; i < smfMessages.size(); i++) {
 				XMLMessage smfMessage = smfMessages.get(i);
+				Destination targetDestination = Objects.requireNonNullElse(dynamicDestinations.get(i), configDestination);
 				smfMessage.setCorrelationKey(proxyCorrelationKey);
 
 				LOGGER.debug("Publishing message {} of {} to destination [ {}:{} ] <message handler ID: {}>",
@@ -163,9 +177,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 				}
 			}
 
-			throw handleMessagingException(correlationKey,
-					String.format("Unable to send message to destination %s %s",
-							targetDestination instanceof Topic ? "TOPIC" : "QUEUE", targetDestination.getName()), e);
+			throw handleMessagingException(correlationKey, "Unable to send message(s) to destination", e);
 		} finally {
 			if (solaceMeterAccessor != null) {
 				for (XMLMessage smfMessage : smfMessages) {
@@ -175,17 +187,19 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		}
 	}
 
-	private Destination checkDynamicDestination(Message<?> message, ErrorChannelSendingCorrelationKey correlationKey) {
+	private Destination getDynamicDestination(Map<String, Object> headers, ErrorChannelSendingCorrelationKey correlationKey) {
 		try {
 			String dynamicDestName;
-			String targetDestinationHeader = message.getHeaders().get(BinderHeaders.TARGET_DESTINATION, String.class);
+			String targetDestinationHeader = StaticMessageHeaderMapAccessor.get(headers,
+					BinderHeaders.TARGET_DESTINATION, String.class);
 			if (StringUtils.hasText(targetDestinationHeader)) {
 				dynamicDestName = targetDestinationHeader.trim();
 			} else {
 				return null;
 			}
 
-			String targetDestinationTypeHeader = message.getHeaders().get(SolaceBinderHeaders.TARGET_DESTINATION_TYPE, String.class);
+			String targetDestinationTypeHeader = StaticMessageHeaderMapAccessor.get(headers,
+					SolaceBinderHeaders.TARGET_DESTINATION_TYPE, String.class);
 			if (StringUtils.hasText(targetDestinationTypeHeader)) {
 				targetDestinationTypeHeader = targetDestinationTypeHeader.trim().toUpperCase();
 				if (targetDestinationTypeHeader.equals(DestinationType.TOPIC.name())) {

@@ -237,9 +237,10 @@ public class SolaceBinderMeterIT {
 		MessageGenerator.BatchingConfig batchingConfig = new MessageGenerator.BatchingConfig()
 				.setEnabled(batched);
 		Message<?> message = MessageGenerator.generateMessage(
-				() -> RandomStringUtils.randomAlphanumeric(100),
-				() -> Map.of(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE),
-				batchingConfig);
+				i -> RandomStringUtils.randomAlphanumeric(100),
+				i -> Map.of(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE),
+				batchingConfig)
+				.build();
 		int numMessages = batched ? batchingConfig.getNumberOfMessages() : 1;
 
 		moduleOutputChannel.send(message);

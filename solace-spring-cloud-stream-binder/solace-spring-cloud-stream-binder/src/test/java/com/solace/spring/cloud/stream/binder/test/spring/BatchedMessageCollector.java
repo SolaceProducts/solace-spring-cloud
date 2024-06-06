@@ -2,7 +2,6 @@ package com.solace.spring.cloud.stream.binder.test.spring;
 
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import org.springframework.integration.support.MessageBuilder;
-import org.springframework.messaging.Message;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +13,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collector;
 
-public class BatchedMessageCollector<T, V> implements Collector<T, MessageBuilder<List<V>>, Message<List<V>>> {
+public class BatchedMessageCollector<T, V> implements Collector<T, MessageBuilder<List<V>>, MessageBuilder<List<V>>> {
 	private final Function<T, V> getPayload;
 	private final Function<T, Map<String, Object>> getHeaders;
 
@@ -57,8 +56,8 @@ public class BatchedMessageCollector<T, V> implements Collector<T, MessageBuilde
 	}
 
 	@Override
-	public Function<MessageBuilder<List<V>>, Message<List<V>>> finisher() {
-		return MessageBuilder::build;
+	public Function<MessageBuilder<List<V>>, MessageBuilder<List<V>>> finisher() {
+		return b -> b;
 	}
 
 	@Override

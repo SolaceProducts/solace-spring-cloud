@@ -409,9 +409,10 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 				.setEnabled(batched)
 				.setNumberOfMessages(numMessages);
 		Message<?> message = MessageGenerator.generateMessage(
-				() -> UUID.randomUUID().toString().getBytes(),
-				() -> Map.of(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE),
-				batchingConfig);
+				i -> UUID.randomUUID().toString().getBytes(),
+				i -> Map.of(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE),
+				batchingConfig)
+				.build();
 
 		final CompletableFuture<Message<?>> bindingSpecificErrorMessage = new CompletableFuture<>();
 		logger.info("Subscribing to binding-specific error channel");
@@ -491,9 +492,10 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		Binding<MessageChannel> producerBinding = binder.bindProducer(destination0, moduleOutputChannel, producerProperties);
 
 		Message<?> message = MessageGenerator.generateMessage(
-				() -> UUID.randomUUID().toString().getBytes(),
-				() -> Map.of(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE),
-				new MessageGenerator.BatchingConfig().setEnabled(true).setNumberOfMessages(numberOfMessages));
+				i -> UUID.randomUUID().toString().getBytes(),
+				i -> Map.of(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE),
+				new MessageGenerator.BatchingConfig().setEnabled(true).setNumberOfMessages(numberOfMessages))
+				.build();
 
 		final CompletableFuture<Message<?>> bindingSpecificErrorMessage = new CompletableFuture<>();
 		logger.info("Subscribing to binding-specific error channel");

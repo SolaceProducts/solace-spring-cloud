@@ -4,6 +4,7 @@ import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator;
+import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator.BatchingConfig;
 import com.solace.spring.cloud.stream.binder.util.CorrelationData;
 import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.spring.cloud.stream.binder.util.ErrorChannelSendingCorrelationKey;
@@ -22,6 +23,7 @@ import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jcsmp.transaction.RollbackException;
 import com.solacesystems.jcsmp.transaction.TransactedSession;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -43,6 +45,7 @@ import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.MessageBuilder;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -151,9 +154,9 @@ public class JCSMPOutboundMessageHandlerTest {
 		messageHandler.start();
 
 		CorrelationData correlationData = new CorrelationData();
-		MessageGenerator.BatchingConfig batchingConfig = new MessageGenerator.BatchingConfig().setEnabled(batched);
+		BatchingConfig batchingConfig = new BatchingConfig().setEnabled(batched);
 		messageHandler.handleMessage(MessageGenerator.generateMessage(
-						() -> {
+						i -> {
 							if (payloadType.equals(List.class)) {
 								return List.of("test-0", "test-1", "test-2");
 							} else if (payloadType.equals(String.class)) {
@@ -162,7 +165,7 @@ public class JCSMPOutboundMessageHandlerTest {
 								throw new IllegalArgumentException("No test for payload type " + payloadType);
 							}
 						},
-						Map::of,
+						i -> Map.of(),
 						batchingConfig)
 				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
 				.build());
@@ -191,9 +194,9 @@ public class JCSMPOutboundMessageHandlerTest {
 
 		CorrelationData correlationData = new CorrelationData();
 		messageHandler.handleMessage(MessageGenerator.generateMessage(
-						() -> RandomStringUtils.randomAlphanumeric(100),
-						Map::of,
-						new MessageGenerator.BatchingConfig().setEnabled(batched))
+						i -> RandomStringUtils.randomAlphanumeric(100),
+						i -> Map.of(),
+						new BatchingConfig().setEnabled(batched))
 				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
 				.build());
 
@@ -224,9 +227,9 @@ public class JCSMPOutboundMessageHandlerTest {
 
 		CorrelationData correlationData = new CorrelationData();
 		messageHandler.handleMessage(MessageGenerator.generateMessage(
-						() -> RandomStringUtils.randomAlphanumeric(100),
-						Map::of,
-						new MessageGenerator.BatchingConfig().setEnabled(true).setNumberOfMessages(10))
+						i -> RandomStringUtils.randomAlphanumeric(100),
+						i -> Map.of(),
+						new BatchingConfig().setEnabled(true).setNumberOfMessages(10))
 				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
 				.build());
 
@@ -395,50 +398,84 @@ public class JCSMPOutboundMessageHandlerTest {
 				.recordMessage(Mockito.eq(producerProperties.getBindingName()), any());
 	}
 
-	@Test
-	public void test_dynamic_destinationName_only() throws JCSMPException {
+	@CartesianTest(name = "[{index}] batched={0}")
+	public void test_dynamic_destinationName_only(
+			@Values(booleans = {false, true}) boolean batched) throws JCSMPException {
 		messageHandler.start();
 
-		Message<?> message = MessageBuilder.withPayload("the payload")
-				.setHeader(BinderHeaders.TARGET_DESTINATION, "dynamicDestinationName")
-				.setHeader("SOME_HEADER", "HOLA") //add extra header and confirm it is kept
+		BatchingConfig batchingConfig = new BatchingConfig().setEnabled(batched);
+		List<String> targetDestinations = new ArrayList<>();
+		Message<?> message = MessageGenerator.generateMessage(
+				i -> RandomStringUtils.randomAlphanumeric(10),
+				i -> {
+					String targetDestination = RandomStringUtils.randomAlphanumeric(100);
+					targetDestinations.add(targetDestination);
+					return Map.ofEntries(
+							Map.entry(BinderHeaders.TARGET_DESTINATION, targetDestination),
+							Map.entry("SOME_HEADER", "HOLA") //add extra header and confirm it is kept
+					);
+				}, batchingConfig)
 				.build();
+
 		messageHandler.handleMessage(message);
 
-		Mockito.verify(messageProducer).send(xmlMessageCaptor.capture(), destinationCaptor.capture());
-		Destination targetDestination = destinationCaptor.getValue();
-		assertThat(targetDestination).isInstanceOf(Topic.class);
-		assertThat(targetDestination.getName()).isEqualTo("dynamicDestinationName");
+		Mockito.verify(messageProducer, Mockito.times(batched ? batchingConfig.getNumberOfMessages() : 1))
+				.send(xmlMessageCaptor.capture(), destinationCaptor.capture());
 
-		XMLMessage sentMessage = xmlMessageCaptor.getValue();
-		assertThat(sentMessage.getProperties().get(BinderHeaders.TARGET_DESTINATION)).isNull();
-		assertThat(sentMessage.getProperties().get("SOME_HEADER")).isEqualTo("HOLA");
+		assertThat(destinationCaptor.getAllValues())
+				.asInstanceOf(InstanceOfAssertFactories.list(Topic.class))
+				.extracting(Destination::getName)
+				.containsExactlyElementsOf(targetDestinations);
+
+		assertThat(xmlMessageCaptor.getAllValues())
+				.extracting(XMLMessage::getProperties)
+				.allSatisfy(p -> assertThat(p.get(BinderHeaders.TARGET_DESTINATION)).isNull())
+				.allSatisfy(p -> assertThat(p.get("SOME_HEADER")).isEqualTo("HOLA"));
 	}
 
-	@ParameterizedTest
-	@ValueSource(strings = { "topic", "queue", " TOPIc ", " QueUe  ", "", "   " })
-	public void test_dynamic_destinationName_and_destinationType(String destinationType) throws JCSMPException {
+	@CartesianTest(name = "[{index}] destinationType={0} batched={1}")
+	public void test_dynamic_destinationName_and_destinationType(
+			@Values(strings = { "topic", "queue", " TOPIc ", " QueUe  ", "", "   " }) String destinationType,
+			@Values(booleans = {false, true}) boolean batched) throws JCSMPException {
 		messageHandler.start();
 
-		Message<?> message = getMessageForDynamicDestination("dynamicDestinationName", destinationType);
+		BatchingConfig batchingConfig = new BatchingConfig().setEnabled(batched);
+		List<String> targetDestinations = new ArrayList<>();
+		Message<?> message = MessageGenerator.generateMessage(
+				i -> RandomStringUtils.randomAlphanumeric(100),
+				i -> {
+					String targetDestination = RandomStringUtils.randomAlphanumeric(100);
+					targetDestinations.add(targetDestination);
+					return Map.ofEntries(
+							Map.entry(BinderHeaders.TARGET_DESTINATION, targetDestination),
+							Map.entry(SolaceBinderHeaders.TARGET_DESTINATION_TYPE, destinationType));
+				},
+				batchingConfig)
+				.build();
+
 		messageHandler.handleMessage(message);
 
-		Mockito.verify(messageProducer).send(xmlMessageCaptor.capture(), destinationCaptor.capture());
-		Destination targetDestination = destinationCaptor.getValue();
+		Mockito.verify(messageProducer, Mockito.times(batched ? batchingConfig.getNumberOfMessages() : 1))
+				.send(xmlMessageCaptor.capture(), destinationCaptor.capture());
 
 		//MessageHandler uses default producerProperties so blank and unspecified destinationType defaults to Topic
-		assertThat(targetDestination).isInstanceOf(destinationType.trim().equalsIgnoreCase("queue") ? Queue.class : Topic.class);
-		assertThat(targetDestination.getName()).isEqualTo("dynamicDestinationName");
+		assertThat(destinationCaptor.getAllValues())
+				.allSatisfy(d -> assertThat(d).isInstanceOf(
+						destinationType.trim().equalsIgnoreCase("queue") ? Queue.class : Topic.class))
+				.extracting(Destination::getName)
+				.containsExactlyElementsOf(targetDestinations);
 
 		//Verify headers don't get set on ongoing Solace message
-		XMLMessage sentMessage = xmlMessageCaptor.getValue();
-		assertThat(sentMessage.getProperties().get(BinderHeaders.TARGET_DESTINATION)).isNull();
-		assertThat(sentMessage.getProperties().get(SolaceBinderHeaders.TARGET_DESTINATION_TYPE)).isNull();
+		assertThat(xmlMessageCaptor.getAllValues())
+				.extracting(XMLMessage::getProperties)
+				.allSatisfy(p -> assertThat(p.get(BinderHeaders.TARGET_DESTINATION)).isNull())
+				.allSatisfy(p -> assertThat(p.get(SolaceBinderHeaders.TARGET_DESTINATION_TYPE)).isNull());
 	}
 
-	@ParameterizedTest
-	@ValueSource(strings = { "queue", "topic" })
-	public void test_dynamic_destinationName_with_destinationType_configured_on_messageHandler(String type) throws JCSMPException {
+	@CartesianTest(name = "[{index}] type={0} batched={1}")
+	public void test_dynamic_destinationName_with_destinationType_configured_on_messageHandler(
+			@Values(strings = { "queue", "topic" }) String type,
+			@Values(booleans = {false, true}) boolean batched) throws JCSMPException {
 		messageHandler.start();
 
 		SolaceProducerProperties producerProperties = new SolaceProducerProperties();
@@ -456,41 +493,71 @@ public class JCSMPOutboundMessageHandlerTest {
 		);
 		messageHandler.start();
 
-		Message<?> message = getMessageForDynamicDestination("dynamicDestinationName", null);
+		BatchingConfig batchingConfig = new BatchingConfig().setEnabled(batched);
+		List<String> targetDestinations = new ArrayList<>();
+		Message<?> message = MessageGenerator.generateMessage(
+						i -> RandomStringUtils.randomAlphanumeric(100),
+						i -> {
+							String targetDestination = RandomStringUtils.randomAlphanumeric(100);
+							targetDestinations.add(targetDestination);
+							return Map.of(BinderHeaders.TARGET_DESTINATION, targetDestination);
+						},
+						batchingConfig)
+				.build();
+
 		messageHandler.handleMessage(message);
 
-		Mockito.verify(messageProducer).send(any(), destinationCaptor.capture());
-		Destination targetDestination = destinationCaptor.getValue();
-		assertThat(targetDestination).isInstanceOf(type.equals("queue") ? Queue.class : Topic.class);
-		assertThat(targetDestination.getName()).isEqualTo("dynamicDestinationName");
+		Mockito.verify(messageProducer, Mockito.times(batched ? batchingConfig.getNumberOfMessages() : 1))
+				.send(any(), destinationCaptor.capture());
+
+		assertThat(destinationCaptor.getAllValues())
+				.allSatisfy(d -> assertThat(d).isInstanceOf(type.equals("queue") ? Queue.class : Topic.class))
+				.extracting(Destination::getName)
+				.containsExactlyElementsOf(targetDestinations);
 	}
 
-	@Test
-	public void test_dynamic_destination_with_invalid_destinationType() {
+	@CartesianTest(name = "[{index}] batched={0}")
+	public void test_dynamic_destination_with_invalid_destinationType(
+			@Values(booleans = {false, true}) boolean batched) {
 		messageHandler.start();
-		Message<?> message = getMessageForDynamicDestination("dynamicDestinationName", "INVALID");
+		Message<?> message = MessageGenerator.generateMessage(
+				i -> RandomStringUtils.randomAlphanumeric(100),
+				i -> Map.ofEntries(
+						Map.entry(BinderHeaders.TARGET_DESTINATION, "dynamicDestinationName"),
+						Map.entry(SolaceBinderHeaders.TARGET_DESTINATION_TYPE, "INVALID")
+				), new BatchingConfig().setEnabled(batched))
+				.build();
 		Exception exception = assertThrows(MessagingException.class, () -> messageHandler.handleMessage(message));
 		assertThat(exception)
 				.hasRootCauseInstanceOf(IllegalArgumentException.class)
 				.hasRootCauseMessage("Incorrect value specified for header 'solace_scst_targetDestinationType'. Expected [ TOPIC|QUEUE ] but actual value is [ INVALID ]");
 	}
 
-	@Test
-	public void test_dynamic_destinationName_with_invalid_header_value_type() {
+	@CartesianTest(name = "[{index}] batched={0}")
+	public void test_dynamic_destinationName_with_invalid_header_value_type(
+			@Values(booleans = {false, true}) boolean batched) {
 		messageHandler.start();
-		Message<?> message = getMessageForDynamicDestination(Instant.now(), null);
+		Message<?> message = MessageGenerator.generateMessage(
+						i -> RandomStringUtils.randomAlphanumeric(100),
+						i -> Map.of(BinderHeaders.TARGET_DESTINATION, Instant.now()),
+						new BatchingConfig().setEnabled(batched))
+				.build();
 		Exception exception = assertThrows(MessagingException.class, () -> messageHandler.handleMessage(message));
 		assertThat(exception)
 				.hasRootCauseInstanceOf(IllegalArgumentException.class)
 				.hasRootCauseMessage("Incorrect type specified for header 'scst_targetDestination'. Expected [class java.lang.String] but actual type is [class java.time.Instant]");
 	}
 
-	@Test
-	public void test_dynamic_destinationType_with_invalid_header_value_type() {
+	@CartesianTest(name = "[{index}] batched={0}")
+	public void test_dynamic_destinationType_with_invalid_header_value_type(
+			@Values(booleans = {false, true}) boolean batched) {
 		messageHandler.start();
-		Message<?> message = MessageBuilder.withPayload("the payload")
-				.setHeader(BinderHeaders.TARGET_DESTINATION, "someDynamicDestinationName")
-				.setHeader(SolaceBinderHeaders.TARGET_DESTINATION_TYPE, Instant.now())
+		Message<?> message = MessageGenerator.generateMessage(
+						i -> RandomStringUtils.randomAlphanumeric(100),
+						i -> Map.ofEntries(
+								Map.entry(BinderHeaders.TARGET_DESTINATION, "someDynamicDestinationName"),
+								Map.entry(SolaceBinderHeaders.TARGET_DESTINATION_TYPE, Instant.now())
+						), new BatchingConfig().setEnabled(batched))
 				.build();
 		Exception exception = assertThrows(MessagingException.class, () -> messageHandler.handleMessage(message));
 		assertThat(exception)
@@ -513,17 +580,6 @@ public class JCSMPOutboundMessageHandlerTest {
 				.satisfies(
 						p -> assertThat(p.getWindowSize()).isEqualTo(pubAckWindowSize),
 						p -> assertThat(p.getAckEventMode()).isEqualTo(ackEventMode));
-	}
-
-	private Message<String> getMessageForDynamicDestination(Object targetDestination, Object targetDestinationType) {
-		MessageBuilder<String> builder = MessageBuilder.withPayload("the payload");
-		if (targetDestination != null) {
-			builder.setHeader(BinderHeaders.TARGET_DESTINATION, targetDestination);
-		}
-		if (targetDestinationType != null) {
-			builder.setHeader(SolaceBinderHeaders.TARGET_DESTINATION_TYPE, targetDestinationType);
-		}
-		return builder.build();
 	}
 
 	private List<Object> getCorrelationKeys() throws JCSMPException {

@@ -1,7 +1,10 @@
 package com.solace.spring.cloud.stream.binder;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
+import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
+import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator;
+import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator.BatchingConfig;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
@@ -10,9 +13,12 @@ import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junitpioneer.jupiter.cartesian.CartesianTest;
+import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.Binding;
+import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.support.MessageBuilder;
@@ -24,6 +30,8 @@ import org.springframework.messaging.MessagingException;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.MimeTypeUtils;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
@@ -39,12 +47,19 @@ import static org.junit.jupiter.api.Assertions.fail;
 @ExtendWith(SpringCloudStreamExtension.class)
 public class SolaceBinderDynamicMessagingIT {
 
-	@Test
-	public void testTargetDestination(SpringCloudStreamContext context, SoftAssertions softly,
+	@CartesianTest(name = "[{index}] batched={0}")
+	public void testTargetDestination(@Values(booleans = {false, true}) boolean batched,
+									  SpringCloudStreamContext context,
+									  SoftAssertions softly,
 									  TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = context.getBinder();
 
-		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
+		producerProperties.setUseNativeEncoding(batched);
+
+		BindingProperties producerBindingProperties = new BindingProperties();
+		producerBindingProperties.setProducer(producerProperties);
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", producerBindingProperties);
 		DirectChannel moduleInputChannel0 = context.createBindableChannel("input0", new BindingProperties());
 		DirectChannel moduleInputChannel1 = context.createBindableChannel("input1", new BindingProperties());
 
@@ -53,16 +68,22 @@ public class SolaceBinderDynamicMessagingIT {
 		String group0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
+				destination0, moduleOutputChannel, producerProperties);
 		Binding<MessageChannel> consumerBinding0 = binder.bindConsumer(
 				destination0, group0, moduleInputChannel0, context.createConsumerProperties());
 		Binding<MessageChannel> consumerBinding1 = binder.bindConsumer(
 				destination1, group0, moduleInputChannel1, context.createConsumerProperties());
 
-		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
-				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
-				.setHeader(BinderHeaders.TARGET_DESTINATION, destination1)
-				.build();
+		BatchingConfig batchingConfig = new BatchingConfig().setEnabled(batched);
+
+		Message<?> message = MessageGenerator.generateMessage(
+				i -> RandomStringUtils.randomAlphanumeric(100).getBytes(),
+				i -> Map.ofEntries(
+						Map.entry(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE),
+						// Only send half of the batch to the test destination
+						Map.entry(BinderHeaders.TARGET_DESTINATION, i % 2 == 0 ?
+								destination1 : RandomStringUtils.randomAlphanumeric(100))
+				), batchingConfig).build();
 
 		context.binderBindUnbindLatency();
 
@@ -74,7 +95,7 @@ public class SolaceBinderDynamicMessagingIT {
 		final CountDownLatch latch0 = new CountDownLatch(1);
 		moduleInputChannel0.subscribe(msgHandlerFactory.apply(latch0));
 
-		final CountDownLatch latch1 = new CountDownLatch(1);
+		final CountDownLatch latch1 = new CountDownLatch(batched ? batchingConfig.getNumberOfMessages() / 2 : 1);
 		moduleInputChannel1.subscribe(msgHandlerFactory.apply(latch1));
 
 		moduleOutputChannel.send(message);
@@ -89,96 +110,47 @@ public class SolaceBinderDynamicMessagingIT {
 		consumerBinding1.unbind();
 	}
 
-	@Test
-	public void testTargetDestinationWithEmptyString(SpringCloudStreamContext context, TestInfo testInfo)
-			throws Exception {
+	@CartesianTest(name = "[{index}] batched={0} value=\"{1}\"")
+	public void testTargetDestinationIgnored(
+			@Values(booleans = {false, true}) boolean batched,
+			@Values(strings = {"NULL", "", " "}) String value,
+			SpringCloudStreamContext context,
+			TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = context.getBinder();
 
-		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = context.createProducerProperties(testInfo);
+		producerProperties.setUseNativeEncoding(true);
+		BindingProperties producerBindingProperties = new BindingProperties();
+		producerBindingProperties.setProducer(producerProperties);
+
+		DirectChannel moduleOutputChannel = context.createBindableChannel("output", producerBindingProperties);
 		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
 
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
+				destination0, moduleOutputChannel, producerProperties);
 		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, context.createConsumerProperties());
+				destination0,
+				RandomStringUtils.randomAlphanumeric(10),
+				moduleInputChannel,
+				context.createConsumerProperties());
 
-		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
-				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
-				.setHeader(BinderHeaders.TARGET_DESTINATION, "")
+		BatchingConfig batchingConfig = new BatchingConfig().setEnabled(batched);
+		Message<?> message = MessageGenerator.generateMessage(
+				i -> RandomStringUtils.randomAlphanumeric(100).getBytes(),
+				i -> {
+					Map<String, Object> headers = new HashMap<>();
+					headers.put(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE);
+					headers.put(BinderHeaders.TARGET_DESTINATION, value.equals("NULL") ? null : value);
+					return headers;
+				},
+				batchingConfig)
 				.build();
 
 		context.binderBindUnbindLatency();
 
-		final CountDownLatch latch = new CountDownLatch(1);
-		moduleInputChannel.subscribe(m -> {
-			assertThat(m.getHeaders()).doesNotContainKey(BinderHeaders.TARGET_DESTINATION);
-			latch.countDown();
-		});
-
-		moduleOutputChannel.send(message);
-		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
-		producerBinding.unbind();
-		consumerBinding.unbind();
-	}
-
-	@Test
-	public void testTargetDestinationWithWhitespace(SpringCloudStreamContext context, TestInfo testInfo)
-			throws Exception {
-		SolaceTestBinder binder = context.getBinder();
-
-		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
-
-		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-
-		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
-		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, context.createConsumerProperties());
-
-		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
-				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
-				.setHeader(BinderHeaders.TARGET_DESTINATION, "   ")
-				.build();
-
-		context.binderBindUnbindLatency();
-
-		final CountDownLatch latch = new CountDownLatch(1);
-		moduleInputChannel.subscribe(m -> {
-			assertThat(m.getHeaders()).doesNotContainKey(BinderHeaders.TARGET_DESTINATION);
-			latch.countDown();
-		});
-
-		moduleOutputChannel.send(message);
-		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
-		producerBinding.unbind();
-		consumerBinding.unbind();
-	}
-
-	@Test
-	public void testTargetDestinationWithNull(SpringCloudStreamContext context, TestInfo testInfo) throws Exception {
-		SolaceTestBinder binder = context.getBinder();
-
-		DirectChannel moduleOutputChannel = context.createBindableChannel("output", new BindingProperties());
-		DirectChannel moduleInputChannel = context.createBindableChannel("input", new BindingProperties());
-
-		String destination0 = RandomStringUtils.randomAlphanumeric(10);
-
-		Binding<MessageChannel> producerBinding = binder.bindProducer(
-				destination0, moduleOutputChannel, context.createProducerProperties(testInfo));
-		Binding<MessageChannel> consumerBinding = binder.bindConsumer(
-				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, context.createConsumerProperties());
-
-		Message<?> message = MessageBuilder.withPayload("foo".getBytes())
-				.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
-				.setHeader(BinderHeaders.TARGET_DESTINATION, null)
-				.build();
-
-		context.binderBindUnbindLatency();
-
-		final CountDownLatch latch = new CountDownLatch(1);
+		final CountDownLatch latch = new CountDownLatch(batched ? batchingConfig.getNumberOfMessages() : 1);
 		moduleInputChannel.subscribe(m -> {
 			assertThat(m.getHeaders()).doesNotContainKey(BinderHeaders.TARGET_DESTINATION);
 			latch.countDown();
