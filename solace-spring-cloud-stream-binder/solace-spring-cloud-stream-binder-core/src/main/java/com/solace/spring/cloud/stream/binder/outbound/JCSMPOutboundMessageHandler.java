@@ -116,6 +116,10 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 			smfMessages.forEach(smfMessage -> smfMessage.setCorrelationKey(
 					Objects.requireNonNullElse(batchProxyCorrelationKey, correlationKey)));
 
+			if (transactedSession == null) {
+				smfMessages.get(smfMessages.size() - 1).setAckImmediately(true);
+			}
+
 			// after successfully running xmlMessageMapper.mapBatchMessage(),
 			// SolaceBinderHeaders.BATCHED_HEADERS is verified to be well-formed
 

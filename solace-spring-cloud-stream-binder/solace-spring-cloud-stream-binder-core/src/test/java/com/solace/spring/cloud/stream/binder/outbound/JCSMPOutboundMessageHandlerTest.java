@@ -181,7 +181,21 @@ public class JCSMPOutboundMessageHandlerTest {
 		}
 
 		getCorrelationKeys().forEach(pubEventHandlerCaptor.getValue()::responseReceivedEx);
-		assertThat(xmlMessageCaptor.getAllValues()).hasSize(batched ? batchingConfig.getNumberOfMessages() : 1);
+		assertThat(xmlMessageCaptor.getAllValues())
+				.hasSize(batched ? batchingConfig.getNumberOfMessages() : 1)
+				.satisfies(msgs -> {
+					boolean lastMsgIsAckImmediately = batched && !transacted;
+					assertThat(lastMsgIsAckImmediately ? msgs.subList(0, msgs.size() - 1) : msgs)
+							.extracting(XMLMessage::isAckImmediately)
+							.containsOnly(false);
+
+					if (lastMsgIsAckImmediately) {
+						assertThat(msgs)
+								.last()
+								.extracting(XMLMessage::isAckImmediately)
+								.isEqualTo(true);
+					}
+				});
 
 		assertThat(correlationData.getFuture()).succeedsWithin(100, TimeUnit.MILLISECONDS);
 		assertThat(timesSuccessResolved).hasValue(1);
