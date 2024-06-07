@@ -9,7 +9,6 @@ import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -87,7 +86,6 @@ public class MultiBinderIT {
     }
 
     @Test
-    @Disabled("Due to bug https://github.com/spring-cloud/spring-cloud-stream/issues/2728")
     public void checkSolaceMetricsAreExposed(@Autowired MockMvc mvc) throws Exception {
         //Send a message to activate metrics
         producer.send(JCSMPFactory.onlyInstance().createBytesXMLMessage(),
