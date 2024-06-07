@@ -39,8 +39,11 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 
 		@Override
 		public void responseReceivedEx(Object correlationKey) {
-			if (correlationKey instanceof ErrorChannelSendingCorrelationKey) {
-				ErrorChannelSendingCorrelationKey key = (ErrorChannelSendingCorrelationKey) correlationKey;
+			if (correlationKey instanceof BatchProxyCorrelationKey batchProxyCorrelationKey) {
+				correlationKey = batchProxyCorrelationKey.getCorrelationKeyForSuccess();
+			}
+
+			if (correlationKey instanceof ErrorChannelSendingCorrelationKey key) {
 				if (logger.isTraceEnabled()) {
 					logger.trace("Producer received response for message " +
 							StaticMessageHeaderAccessor.getId(key.getInputMessage()));
@@ -48,8 +51,7 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 				if (key.getConfirmCorrelation() != null) {
 					key.getConfirmCorrelation().success();
 				}
-			} else if (correlationKey instanceof ErrorQueueRepublishCorrelationKey) {
-				ErrorQueueRepublishCorrelationKey key = (ErrorQueueRepublishCorrelationKey) correlationKey;
+			} else if (correlationKey instanceof ErrorQueueRepublishCorrelationKey key) {
 				try {
 					key.handleSuccess();
 				} catch (SolaceAcknowledgmentException e) { // unlikely to happen
@@ -66,23 +68,24 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 
 		@Override
 		public void handleErrorEx(Object correlationKey, JCSMPException cause, long timestamp) {
-			if (correlationKey instanceof ErrorChannelSendingCorrelationKey) {
-				ErrorChannelSendingCorrelationKey key = (ErrorChannelSendingCorrelationKey) correlationKey;
-				String messageId = key.getRawMessage() != null ? key.getRawMessage().getMessageId() : null;
+			if (correlationKey instanceof BatchProxyCorrelationKey batchProxyCorrelationKey) {
+				correlationKey = batchProxyCorrelationKey.getCorrelationKeyForFailure();
+			}
+
+			if (correlationKey instanceof ErrorChannelSendingCorrelationKey key) {
 				UUID springMessageId = Optional.ofNullable(key.getInputMessage())
 						.map(Message::getHeaders)
 						.map(MessageHeaders::getId)
 						.orElse(null);
-				String msg = String.format("Producer received error for message %s (Spring message %s) at %s",
-						messageId, springMessageId, timestamp);
+				String msg = String.format("Producer received error during publishing (Spring message %s) at %s",
+						springMessageId, timestamp);
 				logger.warn(msg, cause);
 				MessagingException messagingException = key.send(msg, cause);
 
 				if (key.getConfirmCorrelation() != null) {
 					key.getConfirmCorrelation().failed(messagingException);
 				}
-			} else if (correlationKey instanceof ErrorQueueRepublishCorrelationKey) {
-				ErrorQueueRepublishCorrelationKey key = (ErrorQueueRepublishCorrelationKey) correlationKey;
+			} else if (correlationKey instanceof ErrorQueueRepublishCorrelationKey key) {
 				try {
 					key.handleError();
 				} catch (SolaceAcknowledgmentException e) { // unlikely to happen
