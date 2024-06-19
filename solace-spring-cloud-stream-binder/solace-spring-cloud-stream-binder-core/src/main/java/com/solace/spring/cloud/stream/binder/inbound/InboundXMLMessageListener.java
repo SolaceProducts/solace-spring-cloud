@@ -194,18 +194,25 @@ abstract class InboundXMLMessageListener implements Runnable {
 
 	private void processBatchIfAvailable() {
 		Optional<List<MessageContainer>> batchedMessages = batchCollector.collectBatchIfAvailable();
-		if (!batchedMessages.isPresent()) {
+		if (batchedMessages.isEmpty()) {
 			return;
 		}
 
-		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createBatchCallback(batchedMessages.get());
+		AcknowledgmentCallback acknowledgmentCallback = consumerProperties.getExtension().isTransacted() ?
+				ackCallbackFactory.createTransactedBatchCallback(batchedMessages.get(),
+						flowReceiverContainer.getTransactedSession()) :
+				ackCallbackFactory.createBatchCallback(batchedMessages.get());
+
 		try {
 			List<BytesXMLMessage> xmlMessages = batchedMessages.get()
 					.stream()
 					.map(MessageContainer::getMessage)
 					.collect(Collectors.toList());
-			handleMessage(() -> createBatchMessage(xmlMessages, acknowledgmentCallback),
-					m -> sendBatchToConsumer(m, xmlMessages),
+			handleMessage(() -> createBatchMessage(xmlMessages,
+							// transactions are sync-only.
+							// No support for user-controlled client acks via AcknowledgmentCallback
+							consumerProperties.getExtension().isTransacted() ? null : acknowledgmentCallback),
+					m -> sendBatchToConsumer(m, xmlMessages, acknowledgmentCallback),
 					acknowledgmentCallback,
 					true);
 		} catch (Exception e) {
@@ -240,7 +247,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 
 	Message<?> createBatchMessage(List<BytesXMLMessage> bytesXMLMessages,
 								  AcknowledgmentCallback acknowledgmentCallback) {
-		setAttributesIfNecessary(bytesXMLMessages, acknowledgmentCallback);
+		setBatchAttributesIfNecessary(bytesXMLMessages, null, acknowledgmentCallback);
 		return xmlMessageMapper.mapBatchMessage(bytesXMLMessages, acknowledgmentCallback, consumerProperties.getExtension());
 	}
 
@@ -250,9 +257,12 @@ abstract class InboundXMLMessageListener implements Runnable {
 		sendToConsumer(message);
 	}
 
-	void sendBatchToConsumer(final Message<?> message, final List<BytesXMLMessage> bytesXMLMessages)
+	private void sendBatchToConsumer(
+			final Message<?> message,
+			final List<BytesXMLMessage> bytesXMLMessages,
+			final AcknowledgmentCallback acknowledgmentCallback)
 			throws RuntimeException {
-		setAttributesIfNecessary(bytesXMLMessages, message);
+		setBatchAttributesIfNecessary(bytesXMLMessages, message, acknowledgmentCallback);
 		sendToConsumer(message);
 	}
 
@@ -272,13 +282,14 @@ abstract class InboundXMLMessageListener implements Runnable {
 		setAttributesIfNecessary(xmlMessage, message, null);
 	}
 
-	void setAttributesIfNecessary(List<? extends XMLMessage> xmlMessages,
-								  AcknowledgmentCallback acknowledgmentCallback) {
-		setAttributesIfNecessary(xmlMessages, null, acknowledgmentCallback);
-	}
-
-	void setAttributesIfNecessary(List<? extends XMLMessage> xmlMessages, Message<?> batchMessage) {
-		setAttributesIfNecessary(xmlMessages, batchMessage, null);
+	void setBatchAttributesIfNecessary(List<? extends XMLMessage> xmlMessages,
+									   @Nullable Message<?> batchMessage,
+									   AcknowledgmentCallback acknowledgmentCallback) {
+		if (batchMessage != null && StaticMessageHeaderAccessor.getAcknowledgmentCallback(batchMessage) != null) {
+			setAttributesIfNecessary(xmlMessages, batchMessage, null);
+		} else {
+			setAttributesIfNecessary(xmlMessages, batchMessage, acknowledgmentCallback);
+		}
 	}
 
 	private void setAttributesIfNecessary(Object rawXmlMessage, Message<?> message,

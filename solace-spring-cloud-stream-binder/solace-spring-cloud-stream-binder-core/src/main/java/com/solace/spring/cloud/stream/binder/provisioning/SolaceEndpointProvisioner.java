@@ -145,6 +145,12 @@ public class SolaceEndpointProvisioner
 			}
 		}
 
+		if (!properties.isBatchMode() && properties.getExtension().isTransacted()) {
+			String msg = "Non-batched, transacted consumers are not supported";
+			LOGGER.warn(msg);
+			throw new ProvisioningException(msg);
+		}
+
 		LOGGER.info(isAnonEndpoint ?
 				String.format("Creating anonymous (temporary) %s %s", endpointType, groupQueueName) :
 				String.format("Creating %s %s %s for consumer group %s",

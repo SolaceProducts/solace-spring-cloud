@@ -1,12 +1,5 @@
 package com.solace.spring.cloud.stream.binder;
 
-import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
-import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.errorQueueHasMessages;
-import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.hasNestedHeader;
-import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.isValidConsumerErrorMessage;
-import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.isValidProducerErrorMessage;
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
@@ -17,7 +10,6 @@ import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContex
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
-import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solacesystems.jcsmp.EndpointProperties;
@@ -25,14 +17,6 @@ import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
-import java.util.List;
-import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.Test;
@@ -51,8 +35,6 @@ import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.cloud.stream.binder.RequeueCurrentMessageException;
 import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.integration.StaticMessageHeaderAccessor;
-import org.springframework.integration.acks.AckUtils;
-import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.channel.PublishSubscribeChannel;
 import org.springframework.integration.support.MessageBuilder;
@@ -62,6 +44,21 @@ import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.MessagingException;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.MimeTypeUtils;
+
+import java.util.List;
+import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import static com.solace.spring.cloud.stream.binder.test.util.RetryableAssertions.retryAssert;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.errorQueueHasMessages;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.hasNestedHeader;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.isValidConsumerErrorMessage;
+import static com.solace.spring.cloud.stream.binder.test.util.SolaceSpringCloudStreamAssertions.isValidProducerErrorMessage;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * All tests regarding custom channel-specific error message handlers
@@ -113,8 +110,8 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 		final CountDownLatch errorLatch = new CountDownLatch(1);
 		context.createChannel(inputErrorChannelName, DirectChannel.class, msg -> {
 			logger.info("Got error message: {}", StaticMessageHeaderAccessor.getId(msg));
-			softly.assertThat(msg).satisfies(isValidConsumerErrorMessage(consumerProperties,
-					channelType.isAssignableFrom(PollableSource.class), true, messages));
+			softly.assertThat(msg).satisfies(isValidConsumerErrorMessage(channelType, consumerProperties,
+					true, messages));
 			errorLatch.countDown();
 		});
 

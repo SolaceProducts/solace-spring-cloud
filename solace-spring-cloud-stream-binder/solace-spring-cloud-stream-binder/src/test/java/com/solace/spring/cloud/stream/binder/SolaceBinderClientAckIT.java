@@ -1096,7 +1096,7 @@ public class SolaceBinderClientAckIT<T> {
                     AcknowledgmentCallback ackCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(msg);
                     Objects.requireNonNull(ackCallback).noAutoAck();
                     softly.assertThat(msg).as("first batch is not valid")
-                            .satisfies(isValidMessage(consumerProperties,
+                            .satisfies(isValidMessage(channelType, consumerProperties,
                                     messages.subList(0, consumerProperties.getExtension().getBatchMaxSize())));
                     if (!firstReceivedMessage.get()) {
                         logger.info("Got first message");
