@@ -875,7 +875,7 @@ Consumer<Message<List<Payload>>> input() {
 .Transacted Batch Consumers
 [TIP]
 ====
-By default, message batches are non-transacted (i.e. `transacted` is set to `false`). When in this mode, a batch that this binder creates is fundamentally a collection of individual messages and must not be treated as a single consistent unit.
+By default, batched messages are non-transacted (i.e. `transacted` is set to `false`). When in this mode, a batch created by this binder is fundamentally a collection of standalone messages. Where messages in the batch have no relationship between each other.
 
 When `transacted` is set to `true`, a local transaction is used to process the batched message. The batch of messages is then automatically committed (or is rolled back on errors) when the message handler returns.
 ====
