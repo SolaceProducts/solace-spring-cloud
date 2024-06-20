@@ -10,14 +10,15 @@ import org.slf4j.LoggerFactory;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 
 class TransactedJCSMPAcknowledgementCallback implements AcknowledgmentCallback {
-	private final ThreadLocal<TransactedSession> transactedSessionThreadLocal = new ThreadLocal<>();
+	private final TransactedSession transactedSession;
 	private final ErrorQueueInfrastructure errorQueueInfrastructure;
+	private final long creationThreadId = Thread.currentThread().getId();
 	private boolean acknowledged = false;
 	private static final Logger LOGGER = LoggerFactory.getLogger(TransactedJCSMPAcknowledgementCallback.class);
 
 	TransactedJCSMPAcknowledgementCallback(TransactedSession transactedSession,
 										   ErrorQueueInfrastructure errorQueueInfrastructure) {
-		this.transactedSessionThreadLocal.set(transactedSession);
+		this.transactedSession = transactedSession;
 		this.errorQueueInfrastructure = errorQueueInfrastructure;
 	}
 
@@ -28,8 +29,7 @@ class TransactedJCSMPAcknowledgementCallback implements AcknowledgmentCallback {
 			return;
 		}
 
-		TransactedSession transactedSession = transactedSessionThreadLocal.get();
-		if (transactedSession == null) {
+		if (creationThreadId != Thread.currentThread().getId()) {
 			throw new UnsupportedOperationException("Transactions must be resolved on the message handler's thread");
 		}
 
@@ -73,22 +73,6 @@ class TransactedJCSMPAcknowledgementCallback implements AcknowledgmentCallback {
 	 */
 	private boolean republishToErrorQueue() {
 		return false; //TODO
-//		if (errorQueueInfrastructure == null) {
-//			return false;
-//		}
-//
-//		LOGGER.debug("{} {}: Will be republished onto error queue {}",
-//				XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
-//				errorQueueInfrastructure.getErrorQueueName());
-//
-//		try {
-//			errorQueueInfrastructure.createCorrelationKey(messageContainer, flowReceiverContainer).handleError();
-//		} catch (Exception e) {
-//			throw new SolaceAcknowledgmentException(
-//					String.format("Failed to send XMLMessage %s to error queue",
-//							messageContainer.getMessage().getMessageId()), e);
-//		}
-//		return true;
 	}
 
 	@Override
