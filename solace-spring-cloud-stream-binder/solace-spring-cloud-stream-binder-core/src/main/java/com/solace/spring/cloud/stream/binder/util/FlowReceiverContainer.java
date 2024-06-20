@@ -123,7 +123,10 @@ public class FlowReceiverContainer {
 				LOGGER.info("Unbinding flow receiver container {}", id);
 				flowReceiverReference.getStaleMessagesFlag().set(true);
 				flowReceiverReference.get().close();
-				Optional.ofNullable(flowReceiverReference.getTransactedSession()).ifPresent(TransactedSession::close);
+				TransactedSession transactedSession = flowReceiverReference.getTransactedSession();
+				if (transactedSession != null) {
+					transactedSession.close();
+				}
 			}
 		} finally {
 			writeLock.unlock();
