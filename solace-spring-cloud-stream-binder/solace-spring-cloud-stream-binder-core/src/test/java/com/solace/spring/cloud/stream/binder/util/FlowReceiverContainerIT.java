@@ -25,7 +25,6 @@ import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
-import com.solacesystems.jcsmp.impl.flow.FlowHandle;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -164,8 +163,7 @@ public class FlowReceiverContainerIT {
 
 		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(sempV2Api, queue, 2);
 		assertThat(txFlows, hasSize(1));
-		Long reassignedFlowId = (Long) ((FlowHandle) flowReference.get()).getFlowId();
-		assertEquals( (reassignedFlowId - 2097152), txFlows.get(0).getFlowId());
+		assertEquals(jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME), txFlows.get(0).getClientName());
 
 		if (transacted) {
 			Assertions.assertThat(getTransactedSessions(sempV2Api, jcsmpSession))
@@ -196,10 +194,10 @@ public class FlowReceiverContainerIT {
 		FlowReceiverReference flowReference = flowReceiverContainer.getFlowReceiverReference();
 		assertNotNull(flowReference);
 
-		List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(sempV2Api, queue, 2);
-		assertThat(txFlows, hasSize(1));
-		Long reassignedFlowId = (Long) ((FlowHandle) flowReference.get()).getFlowId();
-		assertEquals( (reassignedFlowId - 2097152), txFlows.get(0).getFlowId());
+		Assertions.assertThat(getTxFlows(sempV2Api, queue, 2))
+				.singleElement()
+				.extracting(MonitorMsgVpnQueueTxFlow::getClientName)
+				.isEqualTo(jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME));
 	}
 
 	@CartesianTest(name = "[{index}] transacted={0} isDurable={1}")
@@ -272,8 +270,7 @@ public class FlowReceiverContainerIT {
 
 			List<MonitorMsgVpnQueueTxFlow> txFlows = getTxFlows(sempV2Api, queue, 2);
 			assertThat(txFlows, hasSize(1));
-			Long flowIdFromBindResponse = (Long) ((FlowHandle) flowReference.get()).getFlowId();
-			assertEquals((flowIdFromBindResponse - 2097152), txFlows.get(0).getFlowId());
+			assertEquals(jcsmpSession.getProperty(JCSMPProperties.CLIENT_NAME), txFlows.get(0).getClientName());
 		} finally {
 			executorService.shutdownNow();
 		}
