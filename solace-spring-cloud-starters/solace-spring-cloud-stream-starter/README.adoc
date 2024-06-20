@@ -965,6 +965,8 @@ See https://docs.solace.com/Messaging/Guaranteed-Msg/Queues.htm#partitioned-queu
 
 == Manual Message Acknowledgment
 
+NOTE: Manual message acknowledgment is not supported for consumers where `transacted` is set to `true`.
+
 Message handlers can disable auto-acknowledgement and manually invoke the acknowledgement callback as follows:
 
 [source,java]
