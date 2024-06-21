@@ -430,12 +430,12 @@ public class FlowReceiverContainer {
 			if (this == o) return true;
 			if (o == null || getClass() != o.getClass()) return false;
 			FlowReceiverReference that = (FlowReceiverReference) o;
-			return Objects.equals(id, that.id) && Objects.equals(flowReceiver, that.flowReceiver) && Objects.equals(transactedSession, that.transactedSession);
+			return Objects.equals(id, that.id);
 		}
 
 		@Override
 		public int hashCode() {
-			return Objects.hash(id, flowReceiver, transactedSession);
+			return Objects.hash(id);
 		}
 	}
 }
