@@ -157,42 +157,23 @@ public class FlowReceiverContainer {
 	 * @see FlowReceiver#receive(int)
 	 */
 	public MessageContainer receive(Integer timeoutInMillis) throws JCSMPException, UnboundFlowReceiverContainerException {
-		final Long expiry = timeoutInMillis != null ? timeoutInMillis + System.currentTimeMillis() : null;
-
-		Integer realTimeout;
 		FlowReceiverReference flowReceiverReference = flowReceiverAtomicReference.get();
 		if (flowReceiverReference == null) {
 			throw new UnboundFlowReceiverContainerException(
 					String.format("Flow receiver container %s is not bound", id));
 		}
 
-		if (expiry != null) {
-			try {
-				realTimeout = Math.toIntExact(expiry - System.currentTimeMillis());
-				if (realTimeout < 0) {
-					realTimeout = 0;
-				}
-			} catch (ArithmeticException e) {
-				LOGGER.debug("Failed to compute real timeout", e);
-				// Always true: expiry - System.currentTimeMillis() < timeoutInMillis
-				// So just set it to 0 (no-wait) if we underflow
-				realTimeout = 0;
-			}
-		} else {
-			realTimeout = null;
-		}
-
 		// The flow's receive shouldn't be locked behind the read lock.
 		// This lets it be interrupt-able if the flow were to be shutdown mid-receive.
 		BytesXMLMessage xmlMessage;
-		if (realTimeout == null) {
+		if (timeoutInMillis == null) {
 			xmlMessage = flowReceiverReference.get().receive();
-		} else if (realTimeout == 0) {
+		} else if (timeoutInMillis == 0) {
 			xmlMessage = flowReceiverReference.get().receiveNoWait();
 		} else {
-			// realTimeout > 0: Wait until timeout
-			// realTimeout < 0: Equivalent to receiveNoWait()
-			xmlMessage = flowReceiverReference.get().receive(realTimeout);
+			// timeoutInMillis > 0: Wait until timeout
+			// timeoutInMillis < 0: Equivalent to receiveNoWait()
+			xmlMessage = flowReceiverReference.get().receive(timeoutInMillis);
 		}
 
 		if (xmlMessage == null) {
