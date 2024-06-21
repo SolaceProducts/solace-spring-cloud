@@ -113,6 +113,10 @@ public class SolaceMessageChannelBinder
 			throw new IllegalArgumentException("Non-batched, transacted consumers are not supported");
 		}
 
+		if (properties.getExtension().isTransacted() && properties.getExtension().isAutoBindErrorQueue()) {
+			throw new IllegalArgumentException("transacted consumers do not support error queues");
+		}
+
 		SolaceConsumerDestination solaceDestination = (SolaceConsumerDestination) destination;
 
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(
@@ -155,6 +159,10 @@ public class SolaceMessageChannelBinder
 																	ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties) {
 		if (!consumerProperties.isBatchMode() && consumerProperties.getExtension().isTransacted()) {
 			throw new IllegalArgumentException("Non-batched, transacted consumers are not supported");
+		}
+
+		if (consumerProperties.getExtension().isTransacted() && consumerProperties.getExtension().isAutoBindErrorQueue()) {
+			throw new IllegalArgumentException("transacted consumers do not support error queues");
 		}
 
 		if (consumerProperties.getConcurrency() > 1) {

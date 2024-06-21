@@ -1080,6 +1080,8 @@ The redelivery may result in message duplication, and the application should be 
 
 === Error Queue Republishing
 
+NOTE: Error queue republishing is not supported for consumers where `transacted` is set to `true`.
+
 First, it must be noted that an Error Queue is different from a https://docs.solace.com/Configuring-and-Managing/Setting-Dead-Msg-Queues.htm[Dead Message Queue (DMQ)]. In particular, a DMQ is used to capture re-routed failed messages as a consequence of Solace PubSub+ messaging features such as TTL expiration or exceeding a message's max redelivery count. Whereas the purpose of an Error Queue is to capture re-routed messages which have been successfully consumed from the message broker, yet cannot be processed by the application.
 
 An Error Queue can be provisioned for a particular consumer group by setting the `autoBindErrorQueue` consumer config option to `true`. This Error Queue is simply another durable queue which is named as per the <<Generated Error Queue Name Syntax>> section. And like the queues used for consumer groups, its endpoint properties can be configured by means of any consumer properties whose names begin with "errorQueue".

@@ -42,6 +42,7 @@ import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jcsmp.transaction.RollbackException;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.AfterEach;
@@ -57,6 +58,7 @@ import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
+import org.springframework.cloud.stream.binder.BinderException;
 import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
@@ -1812,6 +1814,66 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		producerBinding.unbind();
 		consumerBinding.unbind();
+	}
+
+	@CartesianTest(name = "[{index}] channelType={0}")
+	@Execution(ExecutionMode.CONCURRENT)
+	public <T> void testFailConsumerCreateTransactedNonBatched(
+			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType) throws Exception {
+		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = createConsumerInfrastructureUtil(channelType);
+
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.getExtension().setTransacted(true);
+
+		assertThatThrownBy(() ->
+				consumerInfrastructureUtil.createBinding(
+						binder,
+						RandomStringUtils.randomAlphanumeric(10),
+						RandomStringUtils.randomAlphanumeric(10),
+						moduleInputChannel,
+						consumerProperties))
+				.satisfies(e -> {
+					if (channelType.equals(DirectChannel.class)) {
+						assertThat(e).isInstanceOf(BinderException.class);
+					}
+				})
+				.extracting(ExceptionUtils::getRootCause)
+				.asInstanceOf(InstanceOfAssertFactories.throwable(IllegalArgumentException.class))
+				.hasMessage("Non-batched, transacted consumers are not supported");
+	}
+
+	@CartesianTest(name = "[{index}] channelType={0}")
+	@Execution(ExecutionMode.CONCURRENT)
+	public <T> void testFailConsumerCreateTransactedAutoBindErrorQueue(
+			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType) throws Exception {
+		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = createConsumerInfrastructureUtil(channelType);
+
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setBatchMode(true); // transactions only supported in batch mode
+		consumerProperties.getExtension().setAutoBindErrorQueue(true);
+		consumerProperties.getExtension().setTransacted(true);
+
+		assertThatThrownBy(() ->
+				consumerInfrastructureUtil.createBinding(
+						binder,
+						RandomStringUtils.randomAlphanumeric(10),
+						RandomStringUtils.randomAlphanumeric(10),
+						moduleInputChannel,
+						consumerProperties))
+				.satisfies(e -> {
+					if (channelType.equals(DirectChannel.class)) {
+						assertThat(e).isInstanceOf(BinderException.class);
+					}
+				})
+				.extracting(ExceptionUtils::getRootCause)
+				.asInstanceOf(InstanceOfAssertFactories.throwable(IllegalArgumentException.class))
+				.hasMessage("transacted consumers do not support error queues");
 	}
 
 
