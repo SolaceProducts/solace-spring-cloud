@@ -187,6 +187,7 @@ class SolaceAckUtilIT {
     if (flowReceiverContainerReference.compareAndSet(null, spy(new FlowReceiverContainer(
         jcsmpSession,
         JCSMPFactory.onlyInstance().createQueue(queue.getName()),
+        false,
         new EndpointProperties(),
         new ConsumerFlowProperties())))) {
       flowReceiverContainerReference.get().bind();

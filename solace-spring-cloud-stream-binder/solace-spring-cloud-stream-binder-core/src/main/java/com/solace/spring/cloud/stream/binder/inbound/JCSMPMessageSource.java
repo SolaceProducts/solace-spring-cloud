@@ -180,7 +180,11 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			return null;
 		}
 
-		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createBatchCallback(batchedMessages.get());
+		AcknowledgmentCallback acknowledgmentCallback = consumerProperties.getExtension().isTransacted() ?
+				ackCallbackFactory.createTransactedBatchCallback(batchedMessages.get(),
+						flowReceiverContainer.getTransactedSession()) :
+				ackCallbackFactory.createBatchCallback(batchedMessages.get());
+
 		try {
 			return xmlMessageMapper.mapBatchMessage(batchedMessages.get()
 					.stream()
@@ -233,6 +237,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 					flowReceiverContainer = new FlowReceiverContainer(
 							jcsmpSession,
 							endpoint,
+							consumerProperties.getExtension().isTransacted(),
 							endpointProperties,
 							consumerFlowProperties);
 					this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();

@@ -5,8 +5,8 @@ import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import com.solacesystems.jcsmp.XMLMessage;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.lang.Nullable;
 
@@ -17,7 +17,7 @@ class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
   private boolean acknowledged = false;
   private boolean autoAckEnabled = true;
 
-  private static final Log logger = LogFactory.getLog(JCSMPAcknowledgementCallback.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(JCSMPAcknowledgementCallback.class);
 
   JCSMPAcknowledgementCallback(MessageContainer messageContainer,
       FlowReceiverContainer flowReceiverContainer,
@@ -31,11 +31,8 @@ class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
   public void acknowledge(Status status) {
     // messageContainer.isAcknowledged() might be async set which is why we also need a local ack variable
     if (acknowledged || messageContainer.isAcknowledged()) {
-      if (logger.isDebugEnabled()) {
-        logger.debug(
-            String.format("%s %s is already acknowledged", XMLMessage.class.getSimpleName(),
-                messageContainer.getMessage().getMessageId()));
-      }
+      LOGGER.debug("{} {} is already acknowledged", XMLMessage.class.getSimpleName(),
+              messageContainer.getMessage().getMessageId());
       return;
     }
 
@@ -52,11 +49,9 @@ class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
           }
           break;
         case REQUEUE:
-          if (logger.isDebugEnabled()) {
-            logger.debug(String.format("%s %s: Will be re-queued onto queue %s",
-                XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
-                flowReceiverContainer.getEndpointName()));
-          }
+          LOGGER.debug("{} {}: Will be re-queued onto queue {}",
+              XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
+              flowReceiverContainer.getEndpointName());
           flowReceiverContainer.requeue(messageContainer);
       }
     } catch (SolaceAcknowledgmentException e) {
@@ -80,24 +75,12 @@ class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
       return false;
     }
 
-    if (logger.isDebugEnabled()) {
-      logger.debug(String.format("%s %s: Will be republished onto error queue %s",
-          XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
-          errorQueueInfrastructure.getErrorQueueName()));
-    }
+    LOGGER.debug("{} {}: Will be republished onto error queue {}",
+            XMLMessage.class.getSimpleName(), messageContainer.getMessage().getMessageId(),
+            errorQueueInfrastructure.getErrorQueueName());
 
      try {
-       //Check to prevent message from publishing to errorQueue and also redelivered by broker
-       if (messageContainer.isStale()) {
-         throw new IllegalStateException(
-             String.format("Cannot republish failed message container %s " +
-                     "(XMLMessage %s) to error queue %s. Message is stale and will be redelivered.",
-                 messageContainer.getId(), messageContainer.getMessage().getMessageId(),
-                 errorQueueInfrastructure.getErrorQueueName()), null);
-       }
-
-      errorQueueInfrastructure.createCorrelationKey(messageContainer, flowReceiverContainer)
-          .handleError();
+      errorQueueInfrastructure.createCorrelationKey(messageContainer, flowReceiverContainer).handleError();
     } catch (Exception e) {
       throw new SolaceAcknowledgmentException(
           String.format("Failed to send XMLMessage %s to error queue",

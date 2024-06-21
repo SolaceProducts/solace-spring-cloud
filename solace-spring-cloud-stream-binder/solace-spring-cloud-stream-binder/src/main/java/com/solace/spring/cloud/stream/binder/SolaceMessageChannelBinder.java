@@ -10,8 +10,8 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties
 import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
-import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisioner;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
@@ -109,6 +109,10 @@ public class SolaceMessageChannelBinder
 	@Override
 	protected MessageProducer createConsumerEndpoint(ConsumerDestination destination, String group,
 													 ExtendedConsumerProperties<SolaceConsumerProperties> properties) {
+		if (!properties.isBatchMode() && properties.getExtension().isTransacted()) {
+			throw new IllegalArgumentException("Non-batched, transacted consumers are not supported");
+		}
+
 		SolaceConsumerDestination solaceDestination = (SolaceConsumerDestination) destination;
 
 		JCSMPInboundChannelAdapter adapter = new JCSMPInboundChannelAdapter(
@@ -149,6 +153,10 @@ public class SolaceMessageChannelBinder
 	protected PolledConsumerResources createPolledConsumerResources(String name, String group,
 																	ConsumerDestination destination,
 																	ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties) {
+		if (!consumerProperties.isBatchMode() && consumerProperties.getExtension().isTransacted()) {
+			throw new IllegalArgumentException("Non-batched, transacted consumers are not supported");
+		}
+
 		if (consumerProperties.getConcurrency() > 1) {
 			logger.warn("Polled consumers do not support concurrency > 1, it will be ignored...");
 		}

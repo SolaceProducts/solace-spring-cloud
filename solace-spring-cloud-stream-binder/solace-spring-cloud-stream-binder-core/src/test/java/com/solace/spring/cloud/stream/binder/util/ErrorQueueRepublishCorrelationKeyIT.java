@@ -287,6 +287,7 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 		if (flowReceiverContainerReference.compareAndSet(null, Mockito.spy(new FlowReceiverContainer(
 				jcsmpSession,
 				JCSMPFactory.onlyInstance().createQueue(queue.getName()),
+				false,
 				new EndpointProperties(),
 				new ConsumerFlowProperties())))) {
 			flowReceiverContainerReference.get().bind();

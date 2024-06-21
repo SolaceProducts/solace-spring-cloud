@@ -4,6 +4,12 @@ import com.solacesystems.jcsmp.EndpointProperties;
 
 public class SolaceCommonProperties {
 	/**
+	 * When set to true, messages will be received/sent using local transactions.
+	 * The maximum transaction size is 256 messages.
+	 */
+	private boolean transacted = false;
+
+	/**
 	 * Whether to provision durable queues for non-anonymous consumer groups.
 	 * This should only be set to false if you have externally pre-provisioned the required queue on the message broker.
 	 */
@@ -44,6 +50,14 @@ public class SolaceCommonProperties {
 	 */
 	private Boolean queueRespectsMsgTtl = null;
 	// ------------------------
+
+	public boolean isTransacted() {
+		return transacted;
+	}
+
+	public void setTransacted(boolean transacted) {
+		this.transacted = transacted;
+	}
 
 	public boolean isProvisionDurableQueue() {
 		return provisionDurableQueue;

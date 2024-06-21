@@ -23,8 +23,10 @@ import org.assertj.core.api.ThrowingConsumer;
 import org.springframework.boot.actuate.health.NamedContributor;
 import org.springframework.boot.actuate.health.Status;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
+import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
+import org.springframework.integration.channel.AbstractSubscribableChannel;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.support.ErrorMessage;
@@ -117,6 +119,7 @@ public class SolaceSpringCloudStreamAssertions {
 	 * <p>Returns a function to evaluate that a consumed Solace message is valid.</p>
 	 * <p>Should be used as a parameter of
 	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[]) satisfies(ThrowingConsumer[])}.</p>
+	 * @param channelType type of consumer input channel
 	 * @param consumerProperties consumer properties
 	 * @param expectedMessages the messages against which this message will be evaluated against.
 	 *                            Should have a size of exactly 1 if this consumer is not in batch mode.
@@ -124,21 +127,24 @@ public class SolaceSpringCloudStreamAssertions {
 	 * @return message evaluator
 	 */
 	public static ThrowingConsumer<Message<?>> isValidMessage(
+			Class<?> channelType,
 			ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
 			List<Message<?>> expectedMessages) {
-		return isValidMessage(consumerProperties, expectedMessages.toArray(new Message<?>[0]));
+		return isValidMessage(channelType, consumerProperties, expectedMessages.toArray(new Message<?>[0]));
 	}
 
 	/**
-	 * Same as {@link #isValidMessage(ExtendedConsumerProperties, List)}.
+	 * Same as {@link #isValidMessage(Class, ExtendedConsumerProperties, List)}.
+	 * @param channelType type of consumer input channel
 	 * @param consumerProperties consumer properties
 	 * @param expectedMessages the messages against which this message will be evaluated against.
 	 *                            Should have a size of exactly 1 if this consumer is not in batch mode.
 	 * @see org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[])
-	 * @see #isValidMessage(ExtendedConsumerProperties, List)
+	 * @see #isValidMessage(Class, ExtendedConsumerProperties, List)
 	 * @return message evaluator
 	 */
 	public static ThrowingConsumer<Message<?>> isValidMessage(
+			Class<?> channelType,
 			ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
 			Message<?>... expectedMessages) {
 		// content-type header may be a String or MimeType
@@ -149,10 +155,23 @@ public class SolaceSpringCloudStreamAssertions {
 				.map(convertToMimeType)
 				.orElse(null);
 
+		if (!AbstractSubscribableChannel.class.isAssignableFrom(channelType) &&
+				!PollableSource.class.isAssignableFrom(channelType)) {
+			throw new IllegalArgumentException("Invalid channel type: " + channelType);
+		}
+
 		return message -> {
 			if (consumerProperties.isBatchMode()) {
+				if (consumerProperties.getExtension().isTransacted() &&
+						AbstractSubscribableChannel.class.isAssignableFrom(channelType)) {
+					assertThat(message.getHeaders())
+							.doesNotContainKey(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK);
+				} else {
+					assertThat(message.getHeaders())
+							.containsKey(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK);
+				}
+
 				assertThat(message.getHeaders())
-						.containsKey(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK)
 						.containsKey(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT)
 						.extractingByKey(SolaceBinderHeaders.BATCHED_HEADERS)
 						.isNotNull()
@@ -210,8 +229,8 @@ public class SolaceSpringCloudStreamAssertions {
 	 * <p>Returns a function to evaluate that a consumed Solace message is valid.</p>
 	 * <p>Should be used as a parameter of
 	 * {@link org.assertj.core.api.AbstractAssert#satisfies(ThrowingConsumer[]) satisfies(ThrowingConsumer[])}.</p>
+	 * @param channelType type of consumer input channel
 	 * @param consumerProperties consumer properties
-	 * @param pollableConsumer true if consumer is a pollable consumer
 	 * @param expectRawMessageHeader true if the error message contains the raw XMLMessage
 	 * @param expectedMessages the messages against which this message will be evaluated against.
 	 *                            Should have a size of exactly 1 if this consumer is not in batch mode.
@@ -219,8 +238,8 @@ public class SolaceSpringCloudStreamAssertions {
 	 * @return message evaluator
 	 */
 	public static ThrowingConsumer<Message<?>> isValidConsumerErrorMessage(
+			Class<?> channelType,
 			ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties,
-			boolean pollableConsumer,
 			boolean expectRawMessageHeader,
 			List<Message<?>> expectedMessages) {
 		return errorMessage -> {
@@ -229,13 +248,14 @@ public class SolaceSpringCloudStreamAssertions {
 					.asInstanceOf(InstanceOfAssertFactories.type(ErrorMessage.class))
 					.extracting(ErrorMessage::getOriginalMessage)
 					.isNotNull()
-					.satisfies(isValidMessage(consumerProperties, expectedMessages))
+					.satisfies(isValidMessage(channelType, consumerProperties, expectedMessages))
 					.extracting(Message::getHeaders)
 					.asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
 					.hasEntrySatisfying(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, deliveryAttempt ->
 							assertThat(deliveryAttempt)
 									.asInstanceOf(InstanceOfAssertFactories.ATOMIC_INTEGER)
-									.hasValue(pollableConsumer ? 0 : consumerProperties.getMaxAttempts()));
+									.hasValue(PollableSource.class.isAssignableFrom(channelType) ?
+											0 : consumerProperties.getMaxAttempts()));
 
 			if (expectRawMessageHeader) {
 				if (consumerProperties.isBatchMode()) {

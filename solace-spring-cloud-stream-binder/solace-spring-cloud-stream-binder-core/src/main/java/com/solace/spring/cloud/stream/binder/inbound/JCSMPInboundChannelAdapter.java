@@ -14,6 +14,7 @@ import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionExcepti
 import com.solacesystems.jcsmp.*;
 import com.solacesystems.jcsmp.XMLMessage.Outcome;
 import com.solacesystems.jcsmp.impl.JCSMPBasicSession;
+import com.solacesystems.jcsmp.transaction.RollbackException;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -142,6 +143,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
             FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(
                     jcsmpSession,
                     endpoint,
+                    consumerProperties.getExtension().isTransacted(),
                     endpointProperties,
                     consumerFlowProperties);
 
@@ -188,7 +190,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
             postStart.accept(endpoint);
         }
     }
-  
+
     private ExecutorService buildThreadPool(int concurrency, String bindingName) {
         ThreadFactory threadFactory = new CustomizableThreadFactory("solace-scst-consumer-" + bindingName);
         return Executors.newFixedThreadPool(concurrency, threadFactory);
@@ -388,7 +390,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
             logger.warn(String.format("Failed to consume a message from destination %s - attempt %s",
                     queueName, context.getRetryCount()));
             for (Throwable nestedThrowable : ExceptionUtils.getThrowableList(throwable)) {
-                if (nestedThrowable instanceof SolaceMessageConversionException) {
+                if (nestedThrowable instanceof SolaceMessageConversionException ||
+                        nestedThrowable instanceof RollbackException) {
                     // Do not retry if these exceptions are thrown
                     context.setExhaustedOnly();
                     break;

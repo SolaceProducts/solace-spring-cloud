@@ -268,6 +268,14 @@ Only applicable when `batchMode` is `false`.
 +
 Default: `100`
 
+transacted::
+When set to `true`, messages will be received using local transactions.
++
+Default: `false`
++
+NOTE: The maximum transaction size is 256 messages. +
+The size of the transaction is controlled by the batched message's size. See <<Batch Consumers>> for more info.
+
 batchMaxSize::
 The maximum number of messages per batch. +
 Only applicable when `batchMode` is `true`.
@@ -864,8 +872,15 @@ Consumer<Message<List<Payload>>> input() {
 <1> A batch of messages is really just a single Spring `Message` whose payload is a list of individual message payloads.
 <2> The `solace_scst_batchedHeaders` message header contains the consolidated list of message headers for each of the individual messages in the batch.
 
-IMPORTANT: Message batches are non-transacted. A batch that this binder creates is fundamentally a collection of individual messages and must not be treated as a single consistent unit.
+.Transacted Batch Consumers
+[TIP]
+====
+By default, batched messages are non-transacted (i.e. `transacted` is set to `false`). When in this mode, a batch created by this binder is fundamentally a collection of standalone messages. Where messages in the batch have no relationship between each other.
 
+When `transacted` is set to `true`, a local transaction is used to process the batched message. The batch of messages is then automatically committed (or is rolled back on errors) when the message handler returns.
+====
+
+.Resolving Batch Message Conversion Issues
 [TIP]
 ====
 If the Spring Cloud Stream framework fails to convert the batch message, consider setting one of the following consumer config options:
@@ -949,6 +964,8 @@ As for consuming messages from partitioned queues, this is handled transparently
 See https://docs.solace.com/Messaging/Guaranteed-Msg/Queues.htm#partitioned-queues[Partitioned Queues] for more.
 
 == Manual Message Acknowledgment
+
+NOTE: Manual message acknowledgment is not supported for consumers where `transacted` is set to `true`.
 
 Message handlers can disable auto-acknowledgement and manually invoke the acknowledgement callback as follows:
 
