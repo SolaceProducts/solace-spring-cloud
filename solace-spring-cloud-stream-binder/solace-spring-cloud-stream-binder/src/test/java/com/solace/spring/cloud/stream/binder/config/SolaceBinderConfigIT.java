@@ -44,7 +44,7 @@ public class SolaceBinderConfigIT {
 		jcsmpProperties.setProperty(JCSMPProperties.CLIENT_NAME, clientName);
 
 		binderConfiguration = new SolaceMessageChannelBinderConfiguration(jcsmpProperties,
-				new SolaceExtendedBindingProperties(), null);
+				new SolaceExtendedBindingProperties(), null, null);
 		AutowireCapableBeanFactory beanFactory = applicationContext.getAutowireCapableBeanFactory();
 		beanFactory.autowireBean(binderConfiguration);
 		binderConfiguration = (SolaceMessageChannelBinderConfiguration) beanFactory.initializeBean(binderConfiguration,

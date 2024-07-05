@@ -6,6 +6,9 @@ import com.solace.spring.cloud.stream.binder.health.contributors.SolaceBinderHea
 import com.solace.spring.cloud.stream.binder.health.handlers.SolaceSessionEventHandler;
 import com.solace.spring.cloud.stream.binder.health.indicators.SessionHealthIndicator;
 import com.solace.spring.cloud.stream.binder.properties.SolaceSessionHealthProperties;
+import com.solacesystems.jcsmp.JCSMPProperties;
+import com.solacesystems.jcsmp.SolaceSessionOAuth2TokenProvider;
+import jakarta.annotation.Nullable;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.springframework.boot.actuate.autoconfigure.health.ConditionalOnEnabledHealthIndicator;
@@ -40,11 +43,14 @@ public class SolaceHealthIndicatorsConfiguration {
 	}
 
 	@Bean
-	public SolaceSessionEventHandler solaceSessionEventHandler(SolaceBinderHealthContributor healthContributor) {
+	public SolaceSessionEventHandler solaceSessionEventHandler(
+			JCSMPProperties jcsmpProperties,
+			@Nullable  SolaceSessionOAuth2TokenProvider solaceSessionOAuth2TokenProvider,
+			SolaceBinderHealthContributor healthContributor) {
 		if (logger.isDebugEnabled()) {
 			logger.debug("Creating Solace Session Event Handler for monitoring Health");
 		}
-		return new SolaceSessionEventHandler(healthContributor.getSolaceSessionHealthIndicator());
+		return new SolaceSessionEventHandler(jcsmpProperties, solaceSessionOAuth2TokenProvider, healthContributor.getSolaceSessionHealthIndicator());
 	}
 
 }
