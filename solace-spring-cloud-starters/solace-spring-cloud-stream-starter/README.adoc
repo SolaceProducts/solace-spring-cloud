@@ -400,6 +400,8 @@ When set to `true`, messages will be delivered using local transactions.
 +
 Default: `false`
 +
+WARNING: A transacted producer cannot be used by multiple threads.
++
 NOTE: The maximum transaction size is 256 messages. +
 The size of the transaction is 1 when the binding receives a regular Spring message. Otherwise, if it receives a <<Batch Producers, batched message>>, then the transaction size is equal to the batch size.
 
