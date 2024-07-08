@@ -5,7 +5,7 @@ on:
     workflows:
       - Test
     branches:
-      - 'stage-*'
+      - master
     types:
       - completed
 
