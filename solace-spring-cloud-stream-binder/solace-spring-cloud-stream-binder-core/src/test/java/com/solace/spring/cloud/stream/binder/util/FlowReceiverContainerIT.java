@@ -773,7 +773,7 @@ public class FlowReceiverContainerIT {
 
 			logger.info(String.format("Disabling egress to queue %s", queue.getName()));
 			sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false),
-					null);
+					null, null);
 			retryAssert(() -> assertFalse(sempV2Api.monitor()
 					.getMsgVpnQueue(vpnName, queue.getName(), null)
 					.getData()
@@ -784,7 +784,7 @@ public class FlowReceiverContainerIT {
 
 			logger.info(String.format("Enabling egress to queue %s", queue.getName()));
 			sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true),
-					null);
+					null, null);
 			retryAssert(() -> assertTrue(sempV2Api.monitor()
 					.getMsgVpnQueue(vpnName, queue.getName(), null)
 					.getData()
@@ -871,7 +871,7 @@ public class FlowReceiverContainerIT {
 
 		logger.info(String.format("Disabling egress to queue %s", queue.getName()));
 		sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false),
-				null);
+				null, null);
 		retryAssert(() -> assertFalse(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, queue.getName(), null)
 				.getData()
@@ -881,7 +881,7 @@ public class FlowReceiverContainerIT {
 
 		logger.info(String.format("Enabling egress to queue %s", queue.getName()));
 		sempV2Api.config().updateMsgVpnQueue(vpnName, queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true),
-				null);
+				null, null);
 		retryAssert(() -> assertTrue(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, queue.getName(), null)
 				.getData()

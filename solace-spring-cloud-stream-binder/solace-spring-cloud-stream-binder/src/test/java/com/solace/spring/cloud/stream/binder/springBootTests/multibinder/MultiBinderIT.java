@@ -1,4 +1,4 @@
-package com.solace.spring.cloud.stream.binder.springBootTests;
+package com.solace.spring.cloud.stream.binder.springBootTests.multibinder;
 
 import com.solace.test.integration.testcontainer.PubSubPlusContainer;
 import com.solacesystems.jcsmp.JCSMPException;

@@ -976,7 +976,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		// Minimize message pre-fetch since we're not testing JCSMP, and this influences the test counters
 		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue()
-				.maxDeliveredUnackedMsgsPerFlow((long) consumerProperties.getExtension().getBatchMaxSize()), null);
+				.maxDeliveredUnackedMsgsPerFlow((long) consumerProperties.getExtension().getBatchMaxSize()), null, null);
 		retryAssert(() -> assertThat(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, queue0, null)
 				.getData()
@@ -1023,11 +1023,11 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
 		logger.info(String.format("Disabling egress to queue %s", queue0));
-		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue().egressEnabled(false), null);
+		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue().egressEnabled(false), null, null);
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
 		logger.info(String.format("Enabling egress to queue %s", queue0));
-		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue().egressEnabled(true), null);
+		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue().egressEnabled(true), null, null);
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
 		logger.info("Stopping producer");
@@ -1103,7 +1103,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		// Minimize message pre-fetch since we're not testing JCSMP, and this influences the test counters
 		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue()
-				.maxDeliveredUnackedMsgsPerFlow((long) consumerProperties.getExtension().getBatchMaxSize()), null);
+				.maxDeliveredUnackedMsgsPerFlow((long) consumerProperties.getExtension().getBatchMaxSize()), null, null);
 		retryAssert(() -> assertThat(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, queue0, null)
 				.getData()

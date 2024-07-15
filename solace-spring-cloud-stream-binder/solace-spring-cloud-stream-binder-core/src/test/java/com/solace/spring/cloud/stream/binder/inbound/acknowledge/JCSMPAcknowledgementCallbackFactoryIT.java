@@ -193,7 +193,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 
 		logger.info(String.format("Disabling egress for queue %s", queue.getName()));
 		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
-				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false), null);
+				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false), null, null);
 		retryAssert(() -> assertFalse(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, queue.getName(), null)
 				.getData()
@@ -214,7 +214,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 
 		logger.info(String.format("Enabling egress for queue %s", queue.getName()));
 		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
-				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true), null);
+				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true), null, null);
 		retryAssert(() -> assertTrue(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, queue.getName(), null)
 				.getData()
@@ -277,7 +277,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 		logger.info(String.format("Disabling ingress for error queue %s",
 				errorQueueInfrastructure.getErrorQueueName()));
 		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
-				errorQueueInfrastructure.getErrorQueueName(), new ConfigMsgVpnQueue().ingressEnabled(false), null);
+				errorQueueInfrastructure.getErrorQueueName(), new ConfigMsgVpnQueue().ingressEnabled(false), null, null);
 		retryAssert(() -> assertFalse(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, errorQueueInfrastructure.getErrorQueueName(), null)
 				.getData()
@@ -349,7 +349,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 
 		logger.info(String.format("Disabling egress for queue %s", queue.getName()));
 		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
-				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false), null);
+				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false), null, null);
 		retryAssert(() -> assertFalse(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, queue.getName(), null)
 				.getData()
@@ -370,7 +370,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 
 		logger.info(String.format("Enabling egress for queue %s", queue.getName()));
 		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
-				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true), null);
+				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true), null, null);
 		retryAssert(() -> assertTrue(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, queue.getName(), null)
 				.getData()

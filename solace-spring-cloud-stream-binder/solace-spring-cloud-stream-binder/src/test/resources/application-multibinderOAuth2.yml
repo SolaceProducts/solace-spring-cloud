@@ -1,0 +1,83 @@
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          solace1-oauth2-client:
+            provider: solace1-auth-server
+            client-id: solclient_oauth
+            client-secret: j6gWnw13iqzJfFZzlqzaQabQgXza4oHl
+            authorization-grant-type: client_credentials
+            scope: openid
+          solace2-oauth2-client:
+            provider: solace2-auth-server
+            client-id: solclient_oauth
+            client-secret: j6gWnw13iqzJfFZzlqzaQabQgXza4oHl
+            authorization-grant-type: client_credentials
+            scope: openid
+        provider:
+          solace1-auth-server:
+            token-uri: https://localhost:10443/auth/realms/solace-oauth-resource-server1/protocol/openid-connect/token
+          solace2-auth-server:
+            token-uri: https://localhost:10443/auth/realms/solace-oauth-resource-server2/protocol/openid-connect/token
+
+  cloud:
+    function:
+      definition: "consume;otherConsume"
+    stream:
+      binders:
+        solace1:
+          type: solace
+          environment:
+            solace:
+              java:
+                host: placeholder
+                msgVpn: OAUTH_1
+                oauth2ClientRegistrationId: solace1-oauth2-client
+                apiProperties:
+                  SSL_VALIDATE_CERTIFICATE: false ## Because using self-signed certificate
+                  AUTHENTICATION_SCHEME: AUTHENTICATION_SCHEME_OAUTH2
+
+        solace2:
+          type: solace
+          environment:
+            solace:
+              java:
+                host: placeholder
+                msgVpn: OAUTH_2
+                oauth2ClientRegistrationId: solace2-oauth2-client
+                apiProperties:
+                  SSL_VALIDATE_CERTIFICATE: false ## Because using self-signed certificate
+                  AUTHENTICATION_SCHEME: AUTHENTICATION_SCHEME_OAUTH2
+
+      bindings:
+        consume-in-0:
+          destination: MultiBinder/Queue/1
+          group: myConsumerGroup
+          binder: solace1
+        otherConsume-in-0:
+          destination: MultiBinder/Queue/2
+          group: myConsumerGroup
+          binder: solace2
+      default-binder: solace1
+
+#      solace:
+#        default:
+#          consumer:
+#            add-destination-as-subscription-to-queue: false
+#            provision-durable-queue: false
+#          producer:
+#            provision-durable-queue: false
+
+management:
+  endpoint:
+    health:
+      show-components: always
+      show-details: always
+  endpoints:
+    web: # Actuator web endpoint configuration. For more info: https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html#actuator.endpoints
+      exposure:
+        include: 'health,metrics'
+  health:
+    binders:
+      enabled: true

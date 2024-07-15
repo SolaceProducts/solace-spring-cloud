@@ -12,17 +12,6 @@ public class SolaceSessionEventHandler extends DefaultSolaceOAuth2SessionEventHa
 	private final SessionHealthIndicator sessionHealthIndicator;
 	private static final Log logger = LogFactory.getLog(SolaceSessionEventHandler.class);
 
-	/*public SolaceSessionEventHandler(SessionHealthIndicator sessionHealthIndicator) {
-    this.sessionHealthIndicator = sessionHealthIndicator;
-	}*/
-
-	/**
-	 * Constructs a new DefaultSolaceOAuth2SessionEventHandler with the provided JCSMP properties and
-	 * OAuth2 token provider.
-	 *
-	 * @param jcsmpProperties                  The JCSMP properties.
-	 * @param solaceSessionOAuth2TokenProvider The OAuth2 token provider.
-	 */
 	public SolaceSessionEventHandler(JCSMPProperties jcsmpProperties,
 			SolaceSessionOAuth2TokenProvider solaceSessionOAuth2TokenProvider,
 			SessionHealthIndicator sessionHealthIndicator) {

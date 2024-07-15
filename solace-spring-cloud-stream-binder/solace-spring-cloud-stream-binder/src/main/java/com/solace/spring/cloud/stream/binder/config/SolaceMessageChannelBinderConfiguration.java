@@ -56,19 +56,19 @@ public class SolaceMessageChannelBinderConfiguration {
 
 	@PostConstruct
 	private void initSession() throws JCSMPException {
-		JCSMPProperties jcsmpProperties = (JCSMPProperties) this.jcsmpProperties.clone();
-		jcsmpProperties.setProperty(JCSMPProperties.CLIENT_INFO_PROVIDER, new SolaceBinderClientInfoProvider());
+		JCSMPProperties solaceJcsmpProperties = (JCSMPProperties) this.jcsmpProperties.clone();
+		solaceJcsmpProperties.setProperty(JCSMPProperties.CLIENT_INFO_PROVIDER, new SolaceBinderClientInfoProvider());
 		try {
 			if (solaceSessionEventHandler != null) {
 				if (logger.isDebugEnabled()) {
 					logger.debug("Registering Solace Session Event handler on session");
 				}
 
-				SpringJCSMPFactory springJCSMPFactory = new SpringJCSMPFactory(jcsmpProperties, solaceSessionOAuth2TokenProvider);
+				SpringJCSMPFactory springJCSMPFactory = new SpringJCSMPFactory(solaceJcsmpProperties, solaceSessionOAuth2TokenProvider);
 				context = springJCSMPFactory.createContext(new ContextProperties());
 				jcsmpSession = springJCSMPFactory.createSession(context, solaceSessionEventHandler);
 			} else {
-				SpringJCSMPFactory springJCSMPFactory = new SpringJCSMPFactory(jcsmpProperties, solaceSessionOAuth2TokenProvider);
+				SpringJCSMPFactory springJCSMPFactory = new SpringJCSMPFactory(solaceJcsmpProperties, solaceSessionOAuth2TokenProvider);
 				jcsmpSession = springJCSMPFactory.createSession();
 			}
 			logger.info(String.format("Connecting JCSMP session %s", jcsmpSession.getSessionName()));
