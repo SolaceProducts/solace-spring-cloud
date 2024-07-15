@@ -9,7 +9,6 @@ import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisio
 import com.solacesystems.jcsmp.Context;
 import com.solacesystems.jcsmp.ContextProperties;
 import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.SolaceSessionOAuth2TokenProvider;
