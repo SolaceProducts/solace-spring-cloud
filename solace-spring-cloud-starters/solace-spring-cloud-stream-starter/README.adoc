@@ -175,6 +175,11 @@ Additional session properties not available under the usual `solace.java` prefix
 See https://github.com/SolaceProducts/solace-spring-boot/tree/master/solace-spring-boot-starters/solace-java-spring-boot-starter#updating-your-application-properties[JCSMP Spring Boot Auto-Configuration documentation] for more info about `solace.java.apiProperties`.
 ====
 
+[TIP]
+====
+The Solace session can be configured to use OAuth2 authentication. See https://github.com/SolaceDev/solace-spring-boot/tree/master/solace-spring-boot-starters/solace-java-spring-boot-starter#using-oauth2-authentication-scheme-with-solace-java-api[JCSMP Spring Boot: Using OAuth2 Authentication Scheme] for more info.
+====
+
 ==== Solace Consumer Properties
 
 The following properties are available for Solace consumers only and must be prefixed with `spring.cloud.stream.solace.bindings.&lt;bindingName&gt;.consumer.` where `bindingName` looks something like `functionName-in-0` as defined in https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_functional_binding_names[Functional Binding Names].
