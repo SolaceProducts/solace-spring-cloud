@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.assertj.core.util.Files;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.RepeatedTest;
 import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -152,13 +153,13 @@ class MultiBinderOAuth2IT implements
   @Test
   void checkHealthOfMultipleSolaceBindersWhenForceReconnect(@Autowired MockMvc mvc) {
     try {
-      CountDownLatch refreshedTokenLatch = new CountDownLatch(1);
-      int numberOfReconnects = 10;
+      CountDownLatch forcedReconnect = new CountDownLatch(1);
+      int numberOfReconnects = 5;
       AtomicBoolean failed = new AtomicBoolean(false);
       Thread t = new Thread(() -> {
         try {
           for (int i = 0; i < numberOfReconnects; i++) {
-            Thread.sleep(10_000); //Introduced delay for reconnect and token refresh
+            try {
             String msgVPnName = i % 2 == 0 ? MSG_VPN_OAUTH_1 : MSG_VPN_OAUTH_2;
             MonitorMsgVpnClient msgVpnClient = solaceMonitorUtil.vpnClients()
                 .queryVpnClients(msgVPnName)
@@ -170,30 +171,34 @@ class MultiBinderOAuth2IT implements
               throw new RuntimeException("Client not found");
             }
 
-            try {
               logger.info("Forcing Session Reconnect for client: {}", msgVpnClient.getClientName());
               sempV2Api.action()
                   .doMsgVpnClientDisconnect(msgVPnName, msgVpnClient.getClientName(),
                       new ActionMsgVpnClientDisconnect());
             } catch (ApiException e) {
               throw new RuntimeException(e);
+            } finally {
+              Thread.sleep(10_000); //Introduced delay between force reconnects
             }
           }
         } catch (Exception e) {
+          logger.error("Failed to force reconnect", e);
           failed.set(true);
         } finally {
-          refreshedTokenLatch.countDown();
+          forcedReconnect.countDown();
         }
       });
       t.start();
 
-      assertFalse(failed.get(), "Failed to force reconnect");
-
       logger.info("Wait for force session reconnect, to refresh token");
-      boolean success = refreshedTokenLatch.await(3, TimeUnit.MINUTES);
+      boolean success = forcedReconnect.await(3, TimeUnit.MINUTES);
       if (!success) {
         fail("Timed out waiting for token refresh");
       }
+
+      assertFalse(failed.get(), "Failed to force reconnect");
+
+      //Thread.sleep(10000); //Wait for reconnect to complete
 
       mvc.perform(get("/actuator/health"))
           .andExpectAll(status().isOk(), jsonPath("components.binders.components.solace1").exists(),

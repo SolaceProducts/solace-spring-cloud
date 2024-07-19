@@ -33,6 +33,9 @@ spring:
               java:
                 host: placeholder
                 msgVpn: OAUTH_1
+                connectRetries: 10
+                reconnectRetries: 10
+                reconnectRetryWaitInMillis: 2000
                 oauth2ClientRegistrationId: solace1-oauth2-client
                 apiProperties:
                   SSL_VALIDATE_CERTIFICATE: false ## Because using self-signed certificate
@@ -45,6 +48,9 @@ spring:
               java:
                 host: placeholder
                 msgVpn: OAUTH_2
+                connectRetries: 10
+                reconnectRetries: 10
+                reconnectRetryWaitInMillis: 2000
                 oauth2ClientRegistrationId: solace2-oauth2-client
                 apiProperties:
                   SSL_VALIDATE_CERTIFICATE: false ## Because using self-signed certificate
