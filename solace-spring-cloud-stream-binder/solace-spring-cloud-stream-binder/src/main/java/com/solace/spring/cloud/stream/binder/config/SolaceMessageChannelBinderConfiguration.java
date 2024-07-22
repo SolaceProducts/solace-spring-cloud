@@ -40,6 +40,8 @@ public class SolaceMessageChannelBinderConfiguration {
 
 	private JCSMPSession jcsmpSession;
 	private Context context;
+
+	@Nullable
 	private SolaceSessionOAuth2TokenProvider	solaceSessionOAuth2TokenProvider;
 
 	private static final Log logger = LogFactory.getLog(SolaceMessageChannelBinderConfiguration.class);

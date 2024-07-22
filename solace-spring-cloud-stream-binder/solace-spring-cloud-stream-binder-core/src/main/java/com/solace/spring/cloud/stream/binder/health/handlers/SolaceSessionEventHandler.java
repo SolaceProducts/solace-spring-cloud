@@ -7,13 +7,14 @@ import com.solacesystems.jcsmp.SessionEventArgs;
 import com.solacesystems.jcsmp.SolaceSessionOAuth2TokenProvider;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.lang.Nullable;
 
 public class SolaceSessionEventHandler extends DefaultSolaceOAuth2SessionEventHandler {
 	private final SessionHealthIndicator sessionHealthIndicator;
 	private static final Log logger = LogFactory.getLog(SolaceSessionEventHandler.class);
 
 	public SolaceSessionEventHandler(JCSMPProperties jcsmpProperties,
-			SolaceSessionOAuth2TokenProvider solaceSessionOAuth2TokenProvider,
+			@Nullable SolaceSessionOAuth2TokenProvider solaceSessionOAuth2TokenProvider,
 			SessionHealthIndicator sessionHealthIndicator) {
 		super(jcsmpProperties, solaceSessionOAuth2TokenProvider);
 		this.sessionHealthIndicator = sessionHealthIndicator;
@@ -24,13 +25,11 @@ public class SolaceSessionEventHandler extends DefaultSolaceOAuth2SessionEventHa
 		if (logger.isDebugEnabled()) {
 			logger.debug(String.format("Received Solace JCSMP Session event [%s]", eventArgs));
 		}
+		super.handleEvent(eventArgs);
 		switch (eventArgs.getEvent()) {
 			case RECONNECTED -> this.sessionHealthIndicator.up();
 			case DOWN_ERROR -> this.sessionHealthIndicator.down(eventArgs);
-			case RECONNECTING -> {
-				super.handleEvent(eventArgs);
-				this.sessionHealthIndicator.reconnecting(eventArgs);
-			}
+			case RECONNECTING -> this.sessionHealthIndicator.reconnecting(eventArgs);
 		}
 	}
 
