@@ -172,7 +172,7 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 
 		logger.info(String.format("Shutting down ingress for queue %s", errorQueue.getName()));
 		sempV2Api.config().updateMsgVpnQueue(vpnName, errorQueue.getName(),
-				new ConfigMsgVpnQueue().ingressEnabled(false), null);
+				new ConfigMsgVpnQueue().ingressEnabled(false), null, null);
 		retryAssert(() -> assertFalse(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, errorQueue.getName(), null)
 				.getData()
@@ -183,7 +183,7 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 			if (key.getErrorQueueDeliveryAttempt() == errorQueueInfrastructure.getMaxDeliveryAttempts()) {
 				logger.info(String.format("Starting ingress for queue %s", errorQueue.getName()));
 				sempV2Api.config().updateMsgVpnQueue(vpnName, errorQueue.getName(),
-						new ConfigMsgVpnQueue().ingressEnabled(true), null);
+						new ConfigMsgVpnQueue().ingressEnabled(true), null, null);
 				retryAssert(() -> assertTrue(sempV2Api.monitor()
 						.getMsgVpnQueue(vpnName, errorQueue.getName(), null)
 						.getData()

@@ -214,7 +214,7 @@ public class SolaceBinderMeterIT {
 				(String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
 				queue.getName(),
 				new ConfigMsgVpnQueueSubscription().subscriptionTopic(destination0),
-				null);
+				null, null);
 
 		SolaceTestBinder binder = context.getBinder();
 

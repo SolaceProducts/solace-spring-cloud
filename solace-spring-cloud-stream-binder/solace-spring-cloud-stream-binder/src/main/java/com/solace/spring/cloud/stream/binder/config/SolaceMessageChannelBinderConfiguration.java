@@ -9,13 +9,15 @@ import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisio
 import com.solacesystems.jcsmp.Context;
 import com.solacesystems.jcsmp.ContextProperties;
 import com.solacesystems.jcsmp.JCSMPException;
-import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
+import com.solacesystems.jcsmp.SolaceSessionOAuth2TokenProvider;
+import com.solacesystems.jcsmp.SpringJCSMPFactory;
 import com.solacesystems.jcsmp.impl.JCSMPBasicSession;
 import jakarta.annotation.PostConstruct;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -29,7 +31,7 @@ import static com.solacesystems.jcsmp.XMLMessage.Outcome.FAILED;
 import static com.solacesystems.jcsmp.XMLMessage.Outcome.REJECTED;
 
 @Configuration
-@Import(SolaceHealthIndicatorsConfiguration.class)
+@Import({SolaceHealthIndicatorsConfiguration.class, OAuth2ClientAutoConfiguration.class})
 @EnableConfigurationProperties({SolaceExtendedBindingProperties.class})
 public class SolaceMessageChannelBinderConfiguration {
 	private final JCSMPProperties jcsmpProperties;
@@ -39,29 +41,37 @@ public class SolaceMessageChannelBinderConfiguration {
 	private JCSMPSession jcsmpSession;
 	private Context context;
 
+	@Nullable
+	private SolaceSessionOAuth2TokenProvider	solaceSessionOAuth2TokenProvider;
+
 	private static final Log logger = LogFactory.getLog(SolaceMessageChannelBinderConfiguration.class);
 
 	public SolaceMessageChannelBinderConfiguration(JCSMPProperties jcsmpProperties,
 	                                               SolaceExtendedBindingProperties solaceExtendedBindingProperties,
-	                                               @Nullable SolaceSessionEventHandler eventHandler) {
+	                                               @Nullable SolaceSessionEventHandler eventHandler,
+			 																					 @Nullable SolaceSessionOAuth2TokenProvider solaceSessionOAuth2TokenProvider) {
 		this.jcsmpProperties = jcsmpProperties;
 		this.solaceExtendedBindingProperties = solaceExtendedBindingProperties;
 		this.solaceSessionEventHandler = eventHandler;
+		this.solaceSessionOAuth2TokenProvider = solaceSessionOAuth2TokenProvider;
 	}
 
 	@PostConstruct
 	private void initSession() throws JCSMPException {
-		JCSMPProperties jcsmpProperties = (JCSMPProperties) this.jcsmpProperties.clone();
-		jcsmpProperties.setProperty(JCSMPProperties.CLIENT_INFO_PROVIDER, new SolaceBinderClientInfoProvider());
+		JCSMPProperties solaceJcsmpProperties = (JCSMPProperties) this.jcsmpProperties.clone();
+		solaceJcsmpProperties.setProperty(JCSMPProperties.CLIENT_INFO_PROVIDER, new SolaceBinderClientInfoProvider());
 		try {
 			if (solaceSessionEventHandler != null) {
 				if (logger.isDebugEnabled()) {
 					logger.debug("Registering Solace Session Event handler on session");
 				}
-				context = JCSMPFactory.onlyInstance().createContext(new ContextProperties());
-				jcsmpSession = JCSMPFactory.onlyInstance().createSession(jcsmpProperties, context, solaceSessionEventHandler);
+
+				SpringJCSMPFactory springJCSMPFactory = new SpringJCSMPFactory(solaceJcsmpProperties, solaceSessionOAuth2TokenProvider);
+				context = springJCSMPFactory.createContext(new ContextProperties());
+				jcsmpSession = springJCSMPFactory.createSession(context, solaceSessionEventHandler);
 			} else {
-				jcsmpSession = JCSMPFactory.onlyInstance().createSession(jcsmpProperties);
+				SpringJCSMPFactory springJCSMPFactory = new SpringJCSMPFactory(solaceJcsmpProperties, solaceSessionOAuth2TokenProvider);
+				jcsmpSession = springJCSMPFactory.createSession();
 			}
 			logger.info(String.format("Connecting JCSMP session %s", jcsmpSession.getSessionName()));
 			jcsmpSession.connect();

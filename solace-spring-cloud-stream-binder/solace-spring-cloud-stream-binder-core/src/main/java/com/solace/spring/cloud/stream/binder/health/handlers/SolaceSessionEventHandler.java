@@ -1,16 +1,22 @@
 package com.solace.spring.cloud.stream.binder.health.handlers;
 
 import com.solace.spring.cloud.stream.binder.health.indicators.SessionHealthIndicator;
+import com.solacesystems.jcsmp.DefaultSolaceOAuth2SessionEventHandler;
+import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.SessionEventArgs;
-import com.solacesystems.jcsmp.SessionEventHandler;
+import com.solacesystems.jcsmp.SolaceSessionOAuth2TokenProvider;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.springframework.lang.Nullable;
 
-public class SolaceSessionEventHandler implements SessionEventHandler {
+public class SolaceSessionEventHandler extends DefaultSolaceOAuth2SessionEventHandler {
 	private final SessionHealthIndicator sessionHealthIndicator;
 	private static final Log logger = LogFactory.getLog(SolaceSessionEventHandler.class);
 
-	public SolaceSessionEventHandler(SessionHealthIndicator sessionHealthIndicator) {
+	public SolaceSessionEventHandler(JCSMPProperties jcsmpProperties,
+			@Nullable SolaceSessionOAuth2TokenProvider solaceSessionOAuth2TokenProvider,
+			SessionHealthIndicator sessionHealthIndicator) {
+		super(jcsmpProperties, solaceSessionOAuth2TokenProvider);
 		this.sessionHealthIndicator = sessionHealthIndicator;
 	}
 
@@ -19,6 +25,7 @@ public class SolaceSessionEventHandler implements SessionEventHandler {
 		if (logger.isDebugEnabled()) {
 			logger.debug(String.format("Received Solace JCSMP Session event [%s]", eventArgs));
 		}
+		super.handleEvent(eventArgs);
 		switch (eventArgs.getEvent()) {
 			case RECONNECTED -> this.sessionHealthIndicator.up();
 			case DOWN_ERROR -> this.sessionHealthIndicator.down(eventArgs);
