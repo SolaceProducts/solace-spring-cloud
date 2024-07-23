@@ -87,10 +87,6 @@ abstract class InboundXMLMessageListener implements Runnable {
 	@Override
 	public void run() {
 		try {
-			if (batchCollector != null) {
-				// So that first batch doesn't timeout early if was delayed between BatchCollector init and polling
-				batchCollector.resetLastSentTimeIfEmpty();
-			}
 			while (keepPolling()) {
 				try {
 					receive();
@@ -116,14 +112,14 @@ abstract class InboundXMLMessageListener implements Runnable {
 	}
 
 	private void receive() throws UnboundFlowReceiverContainerException, StaleSessionException {
+		if (batchCollector != null) {
+			batchCollector.resetBatchCollectionStartTimestampIfEmpty();
+		}
+
 		MessageContainer messageContainer;
 
 		try {
-			if (batchCollector != null && consumerProperties.getExtension().getBatchTimeout() > 0) {
-				messageContainer = flowReceiverContainer.receive(consumerProperties.getExtension().getBatchTimeout());
-			} else {
-				messageContainer = flowReceiverContainer.receive();
-			}
+			messageContainer = flowReceiverContainer.receive(25);
 		} catch (StaleSessionException e) {
 			throw e;
 		} catch (JCSMPException e) {
@@ -143,9 +139,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 
 		try {
 			if (batchCollector != null) {
-				if (messageContainer != null) {
-					batchCollector.addToBatch(messageContainer);
-				}
+				batchCollector.addToBatch(messageContainer);
 				processBatchIfAvailable();
 			} else if (messageContainer != null) {
 				processMessage(messageContainer);

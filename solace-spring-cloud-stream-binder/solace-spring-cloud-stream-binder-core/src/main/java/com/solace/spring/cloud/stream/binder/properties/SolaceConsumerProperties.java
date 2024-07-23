@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
+import com.solace.spring.cloud.stream.binder.util.BatchWaitStrategy;
 import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solacesystems.jcsmp.EndpointProperties;
 import jakarta.validation.constraints.Min;
@@ -34,6 +35,11 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 */
 	@Min(0)
 	private int batchTimeout = 5000;
+
+	/**
+	 * The waiting strategy for accumulating batches.
+	 */
+	private BatchWaitStrategy batchWaitStrategy = BatchWaitStrategy.RESPECT_TIMEOUT;
 
 	/**
 	 * Maximum wait time for polled consumers to receive a message from their consumer group queue.
@@ -151,6 +157,14 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	public void setBatchTimeout(int batchTimeout) {
 		Assert.isTrue(batchTimeout >= 0, "batch timeout must be greater than or equal to 0");
 		this.batchTimeout = batchTimeout;
+	}
+
+	public BatchWaitStrategy getBatchWaitStrategy() {
+		return batchWaitStrategy;
+	}
+
+	public void setBatchWaitStrategy(BatchWaitStrategy batchWaitStrategy) {
+		this.batchWaitStrategy = batchWaitStrategy;
 	}
 
 	public int getPolledConsumerWaitTimeInMillis() {

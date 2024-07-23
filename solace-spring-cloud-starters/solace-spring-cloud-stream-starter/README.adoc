@@ -287,6 +287,17 @@ Only applicable when `batchMode` is `true`.
 +
 Default: `255`
 
+batchWaitStrategy::
+The waiting strategy for accumulating batches. +
+Only applicable when `batchMode` is `true`.
++
+Default: `respect_timeout`
++
+NOTE: The waiting strategy works alongside the `batchMaxSize` option.
++
+respect_timeout::: Adheres to the `batchTimeout` consumer config option.
+immediate::: Immediately collects the batch once no more messages are available on the endpoint.
+
 batchTimeout::
 The maximum wait time in milliseconds to receive a batch of messages. If this timeout is reached, then the messages that have already been received will be used to create the batch. A value of `0` means wait forever. +
 Only applicable when `batchMode` is `true`.
@@ -903,7 +914,7 @@ See https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/htm
 See <<Native Payload Types>> for more info regarding this binder's natively supported payload types.
 ====
 
-To create a batch of messages, the binder will consume messages from the PubSub+ broker until either a maximum batch size or timeout has been achieved. After which, the binder will compose the batch message and send it to the consumer handler for processing. Both these batching parameters can be configured using the `batchMaxSize` and `batchTimeout` consumer config options.
+To create a batch of messages, the binder will consume messages from the PubSub+ broker until either a maximum batch size or timeout has been achieved. After which, the binder will compose the batch message and send it to the consumer handler for processing. Both these batching parameters can be configured using the `batchMaxSize`, `batchWaitStrategy`, and `batchTimeout` consumer config options.
 
 === Batch Producers
 
