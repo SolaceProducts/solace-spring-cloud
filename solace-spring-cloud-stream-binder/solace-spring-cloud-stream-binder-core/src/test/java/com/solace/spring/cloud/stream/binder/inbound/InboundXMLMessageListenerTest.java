@@ -7,6 +7,7 @@ import com.solacesystems.jcsmp.StaleSessionException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
@@ -27,7 +28,7 @@ public class InboundXMLMessageListenerTest {
     public void testListenerIsStoppedOnStaleSessionException(@Mock FlowReceiverContainer flowReceiverContainer, CapturedOutput output)
             throws UnboundFlowReceiverContainerException, JCSMPException {
 
-        when(flowReceiverContainer.receive())
+        when(flowReceiverContainer.receive(Mockito.anyInt()))
                 .thenThrow(new StaleSessionException("Session has become stale", new JCSMPException("Specific JCSMP exception")));
 
         BasicInboundXMLMessageListener inboundXMLMessageListener = new BasicInboundXMLMessageListener(
