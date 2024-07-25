@@ -80,7 +80,9 @@ public class BatchCollector {
 				}
 				case IMMEDIATE -> {
 					if (isLastMessageNull) {
-						LOGGER.trace("Last message was null, processing batch of {} messages...", batchedMessages.size());
+						LOGGER.trace(
+								"No more messages are available on the endpoint, processing batch of {} messages...",
+								batchedMessages.size());
 					} else {
 						return false;
 					}
