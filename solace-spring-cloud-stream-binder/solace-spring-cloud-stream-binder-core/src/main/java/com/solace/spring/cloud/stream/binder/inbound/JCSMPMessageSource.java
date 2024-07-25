@@ -98,23 +98,18 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		MessageContainer messageContainer;
 		try {
 			if (batchCollector != null) {
-				int batchTimeout = consumerProperties.getExtension().getBatchTimeout();
-				batchCollector.resetLastSentTimeIfEmpty();
+				// Keep time-reset outside of loop.
+				// Polled consumers need to respect the time in relation to when receive() was called,
+				// not when the first message is read.
+				batchCollector.resetBatchCollectionStartTimestampIfEmpty();
 				do {
-					MessageContainer messageContainerForBatch;
-					if (batchTimeout > 0) {
-						messageContainerForBatch = flowReceiverContainer.receive(batchTimeout);
-					} else {
-						messageContainerForBatch = flowReceiverContainer.receive();
+					MessageContainer messageContainerForBatch = flowReceiverContainer.receive(25);
+					if (messageContainerForBatch != null && solaceMeterAccessor != null) {
+						solaceMeterAccessor.recordMessage(
+								consumerProperties.getBindingName(),
+								messageContainerForBatch.getMessage());
 					}
-					if (messageContainerForBatch != null) {
-						if (solaceMeterAccessor != null) {
-							solaceMeterAccessor.recordMessage(
-									consumerProperties.getBindingName(),
-									messageContainerForBatch.getMessage());
-						}
-						batchCollector.addToBatch(messageContainerForBatch);
-					}
+					batchCollector.addToBatch(messageContainerForBatch);
 				} while (!batchCollector.isBatchAvailable());
 				messageContainer = null;
 			} else {

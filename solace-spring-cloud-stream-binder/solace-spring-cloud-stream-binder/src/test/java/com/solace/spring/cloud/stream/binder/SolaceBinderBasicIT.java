@@ -8,9 +8,11 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureUtil;
 import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator;
+import com.solace.spring.cloud.stream.binder.test.spring.MessageLayout;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
 import com.solace.spring.cloud.stream.binder.test.util.SimpleJCSMPEventHandler;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
+import com.solace.spring.cloud.stream.binder.util.BatchWaitStrategy;
 import com.solace.spring.cloud.stream.binder.util.CorrelationData;
 import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.spring.cloud.stream.binder.util.EndpointType;
@@ -81,10 +83,12 @@ import org.springframework.messaging.SubscribableChannel;
 import org.springframework.messaging.support.ErrorMessage;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.MimeTypeUtils;
+import org.springframework.util.StopWatch;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -155,18 +159,18 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 	 *
 	 * @see #testSendAndReceive(TestInfo)
 	 */
-	@CartesianTest(name = "[{index}] channelType={0}, endpointType={1}, numMessages={2}, batchMode={3}, transacted={4}")
+	@CartesianTest(name = "[{index}] channelType={0}, endpointType={1}, numMessages={2}, messageLayout={3}, transacted={4}")
 	@Execution(ExecutionMode.CONCURRENT)
 	public <T> void testReceive(
 			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
 			@CartesianTest.Enum(EndpointType.class) EndpointType endpointType,
 			@Values(ints = {1, 256}) int numMessages,
-			@Values(booleans = {false, true}) boolean batchMode,
+			@CartesianTest.Enum(MessageLayout.class) MessageLayout messageLayout,
 			@Values(booleans = {false, true}) boolean transacted,
 			SempV2Api sempV2Api,
 			SoftAssertions softly,
 			TestInfo testInfo) throws Exception {
-		if (!batchMode && transacted) {
+		if (!messageLayout.isBatched() && transacted) {
 			logger.info("non-batched, transacted consumers not yet supported");
 			return;
 		}
@@ -182,10 +186,13 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
-		consumerProperties.setBatchMode(batchMode);
 		consumerProperties.getExtension().setEndpointType(endpointType);
-		consumerProperties.getExtension().setBatchMaxSize(numMessages);
 		consumerProperties.getExtension().setTransacted(transacted);
+		if (messageLayout.isBatched()) {
+			consumerProperties.setBatchMode(true);
+			consumerProperties.getExtension().setBatchMaxSize(numMessages);
+			consumerProperties.getExtension().setBatchWaitStrategy(messageLayout.getWaitStrategy());
+		}
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
 				destination0, RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
 
@@ -199,10 +206,23 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		Iterator<Message<?>> messageIterator = messages.iterator();
 
-		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, batchMode ? 1 : numMessages,
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, messageLayout.isBatched() ? 1 : numMessages,
 				() -> messages.forEach(moduleOutputChannel::send),
-				msg -> softly.assertThat(msg).satisfies(isValidMessage(channelType, consumerProperties,
-						batchMode ? messages : List.of(messageIterator.next()))));
+				(msg, callback) -> {
+			List<Message<?>> expectedReadMessages = switch (messageLayout) {
+				case SINGLE -> List.of(messageIterator.next());
+				case BATCHED_TIMEOUT -> messages;
+				case BATCHED_IMMEDIATE -> IntStream.range(0, ((Collection<?>) msg.getPayload()).size())
+						.mapToObj(i -> messageIterator.next())
+						.collect(Collectors.toUnmodifiableList());
+			};
+
+			softly.assertThat(msg).satisfies(isValidMessage(channelType, consumerProperties, expectedReadMessages));
+
+			if (!messageLayout.equals(MessageLayout.BATCHED_IMMEDIATE) || !messageIterator.hasNext()) {
+				callback.run();
+			}
+		});
 
 		String vpnName = (String) getJcsmpSession().getProperty(JCSMPProperties.VPN_NAME);
 
@@ -212,8 +232,8 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 					.getData())
 					.singleElement()
 					.satisfies(
-							d -> assertThat(d.getSuccessCount()).isEqualTo(batchMode ? 1 : numMessages),
-							d -> assertThat(d.getCommitCount()).isEqualTo(batchMode ? 1 : numMessages),
+							d -> assertThat(d.getSuccessCount()).isEqualTo(messageLayout.isBatched() ? 1 : numMessages),
+							d -> assertThat(d.getCommitCount()).isEqualTo(messageLayout.isBatched() ? 1 : numMessages),
 							d -> assertThat(d.getFailureCount()).isEqualTo(0),
 							d -> assertThat(d.getConsumedMsgCount()).isEqualTo(numMessages),
 							d -> assertThat(d.getPendingConsumedMsgCount()).isEqualTo(0)
@@ -1188,9 +1208,56 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		consumerBinding.unbind();
 	}
 
-	@CartesianTest(name = "[{index}] batchMode={0}")
-	public void testBatchTimeoutHasPrecedenceOverPolledConsumerWaitTime(
-			@Values(booleans = {false, true}) boolean batchMode) throws Exception {
+	@CartesianTest(name = "[{index}] channelType={0} waitStrategy={1}")
+	public <T> void testBatchWaitStrategy(
+			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
+			@CartesianTest.Enum(BatchWaitStrategy.class) BatchWaitStrategy waitStrategy,
+			TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<T> consumerInfrastructureUtil = createConsumerInfrastructureUtil(channelType);
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		T moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setBatchMode(true);
+		consumerProperties.getExtension().setBatchWaitStrategy(waitStrategy);
+		consumerProperties.getExtension().setBatchTimeout((int) TimeUnit.SECONDS.toMillis(5));
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
+		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, RandomStringUtils.randomAlphanumeric(10),
+				moduleInputChannel, consumerProperties);
+
+		binderBindUnbindLatency();
+		StopWatch stopWatch = new StopWatch("message processing");
+
+		stopWatch.start("batch collection");
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, 1,
+				() -> moduleOutputChannel.send(MessageBuilder.withPayload("test").build()),
+				msg -> stopWatch.stop());
+
+		logger.info(stopWatch.prettyPrint());
+
+		switch (waitStrategy) {
+			case RESPECT_TIMEOUT -> assertThat(stopWatch.getTotalTimeMillis())
+					.as("Expected batch wait strategy %s to respect batch timeout", waitStrategy)
+					.isGreaterThanOrEqualTo(consumerProperties.getExtension().getBatchTimeout());
+			case IMMEDIATE -> assertThat(stopWatch.getTotalTimeMillis())
+					.as("Expected batch wait strategy %s to not wait", waitStrategy)
+					.isLessThan(consumerProperties.getExtension().getBatchTimeout());
+			default -> fail("No test for %s", waitStrategy);
+		}
+
+		consumerBinding.unbind();
+		producerBinding.unbind();
+	}
+
+	@CartesianTest(name = "[{index}] messageLayout={0}")
+	public void testPolledConsumerWaitTimeIsNotUsedInBatchMode(
+			@CartesianTest.Enum(MessageLayout.class) MessageLayout messageLayout) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		PollableSource<MessageHandler> moduleInputChannel = createBindableMessageSource("input",
@@ -1199,17 +1266,20 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
-		consumerProperties.setBatchMode(batchMode);
-		consumerProperties.getExtension().setBatchTimeout((int) TimeUnit.SECONDS.toMillis(10));
-		consumerProperties.getExtension().setPolledConsumerWaitTimeInMillis((int) TimeUnit.SECONDS.toMillis(1));
-
-		assertThat(consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis())
-				.as("polled-consumer-wait-time should be at least 1 second for this test")
-				.isGreaterThanOrEqualTo((int) TimeUnit.SECONDS.toMillis(1));
+		if (messageLayout.isBatched()) {
+			consumerProperties.setBatchMode(true);
+			consumerProperties.getExtension().setBatchWaitStrategy(messageLayout.getWaitStrategy());
+		}
+		consumerProperties.getExtension().setBatchTimeout((int) TimeUnit.SECONDS.toMillis(1));
+		consumerProperties.getExtension().setPolledConsumerWaitTimeInMillis((int) TimeUnit.SECONDS.toMillis(10));
 
 		assertThat(consumerProperties.getExtension().getBatchTimeout())
-				.as("Batch timeout needs to be at least 10 times larger than polled-consumer-wait-time")
-				.isGreaterThanOrEqualTo(10 * consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis());
+				.as("batch timeout should be at least 1 second for this test")
+				.isGreaterThanOrEqualTo((int) TimeUnit.SECONDS.toMillis(1));
+
+		assertThat(consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis())
+				.as("polled-consumer-wait-time needs to be at least 10 times larger than batch timeout")
+				.isGreaterThanOrEqualTo(10 * consumerProperties.getExtension().getBatchTimeout());
 
 		Binding<PollableSource<MessageHandler>> consumerBinding = binder.bindPollableConsumer(destination0,
 				RandomStringUtils.randomAlphanumeric(10), moduleInputChannel, consumerProperties);
@@ -1217,17 +1287,18 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		binderBindUnbindLatency();
 
 		Instant start = Instant.now();
-		assertThat(moduleInputChannel.poll(m -> {
-		})).isFalse();
+		assertThat(moduleInputChannel.poll(m -> {})).isFalse();
 		Duration duration = Duration.between(start, Instant.now()).abs();
-		if (batchMode) {
+		if (messageLayout.isBatched()) {
 			assertThat(duration)
-					.isGreaterThanOrEqualTo(Duration.ofMillis(consumerProperties.getExtension().getBatchTimeout()));
+					.isGreaterThanOrEqualTo(Duration.ofMillis(
+							messageLayout.getWaitStrategy().equals(BatchWaitStrategy.RESPECT_TIMEOUT) ?
+									consumerProperties.getExtension().getBatchTimeout() : 0))
+					.isLessThan(Duration.ofMillis(consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis())
+							.dividedBy(2));
 		} else {
-			assertThat(duration)
-					.isGreaterThanOrEqualTo(Duration.ofMillis(consumerProperties.getExtension()
-							.getPolledConsumerWaitTimeInMillis()))
-					.isLessThan(Duration.ofMillis(consumerProperties.getExtension().getBatchTimeout()).dividedBy(2));
+			assertThat(duration).isGreaterThanOrEqualTo(
+					Duration.ofMillis(consumerProperties.getExtension().getPolledConsumerWaitTimeInMillis()));
 		}
 
 		consumerBinding.unbind();

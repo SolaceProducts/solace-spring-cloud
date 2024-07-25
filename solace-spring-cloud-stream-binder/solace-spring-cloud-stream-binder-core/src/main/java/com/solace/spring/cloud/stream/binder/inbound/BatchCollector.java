@@ -2,8 +2,9 @@ package com.solace.spring.cloud.stream.binder.inbound;
 
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.lang.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -18,10 +19,11 @@ import java.util.UUID;
 public class BatchCollector {
 	private final SolaceConsumerProperties consumerProperties;
 	private final List<MessageContainer> batchedMessages;
-	private long timeSentLastBatch = System.currentTimeMillis();
+	private long batchCollectionStartTimestamp = System.currentTimeMillis();
+	private boolean isLastMessageNull = false;
 	private UUID currentFlowReceiverReferenceId;
 
-	private static final Log logger = LogFactory.getLog(BatchCollector.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(BatchCollector.class);
 
 	public BatchCollector(SolaceConsumerProperties consumerProperties) {
 		this.consumerProperties = consumerProperties;
@@ -32,19 +34,19 @@ public class BatchCollector {
 	 * Add message to batch
 	 * @param messageContainer message container
 	 */
-	public void addToBatch(MessageContainer messageContainer) {
+	public void addToBatch(@Nullable MessageContainer messageContainer) {
 		if (messageContainer == null) {
+			isLastMessageNull = true;
 			return;
 		}
 
+		isLastMessageNull = false;
 		batchedMessages.add(messageContainer);
 		UUID flowReceiverReferenceId = messageContainer.getFlowReceiverReferenceId();
 		if (currentFlowReceiverReferenceId != null && !currentFlowReceiverReferenceId.equals(flowReceiverReferenceId)) {
-			if (logger.isTraceEnabled()) {
-				logger.trace(String.format("Added a message to batch, but its flow receiver reference ID was %s, " +
-								"expected %s. Pruning stale messages from batch...",
-						flowReceiverReferenceId, currentFlowReceiverReferenceId));
-			}
+			LOGGER.trace("Added a message to batch, but its flow receiver reference ID was {}, expected {}. " +
+							"Pruning stale messages from batch...",
+					flowReceiverReferenceId, currentFlowReceiverReferenceId);
 			pruneStaleMessages();
 		}
 		currentFlowReceiverReferenceId = flowReceiverReferenceId;
@@ -55,26 +57,41 @@ public class BatchCollector {
 	 * @return true if available (batch may be empty).
 	 */
 	public boolean isBatchAvailable() {
+		// must be able to return an empty batch so that polled consumers don't block indefinitely
 		return isBatchAvailableInternal() && (!pruneStaleMessages() || isBatchAvailableInternal());
 	}
 
-	public boolean isBatchAvailableInternal() {
+	boolean isBatchAvailableInternal() {
 		if (batchedMessages.size() < consumerProperties.getBatchMaxSize()) {
-			long batchTimeDiff = System.currentTimeMillis() - timeSentLastBatch;
-			if (consumerProperties.getBatchTimeout() == 0 || batchTimeDiff < consumerProperties.getBatchTimeout()) {
-				if (logger.isTraceEnabled()) {
-					logger.trace(String.format("Collecting batch... Size: %s, Time since last batch: %s ms",
-							batchedMessages.size(), batchTimeDiff));
+			switch (consumerProperties.getBatchWaitStrategy()) {
+				case RESPECT_TIMEOUT -> {
+					long batchTimeDiff = System.currentTimeMillis() - batchCollectionStartTimestamp;
+					if (consumerProperties.getBatchTimeout() == 0 || batchTimeDiff < consumerProperties.getBatchTimeout()) {
+						if (!isLastMessageNull) {
+							LOGGER.trace("Collecting batch... Size: {}, Time elapsed: {} ms",
+									batchedMessages.size(), batchTimeDiff);
+						}
+						return false;
+					} else {
+						LOGGER.trace(
+								"Batch timeout reached <time elapsed: {} ms>, processing batch of {} messages...",
+								batchTimeDiff, batchedMessages.size());
+					}
 				}
-				return false;
-			} else if (logger.isTraceEnabled()) {
-				logger.trace(String.format(
-						"Batch timeout reached <time since last batch: %s ms>, processing batch of %s messages...",
-						batchTimeDiff, batchedMessages.size()));
+				case IMMEDIATE -> {
+					if (isLastMessageNull) {
+						LOGGER.trace(
+								"No more messages are available on the endpoint, processing batch of {} messages...",
+								batchedMessages.size());
+					} else {
+						return false;
+					}
+				}
+				default -> throw new UnsupportedOperationException("Unsupported batch wait strategy: " +
+						consumerProperties.getBatchWaitStrategy());
 			}
-		} else if (logger.isTraceEnabled()) {
-			logger.trace(String.format("Max batch size reached, processing batch of %s messages...",
-					batchedMessages.size()));
+		} else {
+			LOGGER.trace("Max batch size reached, processing batch of {} messages...", batchedMessages.size());
 		}
 		return true;
 	}
@@ -92,11 +109,11 @@ public class BatchCollector {
 	}
 
 	/**
-	 * Reset the timestamp of the last batch sent if the message batch is empty.
+	 * Reset batch collection start timestamp if the message batch is empty.
 	 */
-	public void resetLastSentTimeIfEmpty() {
+	public void resetBatchCollectionStartTimestampIfEmpty() {
 		if (batchedMessages.isEmpty()) {
-			resetLastSentTime();
+			resetBatchCollectionStartTimestamp();
 		}
 	}
 
@@ -104,7 +121,9 @@ public class BatchCollector {
 	 * Callback to invoke when batch of messages have been processed.
 	 */
 	public void confirmDelivery() {
-		resetLastSentTime();
+		LOGGER.trace("Confirmed delivery of batch of {} messages", batchedMessages.size());
+		resetBatchCollectionStartTimestamp();
+		isLastMessageNull = false;
 		batchedMessages.clear();
 	}
 
@@ -115,17 +134,13 @@ public class BatchCollector {
 	private boolean pruneStaleMessages() {
 		int prePrunedBatchSize = batchedMessages.size();
 		boolean pruned = batchedMessages.removeIf(MessageContainer::isStale);
-		if (logger.isTraceEnabled()) {
-			logger.trace(String.format("Finished pruning stale messages from undelivered batch. Size: %s -> %s",
-					prePrunedBatchSize, batchedMessages.size()));
-		}
+		LOGGER.trace("Finished pruning stale messages from undelivered batch. Size: {} -> {}", prePrunedBatchSize,
+				batchedMessages.size());
 		return pruned;
 	}
 
-	private void resetLastSentTime() {
-		timeSentLastBatch = System.currentTimeMillis();
-		if (logger.isTraceEnabled()) {
-			logger.trace("Timestamp of last batch sent was reset");
-		}
+	private void resetBatchCollectionStartTimestamp() {
+		batchCollectionStartTimestamp = System.currentTimeMillis();
+		LOGGER.trace("Batch collection start time was reset");
 	}
 }
