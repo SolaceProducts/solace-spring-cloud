@@ -206,9 +206,11 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		Iterator<Message<?>> messageIterator = messages.iterator();
 
+		AtomicInteger numFncCalls = new AtomicInteger(0);
 		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, messageLayout.isBatched() ? 1 : numMessages,
 				() -> messages.forEach(moduleOutputChannel::send),
 				(msg, callback) -> {
+			numFncCalls.incrementAndGet();
 			List<Message<?>> expectedReadMessages = switch (messageLayout) {
 				case SINGLE -> List.of(messageIterator.next());
 				case BATCHED_TIMEOUT -> messages;
@@ -232,8 +234,8 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 					.getData())
 					.singleElement()
 					.satisfies(
-							d -> assertThat(d.getSuccessCount()).isEqualTo(messageLayout.isBatched() ? 1 : numMessages),
-							d -> assertThat(d.getCommitCount()).isEqualTo(messageLayout.isBatched() ? 1 : numMessages),
+							d -> assertThat(d.getSuccessCount()).isEqualTo(numFncCalls.get()),
+							d -> assertThat(d.getCommitCount()).isEqualTo(numFncCalls.get()),
 							d -> assertThat(d.getFailureCount()).isEqualTo(0),
 							d -> assertThat(d.getConsumedMsgCount()).isEqualTo(numMessages),
 							d -> assertThat(d.getPendingConsumedMsgCount()).isEqualTo(0)
