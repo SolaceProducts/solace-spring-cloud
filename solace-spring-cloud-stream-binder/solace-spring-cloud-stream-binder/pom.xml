@@ -5,12 +5,12 @@
     <parent>
         <groupId>com.solace.spring.cloud</groupId>
         <artifactId>solace-spring-cloud-parent</artifactId>
-        <version>4.4.0</version>
+        <version>4.4.1-SNAPSHOT</version>
         <relativePath>../../solace-spring-cloud-parent/pom.xml</relativePath>
     </parent>
 
     <artifactId>spring-cloud-stream-binder-solace</artifactId>
-    <version>5.4.0</version>
+    <version>5.4.1-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Solace Spring Cloud Stream Binder</name>
