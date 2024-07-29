@@ -15,9 +15,9 @@ jobs:
       should_skip: ${{ steps.skip_check.outputs.should_skip }}
     steps:
       - id: skip_check
-        uses: fkirc/skip-duplicate-actions@v3.4.0
+        uses: fkirc/skip-duplicate-actions@v5.3.1
         with:
-          concurrent_skipping: same_content
+          concurrent_skipping: same_content_newer
           do_not_skip: '["pull_request", "workflow_dispatch", "schedule"]'
 
   build:
@@ -28,24 +28,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Cache local Maven repository
-        uses: actions/cache@v2
-        with:
-          path: ~/.m2/repository
-          key: ${{ runner.os }}-maven-test-${{ hashFiles('**/pom.xml') }}
-          restore-keys: |
-            ${{ runner.os }}-maven-test-
+      - uses: actions/checkout@v4
       - name: Setup JDK 17
-        uses: actions/setup-java@v2
+        uses: actions/setup-java@v4
         with:
           distribution: zulu
           java-version: 17
+          cache: maven
       - name: Build and run Tests
         run: mvn clean verify
       - name: Upload Test Artifacts
         if: always()
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v4
         with:
           name: Test Results
           path: |
