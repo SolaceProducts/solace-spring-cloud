@@ -1070,6 +1070,33 @@ public class MyMessageBuilder {
 
 NOTE: Those 2 headers are cleared from the message before it is sent off to the message broker. So you should attach that information to your message payload if you want to get that information on the consumer-side.
 
+.Dynamic Producer Destinations with StreamBridge
+[NOTE]
+====
+This binder does not support the usage of https://docs.spring.io/spring-cloud-stream/docs/current/reference/html/spring-cloud-stream.html#_streambridge_and_dynamic_destinations[StreamBridge's dynamic destination feature], which automatically creates and caches unknown output bindings on-the-fly.
+
+Instead, set the `scst_targetDestination` message header and send the message to a pre-defined output binding:
+
+[source,java]
+----
+public void sendMessage(StreamBridge streamBridge, String myDynamicDestination, Message<?> message) {
+  Message<?> messageWithDestination = MessageBuilder.fromMessage(message)
+      .setHeader(BinderHeaders.TARGET_DESTINATION, myDynamicDestination)
+      .build();
+  streamBridge.send("some-pre-defined-output-binding", messageWithDestination);
+}
+----
+
+Then in your application's configuration file, configure your predefined output binding:
+
+[source,shell]
+----
+spring.cloud.stream.output-bindings=some-pre-defined-output-binding
+----
+
+For more info, see https://docs.spring.io/spring-cloud-stream/docs/current/reference/html/spring-cloud-stream.html#_sending_arbitrary_data_to_an_output_e_g_foreign_event_driven_sources[Sending arbitrary data to an output (e.g. Foreign event-driven sources)].
+====
+
 == Failed Consumer Message Error Handling
 
 The Spring cloud stream framework already provides a number of application-internal reprocessing strategies for failed messages during message consumption. You can read more about that https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#spring-cloud-stream-overview-error-handling[here]:
