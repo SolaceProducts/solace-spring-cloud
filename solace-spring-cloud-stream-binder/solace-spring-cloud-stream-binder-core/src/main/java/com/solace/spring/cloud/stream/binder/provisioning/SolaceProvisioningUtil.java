@@ -80,19 +80,20 @@ public class SolaceProvisioningUtil {
 			String subscription;
 			// default case
 			if (properties.getExtension().isAddDestinationAsSubscriptionToQueue()) {
-				subscription = destinationName;
 				if (properties.getExtension().getQueueAdditionalSubscriptions().length > 0) {
 					throw new IllegalArgumentException("No additional queue subscriptions permitted for topic endpoints");
 				}
+				subscription = destinationName;
 			} else {
-				if (properties.getExtension().getQueueAdditionalSubscriptions().length != 1)
+				if (properties.getExtension().getQueueAdditionalSubscriptions().length != 1) {
 					throw new IllegalArgumentException("Exactly one subscription must be provided for topic endpoints");
-					subscription = properties.getExtension().getQueueAdditionalSubscriptions()[0];
 				}
-				consumerFlowProperties.setNewSubscription(JCSMPFactory.onlyInstance().createTopic(subscription));
+				subscription = properties.getExtension().getQueueAdditionalSubscriptions()[0];
 			}
+			consumerFlowProperties.setNewSubscription(JCSMPFactory.onlyInstance().createTopic(subscription));
+		}
 
-			return consumerFlowProperties;
+		return consumerFlowProperties;
     }
 
 	public static boolean isAnonEndpoint(String groupName) {
