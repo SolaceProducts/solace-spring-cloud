@@ -96,8 +96,11 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
@@ -848,9 +851,11 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		}
 	}
 
-	@Test
+	@CartesianTest(name = "[{index}] addDestinationAsSubscriptionToQueue={0}")
 	@Execution(ExecutionMode.CONCURRENT)
-	public void testConsumerAdditionalSubscriptions(TestInfo testInfo) throws Exception {
+	public void testConsumerAdditionalSubscriptions(
+			@Values(booleans = {false, true}) boolean addDestinationAsSubscriptionToQueue,
+			TestInfo testInfo) throws Exception {
 		SolaceTestBinder binder = getBinder();
 
 		DirectChannel moduleOutputChannel0 = createBindableChannel("output0", new BindingProperties());
@@ -867,6 +872,8 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 				destination1, moduleOutputChannel1, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		// this flag shouldn't do anything for additional-subscriptions
+		consumerProperties.getExtension().setAddDestinationAsSubscriptionToQueue(addDestinationAsSubscriptionToQueue);
 		consumerProperties.getExtension()
 				.setQueueAdditionalSubscriptions(new String[]{wildcardDestination1, "some-random-sub"});
 
@@ -879,19 +886,31 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		binderBindUnbindLatency();
 
-		final CountDownLatch latch = new CountDownLatch(2);
+		final BlockingQueue<Destination> receivedMsgDestinations = new ArrayBlockingQueue<>(10);
 		moduleInputChannel.subscribe(message1 -> {
 			logger.info(String.format("Received message %s", message1));
-			latch.countDown();
+			Optional.ofNullable(message1.getHeaders().get(SolaceHeaders.DESTINATION, Destination.class))
+					.ifPresent(receivedMsgDestinations::add);
 		});
 
-		logger.info(String.format("Sending message to destination %s: %s", destination0, message));
-		moduleOutputChannel0.send(message);
+		if (addDestinationAsSubscriptionToQueue) {
+			logger.info(String.format("Sending message to destination %s: %s", destination0, message));
+			moduleOutputChannel0.send(message);
+			assertThat(receivedMsgDestinations.poll(10, TimeUnit.SECONDS))
+					.extracting(Destination::getName)
+					.isEqualTo(destination0);
+		}
 
 		logger.info(String.format("Sending message to destination %s: %s", destination1, message));
 		moduleOutputChannel1.send(message);
+		assertThat(receivedMsgDestinations.poll(10, TimeUnit.SECONDS))
+				.extracting(Destination::getName)
+				.isEqualTo(destination1);
 
-		assertThat(latch.await(10, TimeUnit.SECONDS)).isTrue();
+		assertThat(receivedMsgDestinations)
+				.as("An unexpected message was read")
+				.isEmpty();
+
 		TimeUnit.SECONDS.sleep(1); // Give bindings a sec to finish processing successful message consume
 		producerBinding0.unbind();
 		producerBinding1.unbind();
