@@ -28,7 +28,7 @@ Consult the table below to determine which version of the BOM you need to use:
 | 2022.0.4     | 3.1.0, 3.2.0               | 3.1.x       |
 | 2023.0.1     | 4.0.0, 4.1.0               | 3.2.x       |
 | 2023.0.2     | 4.2.0                      | 3.3.x       |
-| 2023.0.3     | 4.3.0, 4.4.0               | 3.3.x       |
+| 2023.0.3     | 4.3.0, 4.4.0, 4.5.0        | 3.3.x       |
 
 ## Including the BOM
 
@@ -41,7 +41,7 @@ In addition to showing how to include the BOM, the following snippets also shows
         <dependency>
             <groupId>com.solace.spring.cloud</groupId>
             <artifactId>solace-spring-cloud-bom</artifactId>
-            <version>4.4.0</version>
+            <version>4.5.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -56,32 +56,10 @@ In addition to showing how to include the BOM, the following snippets also shows
 </dependencies>
 ```
 
-### Using it with Gradle 4
-```groovy
-buildscript {
-    dependencies {
-        classpath 'io.spring.gradle:dependency-management-plugin:1.0.8.RELEASE'
-    }
-}
-
-/* Gradle 4 isn't natively compatible with Maven BOMs. Need to use the Spring's dependency management plugin. */
-apply plugin: 'io.spring.dependency-management'
-
-dependencyManagement {
-    imports {
-        mavenBom "com.solace.spring.cloud:solace-spring-cloud-bom:4.4.0"
-    }
-}
-
-dependencies {
-    compile("com.solace.spring.cloud:spring-cloud-starter-stream-solace")
-}
-```
-
-### Using it with Gradle 5
+### Using it with Gradle
 ```groovy
 dependencies {
-    implementation(platform("com.solace.spring.cloud:solace-spring-cloud-bom:4.4.0"))
+    implementation(platform("com.solace.spring.cloud:solace-spring-cloud-bom:4.5.0"))
     implementation("com.solace.spring.cloud:spring-cloud-starter-stream-solace")
 }
 ```
