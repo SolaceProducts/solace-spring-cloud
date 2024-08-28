@@ -1108,7 +1108,7 @@ However, after all internal error handling strategies have been exhausted, the S
 
 === Message Redelivery
 
-A simple error handling strategy in which failed messages are redelivered from the consumer group's queue. This is very similar to simply enabling the retry template (setting `maxAttempts` to a value greater than `1`), but allows for the failed messages to be re-processed by the message broker.
+https://docs.solace.com/Messaging/Guaranteed-Msg/Configuring-Queues.htm#Configuring_Message_Redelivery_..54[Message Redelivery] is a simple error handling strategy in which failed messages are redelivered to the application from the consumer group's queue on the PubSub+ broker. This is very similar to simply enabling the retry template (setting `maxAttempts` to a value greater than `1`), but allows for the failed messages to be re-processed by the message broker.
 
 [IMPORTANT]
 ====
@@ -1137,6 +1137,30 @@ Error Queues should not be used with anonymous consumer groups.
 
 Since the names of anonymous consumer groups, and in turn the name of their would-be Error Queues, are randomly generated at runtime, it would provide little value to create bindings to these Error Queues because of their unpredictable naming and temporary existence. Also, your environment will be polluted with orphaned Error Queues whenever these consumers rebind.
 ====
+
+=== Mutating Messages while using Spring's Retry Template
+
+When locally reprocessing failed messages with https://docs.spring.io/spring-cloud-stream/docs/{scst-version}/reference/html/spring-cloud-stream.html#_retry_template[Spring's Retry Template] (i.e. when consumer `maxAttempts > 1`), mutations of nested objects within the Spring `Message<?>` may persist between retries.
+
+.Example: Mutating `SDTMap` payload and failing the message
+[source,java]
+----
+public Function<Message<SDTMap>, Message<SDTMap>> transform() {
+    return message -> {
+        if (!message.getPayload().containsKey("new-key")) { // <1>
+            message.getPayload().putString("new-key", "value");
+        }
+
+        // failing message processing to trigger retry template
+        throw new RuntimeException("Failed processing");
+    };
+}
+----
+<1> Here, this example only invokes this if-statement if the `SDTMap` payload does not contain the key `"new-key"`.
++
+If the consumer binding was configured with `maxAttempts > 1`, then on the following reprocessing attempts, the payload will still contain the key `"new-key"` from the previous attempt.
+
+If this behavior is undesirable, then you should configure your consumers `maxAttempts` to `1` and rely on <<Message Redelivery>> to handle reprocessing.
 
 == Consumer Bindings Pause/Resume
 
