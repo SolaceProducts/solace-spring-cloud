@@ -1,8 +1,8 @@
 package com.solace.spring.cloud.stream.binder.health.base;
 
 import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.boot.actuate.health.Status;
@@ -16,12 +16,10 @@ public class SolaceHealthIndicator implements HealthIndicator {
 	private static final String INFO = "info";
 	private static final String RESPONSE_CODE = "responseCode";
 	private volatile Health health;
-	private static final Log logger = LogFactory.getLog(SolaceHealthIndicator.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(SolaceHealthIndicator.class);
 
 	private static void logDebugStatus(String status) {
-		if (logger.isDebugEnabled()) {
-			logger.debug(String.format("Solace connection/flow status is %s", status));
-		}
+		LOGGER.debug("Solace connection/flow status is {}", status);
 	}
 	protected void healthUp() {
 			health = Health.up().build();

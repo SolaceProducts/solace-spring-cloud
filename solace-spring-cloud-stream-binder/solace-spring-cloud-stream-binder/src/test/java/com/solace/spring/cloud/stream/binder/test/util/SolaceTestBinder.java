@@ -4,14 +4,18 @@ import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.EndpointProvider;
-import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisioner;
+import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.ApiException;
-import com.solacesystems.jcsmp.*;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import com.solacesystems.jcsmp.AccessDeniedException;
+import com.solacesystems.jcsmp.Endpoint;
+import com.solacesystems.jcsmp.JCSMPException;
+import com.solacesystems.jcsmp.JCSMPProperties;
+import com.solacesystems.jcsmp.JCSMPSession;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.AbstractPollableConsumerTestBinder;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
@@ -40,7 +44,7 @@ public class SolaceTestBinder
 	private final Map<String, EndpointType> endpoints = new HashMap<>();
 	private final Map<String, String> bindingNameToQueueName = new HashMap<>();
 	private final Map<String, String> bindingNameToErrorQueueName = new HashMap<>();
-	private static final Log logger = LogFactory.getLog(SolaceTestBinder.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(SolaceTestBinder.class);
 
 	public SolaceTestBinder(JCSMPSession jcsmpSession, SempV2Api sempV2Api) {
 		this.applicationContext = new AnnotationConfigApplicationContext(Config.class);
@@ -143,13 +147,13 @@ public class SolaceTestBinder
 	public void cleanup() {
 		for (Map.Entry<String, EndpointType> endpointEntry : endpoints.entrySet()) {
 			try {
-				logger.info(String.format("De-provisioning endpoint %s", endpointEntry));
+				LOGGER.info("De-provisioning endpoint {}", endpointEntry);
 				Endpoint endpoint;
 				try {
 					endpoint = EndpointProvider.from(endpointEntry.getValue()).createInstance(endpointEntry.getKey());
 				} catch (Exception e) {
 					//This is possible as we eagerly add endpoints to cleanup in preBindCaptureConsumerResources()
-					logger.info(String.format("Skipping de-provisioning as queue name is invalid; queue was never provisioned", endpointEntry));
+					LOGGER.info("Skipping de-provisioning as queue name is invalid; queue was never provisioned");
 					continue;
 				}
 				jcsmpSession.deprovision(endpoint, JCSMPSession.FLAG_IGNORE_DOES_NOT_EXIST);

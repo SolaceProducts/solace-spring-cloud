@@ -29,13 +29,13 @@ import com.solacesystems.jms.SolConnectionFactory;
 import com.solacesystems.jms.SolJmsUtility;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.RandomUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.integration.support.DefaultMessageBuilderFactory;
 import org.springframework.integration.support.MessageBuilder;
@@ -76,7 +76,7 @@ public class JmsCompatibilityIT {
 	private XMLMessageProducer jcsmpProducer;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 
-	private static final Log logger = LogFactory.getLog(JmsCompatibilityIT.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(JmsCompatibilityIT.class);
 	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
 	@BeforeEach
@@ -97,12 +97,12 @@ public class JmsCompatibilityIT {
 		jcsmpProducer = jcsmpSession.getMessageProducer(new JCSMPStreamingPublishCorrelatingEventHandler() {
 			@Override
 			public void responseReceivedEx(Object key) {
-				logger.debug("Got message with key: " + key);
+				LOGGER.debug("Got message with key: {}", key);
 			}
 
 			@Override
 			public void handleErrorEx(Object o, JCSMPException e, long l) {
-				logger.error(e);
+				LOGGER.error("Got error at {} while publishing message with key {}", l, o, e);
 			}
 		});
 	}
@@ -165,7 +165,7 @@ public class JmsCompatibilityIT {
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
 		jmsConsumer.setMessageListener(msg -> {
-			logger.info("Got message " + msg);
+			LOGGER.info("Got message {}", msg);
 			try {
 				for (Map.Entry<String, SolaceBinderHeaderMeta<?>> headerMeta : SolaceBinderHeaderMeta.META.entrySet()) {
 					if (!HeaderMeta.Scope.WIRE.equals(headerMeta.getValue().getScope())) continue;
@@ -216,7 +216,7 @@ public class JmsCompatibilityIT {
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
 		jmsConsumer.setMessageListener(msg -> {
-			logger.info("Got message " + msg);
+			LOGGER.info("Got message {}", msg);
 			try {
 				softly.assertThat(msg.getStringProperty(SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING))
 						.isEqualTo("base64");
@@ -279,7 +279,7 @@ public class JmsCompatibilityIT {
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(messages.size());
 		jmsConsumer.setMessageListener(msg -> {
-			logger.info("Got message " + msg);
+			LOGGER.info("Got message {}", msg);
 			try {
 				if (msg instanceof javax.jms.BytesMessage) {
 					javax.jms.BytesMessage bytesMessage = (javax.jms.BytesMessage) msg;
@@ -349,7 +349,7 @@ public class JmsCompatibilityIT {
 			messageConsumer = jcsmpSession.getMessageConsumer(new XMLMessageListener() {
 				@Override
 				public void onReceive(BytesXMLMessage bytesXMLMessage) {
-					logger.info("Got message " + bytesXMLMessage);
+					LOGGER.info("Got message {}", bytesXMLMessage);
 					try {
 						Message<?> msg = xmlMessageMapper.map(bytesXMLMessage, null, consumerProperties);
 						if (msg.getPayload() instanceof byte[]) {
@@ -398,7 +398,7 @@ public class JmsCompatibilityIT {
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
 		jmsConsumer.setMessageListener(msg -> {
-			logger.info("Got message " + msg);
+			LOGGER.info("Got message {}", msg);
 			try {
 				softly.assertThat(msg.getBooleanProperty(SolaceBinderHeaders.SERIALIZED_PAYLOAD)).isTrue();
 
@@ -438,7 +438,7 @@ public class JmsCompatibilityIT {
 			messageConsumer = jcsmpSession.getMessageConsumer(new XMLMessageListener() {
 				@Override
 				public void onReceive(BytesXMLMessage bytesXMLMessage) {
-					logger.info("Got message " + bytesXMLMessage);
+					LOGGER.info("Got message {}", bytesXMLMessage);
 					try {
 						softly.assertThat(xmlMessageMapper.map(bytesXMLMessage, null, consumerProperties).getPayload())
 								.isEqualTo(payload);

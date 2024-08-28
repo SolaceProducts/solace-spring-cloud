@@ -1,7 +1,7 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class ErrorQueueRepublishCorrelationKey {
 	private final ErrorQueueInfrastructure errorQueueInfrastructure;
@@ -9,7 +9,7 @@ public class ErrorQueueRepublishCorrelationKey {
 	private final FlowReceiverContainer flowReceiverContainer;
 	private long errorQueueDeliveryAttempt = 0;
 
-	private static final Log logger = LogFactory.getLog(ErrorQueueRepublishCorrelationKey.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(ErrorQueueRepublishCorrelationKey.class);
 
 	public ErrorQueueRepublishCorrelationKey(ErrorQueueInfrastructure errorQueueInfrastructure,
 											 MessageContainer messageContainer,
@@ -36,26 +36,26 @@ public class ErrorQueueRepublishCorrelationKey {
 				break;
 			} else {
 				errorQueueDeliveryAttempt++;
-				logger.info(String.format("Republishing XMLMessage %s to error queue %s - attempt %s of %s",
-						messageContainer.getMessage().getMessageId(), errorQueueInfrastructure.getErrorQueueName(),
-						errorQueueDeliveryAttempt, errorQueueInfrastructure.getMaxDeliveryAttempts()));
+				LOGGER.info("Republishing XMLMessage {} to error queue {} - attempt {} of {}",
+						messageContainer.getMessage().getMessageId(),
+						errorQueueInfrastructure.getErrorQueueName(),
+						errorQueueDeliveryAttempt,
+						errorQueueInfrastructure.getMaxDeliveryAttempts());
 				try {
 					errorQueueInfrastructure.send(messageContainer, this);
 					break;
 				} catch (Exception e) {
-					logger.warn(String.format("Could not send XMLMessage %s to error queue %s",
-							messageContainer.getMessage().getMessageId(),
-							errorQueueInfrastructure.getErrorQueueName()));
+					LOGGER.warn("Could not send XMLMessage {} to error queue {}",
+							messageContainer.getMessage().getMessageId(), errorQueueInfrastructure.getErrorQueueName());
 				}
 			}
 		}
 	}
 
 	private void fallback() {
-			logger.info(String.format(
-					"Exceeded max error queue delivery attempts. XMLMessage %s will be re-queued onto queue %s",
-					messageContainer.getMessage().getMessageId(), flowReceiverContainer.getEndpointName()));
-			flowReceiverContainer.requeue(messageContainer);
+		LOGGER.info("Exceeded max error queue delivery attempts. XMLMessage {} will be re-queued onto queue {}",
+				messageContainer.getMessage().getMessageId(), flowReceiverContainer.getEndpointName());
+		flowReceiverContainer.requeue(messageContainer);
 	}
 
 	public String getSourceMessageId() {

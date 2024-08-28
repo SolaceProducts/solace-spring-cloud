@@ -4,8 +4,8 @@ import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import com.solacesystems.jcsmp.XMLMessageProducer;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
@@ -18,7 +18,7 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 	private final JCSMPSession session;
 	private final CloudStreamEventHandler publisherEventHandler = new CloudStreamEventHandler();
 
-	private static final Log logger = LogFactory.getLog(JCSMPSessionProducerManager.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(JCSMPSessionProducerManager.class);
 
 	public JCSMPSessionProducerManager(JCSMPSession session) {
 		super("producer");
@@ -44,10 +44,8 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 			}
 
 			if (correlationKey instanceof ErrorChannelSendingCorrelationKey key) {
-				if (logger.isTraceEnabled()) {
-					logger.trace("Producer received response for message " +
-							StaticMessageHeaderAccessor.getId(key.getInputMessage()));
-				}
+				LOGGER.trace("Producer received response for message {}",
+						StaticMessageHeaderAccessor.getId(key.getInputMessage()));
 				if (key.getConfirmCorrelation() != null) {
 					key.getConfirmCorrelation().success();
 				}
@@ -55,14 +53,12 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 				try {
 					key.handleSuccess();
 				} catch (SolaceAcknowledgmentException e) { // unlikely to happen
-					logger.warn(String.format("Message %s successfully sent to error queue %s, " +
-									"but failed to acknowledge consumer message. Message is likely duplicated and was/will be"
-									+ " redelivered on the original queue.",
-							key.getSourceMessageId(), key.getErrorQueueName()), e);
+					LOGGER.warn("Message {} successfully sent to error queue {}, but failed to acknowledge consumer message. Message is likely duplicated and was/will be redelivered on the original queue.",
+							key.getSourceMessageId(), key.getErrorQueueName(), e);
 					throw e;
 				}
-			} else if (logger.isTraceEnabled()) {
-				logger.trace("Producer received response for correlation key: " + correlationKey);
+			} else {
+				LOGGER.trace("Producer received response for correlation key: {}", correlationKey);
 			}
 		}
 
@@ -79,7 +75,7 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 						.orElse(null);
 				String msg = String.format("Producer received error during publishing (Spring message %s) at %s",
 						springMessageId, timestamp);
-				logger.warn(msg, cause);
+				LOGGER.warn(msg, cause);
 				MessagingException messagingException = key.send(msg, cause);
 
 				if (key.getConfirmCorrelation() != null) {
@@ -89,14 +85,12 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 				try {
 					key.handleError();
 				} catch (SolaceAcknowledgmentException e) { // unlikely to happen
-					logger.warn(String.format("Cannot republish message %s to error queue %s. " +
-									"It was/will be redelivered on the original queue",
-							key.getSourceMessageId(), key.getErrorQueueName()), e);
+					LOGGER.warn("Cannot republish message {} to error queue {}. It was/will be redelivered on the original queue",
+							key.getSourceMessageId(), key.getErrorQueueName(), e);
 					throw e;
 				}
 			} else {
-				logger.warn(String.format("Producer received error for correlation key: %s at %s", correlationKey,
-						timestamp), cause);
+				LOGGER.warn("Producer received error for correlation key: {} at {}", correlationKey, timestamp, cause);
 			}
 		}
 	}

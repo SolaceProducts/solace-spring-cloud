@@ -16,14 +16,14 @@ import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
@@ -49,7 +49,7 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 	private final AtomicReference<FlowReceiverContainer> flowReceiverContainerReference = new AtomicReference<>();
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
 
-	private static final Log logger = LogFactory.getLog(ErrorQueueRepublishCorrelationKeyIT.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(ErrorQueueRepublishCorrelationKeyIT.class);
 
 	@BeforeEach
 	public void setUp(JCSMPSession jcsmpSession) throws Exception {
@@ -170,7 +170,7 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 		MessageContainer messageContainer = flowReceiverContainer.receive(5000);
 		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer);
 
-		logger.info(String.format("Shutting down ingress for queue %s", errorQueue.getName()));
+		LOGGER.info("Shutting down ingress for queue {}", errorQueue.getName());
 		sempV2Api.config().updateMsgVpnQueue(vpnName, errorQueue.getName(),
 				new ConfigMsgVpnQueue().ingressEnabled(false), null, null);
 		retryAssert(() -> assertFalse(sempV2Api.monitor()
@@ -181,7 +181,7 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 		CountDownLatch latch = new CountDownLatch(1);
 		Mockito.doAnswer(invocation -> {
 			if (key.getErrorQueueDeliveryAttempt() == errorQueueInfrastructure.getMaxDeliveryAttempts()) {
-				logger.info(String.format("Starting ingress for queue %s", errorQueue.getName()));
+				LOGGER.info("Starting ingress for queue {}", errorQueue.getName());
 				sempV2Api.config().updateMsgVpnQueue(vpnName, errorQueue.getName(),
 						new ConfigMsgVpnQueue().ingressEnabled(true), null, null);
 				retryAssert(() -> assertTrue(sempV2Api.monitor()
@@ -278,7 +278,7 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 		Mockito.when(messageContainer.isStale()).thenReturn(true);
 		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer);
 
-		assertThrows(IllegalStateException.class, () -> key.handleError());
+		assertThrows(IllegalStateException.class, key::handleError);
 		assertEquals(0, key.getErrorQueueDeliveryAttempt());
 	}
 

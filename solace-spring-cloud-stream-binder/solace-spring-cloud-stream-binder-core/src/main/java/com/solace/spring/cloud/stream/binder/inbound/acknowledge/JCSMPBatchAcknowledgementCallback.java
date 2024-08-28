@@ -1,13 +1,14 @@
 package com.solace.spring.cloud.stream.binder.inbound.acknowledge;
 
 import com.solace.spring.cloud.stream.binder.util.SolaceBatchAcknowledgementException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.integration.acks.AcknowledgmentCallback;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-import org.springframework.integration.acks.AcknowledgmentCallback;
 
 /**
  * Acknowledgment callback for a batch of messages.
@@ -18,7 +19,7 @@ class JCSMPBatchAcknowledgementCallback implements AcknowledgmentCallback {
   private boolean acknowledged = false;
   private boolean autoAckEnabled = true;
 
-  private static final Log logger = LogFactory.getLog(JCSMPBatchAcknowledgementCallback.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(JCSMPBatchAcknowledgementCallback.class);
 
   JCSMPBatchAcknowledgementCallback(List<JCSMPAcknowledgementCallback> acknowledgementCallbacks) {
     this.acknowledgementCallbacks = acknowledgementCallbacks;
@@ -28,9 +29,7 @@ class JCSMPBatchAcknowledgementCallback implements AcknowledgmentCallback {
   public void acknowledge(Status status) {
     // messageContainer.isAcknowledged() might be async set which is why we also need a local ack variable
     if (isAcknowledged()) {
-      if (logger.isDebugEnabled()) {
-        logger.debug("Batch message is already acknowledged");
-      }
+      LOGGER.debug("Batch message is already acknowledged");
       return;
     }
 
@@ -41,8 +40,8 @@ class JCSMPBatchAcknowledgementCallback implements AcknowledgmentCallback {
       try {
         messageAcknowledgementCallback.acknowledge(status);
       } catch (Exception e) {
-        logger.error(String.format("Failed to acknowledge XMLMessage %s",
-            messageAcknowledgementCallback.getMessageContainer().getMessage().getMessageId()), e);
+        LOGGER.error("Failed to acknowledge XMLMessage {}",
+            messageAcknowledgementCallback.getMessageContainer().getMessage().getMessageId(), e);
         failedMessageIndexes.add(msgIdx);
         if (firstEncounteredException == null) {
           firstEncounteredException = e;
@@ -62,10 +61,8 @@ class JCSMPBatchAcknowledgementCallback implements AcknowledgmentCallback {
   public boolean isAcknowledged() {
     if (acknowledged) {
       return true;
-		} else if (acknowledgementCallbacks.stream().allMatch(JCSMPAcknowledgementCallback::isAcknowledged)) {
-      if (logger.isTraceEnabled()) {
-        logger.trace("All messages in batch are already acknowledged, marking batch as acknowledged");
-      }
+    } else if (acknowledgementCallbacks.stream().allMatch(JCSMPAcknowledgementCallback::isAcknowledged)) {
+      LOGGER.trace("All messages in batch are already acknowledged, marking batch as acknowledged");
       acknowledged = true;
       return true;
     } else {
@@ -99,9 +96,7 @@ class JCSMPBatchAcknowledgementCallback implements AcknowledgmentCallback {
     }
 
     if (isAcknowledged()) {
-      if (logger.isDebugEnabled()) {
-        logger.debug("Batch message is already acknowledged");
-      }
+      LOGGER.debug("Batch message is already acknowledged");
       return false;
     }
 
