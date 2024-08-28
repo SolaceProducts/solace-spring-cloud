@@ -31,14 +31,12 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 					springId, ErrorMessage.class.getSimpleName(), message.getClass().getSimpleName()));
 		}
 
-		Throwable payload = errorMessage.getPayload();
-
 		Set<AcknowledgmentCallback> acknowledgmentCallbacks = new HashSet<>();
 
 		Optional.ofNullable(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message))
 				.ifPresent(acknowledgmentCallbacks::add);
 
-		if (payload instanceof MessagingException messagingException) {
+		if (errorMessage.getPayload() instanceof MessagingException messagingException) {
 			Optional.ofNullable(messagingException.getFailedMessage())
 					.map(m -> {
 						info.append("messaging-exception-message: ").append(StaticMessageHeaderAccessor.getId(m)).append(", ");
