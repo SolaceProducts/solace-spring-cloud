@@ -2,8 +2,8 @@ package com.solace.spring.cloud.stream.binder.util;
 
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solacesystems.jcsmp.XMLMessage;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.integration.support.ErrorMessageUtils;
@@ -20,7 +20,7 @@ public class ErrorChannelSendingCorrelationKey {
 	private List<XMLMessage> rawMessages;
 	private CorrelationData confirmCorrelation;
 
-	private static final Log logger = LogFactory.getLog(ErrorChannelSendingCorrelationKey.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(ErrorChannelSendingCorrelationKey.class);
 
 	public ErrorChannelSendingCorrelationKey(Message<?> inputMessage, MessageChannel errorChannel,
 											 ErrorMessageStrategy errorMessageStrategy) {
@@ -64,8 +64,7 @@ public class ErrorChannelSendingCorrelationKey {
 						inputMessage.getHeaders().containsKey(SolaceBinderHeaders.BATCHED_HEADERS) ?
 								rawMessages : rawMessages.get(0));
 			}
-			logger.debug(String.format("Sending message %s to error channel %s", inputMessage.getHeaders().getId(),
-					errorChannel));
+			LOGGER.debug("Sending message {} to error channel {}", inputMessage.getHeaders().getId(), errorChannel);
 			errorChannel.send(errorMessageStrategy.buildErrorMessage(exception, attributes));
 		}
 		return exception;

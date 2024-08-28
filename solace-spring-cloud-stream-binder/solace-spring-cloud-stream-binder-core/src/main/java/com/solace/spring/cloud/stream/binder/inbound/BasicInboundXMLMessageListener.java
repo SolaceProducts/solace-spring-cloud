@@ -6,8 +6,8 @@ import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
@@ -24,7 +24,7 @@ import java.util.function.Supplier;
 public class BasicInboundXMLMessageListener extends InboundXMLMessageListener {
 	private final BiFunction<Message<?>, RuntimeException, Boolean> errorHandlerFunction;
 
-	private static final Log logger = LogFactory.getLog(BasicInboundXMLMessageListener.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(BasicInboundXMLMessageListener.class);
 
 	BasicInboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 								   ConsumerDestination consumerDestination,
@@ -63,9 +63,9 @@ public class BasicInboundXMLMessageListener extends InboundXMLMessageListener {
 			if (processedByErrorHandler) {
 				AckUtils.autoAck(acknowledgmentCallback);
 			} else {
-				logger.warn(String.format("Failed to map %s to a Spring Message and no error channel " +
+				LOGGER.warn("Failed to map {} to a Spring Message and no error channel " +
 						"was configured. Message will be rejected.", isBatched ? "a batch of XMLMessages" :
-						"an XMLMessage"), e);
+						"an XMLMessage", e);
 				if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 					AckUtils.requeue(acknowledgmentCallback);
 				}

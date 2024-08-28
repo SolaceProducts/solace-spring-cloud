@@ -27,8 +27,6 @@ import com.solacesystems.jcsmp.XMLContentMessage;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.assertj.core.api.Assertions;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.assertj.core.api.MapAssert;
@@ -49,6 +47,8 @@ import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.mockito.Mockito;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
@@ -111,7 +111,7 @@ public class XMLMessageMapperTest {
 	@Spy
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 
-	private static final Log logger = LogFactory.getLog(XMLMessageMapperTest.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(XMLMessageMapperTest.class);
 	private static final Set<String> JMS_INVALID_HEADER_NAMES = new HashSet<>(Arrays.asList("~ab;c", "NULL",
 			"TRUE", "FALSE", "NOT", "AND", "OR", "BETWEEN", "LIKE", "IN", "IS", "ESCAPE", "JMSX_abc", "JMS_abc"));
 
@@ -1681,12 +1681,12 @@ public class XMLMessageMapperTest {
 		XMLMessage xmlMessage;
 		int i = 0;
 		do {
-			logger.info(String.format("Iteration %s - Message<?> to XMLMessage:\n%s", i, springMessage));
+			LOGGER.info("Iteration {} - Message<?> to XMLMessage:\n{}", i, springMessage);
 			xmlMessage = xmlMessageMapper.map(springMessage, null, false);
 			validateXMLProperties(xmlMessage, expectedSpringMessage.getPayload(), expectedSpringMessage.getHeaders(),
 					springHeaders);
 
-			logger.info(String.format("Iteration %s - XMLMessage to Message<?>:\n%s", i, xmlMessage));
+			LOGGER.info("Iteration {} - XMLMessage to Message<?>:\n{}", i, xmlMessage);
 			AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 			springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback, consumerProperties);
 			validateSpringHeaders(springMessage.getHeaders(), expectedXmlMessage);

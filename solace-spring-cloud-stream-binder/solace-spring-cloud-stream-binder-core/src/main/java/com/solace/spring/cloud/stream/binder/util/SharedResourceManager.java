@@ -1,7 +1,7 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -12,7 +12,7 @@ abstract class SharedResourceManager<T> {
 	private Set<String> registeredIds = new HashSet<>();
 	private final Object lock = new Object();
 
-	private static final Log logger = LogFactory.getLog(SharedResourceManager.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(SharedResourceManager.class);
 
 	SharedResourceManager(String type) {
 		this.type = type;
@@ -31,10 +31,10 @@ abstract class SharedResourceManager<T> {
 	public T get(String key) throws Exception {
 		synchronized (lock) {
 			if (registeredIds.isEmpty()) {
-				logger.info(String.format("No %s exists, a new one will be created", type));
+				LOGGER.info("No {} exists, a new one will be created", type);
 				sharedResource = create();
-			} else if (logger.isTraceEnabled()) {
-				logger.trace(String.format("A message %s already exists, reusing it", type));
+			} else {
+				LOGGER.trace("A message {} already exists, reusing it", type);
 			}
 
 			registeredIds.add(key);
@@ -53,11 +53,11 @@ abstract class SharedResourceManager<T> {
 			if (!registeredIds.contains(key)) return;
 
 			if (registeredIds.size() <= 1) {
-				logger.info(String.format("%s is the last user, closing %s...", key, type));
+				LOGGER.info("{} is the last user, closing {}...", key, type);
 				close();
 				sharedResource = null;
 			} else {
-				logger.info(String.format("%s is not the last user, persisting %s...", key, type));
+				LOGGER.info("{} is not the last user, persisting {}...", key, type);
 			}
 			registeredIds.remove(key);
 		}

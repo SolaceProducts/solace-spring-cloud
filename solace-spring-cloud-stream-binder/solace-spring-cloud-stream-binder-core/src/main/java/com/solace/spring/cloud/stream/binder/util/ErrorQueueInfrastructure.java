@@ -6,8 +6,8 @@ import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.messaging.MessagingException;
 
 public class ErrorQueueInfrastructure {
@@ -17,7 +17,7 @@ public class ErrorQueueInfrastructure {
 	private final SolaceConsumerProperties consumerProperties;
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 
-	private static final Log logger = LogFactory.getLog(ErrorQueueInfrastructure.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(ErrorQueueInfrastructure.class);
 
 	public ErrorQueueInfrastructure(JCSMPSessionProducerManager producerManager, String producerKey,
 									String errorQueueName, SolaceConsumerProperties consumerProperties) {
@@ -35,10 +35,11 @@ public class ErrorQueueInfrastructure {
 		try {
 			producer = producerManager.get(producerKey);
 		} catch (Exception e) {
-			String msg = String.format("Failed to get producer to send message %s to queue %s",
-					xmlMessage.getMessageId(), errorQueueName);
-			logger.warn(msg, e);
-			throw new MessagingException(msg, e);
+			MessagingException wrappedException = new MessagingException(
+					String.format("Failed to get producer to send message %s to queue %s", xmlMessage.getMessageId(),
+							errorQueueName), e);
+			LOGGER.warn(wrappedException.getMessage(), e);
+			throw wrappedException;
 		}
 
 		producer.send(xmlMessage, queue);

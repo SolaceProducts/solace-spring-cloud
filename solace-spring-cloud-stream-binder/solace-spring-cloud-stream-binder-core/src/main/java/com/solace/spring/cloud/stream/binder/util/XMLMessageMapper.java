@@ -20,8 +20,8 @@ import com.solacesystems.jcsmp.StreamMessage;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLContentMessage;
 import com.solacesystems.jcsmp.XMLMessage;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
 import org.springframework.integration.StaticMessageHeaderAccessor;
@@ -55,7 +55,7 @@ import java.util.function.Supplier;
 import java.util.stream.IntStream;
 
 public class XMLMessageMapper {
-	private static final Log logger = LogFactory.getLog(XMLMessageMapper.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(XMLMessageMapper.class);
 	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 	private static final MessageBuilderFactory MESSAGE_BUILDER_FACTORY = new DefaultMessageBuilderFactory();
 	static final int MESSAGE_VERSION = 1;
@@ -129,7 +129,7 @@ public class XMLMessageMapper {
 							Serializable.class.getSimpleName()
 					), payload.getClass().getName());
 			SolaceMessageConversionException exception = new SolaceMessageConversionException(msg);
-			logger.warn(msg, exception);
+			LOGGER.warn(msg, exception);
 			throw exception;
 		}
 
@@ -155,7 +155,7 @@ public class XMLMessageMapper {
 							messageId, header.getKey(), header.getValue().getType(),
 							value.getClass());
 					SolaceMessageConversionException exception = new SolaceMessageConversionException(msg);
-					logger.warn(msg, exception);
+					LOGGER.warn(msg, exception);
 					throw exception;
 				}
 			} else if (header.getValue().hasOverriddenDefaultValue()) {
@@ -170,7 +170,7 @@ public class XMLMessageMapper {
 				String msg = String.format("Could not set %s property from header %s of message %s",
 						XMLMessage.class.getSimpleName(), header.getKey(), messageId);
 				SolaceMessageConversionException exception = new SolaceMessageConversionException(msg, e);
-				logger.warn(msg, exception);
+				LOGGER.warn(msg, exception);
 				throw exception;
 			}
 		}
@@ -287,7 +287,7 @@ public class XMLMessageMapper {
 							XMLContentMessage.class.getSimpleName()
 					), xmlMessage.getClass());
 			SolaceMessageConversionException exception = new SolaceMessageConversionException(msg);
-			logger.warn(msg, exception);
+			LOGGER.warn(msg, exception);
 			throw exception;
 		}
 
@@ -311,9 +311,7 @@ public class XMLMessageMapper {
 				.setHeaderIfAbsent(MessageHeaders.CONTENT_TYPE, xmlMessage.getHTTPContentType());
 
 		if (isNullPayload) {
-			if (logger.isDebugEnabled()) {
-				logger.debug("Null payload detected, setting Spring header " + SolaceBinderHeaders.NULL_PAYLOAD);
-			}
+			LOGGER.debug("Null payload detected, setting Spring header {}", SolaceBinderHeaders.NULL_PAYLOAD);
 			builder.setHeader(SolaceBinderHeaders.NULL_PAYLOAD, isNullPayload);
 		}
 
@@ -330,9 +328,7 @@ public class XMLMessageMapper {
 			try {
 				builder.setHeaderIfAbsent(header.getKey(), header.getValue().getReadAction().apply(xmlMessage));
 			} catch (UnsupportedOperationException e) {
-				if (logger.isDebugEnabled()) {
-					logger.debug(String.format("Ignoring Solace header %s. Error: %s", header.getKey(), e.getMessage()));
-				}
+				LOGGER.debug("Ignoring Solace header {}. Error: {}", header.getKey(), e.getMessage());
 				ignoredHeaderProperties.add(header.getKey());
 				continue;
 			}
@@ -379,7 +375,7 @@ public class XMLMessageMapper {
 						SolaceBinderHeaders.PARTITION_KEY, String.class, partitionKeyObj.getClass());
 				SolaceMessageConversionException exception = new SolaceMessageConversionException(
 						new IllegalArgumentException(msg));
-				logger.warn(msg, exception);
+				LOGGER.warn(msg, exception);
 				throw exception;
 			}
 		}
@@ -413,7 +409,7 @@ public class XMLMessageMapper {
 				if (encoder == null) {
 					String msg = String.format("%s encoding is not supported", encoding);
 					SolaceMessageConversionException exception = new SolaceMessageConversionException(msg);
-					logger.warn(msg, exception);
+					LOGGER.warn(msg, exception);
 					throw exception;
 				}
 			}
@@ -475,9 +471,7 @@ public class XMLMessageMapper {
 
 					serializedHeaders.add(k);
 				} else if (convertNonSerializableHeadersToString && o != null) {
-					if (logger.isDebugEnabled()) {
-						logger.debug(String.format("Irreversibly converting header %s to String", k));
-					}
+					LOGGER.debug("Irreversibly converting header {} to String", k);
 					sdtMap.putString(k, o.toString());
 				} else {
 					throw e;
@@ -506,9 +500,7 @@ public class XMLMessageMapper {
 		if (ignoredHeaderProperties.isEmpty()) {
 			return;
 		}
-		if (logger.isDebugEnabled()) {
-			logger.debug(String.format("Clearing ignored properties %s on flow receiver container %s", ignoredHeaderProperties, flowReceiverId));
-		}
+		LOGGER.debug("Clearing ignored properties {} on flow receiver container {}", ignoredHeaderProperties, flowReceiverId);
 		ignoredHeaderProperties.clear();
 	}
 
@@ -521,7 +513,7 @@ public class XMLMessageMapper {
 				return applyThrows(t);
 			} catch (Exception e) {
 				SolaceMessageConversionException wrappedException = new SolaceMessageConversionException(e);
-				logger.warn(wrappedException);
+				LOGGER.warn(wrappedException.getMessage(), wrappedException);
 				throw wrappedException;
 			}
 		}
@@ -538,7 +530,7 @@ public class XMLMessageMapper {
 				return applyThrows(t, u);
 			} catch (Exception e) {
 				SolaceMessageConversionException wrappedException = new SolaceMessageConversionException(e);
-				logger.warn(wrappedException);
+				LOGGER.warn(wrappedException.getMessage(), wrappedException);
 				throw wrappedException;
 			}
 		}
@@ -555,7 +547,7 @@ public class XMLMessageMapper {
 				applyThrows(t, u);
 			} catch (Exception e) {
 				SolaceMessageConversionException wrappedException = new SolaceMessageConversionException(e);
-				logger.warn(wrappedException);
+				LOGGER.warn(wrappedException.getMessage(), wrappedException);
 				throw wrappedException;
 			}
 		}
@@ -572,7 +564,7 @@ public class XMLMessageMapper {
 				return applyThrows();
 			} catch (Exception e) {
 				SolaceMessageConversionException wrappedException = new SolaceMessageConversionException(e);
-				logger.warn(wrappedException);
+				LOGGER.warn(wrappedException.getMessage(), wrappedException);
 				throw wrappedException;
 			}
 		}

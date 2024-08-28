@@ -11,13 +11,17 @@ import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
-import com.solacesystems.jcsmp.*;
+import com.solacesystems.jcsmp.ConsumerFlowProperties;
+import com.solacesystems.jcsmp.Endpoint;
+import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.JCSMPException;
+import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.XMLMessage.Outcome;
 import com.solacesystems.jcsmp.impl.JCSMPBasicSession;
 import com.solacesystems.jcsmp.transaction.RollbackException;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.context.OrderlyShutdownCapable;
@@ -33,7 +37,11 @@ import org.springframework.retry.support.RetryTemplate;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 import org.springframework.util.Assert;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -62,7 +70,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
     @Nullable
     private SolaceBinderHealthAccessor solaceBinderHealthAccessor;
 
-    private static final Log logger = LogFactory.getLog(JCSMPInboundChannelAdapter.class);
+    // overriding Spring's LogAccessor to just use plain SLF4J
+    private static final Logger logger = LoggerFactory.getLogger(JCSMPInboundChannelAdapter.class);
     private static final ThreadLocal<AttributeAccessor> attributesHolder = new ThreadLocal<>();
 
     public JCSMPInboundChannelAdapter(SolaceConsumerDestination consumerDestination,
@@ -82,32 +91,31 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
     @Override
     protected void doStart() {
         final String endpointName = consumerDestination.getName();
-        logger.info(String.format("Creating %s consumer flows for %s %s <inbound adapter %s>",
-                consumerProperties.getExtension().getEndpointType(),
-                consumerProperties.getConcurrency(), endpointName, id));
+		logger.info("Creating {} consumer flows for {} {} <inbound adapter {}>",
+                consumerProperties.getExtension().getEndpointType(), consumerProperties.getConcurrency(), endpointName, id);
 
         if (isRunning()) {
-            logger.warn(String.format("Nothing to do. Inbound message channel adapter %s is already running", id));
+			logger.warn("Nothing to do. Inbound message channel adapter {} is already running", id);
             return;
         }
 
         if (consumerProperties.getConcurrency() < 1) {
-            String msg = String.format("Concurrency must be greater than 0, was %s <inbound adapter %s>",
-                    consumerProperties.getConcurrency(), id);
-            logger.warn(msg);
-            throw new MessagingException(msg);
+            MessagingException exception = new MessagingException(
+                    String.format("Concurrency must be greater than 0, was %s <inbound adapter %s>",
+                    consumerProperties.getConcurrency(), id));
+            logger.warn(exception.getMessage());
+            throw exception;
         }
 
         if (jcsmpSession instanceof JCSMPBasicSession jcsmpBasicSession
                 && !jcsmpBasicSession.isRequiredSettlementCapable(
                 Set.of(Outcome.ACCEPTED, Outcome.FAILED, Outcome.REJECTED))) {
-            String msg = String.format("The Solace PubSub+ Broker doesn't support message NACK capability, <inbound adapter %s>", id);
-            throw new MessagingException(msg);
+            throw new MessagingException(String.format(
+                    "The Solace PubSub+ Broker doesn't support message NACK capability, <inbound adapter %s>", id));
         }
 
         if (executorService != null && !executorService.isTerminated()) {
-            logger.warn(String.format("Unexpectedly found running executor service while starting inbound adapter %s, " +
-                    "closing it...", id));
+			logger.warn("Unexpectedly found running executor service while starting inbound adapter {}, closing it...", id);
             stopAllConsumers();
         }
 
@@ -115,10 +123,11 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
         EndpointProvider<?> endpointProvider = EndpointProvider.from(endpointType);
 
         if (endpointProvider == null) {
-            String msg = String.format("Consumer not supported for destination type %s <inbound adapter %s>",
-                    consumerProperties.getExtension().getEndpointType(), id);
-            logger.warn(msg);
-            throw new MessagingException(msg);
+            MessagingException exception = new MessagingException(String.format(
+                    "Consumer not supported for destination type %s <inbound adapter %s>",
+                    consumerProperties.getExtension().getEndpointType(), id));
+            logger.warn(exception.getMessage());
+            throw exception;
         }
 
         Endpoint endpoint = null;
@@ -130,15 +139,14 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
                     : endpointProvider.createInstance(endpointName);
         } catch (JCSMPException e) {
             // consumer binding will fail later, just logging
-            logger.warn(String.format("Inbound adapter %s can't create temporary endpoint %s on a broker", id), e);
+			logger.warn("Inbound adapter {} can't create temporary endpoint {} on a broker", id, endpointName, e);
         }
 
         ConsumerFlowProperties consumerFlowProperties = SolaceProvisioningUtil.getConsumerFlowProperties(
                 consumerDestination.getBindingDestinationName(), consumerProperties);
 
         for (int i = 0, numToCreate = consumerProperties.getConcurrency() - flowReceivers.size(); i < numToCreate; i++) {
-            logger.info(String.format("Creating consumer %s of %s for inbound adapter %s",
-                    i + 1, consumerProperties.getConcurrency(), id));
+			logger.info("Creating consumer {} of {} for inbound adapter {}", i + 1, consumerProperties.getConcurrency(), id);
 
             FlowReceiverContainer flowReceiverContainer = new FlowReceiverContainer(
                     jcsmpSession,
@@ -148,9 +156,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
                     consumerFlowProperties);
 
             if (paused.get()) {
-                logger.info(String.format(
-                        "Inbound adapter %s is paused, pausing newly created flow receiver container %s",
-                        id, flowReceiverContainer.getId()));
+				logger.info("Inbound adapter {} is paused, pausing newly created flow receiver container {}", id,
+                        flowReceiverContainer.getId());
                 flowReceiverContainer.pause();
             }
             flowReceivers.add(flowReceiverContainer);
@@ -167,10 +174,10 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
                 flowReceiverContainer.bind();
             }
         } catch (JCSMPException e) {
-            String msg = String.format("Failed to get message consumer for inbound adapter %s", id);
-            logger.warn(msg, e);
+            MessagingException wrappedException = new MessagingException(String.format("Failed to get message consumer for inbound adapter %s", id), e);
+            logger.warn(wrappedException.getMessage(), e);
             flowReceivers.forEach(FlowReceiverContainer::unbind);
-            throw new MessagingException(msg, e);
+            throw wrappedException;
         }
 
         if (retryTemplate != null) {
@@ -204,17 +211,17 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
     private void stopAllConsumers() {
         final String queueName = consumerDestination.getName();
-        logger.info(String.format("Stopping all %s consumer flows to queue %s <inbound adapter ID: %s>",
-                consumerProperties.getConcurrency(), queueName, id));
+		logger.info("Stopping all {} consumer flows to queue {} <inbound adapter ID: {}>",
+                consumerProperties.getConcurrency(), queueName, id);
         consumerStopFlags.forEach(flag -> flag.set(true)); // Mark threads for shutdown
         try {
             if (!executorService.awaitTermination(shutdownInterruptThresholdInMillis, TimeUnit.MILLISECONDS)) {
-                logger.info(String.format("Interrupting all workers for inbound adapter %s", id));
+                logger.info("Interrupting all workers for inbound adapter {}", id);
                 executorService.shutdownNow();
                 if (!executorService.awaitTermination(1, TimeUnit.MINUTES)) {
-                    String msg = String.format("executor service shutdown for inbound adapter %s timed out", id);
-                    logger.warn(msg);
-                    throw new MessagingException(msg);
+                    MessagingException exception = new MessagingException(String.format("executor service shutdown for inbound adapter %s timed out", id));
+                    logger.warn(exception.getMessage());
+                    throw exception;
                 }
             }
 
@@ -228,9 +235,10 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
             consumerStopFlags.clear();
 
         } catch (InterruptedException e) {
-            String msg = String.format("executor service shutdown for inbound adapter %s was interrupted", id);
-            logger.warn(msg);
-            throw new MessagingException(msg);
+            MessagingException wrappedException = new MessagingException(
+                    String.format("executor service shutdown for inbound adapter %s was interrupted", id));
+            logger.warn(wrappedException.getMessage());
+            throw wrappedException;
         }
     }
 
@@ -319,14 +327,14 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
     @Override
     public void pause() {
-        logger.info(String.format("Pausing inbound adapter %s", id));
+        logger.info("Pausing inbound adapter {}", id);
         flowReceivers.forEach(FlowReceiverContainer::pause);
         paused.set(true);
     }
 
     @Override
     public void resume() {
-        logger.info(String.format("Resuming inbound adapter %s", id));
+        logger.info("Resuming inbound adapter {}", id);
         try {
             for (FlowReceiverContainer flowReceiver : flowReceivers) {
                 flowReceiver.resume();
@@ -336,9 +344,9 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
             RuntimeException toThrow = new RuntimeException(
                     String.format("Failed to resume inbound adapter %s", id), e);
             if (paused.get()) {
-                logger.error(String.format(
-                        "Inbound adapter %s failed to be resumed. Resumed flow receiver containers will be re-paused",
-                        id), e);
+                logger.error(
+                        "Inbound adapter {} failed to be resumed. Resumed flow receiver containers will be re-paused",
+                        id, e);
                 try {
                     pause();
                 } catch (Exception e1) {
@@ -354,9 +362,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
         if (paused.get()) {
             for (FlowReceiverContainer flowReceiverContainer : flowReceivers) {
                 if (!flowReceiverContainer.isPaused()) {
-                    logger.warn(String.format(
-                            "Flow receiver container %s is unexpectedly running for inbound adapter %s",
-                            flowReceiverContainer.getId(), id));
+                    logger.warn("Flow receiver container {} is unexpectedly running for inbound adapter {}",
+                            flowReceiverContainer.getId(), id);
                     return false;
                 }
             }
@@ -387,8 +394,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
         @Override
         public <T, E extends Throwable> void onError(RetryContext context, RetryCallback<T, E> callback, Throwable throwable) {
-            logger.warn(String.format("Failed to consume a message from destination %s - attempt %s",
-                    queueName, context.getRetryCount()));
+            logger.warn("Failed to consume a message from destination {} - attempt {}", queueName, context.getRetryCount());
             for (Throwable nestedThrowable : ExceptionUtils.getThrowableList(throwable)) {
                 if (nestedThrowable instanceof SolaceMessageConversionException ||
                         nestedThrowable instanceof RollbackException) {

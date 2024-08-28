@@ -2,9 +2,8 @@ package com.solace.spring.cloud.stream.binder.util;
 
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.SolaceAckUtil;
 import com.solacesystems.jcsmp.XMLMessage;
-import java.util.UUID;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
@@ -13,22 +12,23 @@ import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.ErrorMessage;
 
+import java.util.UUID;
+
 public class SolaceErrorMessageHandler implements MessageHandler {
 
-	private static final Log logger = LogFactory.getLog(SolaceErrorMessageHandler.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(SolaceErrorMessageHandler.class);
 
 	@Override
 	public void handleMessage(Message<?> message) throws MessagingException {
 		UUID springId = StaticMessageHeaderAccessor.getId(message);
 		StringBuilder info = new StringBuilder("Processing message ").append(springId).append(" <");
 
-		if (!(message instanceof ErrorMessage)) {
-			logger.warn(String.format("Spring message %s: Expected an %s, not a %s",
-					springId, ErrorMessage.class.getSimpleName(), message.getClass().getSimpleName()));
+		if (!(message instanceof ErrorMessage errorMessage)) {
+			LOGGER.warn("Spring message {}: Expected an {}, not a {}", springId, ErrorMessage.class.getSimpleName(),
+					message.getClass().getSimpleName());
 			return;
 		}
 
-		ErrorMessage errorMessage = (ErrorMessage) message;
 		Throwable payload = errorMessage.getPayload();
 
 		Message<?> failedMsg;
@@ -47,7 +47,7 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 			info.append("source-message: ").append(((XMLMessage) sourceData).getMessageId()).append(", ");
 		}
 
-		logger.info(info.append('>'));
+		LOGGER.info(info.append('>').toString());
 
 		AcknowledgmentCallback acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(message);
 		if (acknowledgmentCallback == null && failedMsg != null) {
@@ -56,9 +56,8 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 
 		if (acknowledgmentCallback == null) {
 			// Should never happen under normal use
-			logger.warn(String.format(
-					"Spring message %s does not contain an acknowledgment callback. Message cannot be acknowledged",
-					springId));
+			LOGGER.warn("Spring message {} does not contain an acknowledgment callback. Message cannot be acknowledged",
+					springId);
 			return;
 		}
 
@@ -67,7 +66,7 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 				AckUtils.requeue(acknowledgmentCallback);
 			}
 		} catch (SolaceAcknowledgmentException e) {
-			logger.error(String.format("Spring message %s: exception in error handler", springId), e);
+			LOGGER.error("Spring message {}: exception in error handler", springId, e);
 			throw e;
 		}
 	}

@@ -24,19 +24,15 @@ public class PubSubPlusSpringProvider implements PubSubPlusExtension.ExternalPro
 		try {
 			applicationContext.getBean(JCSMPProperties.class);
 		} catch (NoSuchBeanDefinitionException e) {
-			if (LOGGER.isTraceEnabled()) {
-				LOGGER.trace("Didn't find required bean: " + JCSMPProperties.class, e);
-			}
+			LOGGER.trace("Didn't find required bean: {}", JCSMPProperties.class, e);
 			return false;
 		}
 
 		if (!Stream.of(TestProperties.values()).map(TestProperties::getProperty)
 				.allMatch(contextEnvironment::containsProperty)) {
-			if (LOGGER.isTraceEnabled()) {
-				LOGGER.trace("Didn't find required test properties: [{}]", Stream.of(TestProperties.values())
-						.map(TestProperties::getProperty)
-						.collect(Collectors.joining(", ")));
-			}
+			LOGGER.trace("Didn't find required test properties: [{}]", Stream.of(TestProperties.values())
+					.map(TestProperties::getProperty)
+					.collect(Collectors.joining(", ")));
 			return false;
 		}
 		return true;

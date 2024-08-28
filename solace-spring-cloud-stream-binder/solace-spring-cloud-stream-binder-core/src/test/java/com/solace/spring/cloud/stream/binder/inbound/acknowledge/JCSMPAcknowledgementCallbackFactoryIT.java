@@ -32,8 +32,6 @@ import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jcsmp.transaction.RollbackException;
 import com.solacesystems.jcsmp.transaction.TransactedSession;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.assertj.core.api.SoftAssertions;
 import org.junit.function.ThrowingRunnable;
 import org.junit.jupiter.api.AfterEach;
@@ -46,6 +44,8 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.lang.Nullable;
@@ -90,7 +90,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 	private String vpnName;
 	private Runnable closeErrorQueueInfrastructureCallback;
 
-	private static final Log logger = LogFactory.getLog(JCSMPAcknowledgementCallbackFactoryIT.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(JCSMPAcknowledgementCallbackFactoryIT.class);
 
 	@BeforeEach
 	public void setup(JCSMPSession jcsmpSession) throws Exception {
@@ -117,7 +117,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 						   Queue durableQueue,
 						   SempV2Api sempV2Api) throws Exception {
 		if (numMessages == 1 && transacted) {
-			logger.info("No support yet for non-batched, transacted consumers");
+			LOGGER.info("No support yet for non-batched, transacted consumers");
 			return;
 		}
 
@@ -149,7 +149,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 						   SempV2Api sempV2Api)
 			throws Exception {
 		if (numMessages == 1 && transacted) {
-			logger.info("No support yet for non-batched, transacted consumers");
+			LOGGER.info("No support yet for non-batched, transacted consumers");
 			return;
 		}
 
@@ -180,7 +180,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 							   Queue queue,
 							   SempV2Api sempV2Api) throws Exception {
 		if (numMessages == 1 && transacted) {
-			logger.info("No support yet for non-batched, transacted consumers");
+			LOGGER.info("No support yet for non-batched, transacted consumers");
 			return;
 		}
 
@@ -191,7 +191,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers, flowReceiverContainer.getTransactedSession());
 
-		logger.info(String.format("Disabling egress for queue %s", queue.getName()));
+		LOGGER.info("Disabling egress for queue {}", queue.getName());
 		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
 				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false), null, null);
 		retryAssert(() -> assertFalse(sempV2Api.monitor()
@@ -199,7 +199,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 				.getData()
 				.isEgressEnabled()));
 
-		logger.info("Acknowledging messages");
+		LOGGER.info("Acknowledging messages");
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
 		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 
@@ -212,7 +212,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 				.getBindRequestCount())
 				.isGreaterThan(1);
 
-		logger.info(String.format("Enabling egress for queue %s", queue.getName()));
+		LOGGER.info("Enabling egress for queue {}", queue.getName());
 		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
 				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true), null, null);
 		retryAssert(() -> assertTrue(sempV2Api.monitor()
@@ -221,7 +221,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 				.isEgressEnabled()));
 
 		// Message was redelivered
-		logger.info("Verifying message was redelivered");
+		LOGGER.info("Verifying message was redelivered");
 		validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
 		validateQueueBindSuccesses(sempV2Api, queue.getName(), 2);
 		validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
@@ -274,8 +274,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers, flowReceiverContainer.getTransactedSession());
 
-		logger.info(String.format("Disabling ingress for error queue %s",
-				errorQueueInfrastructure.getErrorQueueName()));
+		LOGGER.info("Disabling ingress for error queue {}", errorQueueInfrastructure.getErrorQueueName());
 		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
 				errorQueueInfrastructure.getErrorQueueName(), new ConfigMsgVpnQueue().ingressEnabled(false), null, null);
 		retryAssert(() -> assertFalse(sempV2Api.monitor()
@@ -283,7 +282,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 				.getData()
 				.isIngressEnabled()));
 
-		logger.info("Acknowledging messages");
+		LOGGER.info("Acknowledging messages");
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
 		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 
@@ -304,7 +303,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 							Queue durableQueue,
 							SempV2Api sempV2Api) throws Exception {
 		if (numMessages == 1 && transacted) {
-			logger.info("No support yet for non-batched, transacted consumers");
+			LOGGER.info("No support yet for non-batched, transacted consumers");
 			return;
 		}
 
@@ -335,7 +334,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 								Queue queue,
 								SempV2Api sempV2Api) throws Exception {
 		if (numMessages == 1 && transacted) {
-			logger.info("No support yet for non-batched, transacted consumers");
+			LOGGER.info("No support yet for non-batched, transacted consumers");
 			return;
 		}
 
@@ -347,7 +346,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers, flowReceiverContainer.getTransactedSession());
 
-		logger.info(String.format("Disabling egress for queue %s", queue.getName()));
+		LOGGER.info("Disabling egress for queue {}", queue.getName());
 		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
 				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(false), null, null);
 		retryAssert(() -> assertFalse(sempV2Api.monitor()
@@ -355,7 +354,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 				.getData()
 				.isEgressEnabled()));
 
-		logger.info("Acknowledging messages");
+		LOGGER.info("Acknowledging messages");
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
 		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
 
@@ -368,7 +367,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 				.getBindRequestCount())
 				.isGreaterThan(1);
 
-		logger.info(String.format("Enabling egress for queue %s", queue.getName()));
+		LOGGER.info("Enabling egress for queue {}", queue.getName());
 		sempV2Api.config().updateMsgVpnQueue((String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
 				queue.getName(), new ConfigMsgVpnQueue().egressEnabled(true), null, null);
 		retryAssert(() -> assertTrue(sempV2Api.monitor()
@@ -377,7 +376,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 				.isEgressEnabled()));
 
 		// Message was redelivered
-		logger.info("Verifying message was redelivered");
+		LOGGER.info("Verifying message was redelivered");
 		validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
 		validateQueueBindSuccesses(sempV2Api, queue.getName(), 2);
 		validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
@@ -395,7 +394,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 									 Queue durableQueue,
 									 SempV2Api sempV2Api) throws Throwable {
 		if (numMessages == 1 && transacted) {
-			logger.info("No support yet for non-batched, transacted consumers");
+			LOGGER.info("No support yet for non-batched, transacted consumers");
 			return;
 		}
 
@@ -437,7 +436,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 									 Queue durableQueue,
 									 SempV2Api sempV2Api) throws Throwable {
 		if (numMessages == 1 && transacted) {
-			logger.info("No support yet for non-batched, transacted consumers");
+			LOGGER.info("No support yet for non-batched, transacted consumers");
 			return;
 		}
 
@@ -515,7 +514,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 									  Queue durableQueue,
 									  SempV2Api sempV2Api) throws Throwable {
 		if (numMessages == 1 && transacted) {
-			logger.info("No support yet for non-batched, transacted consumers");
+			LOGGER.info("No support yet for non-batched, transacted consumers");
 			return;
 		}
 
@@ -560,7 +559,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 			Queue durableQueue,
 			SempV2Api sempV2Api) throws Exception {
 		if (numMessages == 1 && transacted) {
-			logger.info("No support yet for non-batched, transacted consumers");
+			LOGGER.info("No support yet for non-batched, transacted consumers");
 			return;
 		}
 
@@ -619,7 +618,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 			@Values(booleans = {false, true}) boolean isDurable,
 			JCSMPSession jcsmpSession, Queue durableQueue, SempV2Api sempV2Api) throws Exception {
 		if (numMessages == 1 && transacted) {
-			logger.info("No support yet for non-batched, transacted consumers");
+			LOGGER.info("No support yet for non-batched, transacted consumers");
 			return;
 		}
 

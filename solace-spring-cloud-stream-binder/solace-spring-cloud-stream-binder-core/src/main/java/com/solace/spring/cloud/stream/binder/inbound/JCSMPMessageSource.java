@@ -21,6 +21,9 @@ import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPTransportException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.context.Lifecycle;
 import org.springframework.integration.acks.AckUtils;
@@ -60,6 +63,9 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
 	private Consumer<Endpoint> postStart;
 
+	// overriding Spring's LogAccessor to just use plain SLF4J
+	private static final Logger logger = LoggerFactory.getLogger(JCSMPMessageSource.class);
+
 	public JCSMPMessageSource(SolaceConsumerDestination consumerDestination,
 							  JCSMPSession jcsmpSession,
 							  @Nullable BatchCollector batchCollector,
@@ -80,16 +86,15 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		readLock.lock();
 		try {
 			if (remoteStopFlag.get()) {
-				if (logger.isDebugEnabled()) {
-					logger.debug(String.format("Message source %s is not running. Cannot receive message", id));
-				}
+				logger.debug("Message source {} is not running. Cannot receive message", id);
 				return null;
 			} else if (!isRunning()) {
-				String msg0 = String.format("Cannot receive message using message source %s", id);
-				String msg1 = String.format("Message source %s is not running", id);
-				ClosedChannelBindingException closedBindingException = new ClosedChannelBindingException(msg1);
-				logger.warn(closedBindingException, msg0);
-				throw new MessagingException(msg0, closedBindingException);
+				ClosedChannelBindingException closedBindingException = new ClosedChannelBindingException(
+						String.format("Message source %s is not running", id));
+				MessagingException messagingException = new MessagingException(
+						String.format("Cannot receive message using message source %s", id), closedBindingException);
+				logger.warn(messagingException.getMessage(), closedBindingException);
+				throw messagingException;
 			}
 		} finally {
 			readLock.unlock();
@@ -123,25 +128,20 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			}
 		} catch (JCSMPException e) {
 			if (!isRunning() || remoteStopFlag.get()) {
-				String msg = String.format("Exception received while consuming a message, but the consumer " +
-						"<message source ID: %s> is currently shutdown. Exception will be ignored", id);
-				if (e instanceof JCSMPTransportException || e instanceof ClosedFacilityException) {
-					logger.debug(e, msg);
-				} else {
-					logger.warn(e, msg);
-				}
+				logger.atLevel(e instanceof JCSMPTransportException || e instanceof ClosedFacilityException ? Level.DEBUG : Level.WARN)
+						.setCause(e)
+						.log("Exception received while consuming a message, but the consumer <message source ID: {}> is currently shutdown. Exception will be ignored", id);
 				return null;
 			} else {
-				String msg = String.format("Unable to consume message from endpoint %s", consumerDestination.getName());
-				logger.warn(e, msg);
-				throw new MessagingException(msg, e);
+				MessagingException wrappedException = new MessagingException("Unable to consume message from endpoint " +
+						consumerDestination.getName(), e);
+				logger.warn(wrappedException.getMessage(), e);
+				throw wrappedException;
 			}
 		} catch (UnboundFlowReceiverContainerException e) {
-			if (logger.isDebugEnabled()) {
-				// Might be thrown when async rebinding and this is configured with a super short timeout.
-				// Hide this so we don't flood the logger.
-				logger.debug(e, String.format("Unable to receive message from endpoint %s", consumerDestination.getName()));
-			}
+			// Might be thrown when async rebinding and this is configured with a super short timeout.
+			// Hide this so we don't flood the logger.
+			logger.debug("Unable to receive message from endpoint {}", consumerDestination.getName(), e);
 			return null;
 		}
 
@@ -160,8 +160,8 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			return xmlMessageMapper.map(messageContainer.getMessage(), acknowledgmentCallback, true, consumerProperties.getExtension());
 		} catch (Exception e) {
 			//TODO If one day the errorChannel or attributesHolder can be retrieved, use those instead
-			logger.warn(e, String.format("XMLMessage %s cannot be consumed. It will be requeued",
-					messageContainer.getMessage().getMessageId()));
+			logger.warn("XMLMessage {} cannot be consumed. It will be requeued",
+					messageContainer.getMessage().getMessageId(), e);
 			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 				AckUtils.requeue(acknowledgmentCallback);
 			}
@@ -186,7 +186,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 					.map(MessageContainer::getMessage)
 					.collect(Collectors.toList()), acknowledgmentCallback, true, consumerProperties.getExtension());
 		} catch (Exception e) {
-			logger.warn(e, "Message batch cannot be consumed. It will be requeued");
+			logger.warn("Message batch cannot be consumed. It will be requeued", e);
 			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 				AckUtils.requeue(acknowledgmentCallback);
 			}
@@ -206,10 +206,10 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
-			logger.info(String.format("Creating consumer to %s %s <message source ID: %s>",
-					consumerProperties.getExtension().getEndpointType(), consumerDestination.getName(), id));
+			logger.info("Creating consumer to {} {} <message source ID: {}>",
+					consumerProperties.getExtension().getEndpointType(), consumerDestination.getName(), id);
 			if (isRunning()) {
-				logger.warn(String.format("Nothing to do, message source %s is already running", id));
+				logger.warn("Nothing to do, message source {} is already running", id);
 				return;
 			}
 
@@ -217,10 +217,12 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				EndpointProvider<?> endpointProvider = EndpointProvider.from(consumerProperties.getExtension().getEndpointType());
 
 				if (endpointProvider == null) {
-					String msg = String.format("Consumer not supported for destination type %s <inbound adapter %s>",
-							consumerProperties.getExtension().getEndpointType(), id);
-					logger.warn(msg);
-					throw new IllegalArgumentException(msg);
+					IllegalArgumentException exception = new IllegalArgumentException(
+							"Consumer not supported for destination type " +
+									consumerProperties.getExtension().getEndpointType() +
+									" <inbound adapter " + id + ">");
+					logger.warn(exception.getMessage());
+					throw exception;
 				}
 
 				Endpoint endpoint = endpointProvider.createInstance(consumerDestination.getName());
@@ -238,9 +240,8 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 					this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
 
 					if (paused) {
-						logger.info(String.format(
-								"Message source %s is paused, pausing newly created flow receiver container %s",
-								id, flowReceiverContainer.getId()));
+						logger.info("Message source {} is paused, pausing newly created flow receiver container {}",
+								id, flowReceiverContainer.getId());
 						flowReceiverContainer.pause();
 					}
 				}
@@ -255,9 +256,10 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 					postStart.accept(endpoint);
 				}
 			} catch (JCSMPException e) {
-				String msg = String.format("Unable to get a message consumer for session %s", jcsmpSession.getSessionName());
-				logger.warn(e, msg);
-				throw new RuntimeException(msg, e);
+				RuntimeException runtimeException = new RuntimeException(
+						"Unable to get a message consumer for session " + jcsmpSession.getSessionName(), e);
+				logger.warn(runtimeException.getMessage(), e);
+				throw runtimeException;
 			}
 
 			ackCallbackFactory = new JCSMPAcknowledgementCallbackFactory(flowReceiverContainer);
@@ -275,7 +277,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		writeLock.lock();
 		try {
 			if (!isRunning()) return;
-			logger.info(String.format("Stopping consumer to endpoint %s <message source ID: %s>", consumerDestination.getName(), id));
+			logger.info("Stopping consumer to endpoint {} <message source ID: {}>", consumerDestination.getName(), id);
 			flowReceiverContainer.unbind();
 			if (solaceBinderHealthAccessor != null) {
 				solaceBinderHealthAccessor.removeFlow(consumerProperties.getBindingName(), 0);
@@ -308,7 +310,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
-			logger.info(String.format("Pausing message source %s", id));
+			logger.info("Pausing message source {}", id);
 			if (flowReceiverContainer != null) {
 				flowReceiverContainer.pause();
 			}
@@ -323,7 +325,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		Lock writeLock = readWriteLock.writeLock();
 		writeLock.lock();
 		try {
-			logger.info(String.format("Resuming message source %s", id));
+			logger.info("Resuming message source {}", id);
 			if (flowReceiverContainer != null) {
 				try {
 					flowReceiverContainer.resume();
@@ -343,9 +345,8 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			if (flowReceiverContainer.isPaused()) {
 				return true;
 			} else {
-				logger.warn(String.format(
-						"Flow receiver container %s is unexpectedly running for message source %s",
-						flowReceiverContainer.getId(), id));
+				logger.warn("Flow receiver container {} is unexpectedly running for message source {}",
+						flowReceiverContainer.getId(), id);
 				return false;
 			}
 		} else {

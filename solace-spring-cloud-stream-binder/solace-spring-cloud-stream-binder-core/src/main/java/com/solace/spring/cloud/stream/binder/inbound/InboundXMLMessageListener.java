@@ -17,8 +17,9 @@ import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.StaleSessionException;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.lang3.exception.ExceptionUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.RequeueCurrentMessageException;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
@@ -53,7 +54,7 @@ abstract class InboundXMLMessageListener implements Runnable {
 	private final AtomicBoolean stopFlag = new AtomicBoolean(false);
 	private final Supplier<Boolean> remoteStopFlag;
 
-	private static final Log logger = LogFactory.getLog(InboundXMLMessageListener.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(InboundXMLMessageListener.class);
 
 	InboundXMLMessageListener(FlowReceiverContainer flowReceiverContainer,
 							  ConsumerDestination consumerDestination,
@@ -91,18 +92,18 @@ abstract class InboundXMLMessageListener implements Runnable {
 				try {
 					receive();
 				} catch (RuntimeException | UnboundFlowReceiverContainerException e) {
-					logger.warn(String.format("Exception received while consuming messages from destination %s",
-							consumerDestination.getName()), e);
+					LOGGER.warn("Exception received while consuming messages from destination {}",
+							consumerDestination.getName(), e);
 				}
 			}
 		} catch (StaleSessionException e) {
-			logger.error("Session has lost connection", e);
+			LOGGER.error("Session has lost connection", e);
 		} catch (Throwable t) {
-			logger.error(String.format("Received unexpected error while consuming from destination %s",
-					consumerDestination.getName()), t);
+			LOGGER.error("Received unexpected error while consuming from destination {}",
+					consumerDestination.getName(), t);
 			throw t;
 		} finally {
-			logger.info(String.format("Closing flow receiver to destination %s", consumerDestination.getName()));
+			LOGGER.info("Closing flow receiver to destination {}", consumerDestination.getName());
 			flowReceiverContainer.unbind();
 		}
 	}
@@ -123,13 +124,11 @@ abstract class InboundXMLMessageListener implements Runnable {
 		} catch (StaleSessionException e) {
 			throw e;
 		} catch (JCSMPException e) {
-			String msg = String.format("Received error while trying to read message from endpoint %s",
-					flowReceiverContainer.getEndpointName());
-			if ((e instanceof JCSMPTransportException || e instanceof ClosedFacilityException) && !keepPolling()) {
-				logger.debug(msg, e);
-			} else {
-				logger.warn(msg, e);
-			}
+			LOGGER.atLevel((e instanceof JCSMPTransportException || e instanceof ClosedFacilityException) &&
+							!keepPolling() ? Level.DEBUG : Level.WARN)
+					.setCause(e)
+					.log("Received error while trying to read message from endpoint {}",
+							flowReceiverContainer.getEndpointName());
 			return;
 		}
 
@@ -165,22 +164,19 @@ abstract class InboundXMLMessageListener implements Runnable {
 		} catch (Exception e) {
 			try {
 				if (ExceptionUtils.indexOfType(e, RequeueCurrentMessageException.class) > -1) {
-					logger.warn(String.format(
-							"Exception thrown while processing XMLMessage %s. Message will be requeued.",
-							bytesXMLMessage.getMessageId()), e);
+					LOGGER.warn("Exception thrown while processing XMLMessage {}. Message will be requeued.",
+							bytesXMLMessage.getMessageId(), e);
 					AckUtils.requeue(acknowledgmentCallback);
 				} else {
-					logger.warn(String.format(
-							"Exception thrown while processing XMLMessage %s. Message will be requeued.",
-							bytesXMLMessage.getMessageId()), e);
+					LOGGER.warn("Exception thrown while processing XMLMessage {}. Message will be requeued.",
+							bytesXMLMessage.getMessageId(), e);
 					if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 						AckUtils.requeue(acknowledgmentCallback);
 					}
 				}
 			} catch (SolaceAcknowledgmentException e1) {
 				e1.addSuppressed(e);
-				logger.warn(String.format("Exception thrown while re-queuing XMLMessage %s.",
-						bytesXMLMessage.getMessageId()), e1);
+				LOGGER.warn("Exception thrown while re-queuing XMLMessage {}.", bytesXMLMessage.getMessageId(), e1);
 				throw e1;
 			}
 		}
@@ -212,21 +208,17 @@ abstract class InboundXMLMessageListener implements Runnable {
 		} catch (Exception e) {
 				try {
 					if (ExceptionUtils.indexOfType(e, RequeueCurrentMessageException.class) > -1) {
-						if (logger.isWarnEnabled()) {
-							logger.warn("Exception thrown while processing batch. Batch's message will be requeued.", e);
-						}
+						LOGGER.warn("Exception thrown while processing batch. Batch's message will be requeued.", e);
 						AckUtils.requeue(acknowledgmentCallback);
 					} else {
-						if (logger.isWarnEnabled()) {
-							logger.warn("Exception thrown while processing batch. Batch's messages will be requeued.", e);
-						}
+						LOGGER.warn("Exception thrown while processing batch. Batch's messages will be requeued.", e);
 						if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
 							AckUtils.requeue(acknowledgmentCallback);
 						}
 					}
 				} catch (SolaceAcknowledgmentException e1) {
 					e1.addSuppressed(e);
-					logger.warn("Exception thrown while re-queuing batch.", e1);
+					LOGGER.warn("Exception thrown while re-queuing batch.", e1);
 					throw e1;
 				}
 		} finally {

@@ -7,11 +7,11 @@ import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.RandomUtils;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ArgumentsSource;
 import org.mockito.Mockito;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.messaging.MessageHeaders;
 
 import java.lang.reflect.Field;
@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class SolaceHeadersTest {
-	private static final Log logger = LogFactory.getLog(SolaceHeadersTest.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(SolaceHeadersTest.class);
 
 	@ParameterizedTest
 	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.ClassesOnly.class)
@@ -136,7 +136,7 @@ public class SolaceHeadersTest {
 	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.class)
 	public void testMetaReadActions(Class<?> headersClass, Map<String, ? extends HeaderMeta<?>> headersMeta) {
 		if (!(headersClass.equals(SolaceHeaders.class))) {
-			logger.info(String.format("Test does not apply to %s", headersClass.getSimpleName()));
+			LOGGER.info("Test does not apply to {}", headersClass.getSimpleName());
 			return;
 		}
 
@@ -158,7 +158,7 @@ public class SolaceHeadersTest {
 	public void testMetaWriteActions(Class<?> headersClass, Map<String, ? extends HeaderMeta<?>> headersMeta)
 			throws Exception {
 		if (!(headersClass.equals(SolaceHeaders.class))) {
-			logger.info(String.format("Test does not apply to %s", headersClass.getSimpleName()));
+			LOGGER.info("Test does not apply to {}", headersClass.getSimpleName());
 			return;
 		}
 
@@ -189,26 +189,25 @@ public class SolaceHeadersTest {
 				throw new Exception(String.format("Failed to generate test value for %s", headerMeta.getKey()), e);
 			}
 
-			logger.info(String.format("Writing %s: %s", headerMeta.getKey(), value));
+			LOGGER.info("Writing {}: {}", headerMeta.getKey(), value);
 			headerMeta.getValue().getWriteAction().accept(xmlMessage, value);
 
 			if (headerMeta.getValue().isReadable()) {
 				assertEquals(value, headerMeta.getValue().getReadAction().apply(xmlMessage));
 			} else {
-				logger.warn(String.format("No read action for header %s. Cannot validate that write operation worked",
-						headerMeta.getKey()));
+				LOGGER.warn("No read action for header {}. Cannot validate that write operation worked", headerMeta.getKey());
 			}
 		}
 
-		logger.info("Message Dump:\n" + xmlMessage.dump(XMLMessage.MSGDUMP_FULL));
-		logger.info("Message String:\n" + xmlMessage);
+		LOGGER.info("Message Dump:\n{}", xmlMessage.dump(XMLMessage.MSGDUMP_FULL));
+		LOGGER.info("Message String:\n{}", xmlMessage);
 	}
 
 	@ParameterizedTest(name = "[{index}] {0}")
 	@ArgumentsSource(SolaceSpringHeaderArgumentsProvider.class)
 	public void testDefaultValueOverride(Class<?> headersClass, Map<String, ? extends HeaderMeta<?>> headersMeta) {
 		if (!(headersClass.equals(SolaceHeaders.class))) {
-			logger.info(String.format("Test does not apply to %s", headersClass.getSimpleName()));
+			LOGGER.info("Test does not apply to {}", headersClass.getSimpleName());
 			return;
 		}
 
@@ -231,19 +230,19 @@ public class SolaceHeadersTest {
 			}
 
 
-			logger.info(String.format("Writing %s: %s", headerMeta.getKey(), value));
+			LOGGER.info("Writing {}: {}", headerMeta.getKey(), value);
 			headerMeta.getValue().getWriteAction().accept(xmlMessage, value);
 
 			if (headerMeta.getValue().isReadable()) {
 				assertEquals(value, headerMeta.getValue().getReadAction().apply(xmlMessage));
 			} else {
-				logger.warn(String.format("No read action for header %s. Cannot validate that write operation worked",
-						headerMeta.getKey()));
+				LOGGER.warn("No read action for header {}. Cannot validate that write operation worked",
+						headerMeta.getKey());
 			}
 		}
 
-		logger.info("Message Dump:\n" + xmlMessage.dump(XMLMessage.MSGDUMP_FULL));
-		logger.info("Message String:\n" + xmlMessage);
+		LOGGER.info("Message Dump:\n{}", xmlMessage.dump(XMLMessage.MSGDUMP_FULL));
+		LOGGER.info("Message String:\n{}", xmlMessage);
 	}
 
 	@ParameterizedTest(name = "[{index}] {0}")
@@ -251,7 +250,7 @@ public class SolaceHeadersTest {
 	public void testFailMetaWriteActionsWithInvalidType(Class<?> headersClass,
 														Map<String, ? extends HeaderMeta<?>> headersMeta) {
 		if (!(headersClass.equals(SolaceHeaders.class))) {
-			logger.info(String.format("Test does not apply to %s", headersClass.getSimpleName()));
+			LOGGER.info("Test does not apply to {}", headersClass.getSimpleName());
 			return;
 		}
 
@@ -335,7 +334,7 @@ public class SolaceHeadersTest {
 
 	private String camelCaseToSnakeCase(String camelCase) {
 		Matcher camelCaseMatcher = Pattern.compile("(?<=[a-z])[A-Z]").matcher(camelCase);
-		StringBuffer buffer = new StringBuffer();
+		StringBuilder buffer = new StringBuilder();
 		while (camelCaseMatcher.find()) {
 			camelCaseMatcher.appendReplacement(buffer, "_" + camelCaseMatcher.group().toLowerCase());
 		}
