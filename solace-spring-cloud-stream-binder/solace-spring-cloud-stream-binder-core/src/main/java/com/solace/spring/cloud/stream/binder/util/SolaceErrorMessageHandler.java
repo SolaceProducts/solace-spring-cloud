@@ -12,6 +12,9 @@ import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.ErrorMessage;
 
+import java.util.HashSet;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public class SolaceErrorMessageHandler implements MessageHandler {
@@ -24,50 +27,56 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 		StringBuilder info = new StringBuilder("Processing message ").append(springId).append(" <");
 
 		if (!(message instanceof ErrorMessage errorMessage)) {
-			LOGGER.warn("Spring message {}: Expected an {}, not a {}", springId, ErrorMessage.class.getSimpleName(),
-					message.getClass().getSimpleName());
-			return;
+			throw new IllegalArgumentException(String.format("Spring message %s: Expected an %s, but got a %s",
+					springId, ErrorMessage.class.getSimpleName(), message.getClass().getSimpleName()));
 		}
 
 		Throwable payload = errorMessage.getPayload();
 
-		Message<?> failedMsg;
-		if (payload instanceof MessagingException && ((MessagingException) payload).getFailedMessage() != null) {
-			failedMsg = ((MessagingException) payload).getFailedMessage();
-		} else {
-			failedMsg = errorMessage.getOriginalMessage();
+		Set<AcknowledgmentCallback> acknowledgmentCallbacks = new HashSet<>();
+		if (payload instanceof MessagingException messagingException) {
+			Optional.ofNullable(messagingException.getFailedMessage())
+					.map(m -> {
+						info.append("messaging-exception-message: ").append(StaticMessageHeaderAccessor.getId(m)).append(", ");
+						return m;
+					})
+					.map(StaticMessageHeaderAccessor::getAcknowledgmentCallback)
+					.ifPresent(acknowledgmentCallbacks::add);
 		}
 
-		if (failedMsg != null) {
-			info.append("failed-message: ").append(StaticMessageHeaderAccessor.getId(failedMsg)).append(", ");
-		}
+		Optional.ofNullable(errorMessage.getOriginalMessage())
+				.map(m -> {
+					info.append("original-message: ").append(StaticMessageHeaderAccessor.getId(m)).append(", ");
+					return m;
+				})
+				.map(StaticMessageHeaderAccessor::getAcknowledgmentCallback)
+				.ifPresent(acknowledgmentCallbacks::add);
 
-		Object sourceData = StaticMessageHeaderAccessor.getSourceData(message);
-		if (sourceData instanceof XMLMessage) {
-			info.append("source-message: ").append(((XMLMessage) sourceData).getMessageId()).append(", ");
+		Optional.ofNullable(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message))
+				.ifPresent(acknowledgmentCallbacks::add);
+
+		if (StaticMessageHeaderAccessor.getSourceData(message) instanceof XMLMessage xmlMessage) {
+			info.append("source-jcsmp-message: ").append(xmlMessage.getMessageId()).append(", ");
 		}
 
 		LOGGER.info(info.append('>').toString());
 
-		AcknowledgmentCallback acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(message);
-		if (acknowledgmentCallback == null && failedMsg != null) {
-			acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(failedMsg);
-		}
-
-		if (acknowledgmentCallback == null) {
+		if (acknowledgmentCallbacks.isEmpty()) {
 			// Should never happen under normal use
-			LOGGER.warn("Spring message {} does not contain an acknowledgment callback. Message cannot be acknowledged",
-					springId);
-			return;
+			throw new IllegalArgumentException(String.format(
+					"Spring message %s does not contain an acknowledgment callback. Message cannot be acknowledged",
+					springId));
 		}
 
-		try {
-			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
-				AckUtils.requeue(acknowledgmentCallback);
+		for(AcknowledgmentCallback acknowledgmentCallback : acknowledgmentCallbacks) {
+			try {
+				if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
+					AckUtils.requeue(acknowledgmentCallback);
+				}
+			} catch (SolaceAcknowledgmentException e) {
+				LOGGER.error("Spring message {}: exception in error handler", springId, e);
+				throw e;
 			}
-		} catch (SolaceAcknowledgmentException e) {
-			LOGGER.error("Spring message {}: exception in error handler", springId, e);
-			throw e;
 		}
 	}
 }
