@@ -34,6 +34,10 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 		Throwable payload = errorMessage.getPayload();
 
 		Set<AcknowledgmentCallback> acknowledgmentCallbacks = new HashSet<>();
+
+		Optional.ofNullable(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message))
+				.ifPresent(acknowledgmentCallbacks::add);
+
 		if (payload instanceof MessagingException messagingException) {
 			Optional.ofNullable(messagingException.getFailedMessage())
 					.map(m -> {
@@ -50,9 +54,6 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 					return m;
 				})
 				.map(StaticMessageHeaderAccessor::getAcknowledgmentCallback)
-				.ifPresent(acknowledgmentCallbacks::add);
-
-		Optional.ofNullable(StaticMessageHeaderAccessor.getAcknowledgmentCallback(message))
 				.ifPresent(acknowledgmentCallbacks::add);
 
 		if (StaticMessageHeaderAccessor.getSourceData(message) instanceof XMLMessage xmlMessage) {
