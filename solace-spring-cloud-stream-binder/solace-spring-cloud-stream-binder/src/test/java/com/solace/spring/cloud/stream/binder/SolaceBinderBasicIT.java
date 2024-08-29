@@ -608,13 +608,15 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		producerBinding.unbind();
 	}
 
-	@CartesianTest(name = "[{index}] channelType={0}, batchMode={1}, transacted={2}, namedConsumerGroup={3}")
+	@CartesianTest(name = "[{index}] channelType={0}, batchMode={1}, transacted={2}, namedConsumerGroup={3} maxAttempts={4} throwMessagingExceptionWithMissingAckCallback={5}")
 	@Execution(ExecutionMode.CONCURRENT)
 	public <T> void testConsumerRequeue(
 			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
 			@Values(booleans = {false, true}) boolean batchMode,
 			@Values(booleans = {false, true}) boolean transacted,
 			@Values(booleans = {false, true}) boolean namedConsumerGroup,
+			@Values(ints = {1, 3}) int maxAttempts,
+			@Values(booleans = {false, true}) boolean throwMessagingExceptionWithMissingAckCallback,
 			SempV2Api sempV2Api,
 			SoftAssertions softly,
 			TestInfo testInfo) throws Exception {
@@ -637,6 +639,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.setBatchMode(batchMode);
+		consumerProperties.setMaxAttempts(maxAttempts);
 		consumerProperties.getExtension().setTransacted(transacted);
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
 				destination0, group0, moduleInputChannel, consumerProperties);
@@ -657,7 +660,12 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 					softly.assertThat(msg).satisfies(isValidMessage(channelType, consumerProperties, messages));
 					if (numRetriesRemaining.getAndDecrement() > 0) {
 						callback.run();
-						throw new RuntimeException("Throwing expected exception!");
+						throw throwMessagingExceptionWithMissingAckCallback ?
+								new MessagingException(MessageBuilder.fromMessage(msg)
+										.removeHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK)
+										.build(),
+										"Throwing expected exception!") :
+								new RuntimeException("Throwing expected exception!");
 					} else {
 						logger.info("Received message");
 						softly.assertThat(msg).satisfies(hasNestedHeader(SolaceHeaders.REDELIVERED, Boolean.class,
@@ -687,12 +695,14 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		consumerBinding.unbind();
 	}
 
-	@CartesianTest(name = "[{index}] channelType={0}, batchMode={1}, namedConsumerGroup={2}")
+	@CartesianTest(name = "[{index}] channelType={0}, batchMode={1}, namedConsumerGroup={2} maxAttempts={3} throwMessagingExceptionWithMissingAckCallback={4}")
 	@Execution(ExecutionMode.CONCURRENT)
 	public <T> void testConsumerErrorQueueRepublish(
 			@Values(classes = {DirectChannel.class, PollableSource.class}) Class<T> channelType,
 			@Values(booleans = {false, true}) boolean batchMode,
 			@Values(booleans = {false, true}) boolean namedConsumerGroup,
+			@Values(ints = {1, 3}) int maxAttempts,
+			@Values(booleans = {false, true}) boolean throwMessagingExceptionWithMissingAckCallback,
 			JCSMPSession jcsmpSession,
 			SempV2Api sempV2Api,
 			TestInfo testInfo) throws Exception {
@@ -712,6 +722,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
 		consumerProperties.setBatchMode(batchMode);
+		consumerProperties.setMaxAttempts(maxAttempts);
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 		Binding<T> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
 				destination0, group0, moduleInputChannel, consumerProperties);
@@ -729,7 +740,12 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 				() -> messages.forEach(moduleOutputChannel::send),
 				(msg, callback) -> {
 					callback.run();
-					throw new RuntimeException("Throwing expected exception!");
+					throw throwMessagingExceptionWithMissingAckCallback ?
+							new MessagingException(MessageBuilder.fromMessage(msg)
+									.removeHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK)
+									.build(),
+									"Throwing expected exception!") :
+							new RuntimeException("Throwing expected exception!");
 				});
 
 		assertThat(binder.getConsumerErrorQueueName(consumerBinding))

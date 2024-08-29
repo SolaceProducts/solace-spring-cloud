@@ -12,7 +12,10 @@ import org.springframework.messaging.MessageHandler;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.ErrorMessage;
 
-import java.util.UUID;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class SolaceErrorMessageHandler implements MessageHandler {
 
@@ -20,54 +23,54 @@ public class SolaceErrorMessageHandler implements MessageHandler {
 
 	@Override
 	public void handleMessage(Message<?> message) throws MessagingException {
-		UUID springId = StaticMessageHeaderAccessor.getId(message);
-		StringBuilder info = new StringBuilder("Processing message ").append(springId).append(" <");
-
 		if (!(message instanceof ErrorMessage errorMessage)) {
-			LOGGER.warn("Spring message {}: Expected an {}, not a {}", springId, ErrorMessage.class.getSimpleName(),
-					message.getClass().getSimpleName());
-			return;
+			throw new IllegalArgumentException(String.format("Spring message %s: Expected an %s, but got a %s",
+					StaticMessageHeaderAccessor.getId(message), ErrorMessage.class.getSimpleName(),
+					message.getClass().getSimpleName()));
 		}
 
-		Throwable payload = errorMessage.getPayload();
+		handleErrorMessage(errorMessage);
+	}
 
-		Message<?> failedMsg;
-		if (payload instanceof MessagingException && ((MessagingException) payload).getFailedMessage() != null) {
-			failedMsg = ((MessagingException) payload).getFailedMessage();
-		} else {
-			failedMsg = errorMessage.getOriginalMessage();
-		}
+	private void handleErrorMessage(ErrorMessage errorMessage) {
+		Message<?> messagingExceptionFailedMessage = errorMessage.getPayload() instanceof MessagingException m ?
+				m.getFailedMessage() : null;
+		Set<AcknowledgmentCallback> acknowledgmentCallbacks = Stream.of(Stream.of(errorMessage),
+						Stream.ofNullable(messagingExceptionFailedMessage),
+						Stream.ofNullable(errorMessage.getOriginalMessage()))
+				.flatMap(s -> s)
+				.map(StaticMessageHeaderAccessor::getAcknowledgmentCallback)
+				.filter(Objects::nonNull)
+				.collect(Collectors.toUnmodifiableSet());
 
-		if (failedMsg != null) {
-			info.append("failed-message: ").append(StaticMessageHeaderAccessor.getId(failedMsg)).append(", ");
-		}
+		LOGGER.atInfo()
+				.setMessage("Processing message {} <messaging-exception-message: {}, original-message: {}, source-jcsmp-message: {}>")
+				.addArgument(() -> StaticMessageHeaderAccessor.getId(errorMessage))
+				.addArgument(() -> messagingExceptionFailedMessage != null ?
+						StaticMessageHeaderAccessor.getId(messagingExceptionFailedMessage) : null)
+				.addArgument(() -> errorMessage.getOriginalMessage() != null ?
+						StaticMessageHeaderAccessor.getId(errorMessage.getOriginalMessage()) : null)
+				.addArgument(() -> StaticMessageHeaderAccessor.getSourceData(errorMessage) instanceof XMLMessage m ?
+						m.getMessageId() : null)
+				.log();
 
-		Object sourceData = StaticMessageHeaderAccessor.getSourceData(message);
-		if (sourceData instanceof XMLMessage) {
-			info.append("source-message: ").append(((XMLMessage) sourceData).getMessageId()).append(", ");
-		}
-
-		LOGGER.info(info.append('>').toString());
-
-		AcknowledgmentCallback acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(message);
-		if (acknowledgmentCallback == null && failedMsg != null) {
-			acknowledgmentCallback = StaticMessageHeaderAccessor.getAcknowledgmentCallback(failedMsg);
-		}
-
-		if (acknowledgmentCallback == null) {
+		if (acknowledgmentCallbacks.isEmpty()) {
 			// Should never happen under normal use
-			LOGGER.warn("Spring message {} does not contain an acknowledgment callback. Message cannot be acknowledged",
-					springId);
-			return;
+			throw new IllegalArgumentException(String.format(
+					"Spring error message %s does not contain an acknowledgment callback. Message cannot be acknowledged",
+					StaticMessageHeaderAccessor.getId(errorMessage)));
 		}
 
-		try {
-			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
-				AckUtils.requeue(acknowledgmentCallback);
+		for(AcknowledgmentCallback acknowledgmentCallback : acknowledgmentCallbacks) {
+			try {
+				if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
+					AckUtils.requeue(acknowledgmentCallback);
+				}
+			} catch (SolaceAcknowledgmentException e) {
+				LOGGER.error("Spring error message {}: exception in error handler",
+						StaticMessageHeaderAccessor.getId(errorMessage), e);
+				throw e;
 			}
-		} catch (SolaceAcknowledgmentException e) {
-			LOGGER.error("Spring message {}: exception in error handler", springId, e);
-			throw e;
 		}
 	}
 }
