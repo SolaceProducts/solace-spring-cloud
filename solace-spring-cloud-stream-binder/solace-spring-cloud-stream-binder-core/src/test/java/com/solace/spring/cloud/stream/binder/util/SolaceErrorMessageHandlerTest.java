@@ -43,18 +43,12 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testAcknowledgmentCallbackHeader(@Mock AcknowledgmentCallback acknowledgementCallback) {
-		Message<?> inputMessage = MessageBuilder.withPayload("test")
-				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK,
-						Mockito.mock(AcknowledgmentCallback.class))
-				.build();
-
-		attributeAccessor.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, inputMessage);
+	public void testErrorMessage(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		attributeAccessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_ACKNOWLEDGMENT_CALLBACK,
 				acknowledgementCallback);
 
 		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
-				new MessagingException(inputMessage),
+				new RuntimeException("test"),
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
@@ -62,13 +56,25 @@ public class SolaceErrorMessageHandlerTest {
 	}
 
 	@Test
-	public void testFailedMessageAcknowledgmentCallback(@Mock AcknowledgmentCallback acknowledgementCallback) {
-		Message<?> inputMessage = MessageBuilder.withPayload("test")
-				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
-				.build();
-		attributeAccessor.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, inputMessage);
+	public void testMessagingException(@Mock AcknowledgmentCallback acknowledgementCallback) {
 		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
-				new MessagingException(inputMessage),
+				new MessagingException(MessageBuilder.withPayload("test")
+						.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
+						.build()),
+				attributeAccessor);
+
+		errorMessageHandler.handleMessage(errorMessage);
+		Mockito.verify(acknowledgementCallback).acknowledge(Status.REQUEUE);
+	}
+
+	@Test
+	public void testOriginalMessage(@Mock AcknowledgmentCallback acknowledgementCallback) {
+		attributeAccessor.setAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY, MessageBuilder.withPayload("test")
+				.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgementCallback)
+				.build());
+
+		ErrorMessage errorMessage = errorMessageStrategy.buildErrorMessage(
+				new RuntimeException("test"),
 				attributeAccessor);
 
 		errorMessageHandler.handleMessage(errorMessage);
