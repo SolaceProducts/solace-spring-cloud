@@ -69,6 +69,7 @@ public class JCSMPOutboundMessageHandlerTest {
 	private ArgumentCaptor<ProducerFlowProperties> producerFlowPropertiesCaptor;
 	private ExtendedProducerProperties<SolaceProducerProperties> producerProperties;
 	private JCSMPSessionProducerManager sessionProducerManager;
+	@Mock private JCSMPProperties jcsmpProperties;
 	@Mock private JCSMPSession session;
 	@Mock private TransactedSession transactedSession;
 	@Mock private XMLMessageProducer messageProducer;
@@ -105,6 +106,7 @@ public class JCSMPOutboundMessageHandlerTest {
 		messageHandler = new JCSMPOutboundMessageHandler(
 				dest,
 				session,
+				jcsmpProperties,
 				errChannel,
 				sessionProducerManager,
 				producerProperties,
@@ -500,6 +502,7 @@ public class JCSMPOutboundMessageHandlerTest {
 		messageHandler = new JCSMPOutboundMessageHandler(
 				dest,
 				session,
+				jcsmpProperties,
 				null,
 				new JCSMPSessionProducerManager(session),
 				new ExtendedProducerProperties<>(producerProperties),

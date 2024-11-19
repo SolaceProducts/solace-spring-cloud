@@ -8,7 +8,6 @@ import com.solacesystems.jcsmp.ConsumerFlowProperties;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
-import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.ProducerFlowProperties;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
@@ -51,22 +50,8 @@ public class SolaceProvisioningUtil {
 		return endpointProperties;
 	}
 
-	public static ProducerFlowProperties getProducerFlowProperties(JCSMPSession jcsmpSession) {
-		ProducerFlowProperties producerFlowProperties = new ProducerFlowProperties();
-
-		// SOL-118898:
-		// PUB_ACK_WINDOW_SIZE & ACK_EVENT_MODE aren't automatically used as default values for
-		// ProducerFlowProperties.
-		Integer pubAckWindowSize = (Integer) jcsmpSession.getProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE);
-		if (pubAckWindowSize != null) {
-			producerFlowProperties.setWindowSize(pubAckWindowSize);
-		}
-		String ackEventMode = (String) jcsmpSession.getProperty(JCSMPProperties.ACK_EVENT_MODE);
-		if (ackEventMode != null) {
-			producerFlowProperties.setAckEventMode(ackEventMode);
-		}
-
-		return producerFlowProperties;
+	public static ProducerFlowProperties getProducerFlowProperties(JCSMPProperties jcsmpProperties) {
+		return new ProducerFlowProperties(jcsmpProperties);
 	}
 
 	public static ConsumerFlowProperties getConsumerFlowProperties(

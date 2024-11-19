@@ -97,7 +97,7 @@ public class SolaceMessageChannelBinderConfiguration {
 	SolaceMessageChannelBinder solaceMessageChannelBinder(SolaceEndpointProvisioner solaceEndpointProvisioner,
 														  @Nullable SolaceBinderHealthAccessor solaceBinderHealthAccessor,
 														  @Nullable SolaceMeterAccessor solaceMeterAccessor) {
-		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, context, solaceEndpointProvisioner);
+		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, jcsmpProperties, context, solaceEndpointProvisioner);
 		binder.setExtendedBindingProperties(solaceExtendedBindingProperties);
 		binder.setSolaceMeterAccessor(solaceMeterAccessor);
 		if (solaceBinderHealthAccessor != null) {

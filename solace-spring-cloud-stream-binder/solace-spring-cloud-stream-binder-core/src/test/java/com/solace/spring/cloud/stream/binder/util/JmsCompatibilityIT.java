@@ -43,11 +43,6 @@ import org.springframework.messaging.Message;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.SerializationUtils;
 
-import javax.jms.Connection;
-import javax.jms.MessageConsumer;
-import javax.jms.MessageProducer;
-import javax.jms.ObjectMessage;
-import javax.jms.Session;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Enumeration;
