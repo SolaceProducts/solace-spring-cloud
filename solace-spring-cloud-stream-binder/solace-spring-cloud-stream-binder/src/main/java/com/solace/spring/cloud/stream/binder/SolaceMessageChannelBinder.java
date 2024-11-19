@@ -97,6 +97,7 @@ public class SolaceMessageChannelBinder
 		JCSMPOutboundMessageHandler handler = new JCSMPOutboundMessageHandler(
 				destination,
 				jcsmpSession,
+				jcsmpProperties,
 				errorChannel,
 				sessionProducerManager,
 				producerProperties,

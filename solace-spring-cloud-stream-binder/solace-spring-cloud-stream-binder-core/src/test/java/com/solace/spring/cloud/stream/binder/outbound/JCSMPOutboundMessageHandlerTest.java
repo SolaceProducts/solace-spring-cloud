@@ -35,6 +35,7 @@ import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.Mockito;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
@@ -69,7 +70,7 @@ public class JCSMPOutboundMessageHandlerTest {
 	private ArgumentCaptor<ProducerFlowProperties> producerFlowPropertiesCaptor;
 	private ExtendedProducerProperties<SolaceProducerProperties> producerProperties;
 	private JCSMPSessionProducerManager sessionProducerManager;
-	@Mock private JCSMPProperties jcsmpProperties;
+	@Spy private JCSMPProperties jcsmpProperties = new JCSMPProperties();
 	@Mock private JCSMPSession session;
 	@Mock private TransactedSession transactedSession;
 	@Mock private XMLMessageProducer messageProducer;
@@ -589,8 +590,8 @@ public class JCSMPOutboundMessageHandlerTest {
 			@Values(strings = {
 					JCSMPProperties.SUPPORTED_ACK_EVENT_MODE_PER_MSG,
 					JCSMPProperties.SUPPORTED_ACK_EVENT_MODE_WINDOWED}) String ackEventMode) {
-		Mockito.when(session.getProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE)).thenReturn(pubAckWindowSize);
-		Mockito.when(session.getProperty(JCSMPProperties.ACK_EVENT_MODE)).thenReturn(ackEventMode);
+		jcsmpProperties.setProperty(JCSMPProperties.PUB_ACK_WINDOW_SIZE, pubAckWindowSize);
+		jcsmpProperties.setProperty(JCSMPProperties.ACK_EVENT_MODE, ackEventMode);
 		messageHandler.start();
 
 		assertThat(producerFlowPropertiesCaptor.getValue())
