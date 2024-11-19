@@ -53,6 +53,7 @@ public class SpringCloudStreamExtension implements AfterEachCallback, BeforeEach
 						LOGGER.info("Creating {}", SpringCloudStreamContext.class.getSimpleName());
 						SpringCloudStreamContext context = new SpringCloudStreamContext(
 								PubSubPlusExtension.getJCSMPSession(extensionContext),
+								PubSubPlusExtension.getJCSMPProperties(extensionContext),
 								PubSubPlusExtension.getSempV2Api(extensionContext));
 						context.before();
 						return context;

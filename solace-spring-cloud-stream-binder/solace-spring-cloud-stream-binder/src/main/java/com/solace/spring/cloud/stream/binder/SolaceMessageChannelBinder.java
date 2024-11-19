@@ -19,6 +19,7 @@ import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessag
 import com.solacesystems.jcsmp.Context;
 import com.solacesystems.jcsmp.Endpoint;
 import com.solacesystems.jcsmp.EndpointProperties;
+import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.XMLMessage;
@@ -52,6 +53,7 @@ public class SolaceMessageChannelBinder
 				DisposableBean {
 
 	private final JCSMPSession jcsmpSession;
+	private final JCSMPProperties jcsmpProperties;
 	private final Context jcsmpContext;
 	private final JCSMPSessionProducerManager sessionProducerManager;
 	private final AtomicBoolean consumersRemoteStopFlag = new AtomicBoolean(false);
@@ -61,12 +63,13 @@ public class SolaceMessageChannelBinder
 	private static final SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
 	@Nullable private SolaceBinderHealthAccessor solaceBinderHealthAccessor;
 
-	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, SolaceEndpointProvisioner solaceEndpointProvisioner) {
-		this(jcsmpSession, null, solaceEndpointProvisioner);
+	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, JCSMPProperties jcsmpProperties, SolaceEndpointProvisioner solaceEndpointProvisioner) {
+		this(jcsmpSession, jcsmpProperties, null, solaceEndpointProvisioner);
 	}
-	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, Context jcsmpContext, SolaceEndpointProvisioner solaceEndpointProvisioner) {
+	public SolaceMessageChannelBinder(JCSMPSession jcsmpSession, JCSMPProperties jcsmpProperties, Context jcsmpContext, SolaceEndpointProvisioner solaceEndpointProvisioner) {
 		super(new String[0], solaceEndpointProvisioner);
 		this.jcsmpSession = jcsmpSession;
+		this.jcsmpProperties = jcsmpProperties;
 		this.jcsmpContext = jcsmpContext;
 		this.sessionProducerManager = new JCSMPSessionProducerManager(jcsmpSession);
 	}
@@ -94,6 +97,7 @@ public class SolaceMessageChannelBinder
 		JCSMPOutboundMessageHandler handler = new JCSMPOutboundMessageHandler(
 				destination,
 				jcsmpSession,
+				jcsmpProperties,
 				errorChannel,
 				sessionProducerManager,
 				producerProperties,

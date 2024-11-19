@@ -46,11 +46,11 @@ public class SolaceTestBinder
 	private final Map<String, String> bindingNameToErrorQueueName = new HashMap<>();
 	private static final Logger LOGGER = LoggerFactory.getLogger(SolaceTestBinder.class);
 
-	public SolaceTestBinder(JCSMPSession jcsmpSession, SempV2Api sempV2Api) {
+	public SolaceTestBinder(JCSMPSession jcsmpSession, JCSMPProperties jcsmpProperties, SempV2Api sempV2Api) {
 		this.applicationContext = new AnnotationConfigApplicationContext(Config.class);
 		this.jcsmpSession = jcsmpSession;
 		this.sempV2Api = sempV2Api;
-		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, new SolaceEndpointProvisioner(jcsmpSession));
+		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, jcsmpProperties, new SolaceEndpointProvisioner(jcsmpSession));
 		binder.setApplicationContext(this.applicationContext);
 		this.setPollableConsumerBinder(binder);
 	}

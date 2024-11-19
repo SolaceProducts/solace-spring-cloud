@@ -27,6 +27,11 @@ import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jms.SolConnectionFactory;
 import com.solacesystems.jms.SolJmsUtility;
+import jakarta.jms.Connection;
+import jakarta.jms.MessageConsumer;
+import jakarta.jms.MessageProducer;
+import jakarta.jms.ObjectMessage;
+import jakarta.jms.Session;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.RandomUtils;
 import org.assertj.core.api.SoftAssertions;
@@ -43,11 +48,6 @@ import org.springframework.messaging.Message;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.SerializationUtils;
 
-import javax.jms.Connection;
-import javax.jms.MessageConsumer;
-import javax.jms.MessageProducer;
-import javax.jms.ObjectMessage;
-import javax.jms.Session;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Enumeration;
@@ -281,20 +281,19 @@ public class JmsCompatibilityIT {
 		jmsConsumer.setMessageListener(msg -> {
 			LOGGER.info("Got message {}", msg);
 			try {
-				if (msg instanceof javax.jms.BytesMessage) {
-					javax.jms.BytesMessage bytesMessage = (javax.jms.BytesMessage) msg;
+				if (msg instanceof jakarta.jms.BytesMessage bytesMessage) {
 					byte[] payload = new byte[(int) bytesMessage.getBodyLength()];
 					softly.assertThat(bytesMessage.readBytes(payload)).isEqualTo(bytesMessage.getBodyLength());
 					softly.assertThat(payload).isEqualTo("test".getBytes());
 					processedMessageTypes.add(BytesMessage.class);
-				} else if (msg instanceof javax.jms.TextMessage) {
-					softly.assertThat(((javax.jms.TextMessage) msg).getText()).isEqualTo("test");
+				} else if (msg instanceof jakarta.jms.TextMessage textMessage) {
+					softly.assertThat(textMessage.getText()).isEqualTo("test");
 					processedMessageTypes.add(TextMessage.class);
-				} else if (msg instanceof javax.jms.StreamMessage) {
-					softly.assertThat(((javax.jms.StreamMessage) msg).readString()).isEqualTo("test");
+				} else if (msg instanceof jakarta.jms.StreamMessage streamMessage) {
+					softly.assertThat(streamMessage.readString()).isEqualTo("test");
 					processedMessageTypes.add(StreamMessage.class);
-				} else if (msg instanceof javax.jms.MapMessage) {
-					softly.assertThat(((javax.jms.MapMessage) msg).getString("test")).isEqualTo("test");
+				} else if (msg instanceof jakarta.jms.MapMessage mapMessage) {
+					softly.assertThat(mapMessage.getString("test")).isEqualTo("test");
 					processedMessageTypes.add(MapMessage.class);
 				} else {
 					throw new IllegalStateException(String.format("Message type %s has no test", msg.getClass()));
@@ -322,20 +321,20 @@ public class JmsCompatibilityIT {
 
 	@Test
 	public void testPayloadFromJmsToSpring(JCSMPSession jcsmpSession, SoftAssertions softly) throws Exception {
-		List<javax.jms.Message> messages = new ArrayList<>();
+		List<jakarta.jms.Message> messages = new ArrayList<>();
 
 		{
-			javax.jms.BytesMessage bytesMessage = jmsSession.createBytesMessage();
+			jakarta.jms.BytesMessage bytesMessage = jmsSession.createBytesMessage();
 			bytesMessage.writeBytes("test".getBytes());
 			messages.add(bytesMessage);
 
 			messages.add(jmsSession.createTextMessage("test"));
 
-			javax.jms.StreamMessage streamMessage = jmsSession.createStreamMessage();
+			jakarta.jms.StreamMessage streamMessage = jmsSession.createStreamMessage();
 			streamMessage.writeString("test");
 			messages.add(streamMessage);
 
-			javax.jms.MapMessage mapMessage = jmsSession.createMapMessage();
+			jakarta.jms.MapMessage mapMessage = jmsSession.createMapMessage();
 			mapMessage.setString("test", "test");
 			messages.add(mapMessage);
 		}
@@ -358,11 +357,11 @@ public class JmsCompatibilityIT {
 						} else if (msg.getPayload() instanceof String) {
 							softly.assertThat(msg.getPayload()).isEqualTo("test");
 							processedMessageTypes.add(TextMessage.class);
-						} else if (msg.getPayload() instanceof SDTStream) {
-							softly.assertThat(((SDTStream) msg.getPayload()).readString()).isEqualTo("test");
+						} else if (msg.getPayload() instanceof SDTStream sdtStream) {
+							softly.assertThat(sdtStream.readString()).isEqualTo("test");
 							processedMessageTypes.add(StreamMessage.class);
-						} else if (msg.getPayload() instanceof SDTMap) {
-							softly.assertThat(((SDTMap) msg.getPayload()).getString("test")).isEqualTo("test");
+						} else if (msg.getPayload() instanceof SDTMap sdtMap) {
+							softly.assertThat(sdtMap.getString("test")).isEqualTo("test");
 							processedMessageTypes.add(MapMessage.class);
 						}
 					} catch (Exception e) {
@@ -379,7 +378,7 @@ public class JmsCompatibilityIT {
 
 			jcsmpSession.addSubscription(JCSMPFactory.onlyInstance().createTopic(topicName));
 			messageConsumer.start();
-			for (javax.jms.Message message : messages) {
+			for (jakarta.jms.Message message : messages) {
 				jmsProducer.send(message);
 			}
 
@@ -402,7 +401,7 @@ public class JmsCompatibilityIT {
 			try {
 				softly.assertThat(msg.getBooleanProperty(SolaceBinderHeaders.SERIALIZED_PAYLOAD)).isTrue();
 
-				javax.jms.BytesMessage bytesMessage = (javax.jms.BytesMessage) msg;
+				jakarta.jms.BytesMessage bytesMessage = (jakarta.jms.BytesMessage) msg;
 				byte[] receivedPayload = new byte[(int) bytesMessage.getBodyLength()];
 				bytesMessage.readBytes(receivedPayload);
 				softly.assertThat(SerializationUtils.deserialize(receivedPayload)).isEqualTo(payload);
