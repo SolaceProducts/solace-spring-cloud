@@ -426,7 +426,7 @@ public class XMLMessageMapper {
 							rethrowableCall(metadata::getBytes, headerName);
 					Object value = SerializationUtils.deserialize(serializedValue);
 					if (value instanceof ByteArray) { // Just in case...
-						value = ((ByteArray) value).getBuffer();
+						value = ((ByteArray) value).asBytes();
 					}
 					headers.put(headerName, value);
 				}
@@ -440,8 +440,8 @@ public class XMLMessageMapper {
 				.filter(h -> !SolaceHeaderMeta.META.containsKey(h))
 				.forEach(h -> {
 					Object value = rethrowableCall(metadata::get, h);
-					if (value instanceof ByteArray) {
-						value = ((ByteArray) value).getBuffer();
+					if (value instanceof ByteArray byteArray) {
+						value = byteArray.asBytes();
 					}
 					headers.put(h, value);
 				});
