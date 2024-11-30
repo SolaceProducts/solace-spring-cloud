@@ -73,7 +73,7 @@
 
         <dependency>
             <groupId>com.solacesystems</groupId>
-            <artifactId>sol-jms</artifactId>
+            <artifactId>sol-jms-jakarta</artifactId>
             <version>${solace.jms.version}</version>
             <scope>test</scope>
         </dependency>

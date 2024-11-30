@@ -16,6 +16,7 @@ import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
 import com.solacesystems.jcsmp.Topic;
@@ -48,6 +49,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	private final DestinationType configDestinationType;
 	private final Destination configDestination;
 	private final JCSMPSession jcsmpSession;
+	private final JCSMPProperties jcsmpProperties;
 	private final MessageChannel errorChannel;
 	private final JCSMPSessionProducerManager producerManager;
 	private final ExtendedProducerProperties<SolaceProducerProperties> properties;
@@ -63,6 +65,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 
 	public JCSMPOutboundMessageHandler(ProducerDestination destination,
 									   JCSMPSession jcsmpSession,
+									   JCSMPProperties jcsmpProperties,
 									   MessageChannel errorChannel,
 									   JCSMPSessionProducerManager producerManager,
 									   ExtendedProducerProperties<SolaceProducerProperties> properties,
@@ -72,6 +75,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 				JCSMPFactory.onlyInstance().createTopic(destination.getName()) :
 				JCSMPFactory.onlyInstance().createQueue(destination.getName());
 		this.jcsmpSession = jcsmpSession;
+		this.jcsmpProperties = jcsmpProperties;
 		this.errorChannel = errorChannel;
 		this.producerManager = producerManager;
 		this.properties = properties;
@@ -239,10 +243,10 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 			if (properties.getExtension().isTransacted()) {
 				LOGGER.info("Creating transacted session  <message handler ID: {}>", id);
 				transactedSession = jcsmpSession.createTransactedSession();
-				producer = transactedSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
+				producer = transactedSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpProperties),
 						producerEventHandler);
 			} else {
-				producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
+				producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpProperties),
 						producerEventHandler);
 			}
 		} catch (Exception e) {
