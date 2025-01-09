@@ -5,7 +5,7 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.BaseUnits;
 import io.micrometer.core.instrument.binder.MeterBinder;
-import org.jetbrains.annotations.NotNull;
+import org.springframework.lang.NonNull;
 
 public class SolaceMessageMeterBinder implements MeterBinder {
 	MeterRegistry registry;
@@ -17,11 +17,11 @@ public class SolaceMessageMeterBinder implements MeterBinder {
 	public static final String TAG_NAME = "name";
 
 	@Override
-	public void bindTo(@NotNull MeterRegistry registry) {
+	public void bindTo(@NonNull MeterRegistry registry) {
 		this.registry = registry;
 	}
 
-	public void recordMessage(@NotNull String bindingName, @NotNull XMLMessage message) {
+	public void recordMessage(@NonNull String bindingName, @NonNull XMLMessage message) {
 		long payloadSize = message.getAttachmentContentLength() + message.getContentLength();
 		registerSizeMeter(METER_NAME_TOTAL_SIZE, METER_DESCRIPTION_TOTAL_SIZE, bindingName)
 				.record(payloadSize + message.getBinaryMetadataContentLength(0));
@@ -29,9 +29,9 @@ public class SolaceMessageMeterBinder implements MeterBinder {
 				.record(payloadSize);
 	}
 
-	private DistributionSummary registerSizeMeter(@NotNull String meterName,
-												  @NotNull String description,
-												  @NotNull String bindingName) {
+	private DistributionSummary registerSizeMeter(@NonNull String meterName,
+												  @NonNull String description,
+												  @NonNull String bindingName) {
 		return DistributionSummary.builder(meterName)
 				.description(description)
 				.tag(TAG_NAME, bindingName)
