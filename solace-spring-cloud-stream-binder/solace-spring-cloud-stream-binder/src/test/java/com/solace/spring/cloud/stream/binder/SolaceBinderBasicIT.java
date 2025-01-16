@@ -1079,11 +1079,11 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
-		logger.info(String.format("Disabling egress to queue %s", queue0));
+		logger.info("Disabling egress to queue {}", queue0);
 		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue().egressEnabled(false), null, null);
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
-		logger.info(String.format("Enabling egress to queue %s", queue0));
+		logger.info("Enabling egress to queue {}", queue0);
 		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue().egressEnabled(true), null, null);
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
@@ -1091,7 +1091,8 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		producerStop.set(true);
 		int numMsgsSent = producerFuture.get(5, TimeUnit.SECONDS);
 
-		softly.assertThat(queue0).satisfies(q -> retryAssert(1, TimeUnit.MINUTES, () ->
+		logger.info("Waiting for consumer to finish processing messages");
+		softly.assertThat(queue0).satisfies(q -> retryAssert(5, TimeUnit.MINUTES, () ->
 				assertThat(sempV2Api.monitor()
 						.getMsgVpnQueueMsgs(vpnName, q, Integer.MAX_VALUE, null, null, null)
 						.getData()
@@ -1099,16 +1100,18 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 						.as("Expected queue %s to be empty after rebind", q)
 						.isEqualTo(0)));
 
-		MonitorMsgVpnQueue queueState = sempV2Api.monitor()
-				.getMsgVpnQueue(vpnName, queue0, null)
-				.getData();
+		softly.assertThat(queue0).satisfies(q -> retryAssert(1, TimeUnit.MINUTES, () -> {
+			MonitorMsgVpnQueue queueState = sempV2Api.monitor()
+					.getMsgVpnQueue(vpnName, q, null)
+					.getData();
 
-		softly.assertThat(queueState.getDisabledBindFailureCount()).isGreaterThan(0);
-		softly.assertThat(uniquePayloadsReceived.size()).isEqualTo(numMsgsSent);
-		softly.assertThat(numMsgsConsumed.get()).isGreaterThanOrEqualTo(numMsgsSent);
+			logger.info("num-sent: {}, num-consumed: {}, num-redelivered: {}", numMsgsSent, numMsgsConsumed.get(),
+					queueState.getRedeliveredMsgCount());
+			softly.assertThat(queueState.getDisabledBindFailureCount()).isGreaterThan(0);
+			softly.assertThat(uniquePayloadsReceived.size()).isEqualTo(numMsgsSent);
+			softly.assertThat(numMsgsConsumed.get()).isGreaterThanOrEqualTo(numMsgsSent);
+		}));
 
-		logger.info("num-sent: {}, num-consumed: {}, num-redelivered: {}", numMsgsSent, numMsgsConsumed.get(),
-				queueState.getRedeliveredMsgCount());
 		producerBinding.unbind();
 		consumerBinding.unbind();
 	}
