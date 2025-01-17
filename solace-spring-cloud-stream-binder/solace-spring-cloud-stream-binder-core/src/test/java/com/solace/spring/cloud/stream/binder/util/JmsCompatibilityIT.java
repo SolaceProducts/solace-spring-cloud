@@ -7,6 +7,8 @@ import com.solace.spring.cloud.stream.binder.messaging.HeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
+import com.solace.spring.cloud.stream.binder.properties.SmfMessageWriterProperties;
 import com.solace.spring.cloud.stream.binder.test.util.SerializableFoo;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solacesystems.jcsmp.BytesMessage;
@@ -160,7 +162,8 @@ public class JmsCompatibilityIT {
 			springMessageBuilder.setHeader(headerMeta.getKey(), value);
 		}
 
-		XMLMessage jcsmpMessage = xmlMessageMapper.map(springMessageBuilder.build(), null, false);
+		XMLMessage jcsmpMessage = xmlMessageMapper.mapToSmf(springMessageBuilder.build(),
+				new SmfMessageWriterProperties(new SolaceProducerProperties()));
 
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
@@ -208,10 +211,11 @@ public class JmsCompatibilityIT {
 		final String headerName = "abc";
 		final SerializableFoo headerValue = new SerializableFoo("Abc", "def");
 
-		XMLMessage jcsmpMessage = xmlMessageMapper.map(new DefaultMessageBuilderFactory()
+		XMLMessage jcsmpMessage = xmlMessageMapper.mapToSmf(new DefaultMessageBuilderFactory()
 				.withPayload("test")
 				.setHeader(headerName, headerValue)
-				.build(), null, false);
+				.build(),
+				new SmfMessageWriterProperties(new SolaceProducerProperties()));
 
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
@@ -312,7 +316,8 @@ public class JmsCompatibilityIT {
 		jmsConnection.start();
 
 		for (Message<?> message : messages) {
-			jcsmpProducer.send(xmlMessageMapper.map(message, null, false), jcsmpTopic);
+			jcsmpProducer.send(xmlMessageMapper.mapToSmf(message,
+					new SmfMessageWriterProperties(new SolaceProducerProperties())), jcsmpTopic);
 		}
 
 		assertTrue(latch.await(1, TimeUnit.MINUTES));
@@ -351,7 +356,7 @@ public class JmsCompatibilityIT {
 				public void onReceive(BytesXMLMessage bytesXMLMessage) {
 					LOGGER.info("Got message {}", bytesXMLMessage);
 					try {
-						Message<?> msg = xmlMessageMapper.map(bytesXMLMessage, null, consumerProperties);
+						Message<?> msg = xmlMessageMapper.mapToSpring(bytesXMLMessage, null, consumerProperties);
 						if (msg.getPayload() instanceof byte[]) {
 							softly.assertThat(msg.getPayload()).isEqualTo("test".getBytes());
 							processedMessageTypes.add(BytesMessage.class);
@@ -415,8 +420,8 @@ public class JmsCompatibilityIT {
 		});
 
 		jmsConnection.start();
-		jcsmpProducer.send(xmlMessageMapper.map(new DefaultMessageBuilderFactory().withPayload(payload).build(),
-				null, false),
+		jcsmpProducer.send(xmlMessageMapper.mapToSmf(new DefaultMessageBuilderFactory().withPayload(payload).build(),
+						new SmfMessageWriterProperties(new SolaceProducerProperties())),
 				jcsmpTopic);
 
 		assertTrue(latch.await(1, TimeUnit.MINUTES));
@@ -440,7 +445,7 @@ public class JmsCompatibilityIT {
 				public void onReceive(BytesXMLMessage bytesXMLMessage) {
 					LOGGER.info("Got message {}", bytesXMLMessage);
 					try {
-						softly.assertThat(xmlMessageMapper.map(bytesXMLMessage, null, consumerProperties).getPayload())
+						softly.assertThat(xmlMessageMapper.mapToSpring(bytesXMLMessage, null, consumerProperties).getPayload())
 								.isEqualTo(payload);
 					} catch (Exception e) {
 						exceptionAtomicReference.set(e);
