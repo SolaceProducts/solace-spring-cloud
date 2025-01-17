@@ -10,12 +10,16 @@ import com.solace.spring.cloud.stream.binder.test.spring.ConsumerInfrastructureU
 import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator;
 import com.solace.spring.cloud.stream.binder.test.spring.MessageLayout;
 import com.solace.spring.cloud.stream.binder.test.spring.SpringCloudStreamContext;
+import com.solace.spring.cloud.stream.binder.test.util.SerializableFoo;
 import com.solace.spring.cloud.stream.binder.test.util.SimpleJCSMPEventHandler;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.spring.cloud.stream.binder.util.BatchWaitStrategy;
 import com.solace.spring.cloud.stream.binder.util.CorrelationData;
 import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.spring.cloud.stream.binder.util.EndpointType;
+import com.solace.spring.cloud.stream.binder.util.SmfMessageHeaderWriteCompatibility;
+import com.solace.spring.cloud.stream.binder.util.SmfMessagePayloadWriteCompatibility;
+import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension.ExecSvc;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
@@ -85,6 +89,7 @@ import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.springframework.util.MimeTypeUtils;
 import org.springframework.util.StopWatch;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -340,11 +345,13 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		consumerBinding.unbind();
 	}
 
-	@CartesianTest(name = "[{index}] numMessages={0}, batched={1}, transacted={2} withConfirmCorrelation={3}")
+	@CartesianTest(name = "[{index}] numMessages={0}, batched={1} transacted={2} withConfirmCorrelation={3} headerTypeCompatibility={4} payloadTypeCompatibility={5}")
 	public void testSend(@Values(ints = {1, 256}) int numMessages,
 						 @Values(booleans = {false, true}) boolean batched,
 						 @Values(booleans = {false, true}) boolean transacted,
 						 @Values(booleans = {false, true}) boolean withConfirmCorrelation,
+						 @CartesianTest.Enum SmfMessageHeaderWriteCompatibility headerTypeCompatibility,
+						 @CartesianTest.Enum SmfMessagePayloadWriteCompatibility payloadTypeCompatibility,
 						 SempV2Api sempV2Api,
 						 SoftAssertions softly,
 						 TestInfo testInfo) throws Exception {
@@ -355,6 +362,14 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties(testInfo);
 		producerProperties.setUseNativeEncoding(true);
 		producerProperties.getExtension().setTransacted(transacted);
+		producerProperties.getExtension().setHeaderTypeCompatibility(headerTypeCompatibility);
+		producerProperties.getExtension().setPayloadTypeCompatibility(payloadTypeCompatibility);
+
+		if (headerTypeCompatibility.equals(SmfMessageHeaderWriteCompatibility.NATIVE_ONLY)) {
+			// Need to explicitly exclude ID here because it's a UUID type
+			producerProperties.getExtension().getHeaderExclusions().add(MessageHeaders.ID);
+		}
+
 		BindingProperties producerBindingProperties = new BindingProperties();
 		producerBindingProperties.setProducer(producerProperties);
 
@@ -1721,6 +1736,82 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 				jcsmpSession.removeSubscription(JCSMPFactory.onlyInstance().createTopic(destination));
 			if (producerBinding != null) producerBinding.unbind();
 		}
+	}
+
+	@CartesianTest(name = "[{index}] batched={0} transacted={1}")
+	public void testSendWithNativeOnlyHeaders_FailsOnUnsupportedType(
+			@Values(booleans = {false, true}) boolean batched,
+			@Values(booleans = {false, true}) boolean transacted,
+			TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties(testInfo);
+		producerProperties.setUseNativeEncoding(true);
+		producerProperties.getExtension().setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility.NATIVE_ONLY);
+		producerProperties.getExtension().setTransacted(transacted);
+		BindingProperties producerBindingProperties = new BindingProperties();
+		producerBindingProperties.setProducer(producerProperties);
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", producerBindingProperties);
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, producerProperties);
+
+		Message<?> message = batched ?
+				MessageBuilder.withPayload(List.of("payload".getBytes(StandardCharsets.UTF_8)))
+						.setHeader(SolaceBinderHeaders.BATCHED_HEADERS,
+								List.of(Map.of("unsupported", new SerializableFoo("foo"))))
+						.build() :
+				MessageBuilder.withPayload("payload".getBytes(StandardCharsets.UTF_8))
+						.setHeader("unsupported", new SerializableFoo("foo"))
+						.build();
+
+		binderBindUnbindLatency();
+
+		assertThatThrownBy(() -> moduleOutputChannel.send(message))
+				.rootCause()
+				.isInstanceOf(IllegalArgumentException.class)
+				.hasMessageContaining("Invalid type as value - %s", SerializableFoo.class.getSimpleName());
+
+		producerBinding.unbind();
+	}
+
+	@CartesianTest(name = "[{index}] batched={0} transacted={1}")
+	public void testSendWithNativeOnlyPayload_FailsOnUnsupportedType(
+			@Values(booleans = {false, true}) boolean batched,
+			@Values(booleans = {false, true}) boolean transacted,
+			TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = getBinder();
+
+		ExtendedProducerProperties<SolaceProducerProperties> producerProperties = createProducerProperties(testInfo);
+		producerProperties.setUseNativeEncoding(true);
+		producerProperties.getExtension().setPayloadTypeCompatibility(SmfMessagePayloadWriteCompatibility.NATIVE_ONLY);
+		producerProperties.getExtension().setTransacted(transacted);
+		BindingProperties producerBindingProperties = new BindingProperties();
+		producerBindingProperties.setProducer(producerProperties);
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", producerBindingProperties);
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, producerProperties);
+
+		Message<?> message = batched ?
+				MessageBuilder.withPayload(List.of(new SerializableFoo("foo")))
+						.setHeader(SolaceBinderHeaders.BATCHED_HEADERS, List.of(Map.of()))
+						.build() :
+				MessageBuilder.withPayload(new SerializableFoo("foo")).build();
+
+		binderBindUnbindLatency();
+
+		assertThatThrownBy(() -> moduleOutputChannel.send(message))
+				.rootCause()
+				.isInstanceOf(SolaceMessageConversionException.class)
+				.hasMessageContaining("Invalid payload received")
+				.hasMessageContaining("Received: %s", SerializableFoo.class.getName());
+
+		producerBinding.unbind();
 	}
 
 	@CartesianTest(name = "[{index}] channelType={0}, batchMode={1}")
