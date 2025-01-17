@@ -293,7 +293,7 @@ public class XMLMessageMapperTest {
 				Mockito.anyMap(),
 				Mockito.eq(StaticMessageHeaderAccessor.getId(testSpringMessage)),
 				Mockito.eq(serializationProperties));
-		assertThatThrownBy(() -> xmlMessageMapper.mapToSmf(testSpringMessage, serializationProperties))
+		assertThatThrownBy(() -> xmlMessageMapper.mapBatchedToSmf(testSpringMessage, serializationProperties))
 				.isEqualTo(exception);
 	}
 
