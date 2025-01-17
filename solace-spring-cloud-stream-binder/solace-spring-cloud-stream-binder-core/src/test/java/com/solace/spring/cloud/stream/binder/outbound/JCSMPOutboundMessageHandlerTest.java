@@ -5,11 +5,16 @@ import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator;
 import com.solace.spring.cloud.stream.binder.test.spring.MessageGenerator.BatchingConfig;
+import com.solace.spring.cloud.stream.binder.test.util.SerializableFoo;
 import com.solace.spring.cloud.stream.binder.util.CorrelationData;
 import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.spring.cloud.stream.binder.util.ErrorChannelSendingCorrelationKey;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
+import com.solace.spring.cloud.stream.binder.util.SmfMessageHeaderWriteCompatibility;
+import com.solace.spring.cloud.stream.binder.util.SmfMessagePayloadWriteCompatibility;
+import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
+import com.solacesystems.jcsmp.BytesMessage;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPProperties;
@@ -23,6 +28,7 @@ import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jcsmp.transaction.RollbackException;
 import com.solacesystems.jcsmp.transaction.TransactedSession;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.apache.commons.lang3.SerializationUtils;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +50,7 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.MessageBuilder;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -594,6 +601,63 @@ public class JCSMPOutboundMessageHandlerTest {
 				.satisfies(
 						p -> assertThat(p.getWindowSize()).isEqualTo(pubAckWindowSize),
 						p -> assertThat(p.getAckEventMode()).isEqualTo(ackEventMode));
+	}
+
+	@CartesianTest(name = "[{index}] batched={0} witSerializablePayload={1} payloadTypeCompatibility={2}")
+	void test_ModifySmfMessageWriterProperties(
+			@Values(booleans = {false, true}) boolean batched,
+			@Values(booleans = {false, true}) boolean witSerializablePayload,
+			@CartesianTest.Enum SmfMessagePayloadWriteCompatibility payloadTypeCompatibility)
+			throws Exception {
+		messageHandler.start();
+
+		assertThat(messageHandler.getSmfMessageWriterProperties().getHeaderExclusions())
+				.as("Test error: headerExclusions should be empty")
+				.isEmpty();
+		assertThat(messageHandler.getSmfMessageWriterProperties().getHeaderTypeCompatibility())
+				.as("Test error: headerTypeCompatibility should be default")
+				.isEqualTo(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES);
+		assertThat(messageHandler.getSmfMessageWriterProperties().getPayloadTypeCompatibility())
+				.as("Test error: payloadTypeCompatibility should be default")
+				.isEqualTo(SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES);
+
+		messageHandler.getSmfMessageWriterProperties().setPayloadTypeCompatibility(payloadTypeCompatibility);
+		messageHandler.getSmfMessageWriterProperties().getHeaderExclusions().add("excluded");
+
+		byte[] bytesPayload = RandomStringUtils.randomAlphanumeric(100).getBytes(StandardCharsets.UTF_8);
+		SerializableFoo serializablePayload = new SerializableFoo("foo", "bar");
+		BatchingConfig batchingConfig = new BatchingConfig().setEnabled(batched).setNumberOfMessages(10);
+
+		Message<?> messageToSend = MessageGenerator.generateMessage(
+						i -> witSerializablePayload ? serializablePayload : bytesPayload,
+						i -> Map.of("excluded", "foo"),
+						batchingConfig)
+				.build();
+
+		if (witSerializablePayload && payloadTypeCompatibility.equals(SmfMessagePayloadWriteCompatibility.NATIVE_ONLY)) {
+			assertThatThrownBy(() -> messageHandler.handleMessage(messageToSend))
+					.isInstanceOf(SolaceMessageConversionException.class)
+					.hasMessageContaining("Invalid payload received")
+					.hasMessageContaining("Received: %s", SerializableFoo.class.getName());
+			return;
+		}
+
+		messageHandler.handleMessage(messageToSend);
+
+		Mockito.verify(messageProducer, Mockito.atLeastOnce()).send(xmlMessageCaptor.capture(), any(Destination.class));
+
+		assertThat(xmlMessageCaptor.getAllValues())
+				.hasSize(batched ? batchingConfig.getNumberOfMessages() : 1)
+				.allSatisfy(msg -> {
+					assertThat(msg)
+							.asInstanceOf(InstanceOfAssertFactories.type(BytesMessage.class))
+							.extracting(BytesMessage::getData)
+							.isEqualTo(witSerializablePayload ? SerializationUtils.serialize(serializablePayload) :
+									bytesPayload);
+					assertThat(msg.getProperties().containsKey("excluded"))
+							.as("Header 'excluded' should be excluded")
+							.isFalse();
+				});
 	}
 
 	private List<Object> getCorrelationKeys() throws JCSMPException {
