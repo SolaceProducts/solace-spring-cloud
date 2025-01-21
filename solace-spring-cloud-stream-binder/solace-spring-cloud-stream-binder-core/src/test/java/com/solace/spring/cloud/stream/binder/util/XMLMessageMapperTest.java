@@ -14,6 +14,7 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties
 import com.solace.spring.cloud.stream.binder.test.util.SerializableFoo;
 import com.solace.spring.cloud.stream.binder.test.util.ThrowingFunction;
 import com.solacesystems.jcsmp.BytesMessage;
+import com.solacesystems.jcsmp.BytesXMLMessage;
 import com.solacesystems.jcsmp.DeliveryMode;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.MapMessage;
@@ -1343,6 +1344,19 @@ public class XMLMessageMapperTest {
 	}
 
 	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@MethodSource("nullPayloadXMLMessageProvider")
+	void testMapXMLMessageToSpringMessage_WhenPayloadSetAsXMLAttachment(BytesXMLMessage xmlMessage) {
+		xmlMessage.writeBytes("Hello World".getBytes()); // Write Payload as XML Attachment
+		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
+		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+
+		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback, consumerProperties);
+		MessageHeaders springMessageHeaders = springMessage.getHeaders();
+
+		assertNull(springMessageHeaders.get(SolaceBinderHeaders.NULL_PAYLOAD, Boolean.class));
+	}
+
+	@ParameterizedTest(name = "[{index}] batchMode={0}")
 	@ValueSource(booleans = {false, true})
 	void testMapXMLMessageToSpringMessage_WithListPayload(boolean batchMode) throws Exception {
 		BytesMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
@@ -2106,5 +2120,15 @@ public class XMLMessageMapperTest {
 		public void injectAdditionalXMLMessageProperties(SDTMap sdtMap) throws Throwable {
 			injectAdditionalXMLMessageProperties.accept(sdtMap);
 		}
+	}
+
+	static Stream<Arguments> nullPayloadXMLMessageProvider() {
+		return Stream.of(
+				Arguments.of(JCSMPFactory.onlyInstance().createMessage(BytesMessage.class)),
+				Arguments.of(JCSMPFactory.onlyInstance().createMessage(XMLContentMessage.class)),
+				Arguments.of(JCSMPFactory.onlyInstance().createMessage(TextMessage.class)),
+				Arguments.of(JCSMPFactory.onlyInstance().createMessage(MapMessage.class)),
+				Arguments.of(JCSMPFactory.onlyInstance().createMessage(StreamMessage.class))
+		);
 	}
 }
