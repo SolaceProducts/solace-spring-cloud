@@ -1346,7 +1346,8 @@ public class XMLMessageMapperTest {
 	@ParameterizedTest(name = "[{index}] batchMode={0}")
 	@MethodSource("nullPayloadXMLMessageProvider")
 	void testMapXMLMessageToSpringMessage_WhenPayloadSetAsXMLAttachment(BytesXMLMessage xmlMessage) {
-		xmlMessage.writeBytes("Hello World".getBytes()); // Write Payload as XML Attachment
+		byte[] payload = "Hello World".getBytes();
+		xmlMessage.writeBytes(payload); // Write Payload as XML Attachment
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
 
@@ -1354,6 +1355,11 @@ public class XMLMessageMapperTest {
 		MessageHeaders springMessageHeaders = springMessage.getHeaders();
 
 		assertNull(springMessageHeaders.get(SolaceBinderHeaders.NULL_PAYLOAD, Boolean.class));
+		if (springMessage.getPayload() instanceof String) {
+			assertEquals(springMessage.getPayload(), new String(payload));
+		} else {
+			validateSpringPayload(springMessage.getPayload(), payload);
+		}
 	}
 
 	@ParameterizedTest(name = "[{index}] batchMode={0}")
