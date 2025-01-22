@@ -404,12 +404,23 @@ The list of headers to exclude from the published message. Excluding Solace mess
 +
 Default: Empty `List&lt;String&gt;`
 
+headerTypeCompatibility::
+The compatibility mode for message headers when they're being written to the SMF message.
++
+When set to `native_only`, only headers which are natively supported by SMF are allowed to be written. Unsupported types will throw an exception.
++
+When set to `serialize_and_encode_non_native_types`, non-native and serializable headers will be serialized to a byte array then encoded into a string with the corresponding  `solace_scst_serializedHeaders` and `solace_scst_serializedHeadersEncoding` headers set accordingly.
++
+Default: `serialize_and_encode_non_native_types`
+
 nonserializableHeaderConvertToString::
 When set to `true`, irreversibly convert non-serializable headers to strings. An exception is thrown otherwise.
 +
 Default: `false`
 +
 IMPORTANT: Non-serializable headers should have a meaningful `toString()` implementation. Otherwise enabling this feature may result in potential data loss.
++
+NOTE: Only applies when `headerTypeCompatibility` is set to `serialize_and_encode_non_native_types`.
 
 transacted::
 When set to `true`, messages will be delivered using local transactions.
@@ -420,6 +431,15 @@ WARNING: A transacted producer cannot be used by multiple threads.
 +
 NOTE: The maximum transaction size is 256 messages. +
 The size of the transaction is 1 when the binding receives a regular Spring message. Otherwise, if it receives a <<Batch Producers, batched message>>, then the transaction size is equal to the batch size.
+
+payloadTypeCompatibility::
+The compatibility mode for message payloads when they're being written to the SMF message.
++
+When set to `native_only`, only payloads which are natively supported by SMF are allowed to be written. Unsupported types will throw an exception.
++
+When set to `serialize_non_native_types`, non-native and serializable payloads will be serialized into a byte array with the corresponding  `solace_scst_serializedPayload` header set accordingly. Native payloads will be written as usual.
++
+Default: `serialize_non_native_types`
 
 provisionDurableQueue::
 Whether to provision durable queues for non-anonymous consumer groups or queue destinations. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker.

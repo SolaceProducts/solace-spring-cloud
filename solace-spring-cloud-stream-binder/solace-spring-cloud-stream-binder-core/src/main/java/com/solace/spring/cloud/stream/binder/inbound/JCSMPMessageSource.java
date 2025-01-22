@@ -157,7 +157,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private Message<?> processMessage(MessageContainer messageContainer) {
 		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createCallback(messageContainer);
 		try {
-			return xmlMessageMapper.map(messageContainer.getMessage(), acknowledgmentCallback, true, consumerProperties.getExtension());
+			return xmlMessageMapper.mapToSpring(messageContainer.getMessage(), acknowledgmentCallback, true, consumerProperties.getExtension());
 		} catch (Exception e) {
 			//TODO If one day the errorChannel or attributesHolder can be retrieved, use those instead
 			logger.warn("XMLMessage {} cannot be consumed. It will be requeued",
@@ -181,7 +181,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 				ackCallbackFactory.createBatchCallback(batchedMessages.get());
 
 		try {
-			return xmlMessageMapper.mapBatchMessage(batchedMessages.get()
+			return xmlMessageMapper.mapBatchedToSpring(batchedMessages.get()
 					.stream()
 					.map(MessageContainer::getMessage)
 					.collect(Collectors.toList()), acknowledgmentCallback, true, consumerProperties.getExtension());

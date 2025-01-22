@@ -1,6 +1,8 @@
 package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solace.spring.cloud.stream.binder.util.DestinationType;
+import com.solace.spring.cloud.stream.binder.util.SmfMessageHeaderWriteCompatibility;
+import com.solace.spring.cloud.stream.binder.util.SmfMessagePayloadWriteCompatibility;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.ArrayList;
@@ -44,8 +46,20 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 	 * The list of headers to exclude from the published message. Excluding Solace message headers is not supported.
 	 */
 	private List<String> headerExclusions = new ArrayList<>();
+
+	/**
+	 * The compatibility mode for message headers when they're being written to the SMF message.
+	 */
+	private SmfMessageHeaderWriteCompatibility headerTypeCompatibility = SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES;
+
+	/**
+	 * The compatibility mode for message payloads when they're being written to the SMF message.
+	 */
+	private SmfMessagePayloadWriteCompatibility payloadTypeCompatibility = SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES;
+
 	/**
 	 * When set to true, irreversibly convert non-serializable headers to strings. An exception is thrown otherwise.
+	 * Only applies when {@link #headerTypeCompatibility} is set to {@link SmfMessageHeaderWriteCompatibility#SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES}.
 	 */
 	private boolean nonserializableHeaderConvertToString = false;
 
@@ -87,6 +101,22 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 
 	public void setHeaderExclusions(List<String> headerExclusions) {
 		this.headerExclusions = headerExclusions;
+	}
+
+	public SmfMessageHeaderWriteCompatibility getHeaderTypeCompatibility() {
+		return headerTypeCompatibility;
+	}
+
+	public void setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility headerTypeCompatibility) {
+		this.headerTypeCompatibility = headerTypeCompatibility;
+	}
+
+	public SmfMessagePayloadWriteCompatibility getPayloadTypeCompatibility() {
+		return payloadTypeCompatibility;
+	}
+
+	public void setPayloadTypeCompatibility(SmfMessagePayloadWriteCompatibility payloadTypeCompatibility) {
+		this.payloadTypeCompatibility = payloadTypeCompatibility;
 	}
 
 	public boolean isNonserializableHeaderConvertToString() {

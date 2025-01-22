@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder.outbound;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
+import com.solace.spring.cloud.stream.binder.properties.SmfMessageWriterProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.util.BatchProxyCorrelationKey;
 import com.solace.spring.cloud.stream.binder.util.ClosedChannelBindingException;
@@ -30,6 +31,7 @@ import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
 import org.springframework.context.Lifecycle;
 import org.springframework.integration.support.ErrorMessageStrategy;
+import org.springframework.lang.NonNull;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
@@ -51,6 +53,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	private final MessageChannel errorChannel;
 	private final JCSMPSessionProducerManager producerManager;
 	private final ExtendedProducerProperties<SolaceProducerProperties> properties;
+	private final SmfMessageWriterProperties smfMessageWriterProperties;
 	private final JCSMPStreamingPublishCorrelatingEventHandler producerEventHandler = new CloudStreamEventHandler();
 	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
 	private XMLMessageProducer producer;
@@ -75,11 +78,12 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		this.errorChannel = errorChannel;
 		this.producerManager = producerManager;
 		this.properties = properties;
+		this.smfMessageWriterProperties = new SmfMessageWriterProperties(properties.getExtension());
 		this.solaceMeterAccessor = solaceMeterAccessor;
 	}
 
 	@Override
-	public void handleMessage(Message<?> message) throws MessagingException {
+	public void handleMessage(@NonNull Message<?> message) throws MessagingException {
 		ErrorChannelSendingCorrelationKey correlationKey = new ErrorChannelSendingCorrelationKey(message,
 				errorChannel, errorMessageStrategy);
 
@@ -106,10 +110,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		if (message.getHeaders().containsKey(SolaceBinderHeaders.BATCHED_HEADERS)) {
 			LOGGER.debug("Detected header {}, handling as batched message (Message<List<?>>) <message handler ID: {}>",
 					SolaceBinderHeaders.BATCHED_HEADERS, id);
-			smfMessages = xmlMessageMapper.mapBatchMessage(
-					message,
-					properties.getExtension().getHeaderExclusions(),
-					properties.getExtension().isNonserializableHeaderConvertToString());
+			smfMessages = xmlMessageMapper.mapBatchedToSmf(message, smfMessageWriterProperties);
 
 			BatchProxyCorrelationKey batchProxyCorrelationKey = transactedSession == null ?
 					new BatchProxyCorrelationKey(correlationKey, smfMessages.size()) : null;
@@ -132,10 +133,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 					.map(h -> getDynamicDestination(h, correlationKey))
 					.toList();
 		} else {
-			XMLMessage smfMessage = xmlMessageMapper.map(
-					message,
-					properties.getExtension().getHeaderExclusions(),
-					properties.getExtension().isNonserializableHeaderConvertToString());
+			XMLMessage smfMessage = xmlMessageMapper.mapToSmf(message, smfMessageWriterProperties);
 			smfMessage.setCorrelationKey(correlationKey);
 			smfMessages = List.of(smfMessage);
 			dynamicDestinations = Collections.singletonList(getDynamicDestination(message.getHeaders(), correlationKey));
@@ -288,5 +286,9 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 			throws MessagingException {
 		LOGGER.warn(msg, e);
 		return key.send(msg, e);
+	}
+
+	public SmfMessageWriterProperties getSmfMessageWriterProperties() {
+		return smfMessageWriterProperties;
 	}
 }

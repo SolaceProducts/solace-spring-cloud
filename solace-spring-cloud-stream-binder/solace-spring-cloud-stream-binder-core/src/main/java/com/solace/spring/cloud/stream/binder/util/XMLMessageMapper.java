@@ -8,6 +8,7 @@ import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.properties.SmfMessageWriterProperties;
 import com.solacesystems.common.util.ByteArray;
 import com.solacesystems.jcsmp.BytesMessage;
 import com.solacesystems.jcsmp.BytesXMLMessage;
@@ -52,7 +53,9 @@ import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 public class XMLMessageMapper {
 	private static final Logger LOGGER = LoggerFactory.getLogger(XMLMessageMapper.class);
@@ -79,22 +82,20 @@ public class XMLMessageMapper {
 		return errorMessage;
 	}
 
-	public XMLMessage map(Message<?> message, Collection<String> excludedHeaders, boolean convertNonSerializableHeadersToString) {
-		return map(message.getPayload(),
+	public XMLMessage mapToSmf(Message<?> message, SmfMessageWriterProperties writerProperties) {
+		return mapToSmf(message.getPayload(),
 				message.getHeaders(),
 				message.getHeaders().getId(),
-				excludedHeaders,
-				convertNonSerializableHeadersToString);
+				writerProperties);
 	}
 
 	// exposed for testing
-	XMLMessage map(Object payload,
-				   Map<String, Object> headers,
-				   UUID messageId,
-				   Collection<String> excludedHeaders,
-				   boolean convertNonSerializableHeadersToString) {
+	XMLMessage mapToSmf(Object payload,
+						Map<String, Object> headers,
+						UUID messageId,
+						SmfMessageWriterProperties writerProperties) {
 		XMLMessage xmlMessage;
-		SDTMap metadata = map(headers, excludedHeaders, convertNonSerializableHeadersToString);
+		SDTMap metadata = mapHeadersToSmf(headers, writerProperties);
 		rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
 
 		if (payload instanceof byte[]) {
@@ -113,7 +114,8 @@ public class XMLMessageMapper {
 			MapMessage mapMessage = JCSMPFactory.onlyInstance().createMessage(MapMessage.class);
 			mapMessage.setMap((SDTMap) payload);
 			xmlMessage = mapMessage;
-		} else if (payload instanceof Serializable) {
+		} else if (payload instanceof Serializable && SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES
+				.equals(writerProperties.getPayloadTypeCompatibility())) {
 			BytesMessage bytesMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
 			bytesMessage.setData(rethrowableCall(SerializationUtils::serialize, payload));
 			rethrowableCall(metadata::putBoolean, SolaceBinderHeaders.SERIALIZED_PAYLOAD, true);
@@ -121,13 +123,13 @@ public class XMLMessageMapper {
 		} else {
 			String msg = String.format(
 					"Invalid payload received. Expected %s. Received: %s",
-					String.join(", ",
-							byte[].class.getSimpleName(),
-							String.class.getSimpleName(),
-							SDTStream.class.getSimpleName(),
-							SDTMap.class.getSimpleName(),
-							Serializable.class.getSimpleName()
-					), payload.getClass().getName());
+					Stream.of(byte[].class, String.class, SDTStream.class, SDTMap.class, Serializable.class)
+							.filter(c -> !Serializable.class.equals(c) ||
+									SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES
+											.equals(writerProperties.getPayloadTypeCompatibility()))
+							.map(Class::getSimpleName)
+							.collect(Collectors.joining(", ")),
+					payload.getClass().getName());
 			SolaceMessageConversionException exception = new SolaceMessageConversionException(msg);
 			LOGGER.warn(msg, exception);
 			throw exception;
@@ -180,9 +182,7 @@ public class XMLMessageMapper {
 		return xmlMessage;
 	}
 
-	public List<XMLMessage> mapBatchMessage(Message<?> message,
-											Collection<String> excludedHeaders,
-											boolean convertNonSerializableHeadersToString)
+	public List<XMLMessage> mapBatchedToSmf(Message<?> message, SmfMessageWriterProperties writerProperties)
 			throws SolaceMessageConversionException {
 		try {
 			if (!(message.getPayload() instanceof List)) {
@@ -205,12 +205,11 @@ public class XMLMessageMapper {
 			}
 
 			return IntStream.range(0, batchedMessage.getPayload().size())
-					.mapToObj(i -> map(
+					.mapToObj(i -> mapToSmf(
 							batchedMessage.getPayload().get(i),
 							batchedHeaders != null ? batchedHeaders.get(i) : Collections.emptyMap(),
 							StaticMessageHeaderAccessor.getId(batchedMessage),
-							excludedHeaders,
-							convertNonSerializableHeadersToString))
+							writerProperties))
 					.toList();
 		} catch (Throwable t) {
 			if (t instanceof SolaceMessageConversionException) {
@@ -222,43 +221,46 @@ public class XMLMessageMapper {
 		}
 	}
 
-	public Message<List<?>> mapBatchMessage(List<? extends XMLMessage> xmlMessages,
-											AcknowledgmentCallback acknowledgmentCallback, SolaceConsumerProperties solaceConsumerProperties)
+	public Message<List<?>> mapBatchedToSpring(List<? extends XMLMessage> xmlMessages,
+											   AcknowledgmentCallback acknowledgmentCallback, SolaceConsumerProperties solaceConsumerProperties)
 			throws SolaceMessageConversionException {
-		return mapBatchMessage(xmlMessages, acknowledgmentCallback, false, solaceConsumerProperties);
+		return mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, solaceConsumerProperties);
 	}
 
-	public Message<List<?>> mapBatchMessage(List<? extends XMLMessage> xmlMessages,
-											AcknowledgmentCallback acknowledgmentCallback,
-											boolean setRawMessageHeader, SolaceConsumerProperties solaceConsumerProperties) throws SolaceMessageConversionException {
+	public Message<List<?>> mapBatchedToSpring(List<? extends XMLMessage> xmlMessages,
+											   AcknowledgmentCallback acknowledgmentCallback,
+											   boolean setRawMessageHeader, SolaceConsumerProperties solaceConsumerProperties) throws SolaceMessageConversionException {
 		List<Map<String, Object>> batchedHeaders = new ArrayList<>();
 		List<Object> batchedPayloads = new ArrayList<>();
 		for (XMLMessage xmlMessage : xmlMessages) {
-			Message<?> message = mapInternal(xmlMessage, solaceConsumerProperties).build();
+			Message<?> message = mapToSpringInternal(xmlMessage, solaceConsumerProperties).build();
 			batchedHeaders.add(message.getHeaders());
 			batchedPayloads.add(message.getPayload());
 		}
 
 		AbstractIntegrationMessageBuilder<List<?>> builder = MESSAGE_BUILDER_FACTORY.withPayload(batchedPayloads);
-		return injectRootMessageHeaders(builder, acknowledgmentCallback, setRawMessageHeader ? xmlMessages : null)
+		return injectRootSpringHeaders(builder, acknowledgmentCallback, setRawMessageHeader ? xmlMessages : null)
 				.setHeader(SolaceBinderHeaders.BATCHED_HEADERS, batchedHeaders)
 				.build();
 	}
 
-	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback, SolaceConsumerProperties solaceConsumerProperties)
+	public Message<?> mapToSpring(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback, SolaceConsumerProperties solaceConsumerProperties)
 			throws SolaceMessageConversionException {
-		return map(xmlMessage, acknowledgmentCallback, false, solaceConsumerProperties);
+		return mapToSpring(xmlMessage, acknowledgmentCallback, false, solaceConsumerProperties);
 	}
 
-	public Message<?> map(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback,
-						  boolean setRawMessageHeader, SolaceConsumerProperties solaceConsumerProperties) throws SolaceMessageConversionException {
-		return injectRootMessageHeaders(mapInternal(xmlMessage, solaceConsumerProperties), acknowledgmentCallback, setRawMessageHeader ?
+	public Message<?> mapToSpring(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback,
+								  boolean setRawMessageHeader, SolaceConsumerProperties solaceConsumerProperties) throws SolaceMessageConversionException {
+		return injectRootSpringHeaders(mapToSpringInternal(xmlMessage, solaceConsumerProperties), acknowledgmentCallback, setRawMessageHeader ?
 				xmlMessage : null).build();
 	}
 
-	private AbstractIntegrationMessageBuilder<?> mapInternal(XMLMessage xmlMessage, SolaceConsumerProperties solaceConsumerProperties)
+	private AbstractIntegrationMessageBuilder<?> mapToSpringInternal(XMLMessage xmlMessage, SolaceConsumerProperties solaceConsumerProperties)
 			throws SolaceMessageConversionException {
 		SDTMap metadata = xmlMessage.getProperties();
+		//TODO This needs to be made into a Set for performance reasons.
+		// Do this by taking the same approach as SmfMessageWriterProperties.
+		// i.e. create a corresponding SmfMessageReaderProperties class (which we need to do anyway).
 		List<String> excludedHeaders = solaceConsumerProperties.getHeaderExclusions();
 
 		Object payload;
@@ -307,7 +309,7 @@ public class XMLMessageMapper {
 
 		AbstractIntegrationMessageBuilder<?> builder = MESSAGE_BUILDER_FACTORY
 				.withPayload(payload)
-				.copyHeaders(map(metadata, excludedHeaders))
+				.copyHeaders(mapHeadersToSpring(metadata, excludedHeaders))
 				.setHeaderIfAbsent(MessageHeaders.CONTENT_TYPE, xmlMessage.getHTTPContentType());
 
 		if (isNullPayload) {
@@ -337,15 +339,15 @@ public class XMLMessageMapper {
 		return builder;
 	}
 
-	private <T> AbstractIntegrationMessageBuilder<T> injectRootMessageHeaders(AbstractIntegrationMessageBuilder<T> builder,
-																		  AcknowledgmentCallback acknowledgmentCallback,
-																		  Object sourceData) {
+	private <T> AbstractIntegrationMessageBuilder<T> injectRootSpringHeaders(AbstractIntegrationMessageBuilder<T> builder,
+																			 AcknowledgmentCallback acknowledgmentCallback,
+																			 Object sourceData) {
 		return builder.setHeader(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, acknowledgmentCallback)
 				.setHeaderIfAbsent(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, new AtomicInteger(0))
 				.setHeader(IntegrationMessageHeaderAccessor.SOURCE_DATA, sourceData);
 	}
 
-	SDTMap map(Map<String, Object> headers, Collection<String> excludedHeaders, boolean convertNonSerializableHeadersToString) {
+	SDTMap mapHeadersToSmf(Map<String, Object> headers, SmfMessageWriterProperties writerProperties) {
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
 		Set<String> serializedHeaders = new HashSet<>();
 		for (Map.Entry<String,Object> header : headers.entrySet()) {
@@ -356,12 +358,12 @@ public class XMLMessageMapper {
 					SolaceBinderHeaderMeta.META.containsKey(header.getKey())) {
 				continue;
 			}
-			if (excludedHeaders != null && excludedHeaders.contains(header.getKey())) {
+			if (writerProperties.getHeaderExclusions() != null &&
+					writerProperties.getHeaderExclusions().contains(header.getKey())) {
 				continue;
 			}
 
-			addSDTMapObject(metadata, serializedHeaders, header.getKey(), header.getValue(),
-					convertNonSerializableHeadersToString);
+			addSDTMapObject(metadata, serializedHeaders, header.getKey(), header.getValue(), writerProperties);
 		}
 
 		if (headers.containsKey(SolaceBinderHeaders.PARTITION_KEY)) {
@@ -389,7 +391,7 @@ public class XMLMessageMapper {
 		return metadata;
 	}
 
-	MessageHeaders map(SDTMap metadata, Collection<String> excludedHeaders) {
+	MessageHeaders mapHeadersToSpring(SDTMap metadata, Collection<String> excludedHeaders) {
 		if (metadata == null) {
 			return new MessageHeaders(Collections.emptyMap());
 		}
@@ -455,29 +457,33 @@ public class XMLMessageMapper {
 		return new MessageHeaders(headers);
 	}
 
-	/**
-	 * Wrapper function which converts Serializable objects to byte[] if they aren't naturally supported by the SDTMap
-	 */
 	private void addSDTMapObject(SDTMap sdtMap, Set<String> serializedHeaders, String key, Object object,
-								 boolean convertNonSerializableHeadersToString)
+								 SmfMessageWriterProperties writerProperties)
 			throws SolaceMessageConversionException {
-		rethrowableCall((k, o) -> {
-			try {
-				sdtMap.putObject(k, o);
-			} catch (IllegalArgumentException e) {
-				if (o instanceof Serializable) {
-					rethrowableCall(sdtMap::putString, k,
-							DEFAULT_ENCODING.encode(rethrowableCall(SerializationUtils::serialize, o)));
+		switch (writerProperties.getHeaderTypeCompatibility()) {
+			case SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES -> rethrowableCall((k, o) -> {
+				try {
+					sdtMap.putObject(k, o);
+				} catch (IllegalArgumentException e) {
+					//TODO Rewrite this into an if-else chain for each supported SDTMap value type.
+					// There is a performance cost to leaving this as a catch block.
+					if (o instanceof Serializable) {
+						rethrowableCall(sdtMap::putString, k,
+								DEFAULT_ENCODING.encode(rethrowableCall(SerializationUtils::serialize, o)));
 
-					serializedHeaders.add(k);
-				} else if (convertNonSerializableHeadersToString && o != null) {
-					LOGGER.debug("Irreversibly converting header {} to String", k);
-					sdtMap.putString(k, o.toString());
-				} else {
-					throw e;
+						serializedHeaders.add(k);
+					} else if (writerProperties.isNonSerializableHeaderConvertToString() && o != null) {
+						LOGGER.debug("Irreversibly converting header {} to String", k);
+						sdtMap.putString(k, o.toString());
+					} else {
+						throw e;
+					}
 				}
-			}
-		}, key, object);
+			}, key, object);
+			case NATIVE_ONLY -> rethrowableCall(sdtMap::putObject, key, object);
+			default -> throw new IllegalArgumentException("Unsupported header type handling mode: " +
+					writerProperties.getHeaderTypeCompatibility());
+		}
 	}
 
 	private <T,R> R rethrowableCall(ThrowingFunction<T,R> function, T var) {
