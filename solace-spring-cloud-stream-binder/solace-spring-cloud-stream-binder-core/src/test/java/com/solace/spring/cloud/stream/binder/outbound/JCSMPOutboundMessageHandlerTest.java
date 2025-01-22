@@ -99,7 +99,7 @@ public class JCSMPOutboundMessageHandlerTest {
 						producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
 				.thenReturn(messageProducer);
 
-		Mockito.when(session.getMessageProducer(Mockito.any())).thenReturn(defaultGlobalSessionProducer);
+		Mockito.lenient().when(session.getMessageProducer(Mockito.any())).thenReturn(defaultGlobalSessionProducer);
 
 		ProducerDestination dest = Mockito.mock(ProducerDestination.class);
 		Mockito.when(dest.getName()).thenReturn("fake/topic");
@@ -603,14 +603,13 @@ public class JCSMPOutboundMessageHandlerTest {
 						p -> assertThat(p.getAckEventMode()).isEqualTo(ackEventMode));
 	}
 
-	@CartesianTest(name = "[{index}] batched={0} witSerializablePayload={1} payloadTypeCompatibility={2}")
+	@CartesianTest(name = "[{index}] batched={0} witSerializablePayload={1} configureBeforeStart={2} payloadTypeCompatibility={3}")
 	void test_ModifySmfMessageWriterProperties(
 			@Values(booleans = {false, true}) boolean batched,
+			@Values(booleans = {false, true}) boolean configureBeforeStart,
 			@Values(booleans = {false, true}) boolean witSerializablePayload,
 			@CartesianTest.Enum SmfMessagePayloadWriteCompatibility payloadTypeCompatibility)
 			throws Exception {
-		messageHandler.start();
-
 		assertThat(messageHandler.getSmfMessageWriterProperties().getHeaderExclusions())
 				.as("Test error: headerExclusions should be empty")
 				.isEmpty();
@@ -621,9 +620,6 @@ public class JCSMPOutboundMessageHandlerTest {
 				.as("Test error: payloadTypeCompatibility should be default")
 				.isEqualTo(SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES);
 
-		messageHandler.getSmfMessageWriterProperties().setPayloadTypeCompatibility(payloadTypeCompatibility);
-		messageHandler.getSmfMessageWriterProperties().getHeaderExclusions().add("excluded");
-
 		byte[] bytesPayload = RandomStringUtils.randomAlphanumeric(100).getBytes(StandardCharsets.UTF_8);
 		SerializableFoo serializablePayload = new SerializableFoo("foo", "bar");
 		BatchingConfig batchingConfig = new BatchingConfig().setEnabled(batched).setNumberOfMessages(10);
@@ -633,6 +629,17 @@ public class JCSMPOutboundMessageHandlerTest {
 						i -> Map.of("excluded", "foo"),
 						batchingConfig)
 				.build();
+
+		if (!configureBeforeStart) {
+			messageHandler.start();
+		}
+
+		messageHandler.getSmfMessageWriterProperties().setPayloadTypeCompatibility(payloadTypeCompatibility);
+		messageHandler.getSmfMessageWriterProperties().getHeaderExclusions().add("excluded");
+
+		if (configureBeforeStart) {
+			messageHandler.start();
+		}
 
 		if (witSerializablePayload && payloadTypeCompatibility.equals(SmfMessagePayloadWriteCompatibility.NATIVE_ONLY)) {
 			assertThatThrownBy(() -> messageHandler.handleMessage(messageToSend))
@@ -658,6 +665,11 @@ public class JCSMPOutboundMessageHandlerTest {
 							.as("Header 'excluded' should be excluded")
 							.isFalse();
 				});
+	}
+
+	@Test
+	void testGetBindingName() {
+		assertThat(messageHandler.getBindingName()).isNotEmpty().isEqualTo(producerProperties.getBindingName());
 	}
 
 	private List<Object> getCorrelationKeys() throws JCSMPException {
