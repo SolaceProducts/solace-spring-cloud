@@ -1343,7 +1343,7 @@ public class XMLMessageMapperTest {
 		}
 	}
 
-	@ParameterizedTest(name = "[{index}] batchMode={0}")
+	@ParameterizedTest()
 	@MethodSource("nullPayloadXMLMessageProvider")
 	void testMapXMLMessageToSpringMessage_WhenPayloadSetAsXMLAttachment(BytesXMLMessage xmlMessage) {
 		byte[] payload = "Hello World".getBytes();
@@ -1355,8 +1355,8 @@ public class XMLMessageMapperTest {
 		MessageHeaders springMessageHeaders = springMessage.getHeaders();
 
 		assertNull(springMessageHeaders.get(SolaceBinderHeaders.NULL_PAYLOAD, Boolean.class));
-		if (springMessage.getPayload() instanceof String) {
-			assertEquals(springMessage.getPayload(), new String(payload));
+		if (xmlMessage instanceof XMLContentMessage) {
+			validateSpringPayload(springMessage.getPayload(), new String(payload));
 		} else {
 			validateSpringPayload(springMessage.getPayload(), payload);
 		}
