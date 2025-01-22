@@ -293,6 +293,13 @@ public class XMLMessageMapper {
 			throw exception;
 		}
 
+		if (payload == null && xmlMessage.hasContent()) {
+			int size = xmlMessage.getContentLength();
+			byte[] msgContent = new byte[size];
+			xmlMessage.readContentBytes(msgContent);
+			payload = msgContent;
+		}
+
 		boolean isNullPayload = payload == null;
 		if (isNullPayload) {
 			//Set empty payload equivalent to null
