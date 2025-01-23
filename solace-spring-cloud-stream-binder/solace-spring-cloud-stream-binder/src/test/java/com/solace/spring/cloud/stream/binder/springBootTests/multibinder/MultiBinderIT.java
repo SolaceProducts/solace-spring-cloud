@@ -1,9 +1,5 @@
 package com.solace.spring.cloud.stream.binder.springBootTests.multibinder;
 
-import static org.awaitility.Awaitility.await;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import com.solace.test.integration.testcontainer.PubSubPlusContainer;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
@@ -22,6 +18,11 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+
+import static org.awaitility.Awaitility.await;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 
 /**
@@ -68,9 +69,9 @@ public class MultiBinderIT {
     @DynamicPropertySource
     static void registerPgProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.cloud.stream.binders.solace1.environment.solace.java.host",
-                () -> String.format("tcp://%s:%d", container.getHost(), container.getMappedPort(55555)));
+                () -> container.getOrigin(PubSubPlusContainer.Port.SMF));
         registry.add("spring.cloud.stream.binders.solace2.environment.solace.java.host",
-                () -> String.format("tcp://%s:%d", container.getHost(), container.getMappedPort(55555)));
+                () -> container.getOrigin(PubSubPlusContainer.Port.SMF));
     }
 
     @Test

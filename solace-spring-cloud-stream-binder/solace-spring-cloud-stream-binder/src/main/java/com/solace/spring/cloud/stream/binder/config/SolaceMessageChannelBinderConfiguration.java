@@ -4,6 +4,7 @@ import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
 import com.solace.spring.cloud.stream.binder.health.SolaceBinderHealthAccessor;
 import com.solace.spring.cloud.stream.binder.health.handlers.SolaceSessionEventHandler;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
+import com.solace.spring.cloud.stream.binder.outbound.JCSMPOutboundMessageHandler;
 import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisioner;
 import com.solacesystems.jcsmp.Context;
@@ -19,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.security.oauth2.client.servlet.OAuth2ClientAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.cloud.stream.config.ProducerMessageHandlerCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -94,15 +96,16 @@ public class SolaceMessageChannelBinderConfiguration {
 	}
 
 	@Bean
-	SolaceMessageChannelBinder solaceMessageChannelBinder(SolaceEndpointProvisioner solaceEndpointProvisioner,
-														  @Nullable SolaceBinderHealthAccessor solaceBinderHealthAccessor,
-														  @Nullable SolaceMeterAccessor solaceMeterAccessor) {
+	SolaceMessageChannelBinder solaceMessageChannelBinder(
+			SolaceEndpointProvisioner solaceEndpointProvisioner,
+			@Nullable ProducerMessageHandlerCustomizer<JCSMPOutboundMessageHandler> producerCustomizer,
+			@Nullable SolaceBinderHealthAccessor solaceBinderHealthAccessor,
+			@Nullable SolaceMeterAccessor solaceMeterAccessor) {
 		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, context, solaceEndpointProvisioner);
 		binder.setExtendedBindingProperties(solaceExtendedBindingProperties);
+		binder.setProducerMessageHandlerCustomizer(producerCustomizer);
 		binder.setSolaceMeterAccessor(solaceMeterAccessor);
-		if (solaceBinderHealthAccessor != null) {
-			binder.setSolaceBinderHealthAccessor(solaceBinderHealthAccessor);
-		}
+		binder.setSolaceBinderHealthAccessor(solaceBinderHealthAccessor);
 		return binder;
 	}
 
