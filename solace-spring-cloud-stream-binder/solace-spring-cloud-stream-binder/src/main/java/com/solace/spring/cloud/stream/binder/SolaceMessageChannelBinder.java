@@ -56,7 +56,7 @@ public class SolaceMessageChannelBinder
 	private final JCSMPSessionProducerManager sessionProducerManager;
 	private final AtomicBoolean consumersRemoteStopFlag = new AtomicBoolean(false);
 	private final String errorHandlerProducerKey = UUID.randomUUID().toString();
-	private SolaceMeterAccessor solaceMeterAccessor;
+	@Nullable private SolaceMeterAccessor solaceMeterAccessor;
 	private SolaceExtendedBindingProperties extendedBindingProperties = new SolaceExtendedBindingProperties();
 	private static final SolaceMessageHeaderErrorMessageStrategy errorMessageStrategy = new SolaceMessageHeaderErrorMessageStrategy();
 	@Nullable private SolaceBinderHealthAccessor solaceBinderHealthAccessor;
@@ -253,7 +253,7 @@ public class SolaceMessageChannelBinder
 		this.extendedBindingProperties = extendedBindingProperties;
 	}
 
-	public void setSolaceMeterAccessor(SolaceMeterAccessor solaceMeterAccessor) {
+	public void setSolaceMeterAccessor(@Nullable SolaceMeterAccessor solaceMeterAccessor) {
 		this.solaceMeterAccessor = solaceMeterAccessor;
 	}
 

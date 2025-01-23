@@ -1475,7 +1475,7 @@ public class XMLMessageMapperTest {
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
 
-		Message<?> springMessage = xmlMessageMapper.map(xmlMessage, acknowledgmentCallback, consumerProperties);
+		Message<?> springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
 		MessageHeaders springMessageHeaders = springMessage.getHeaders();
 
 		assertNull(springMessageHeaders.get(SolaceBinderHeaders.NULL_PAYLOAD, Boolean.class));

@@ -288,6 +288,10 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		return key.send(msg, e);
 	}
 
+	public String getBindingName() {
+		return properties.getBindingName();
+	}
+
 	public SmfMessageWriterProperties getSmfMessageWriterProperties() {
 		return smfMessageWriterProperties;
 	}

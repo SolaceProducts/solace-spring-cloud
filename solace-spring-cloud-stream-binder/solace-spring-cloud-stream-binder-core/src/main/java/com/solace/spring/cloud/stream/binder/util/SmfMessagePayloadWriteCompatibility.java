@@ -1,5 +1,8 @@
 package com.solace.spring.cloud.stream.binder.util;
 
+/**
+ * The compatibility mode for message payloads when they're being written to the SMF message.
+ */
 public enum SmfMessagePayloadWriteCompatibility {
 	/**
 	 * Only payloads which are natively supported by SMF are allowed to be written.

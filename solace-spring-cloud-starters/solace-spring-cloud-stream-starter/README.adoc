@@ -409,7 +409,7 @@ The compatibility mode for message headers when they're being written to the SMF
 +
 When set to `native_only`, only headers which are natively supported by SMF are allowed to be written. Unsupported types will throw an exception.
 +
-When set to `serialize_and_encode_non_native_types`, non-native and serializable headers will be serialized to a byte array then encoded into a string with the corresponding  `solace_scst_serializedHeaders` and `solace_scst_serializedHeadersEncoding` headers set accordingly.
+When set to `serialize_and_encode_non_native_types`, non-native and serializable headers will be serialized to a byte array then encoded into a string with the corresponding  `solace_scst_serializedHeaders` and `solace_scst_serializedHeadersEncoding` headers set accordingly. Native payloads will be written as usual.
 +
 Default: `serialize_and_encode_non_native_types`
 
