@@ -211,9 +211,9 @@ public class SolaceBinderMeterIT {
 								   TestInfo testInfo) throws Exception {
 		String destination0 = RandomStringUtils.randomAlphanumeric(10);
 		sempV2Api.config().createMsgVpnQueueSubscription(
+				new ConfigMsgVpnQueueSubscription().subscriptionTopic(destination0),
 				(String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME),
 				queue.getName(),
-				new ConfigMsgVpnQueueSubscription().subscriptionTopic(destination0),
 				null, null);
 
 		SolaceTestBinder binder = context.getBinder();

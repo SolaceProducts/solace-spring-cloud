@@ -39,11 +39,12 @@ import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueuesRespon
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnResponse;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnsResponse;
 import com.solace.test.integration.semp.v2.config.model.ConfigSempMetaOnlyResponse;
-import java.util.Collection;
-import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+
+import java.util.Collection;
+import java.util.List;
 
 /**
  * Builder for entity that can perform administrator level configuration tasks on a messaging
@@ -197,7 +198,7 @@ public class BrokerConfiguratorBuilder {
     public ConfigMsgVpn updateVpn(ConfigMsgVpn vpn) {
       try {
         final ConfigMsgVpnResponse response = this.vpnApi
-            .updateMsgVpn(vpn.getMsgVpnName(), vpn, null, null);
+            .updateMsgVpn(vpn, vpn.getMsgVpnName(), null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           return response.getData();
         } else {
@@ -326,7 +327,7 @@ public class BrokerConfiguratorBuilder {
       final ConfigMsgVpn vpn = queryVpn(msgVpnName);
       vpn.setAuthenticationBasicType(AuthenticationBasicTypeEnum.INTERNAL);
       try {
-        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(msgVpnName, vpn, null, null);
+        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(vpn, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           logger.debug("Basic auth enabled for vpn: {}", msgVpnName);
           return;
@@ -350,7 +351,7 @@ public class BrokerConfiguratorBuilder {
       final ConfigMsgVpn vpn = queryVpn(msgVpnName);
       vpn.setAuthenticationBasicType(AuthenticationBasicTypeEnum.NONE);
       try {
-        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(msgVpnName, vpn, null, null);
+        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(vpn, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           logger.debug("Basic auth disabled for vpn: {}", msgVpnName);
           return;
@@ -376,7 +377,7 @@ public class BrokerConfiguratorBuilder {
       vpn.authenticationClientCertValidateDateEnabled(true);
       vpn.authenticationClientCertAllowApiProvidedUsernameEnabled(true);
       try {
-        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(msgVpnName, vpn, null, null);
+        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(vpn, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           logger.debug("Client certificate auth enabled for vpn: {}", msgVpnName);
           return;
@@ -400,7 +401,7 @@ public class BrokerConfiguratorBuilder {
       final ConfigMsgVpn vpn = queryVpn(msgVpnName);
       vpn.setAuthenticationClientCertEnabled(false);
       try {
-        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(msgVpnName, vpn, null, null);
+        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(vpn, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           logger.debug("Basic auth disabled for vpn: {}", msgVpnName);
           return;
@@ -419,7 +420,7 @@ public class BrokerConfiguratorBuilder {
       vpn.authenticationKerberosEnabled(true);
       vpn.authenticationKerberosAllowApiProvidedUsernameEnabled(allowApiProvidedUsername);
       try {
-        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(msgVpnName, vpn, null, null);
+        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(vpn, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           logger.debug("Kerberos auth enabled for vpn: {}", msgVpnName);
           return;
@@ -437,7 +438,7 @@ public class BrokerConfiguratorBuilder {
       final ConfigMsgVpn vpn = queryVpn(msgVpnName);
       vpn.authenticationKerberosEnabled(false);
       try {
-        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(msgVpnName, vpn, null, null);
+        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(vpn, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           logger.debug("Kerberos auth disabled for vpn:  {}", msgVpnName);
           return;
@@ -479,7 +480,7 @@ public class BrokerConfiguratorBuilder {
       final ConfigMsgVpn vpn = queryVpn(msgVpnName);
       vpn.setAuthenticationOauthEnabled(true);
       try {
-        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(msgVpnName, vpn, null, null);
+        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(vpn, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           logger.debug("OAuth authentication enabled for vpn: {}", msgVpnName);
           return;
@@ -495,7 +496,7 @@ public class BrokerConfiguratorBuilder {
       final ConfigMsgVpn vpn = queryVpn(msgVpnName);
       vpn.setAuthenticationOauthEnabled(false);
       try {
-        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(msgVpnName, vpn, null, null);
+        final ConfigMsgVpnResponse response = this.vpnApi.updateMsgVpn(vpn, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           logger.debug("OAuth authentication disabled for vpn: {}", msgVpnName);
           return;
@@ -517,7 +518,7 @@ public class BrokerConfiguratorBuilder {
             .aclProfileName("default")
             .enabled(true);
         ConfigMsgVpnClientUsernameResponse response = clientUsernameApi.createMsgVpnClientUsername(
-            msgVpnName, msgVpnClientUsername, null, null);
+                msgVpnClientUsername, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           return response.getData();
         } else {
@@ -551,7 +552,7 @@ public class BrokerConfiguratorBuilder {
             .clientUsername(clientUsername)
             .enabled(true);
         ConfigMsgVpnClientUsernameResponse response = clientUsernameApi.updateMsgVpnClientUsername(
-            msgVpnName, clientUsername, msgVpnClientUsername, null, null);
+                msgVpnClientUsername, msgVpnName, clientUsername, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           return response.getData();
         } else {
@@ -572,7 +573,7 @@ public class BrokerConfiguratorBuilder {
             .allowGuaranteedMsgReceiveEnabled(true)
             .allowGuaranteedMsgSendEnabled(true);
         ConfigMsgVpnClientProfileResponse response = clientProfileApi.updateMsgVpnClientProfile(
-            msgVpnName, clientProfileName, clientProfile, null, null);
+                clientProfile, msgVpnName, clientProfileName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           return response.getData();
         } else {
@@ -589,7 +590,7 @@ public class BrokerConfiguratorBuilder {
         AuthenticationOauthProfileApi oAuthProfileApi = new AuthenticationOauthProfileApi(
             this.apiClient);
         ConfigMsgVpnAuthenticationOauthProfileResponse response = oAuthProfileApi.createMsgVpnAuthenticationOauthProfile(
-            msgVpnName, profile, null, null);
+                profile, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           return response.getData();
         } else {
@@ -621,7 +622,7 @@ public class BrokerConfiguratorBuilder {
       try {
         AuthorizationGroupApi authorizationGroupApi = new AuthorizationGroupApi(this.apiClient);
         ConfigMsgVpnAuthorizationGroupResponse response = authorizationGroupApi.createMsgVpnAuthorizationGroup(
-            msgVpnName, request, null, null);
+                request, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           return response.getData();
         } else {
@@ -707,7 +708,7 @@ public class BrokerConfiguratorBuilder {
 
       try {
         final ConfigMsgVpnQueueResponse response = this.queueApi
-            .createMsgVpnQueue(msgVpnName, queue, null, null);
+            .createMsgVpnQueue(queue, msgVpnName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           logger.debug("Queue {} created in vpn {}", queueName, msgVpnName);
           return;
@@ -724,7 +725,7 @@ public class BrokerConfiguratorBuilder {
     public void updateQueue(ConfigMsgVpnQueue q) throws SempClientException {
       try {
         final ConfigMsgVpnQueueResponse response = this.queueApi
-            .updateMsgVpnQueue(q.getMsgVpnName(), q.getQueueName(), q, null, null);
+            .updateMsgVpnQueue(q, q.getMsgVpnName(), q.getQueueName(), null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           logger.debug("Queue {} updated in vpn {}", q.getQueueName(), q.getMsgVpnName());
           return;
@@ -766,7 +767,7 @@ public class BrokerConfiguratorBuilder {
 
       try {
         final ConfigMsgVpnQueueSubscriptionResponse response = this.queueApi
-            .createMsgVpnQueueSubscription(msgVpnName, queueName, subscription, null, null);
+            .createMsgVpnQueueSubscription(subscription, msgVpnName, queueName, null, null);
         if (HttpStatus.OK.value() == response.getMeta().getResponseCode()) {
           logger.debug("Subscription is {} created for the queue {} in vpn {}", subscriptionTopic,
               queueName, msgVpnName);
@@ -798,7 +799,7 @@ public class BrokerConfiguratorBuilder {
           });
 
           q.setEgressEnabled(false);
-          this.queueApi.updateMsgVpnQueue(msgVpnName, queueName, q, null, null);
+          this.queueApi.updateMsgVpnQueue(q, msgVpnName, queueName, null, null);
         } else {
           throw new SempClientException(
               String.format("Can't shutdown the queue %s", queueName));
@@ -825,7 +826,7 @@ public class BrokerConfiguratorBuilder {
                 String.format("Can't shutdown the queue %s", msgVpnName));
           });
           q.setEgressEnabled(true);
-          this.queueApi.updateMsgVpnQueue(msgVpnName, queueName, q, null, null);
+          this.queueApi.updateMsgVpnQueue(q, msgVpnName, queueName, null, null);
         } else {
           throw new SempClientException(
               String.format("Can't shutdown the queue %s", queueName));
@@ -852,7 +853,7 @@ public class BrokerConfiguratorBuilder {
                 String.format("Can't shutdown the queue %s", msgVpnName));
           });
           q.setIngressEnabled(false);
-          this.queueApi.updateMsgVpnQueue(msgVpnName, queueName, q, null, null);
+          this.queueApi.updateMsgVpnQueue(q, msgVpnName, queueName, null, null);
         } else {
           throw new SempClientException(
               String.format("Can't shutdown the queue %s", queueName));
@@ -879,7 +880,7 @@ public class BrokerConfiguratorBuilder {
                 String.format("Can't shutdown the queue %s", msgVpnName));
           });
           q.setIngressEnabled(true);
-          this.queueApi.updateMsgVpnQueue(msgVpnName, queueName, q, null, null);
+          this.queueApi.updateMsgVpnQueue(q, msgVpnName, queueName, null, null);
         } else {
           throw new SempClientException(
               String.format("Can't shutdown the queue %s", queueName));

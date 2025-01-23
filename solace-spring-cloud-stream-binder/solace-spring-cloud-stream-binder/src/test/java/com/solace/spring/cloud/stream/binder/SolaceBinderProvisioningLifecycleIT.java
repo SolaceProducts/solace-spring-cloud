@@ -1096,7 +1096,7 @@ public class SolaceBinderProvisioningLifecycleIT {
             logger.info(String.format("Pre-provisioning queue %s with maxBindCount=%s", queue0, maxBindCount));
             jcsmpSession.provision(queue, new EndpointProperties(), JCSMPSession.WAIT_FOR_CONFIRM);
             sempV2Api.config()
-                    .updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue().maxBindCount(maxBindCount), null, null);
+                    .updateMsgVpnQueue(new ConfigMsgVpnQueue().maxBindCount(maxBindCount), vpnName, queue0, null, null);
 
             try {
                 Binding<MessageChannel> consumerBinding = binder.bindConsumer(
@@ -2369,7 +2369,7 @@ public class SolaceBinderProvisioningLifecycleIT {
         config.setEgressEnabled(true);
         config.setMsgVpnName(vpnName);
         // assume TE is created, when not created test will catch it
-        sempV2Api.config().createMsgVpnTopicEndpoint(vpnName, config, null, null);
+        sempV2Api.config().createMsgVpnTopicEndpoint(config, vpnName, null, null);
     }
 
 }
