@@ -34,7 +34,7 @@
 
         <solace.spring.cloud.stream-starter.version>5.7.0-SNAPSHOT</solace.spring.cloud.stream-starter.version>
 
-        <solace.integration.test.support.version>1.1.2</solace.integration.test.support.version>
+        <solace.integration.test.support.version>2.0.0</solace.integration.test.support.version>
         <solace.integration.test.support.fetch_checkout.skip>false</solace.integration.test.support.fetch_checkout.skip>
         <solace.integration.test.support.install.skip>true</solace.integration.test.support.install.skip>
     </properties>

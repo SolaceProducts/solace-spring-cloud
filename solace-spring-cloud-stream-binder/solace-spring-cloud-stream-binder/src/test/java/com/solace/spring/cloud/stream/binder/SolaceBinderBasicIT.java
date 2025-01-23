@@ -1047,8 +1047,9 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		String queue0 = binder.getConsumerQueueName(consumerBinding);
 
 		// Minimize message pre-fetch since we're not testing JCSMP, and this influences the test counters
-		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue()
-				.maxDeliveredUnackedMsgsPerFlow((long) consumerProperties.getExtension().getBatchMaxSize()), null, null);
+		sempV2Api.config().updateMsgVpnQueue(new ConfigMsgVpnQueue()
+				.maxDeliveredUnackedMsgsPerFlow((long) consumerProperties.getExtension().getBatchMaxSize()),
+				vpnName, queue0, null, null);
 		retryAssert(() -> assertThat(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, queue0, null)
 				.getData()
@@ -1095,11 +1096,11 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
 		logger.info("Disabling egress to queue {}", queue0);
-		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue().egressEnabled(false), null, null);
+		sempV2Api.config().updateMsgVpnQueue(new ConfigMsgVpnQueue().egressEnabled(false), vpnName, queue0, null, null);
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
 		logger.info("Enabling egress to queue {}", queue0);
-		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue().egressEnabled(true), null, null);
+		sempV2Api.config().updateMsgVpnQueue(new ConfigMsgVpnQueue().egressEnabled(true), vpnName, queue0, null, null);
 		Thread.sleep(TimeUnit.SECONDS.toMillis(5));
 
 		logger.info("Stopping producer");
@@ -1177,8 +1178,9 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		String queue0 = binder.getConsumerQueueName(consumerBinding);
 
 		// Minimize message pre-fetch since we're not testing JCSMP, and this influences the test counters
-		sempV2Api.config().updateMsgVpnQueue(vpnName, queue0, new ConfigMsgVpnQueue()
-				.maxDeliveredUnackedMsgsPerFlow((long) consumerProperties.getExtension().getBatchMaxSize()), null, null);
+		sempV2Api.config().updateMsgVpnQueue(new ConfigMsgVpnQueue()
+				.maxDeliveredUnackedMsgsPerFlow((long) consumerProperties.getExtension().getBatchMaxSize()),
+				vpnName, queue0, null, null);
 		retryAssert(() -> assertThat(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, queue0, null)
 				.getData()

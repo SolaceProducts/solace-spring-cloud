@@ -177,7 +177,7 @@ public class SolaceBinderHealthIT {
 		switch (healthStatus) {
 			case "DOWN" -> sempV2Api.config().deleteMsgVpnQueue(vpnName, queueName);
 			case "RECONNECTING" -> sempV2Api.config()
-					.updateMsgVpnQueue(vpnName, queueName, new ConfigMsgVpnQueue().egressEnabled(false), null, null);
+					.updateMsgVpnQueue(new ConfigMsgVpnQueue().egressEnabled(false), vpnName, queueName, null, null);
 			default -> throw new IllegalArgumentException("No test for health status: " + healthStatus);
 		}
 
@@ -189,7 +189,7 @@ public class SolaceBinderHealthIT {
 
 		if (healthStatus.equals("RECONNECTING")) {
 			sempV2Api.config()
-					.updateMsgVpnQueue(vpnName, queueName, new ConfigMsgVpnQueue().egressEnabled(true), null, null);
+					.updateMsgVpnQueue(new ConfigMsgVpnQueue().egressEnabled(true), vpnName, queueName, null, null);
 			retryAssert(2, TimeUnit.MINUTES,
 					() -> assertThat(bindingsHealthContributor)
 							.asInstanceOf(InstanceOfAssertFactories.type(BindingsHealthContributor.class))

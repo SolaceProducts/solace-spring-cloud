@@ -173,8 +173,8 @@ class MultiBinderOAuth2IT implements
 
               logger.info("Forcing Session Reconnect for client: {}", msgVpnClient.getClientName());
               sempV2Api.action()
-                  .doMsgVpnClientDisconnect(msgVPnName, msgVpnClient.getClientName(),
-                      new ActionMsgVpnClientDisconnect());
+                  .doMsgVpnClientDisconnect(new ActionMsgVpnClientDisconnect(), msgVPnName,
+                          msgVpnClient.getClientName());
             } catch (ApiException e) {
               throw new RuntimeException(e);
             } finally {

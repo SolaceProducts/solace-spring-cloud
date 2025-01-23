@@ -171,8 +171,8 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 		ErrorQueueRepublishCorrelationKey key = createKey(messageContainer, flowReceiverContainer);
 
 		LOGGER.info("Shutting down ingress for queue {}", errorQueue.getName());
-		sempV2Api.config().updateMsgVpnQueue(vpnName, errorQueue.getName(),
-				new ConfigMsgVpnQueue().ingressEnabled(false), null, null);
+		sempV2Api.config().updateMsgVpnQueue(new ConfigMsgVpnQueue().ingressEnabled(false), vpnName,
+				errorQueue.getName(), null, null);
 		retryAssert(() -> assertFalse(sempV2Api.monitor()
 				.getMsgVpnQueue(vpnName, errorQueue.getName(), null)
 				.getData()
@@ -182,8 +182,8 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 		Mockito.doAnswer(invocation -> {
 			if (key.getErrorQueueDeliveryAttempt() == errorQueueInfrastructure.getMaxDeliveryAttempts()) {
 				LOGGER.info("Starting ingress for queue {}", errorQueue.getName());
-				sempV2Api.config().updateMsgVpnQueue(vpnName, errorQueue.getName(),
-						new ConfigMsgVpnQueue().ingressEnabled(true), null, null);
+				sempV2Api.config().updateMsgVpnQueue(new ConfigMsgVpnQueue().ingressEnabled(true),
+						vpnName, errorQueue.getName(), null, null);
 				retryAssert(() -> assertTrue(sempV2Api.monitor()
 						.getMsgVpnQueue(vpnName, errorQueue.getName(), null)
 						.getData()
