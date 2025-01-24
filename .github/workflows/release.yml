@@ -57,4 +57,10 @@ jobs:
           git config --local user.name "GitHub Action"
 
       - name: Deploy to Maven Central
-        run: mvn release:prepare release:perform -DreleaseTarget=central -s maven/settings.xml
+        run: |
+          mvn -DreleaseTarget=central \
+          -DstagingProgressTimeoutMinutes=360 \
+          -DstagingProgressPauseDurationSeconds=10 \
+          -P releaseCentral \
+          -s maven/settings.xml \
+          release:prepare release:perform
