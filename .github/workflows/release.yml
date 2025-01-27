@@ -59,8 +59,6 @@ jobs:
       - name: Deploy to Maven Central
         run: |
           mvn -DreleaseTarget=central \
-          -DskipTests \
-          -Darguments=-DskipTests \
           -DstagingProgressTimeoutMinutes=360 \
           -DstagingProgressPauseDurationSeconds=10 \
           -P releaseCentral \
