@@ -305,7 +305,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		binderBindUnbindLatency();
 
-		AtomicInteger expectedDeliveryAttempt = new AtomicInteger(1);
+		AtomicInteger expectedDeliveryAttempt = new AtomicInteger(0);
 		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts(),
 				() -> messages.forEach(moduleOutputChannel::send),
 				(msg, callback) -> {
@@ -315,10 +315,16 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 						softly.assertThat(StaticMessageHeaderAccessor.getDeliveryAttempt(msg)).satisfiesAnyOf(
 								deliveryAttempt -> assertThat(deliveryAttempt).isNull(),
 								deliveryAttempt -> assertThat(deliveryAttempt).isNotNull().hasValue(0));
+					} else if (Boolean.TRUE.equals(msg.getHeaders().getOrDefault(SolaceHeaders.REDELIVERED, false))) {
+						// to handle race condition where bad message might be redelivered before this message handler
+						// is unbound by the ConsumerInfrastructureUtil
+						softly.assertThat(StaticMessageHeaderAccessor.getDeliveryAttempt(msg)).hasValue(1);
+						callback.run();
+						return;
 					} else {
 						softly.assertThat(StaticMessageHeaderAccessor.getDeliveryAttempt(msg))
 								.isNotNull()
-								.hasValue(expectedDeliveryAttempt.getAndIncrement());
+								.hasValue(expectedDeliveryAttempt.incrementAndGet());
 					}
 					callback.run();
 					throw new RuntimeException("bad");
@@ -340,6 +346,10 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 							d -> assertThat(d.getPendingConsumedMsgCount()).isEqualTo(messages.size())
 					));
 		}
+
+		assertThat(expectedDeliveryAttempt).hasValue(channelType.equals(PollableSource.class) ?
+				0 : // Polled consumers don't increment delivery attempt header
+				consumerProperties.getMaxAttempts());
 
 		producerBinding.unbind();
 		consumerBinding.unbind();
