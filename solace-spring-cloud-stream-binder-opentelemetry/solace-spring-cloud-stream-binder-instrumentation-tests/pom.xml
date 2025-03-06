@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>com.solace.spring.cloud</groupId>
+    <artifactId>solace-spring-cloud-parent</artifactId>
+    <version>4.7.1-SNAPSHOT</version>
+    <relativePath>../../solace-spring-cloud-parent/pom.xml</relativePath>
+  </parent>
+
+  <artifactId>spring-cloud-stream-binder-solace-instrumentation-tests</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+  <name>spring-cloud-stream-binder-solace-instrumentation-tests</name>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring.cloud.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.solace.spring.cloud</groupId>
+        <artifactId>solace-spring-cloud-bom</artifactId>
+        <version>${solace.spring.boot.bom.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>com.solacesystems</groupId>
+      <artifactId>sol-jcsmp</artifactId>
+      <version>10.25.3-jcsmp_auto_instrument.44353</version>
+    </dependency>
+    <dependency>
+      <groupId>com.solace.spring.cloud</groupId>
+      <artifactId>spring-cloud-starter-stream-solace</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-stream</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-actuator</artifactId>
+    </dependency>
+
+    <dependency>
+      <groupId>com.solace.samples.spring</groupId>
+      <artifactId>spring-samples-datamodel</artifactId>
+      <version>0.0.1-SNAPSHOT</version>
+    </dependency>
+
+    <!--implementation(project(":exporters:otlp:all"))-->
+    <dependency>
+      <groupId>com.linecorp.armeria</groupId>
+      <artifactId>armeria-grpc-protocol</artifactId>
+      <version>1.31.3</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>com.linecorp.armeria</groupId>
+      <artifactId>armeria-junit5</artifactId>
+      <version>1.31.3</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.opentelemetry.proto</groupId>
+      <artifactId>opentelemetry-proto</artifactId>
+      <version>1.5.0-alpha</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <version>1.20.5</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-netty-shaded</artifactId>
+      <version>1.70.0</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-stub</artifactId>
+      <version>1.70.0</version>
+      <scope>test</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-devtools</artifactId>
+      <optional>true</optional>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+      <exclusions>
+        <exclusion>
+          <groupId>com.vaadin.external.google</groupId>
+          <artifactId>android-json</artifactId>
+        </exclusion>
+      </exclusions>
+    </dependency>
+    <!--<dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-stream-test-support</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.springframework.cloud</groupId>
+      <artifactId>spring-cloud-stream-test-binder</artifactId>
+      <scope>test</scope>
+    </dependency>-->
+  </dependencies>
+
+  <!--<build>
+    <plugins>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+    </plugins>
+  </build>-->
+
+</project>

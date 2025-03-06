@@ -1,0 +1,33 @@
+spring:
+  cloud:
+    function:
+      definition: emitSensorReading
+      #definition: emitSensorReading;emitHello;
+      #definition: emitHello;
+
+    stream:
+      poller:
+        fixed-delay: 10000
+      bindings:
+        emitSensorReading-out-0:
+          #destination: manual/ack/test
+          #destination: solace/function/two #
+          #destination: pub/sub/plus/test #
+          destination: sensor/temperature/fahrenheit #source - sink, processor, nullpayload
+          binder: local-solace
+#        emitHello-out-0:
+#          destination: hello/world
+#          binder: local-solace
+      binders:
+        local-solace:
+          type: solace
+          environment:
+            solace:
+              java:
+                host: tcp://localhost:55557
+                msgVpn: default
+                clientUsername: default
+                clientPassword: default
+
+server:
+  port: 0

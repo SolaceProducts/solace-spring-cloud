@@ -2,7 +2,7 @@ package com.solace.spring.cloud.stream.binder.config;
 
 import com.solacesystems.jcsmp.impl.client.ClientInfoProvider;
 
-class SolaceBinderClientInfoProvider extends ClientInfoProvider {
+public class SolaceBinderClientInfoProvider extends ClientInfoProvider {
 	public String getSoftwareVersion() {
 		return String.format("@project.version@ (%s)", super.getSoftwareVersion());
 	}
