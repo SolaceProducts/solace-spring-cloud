@@ -68,6 +68,8 @@ public class SolaceBinderConsumerInstrumentation implements TypeInstrumentation 
   @Override
   public void transform(TypeTransformer transformer) {
     //Instrument processMessage method of com.solace.spring.cloud.stream.binder.inbound.InboundXMLMessageListener
+    //This "process" span is required for establishing proper link between "receive" (parent) and "process" (child)
+    // consumer spans in case of Blocking/Polling receive, and any subsequent spans.
     transformer.applyAdviceToMethod(
         isMethod()
             .and(named("processMessage"))
@@ -78,6 +80,9 @@ public class SolaceBinderConsumerInstrumentation implements TypeInstrumentation 
     );
 
     //Instrument sendMessage method of org.springframework.integration.endpoint.MessageProducerSupport
+    //It's helpful for tracing which SCSt function handled the received message and
+    //in case of client side retries it produces a span for each retry attempt.
+    //The span kind is set to "internal" and it would be child span of "process" span.
     transformer.applyAdviceToMethod(
         isMethod()
             .and(named("sendMessage"))

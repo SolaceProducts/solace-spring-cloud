@@ -17,7 +17,6 @@
 package com.solace.messaging.trace.propagation.javaagent;
 
 import com.google.auto.service.AutoService;
-import com.solace.messaging.trace.propagation.javaagent.SolaceBinderConsumerInstrumentation.InboundXMLMessageListenerProcessMessageMethodAdvice;
 import io.opentelemetry.javaagent.extension.instrumentation.InstrumentationModule;
 import io.opentelemetry.javaagent.extension.instrumentation.TypeInstrumentation;
 import java.util.Arrays;
@@ -46,7 +45,7 @@ public final class SolaceBinderInstrumentationModule extends InstrumentationModu
     return Arrays.asList(
         //Solace Binder Consumer Instrumentation Classes
         SolaceBinderConsumerInstrumentation.class.getName(),
-        InboundXMLMessageListenerProcessMessageMethodAdvice.class.getName(),
+        SolaceBinderConsumerInstrumentation.InboundXMLMessageListenerProcessMessageMethodAdvice.class.getName(),
         SolaceBinderConsumerInstrumentation.MessageProducerSupportSendMessageMethodAdvice.class.getName(),
 
         //Other required classes Solace Binder
