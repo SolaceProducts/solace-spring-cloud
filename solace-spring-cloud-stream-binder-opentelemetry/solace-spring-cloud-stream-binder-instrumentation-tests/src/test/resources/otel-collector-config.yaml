@@ -1,0 +1,49 @@
+extensions:
+  health_check:
+    endpoint: ":13133"  # Default endpoint for OTEL collector health check
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 1000
+    spike_limit_mib: 500
+
+  batch:
+
+exporters:
+  logging:
+    loglevel: "info"
+
+  otlp/jaeger:
+    endpoint: jaeger-all-in-one:4317
+    tls:
+      insecure: true
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+
+  solace:
+    broker: [solbroker:5672]
+    max_unacknowledged: 500
+    auth:
+      sasl_plain:
+        username: trace
+        password: trace
+    queue: queue://#telemetry-trace
+    tls:
+      insecure: true
+      insecure_skip_verify: true
+
+
+service:
+  extensions: [health_check]
+  telemetry:
+    logs:
+      level: "debug"
+  pipelines:
+    traces:
+      receivers: [solace, otlp]
+      processors: [batch, memory_limiter]
+      exporters: [otlp/jaeger, logging]

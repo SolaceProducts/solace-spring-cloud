@@ -1,0 +1,50 @@
+spring:
+  cloud:
+    function:
+      definition: processor1;source1
+      #definition: processor1;
+
+    stream:
+      poller:
+        initialDelay: 3000
+        fixed-delay: 300000 # 30 seconds
+
+      bindings:
+        source1-out-0:
+          destination: solace/supply/hello
+          binder: local-solace
+
+        processor1-in-0:
+          destination: processorQueue
+          group: processorGroup
+          binder: local-solace
+        processor1-out-0:
+          destination: solace/processor/hello
+          binder: local-solace
+
+      binders:
+        local-solace:
+          type: solace
+          environment:
+            solace:
+              java:
+                host: tcp://localhost:55555
+                msgVpn: default
+                clientUsername: default
+                clientPassword: default
+
+      solace:
+        default:
+          consumer:
+            add-destination-as-subscription-to-queue: false
+            provision-durable-queue: true
+            provision-error-queue: false
+            queue-name-expression: "destination"
+
+        bindings:
+          processor1-in-0:
+            consumer:
+              queueAdditionalSubscriptions: solace/supply/hello
+
+server:
+  port: 0
