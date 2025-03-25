@@ -34,6 +34,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.builder.SpringApplicationBuilder;
@@ -302,8 +304,10 @@ class SolaceBinderInstrumentationIT {
       List<TracesData> traces = findTraces(jaegerQueryServer, SERVICE_NAME, numMsgs, 8);
       verifyPublishSpans(traces, numMsgs, "solace/supply/dynamicDestQ", "topic");
       verifyBrokerSendSpans(traces, numMsgs);
-      verifyConsumerReceiveSpans(traces, numMsgs, "dynamicDestQ", "queue", "solace/supply/dynamicDestQ");
-      verifyConsumerProcessSpans(traces, numMsgs, "dynamicDestQ", "queue", "solace/supply/dynamicDestQ");
+      verifyConsumerReceiveSpans(traces, numMsgs, "dynamicDestQ", "queue",
+          "solace/supply/dynamicDestQ");
+      verifyConsumerProcessSpans(traces, numMsgs, "dynamicDestQ", "queue",
+          "solace/supply/dynamicDestQ");
       verifyConsumerInternalSpans(traces, numMsgs);
       verifyPublishSpans(traces, numMsgs, "solace/dynamicDestination/hello", "topic");
       verifyBrokerReceiveSpans(traces, numMsgs * 2);
@@ -314,7 +318,7 @@ class SolaceBinderInstrumentationIT {
   }
 
   @Test
-  void testManualAckRedeliver() {
+  void testManualAckRedeliverInstrumentation() {
     final int numMsgs = 1;
     final int numDelivered = 3;
     final String[] springProfiles = {"manualAck", "requeue"};
@@ -339,7 +343,7 @@ class SolaceBinderInstrumentationIT {
   }
 
   @Test
-  void testManualAckReject() {
+  void testManualAckRejectInstrumentation() {
     final int numMsgs = 1;
     final String[] springProfiles = {"manualAck", "reject"};
     try (var ignored = new SpringApplicationBuilder(MainApp.class).profiles(springProfiles).run()) {
@@ -350,9 +354,35 @@ class SolaceBinderInstrumentationIT {
       verifyBrokerReceiveSpans(traces, numMsgs);
       verifyBrokerSendSpans(traces, numMsgs,
           createTag("messaging.solace.send.outcome", "rejected"));
-      verifyConsumerReceiveSpans(traces, numMsgs, "manualAckQueue", "queue", "solace/supply/manualAckQueue");
-      verifyConsumerProcessSpans(traces, numMsgs, "manualAckQueue", "queue", "solace/supply/manualAckQueue");
+      verifyConsumerReceiveSpans(traces, numMsgs, "manualAckQueue", "queue",
+          "solace/supply/manualAckQueue");
+      verifyConsumerProcessSpans(traces, numMsgs, "manualAckQueue", "queue",
+          "solace/supply/manualAckQueue");
       verifyConsumerInternalSpans(traces, numMsgs);
+      log.info("Stopping Application");
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @ParameterizedTest
+  @CsvSource({"bindingErrorHandler", "globalErrorHandler"})
+  void testBindingCustomErrorHandlerInstrumentation(String springProfile) {
+    final int numMsgs = 1;
+    final int maxAttempts = 3;
+
+    try (var ignored = new SpringApplicationBuilder(MainApp.class).profiles(springProfile).run()) {
+      log.info("Staring Application");
+
+      List<TracesData> traces = findTraces(jaegerQueryServer, SERVICE_NAME, numMsgs, 8);
+      verifyPublishSpans(traces, numMsgs, "solace/supply/errorHandlingTestQueue", "topic");
+      verifyBrokerReceiveSpans(traces, numMsgs);
+      verifyBrokerSendSpans(traces, numMsgs);
+      verifyConsumerReceiveSpans(traces, numMsgs, "errorHandlingTestQueue", "queue",
+          "solace/supply/errorHandlingTestQueue");
+      verifyConsumerProcessSpans(traces, numMsgs, "errorHandlingTestQueue", "queue",
+          "solace/supply/errorHandlingTestQueue");
+      verifyConsumerInternalSpans(traces, numMsgs * maxAttempts);
       log.info("Stopping Application");
     } catch (Exception e) {
       throw new RuntimeException(e);
