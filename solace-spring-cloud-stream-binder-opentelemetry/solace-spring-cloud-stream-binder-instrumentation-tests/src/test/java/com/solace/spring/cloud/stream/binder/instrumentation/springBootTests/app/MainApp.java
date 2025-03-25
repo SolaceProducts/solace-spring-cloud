@@ -1,4 +1,4 @@
-package com.solace.spring.cloud.stream.binder.instrumentation;
+package com.solace.spring.cloud.stream.binder.instrumentation.springBootTests.app;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;

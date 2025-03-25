@@ -1,7 +1,7 @@
 spring:
   cloud:
     function:
-      definition: consumer1;source1
+      definition: dynamicDestinationProcessor1;source1
 
     stream:
       poller:
@@ -10,12 +10,15 @@ spring:
 
       bindings:
         source1-out-0:
-          destination: solace/supply/consumerQueue
+          destination: solace/supply/dynamicDestQ
           binder: local-solace
 
-        consumer1-in-0:
-          destination: consumerQueue
-          group: consumerGroup
+        dynamicDestinationProcessor1-in-0:
+          destination: dynamicDestQ
+          group: dynamicDestinationProcessorGroup
+          binder: local-solace
+        dynamicDestinationProcessor1-out-0:
+          destination: dummy # won't be used.
           binder: local-solace
 
       binders:
@@ -39,9 +42,9 @@ spring:
             queueMaxMsgRedelivery: 2
 
         bindings:
-          consumer1-in-0:
+          dynamicDestinationProcessor1-in-0:
             consumer:
-              queueAdditionalSubscriptions: solace/supply/consumerQueue
+              queueAdditionalSubscriptions: solace/supply/dynamicDestQ
 
 server:
   port: 0

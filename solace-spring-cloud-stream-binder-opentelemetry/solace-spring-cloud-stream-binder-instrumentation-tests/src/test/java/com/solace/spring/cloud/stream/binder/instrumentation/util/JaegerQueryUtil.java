@@ -43,42 +43,31 @@ import org.testcontainers.shaded.org.awaitility.Awaitility;
 
 public class JaegerQueryUtil {
 
-  public static final String SERVICE_SOL_BROKER = "solbroker";
-
-  public static final String TAG_MSG_OPERATION = "messaging.operation";
   public static final String OPERATION_RECEIVE = "receive";
   public static final String OPERATION_PROCESS = "process";
   public static final String OPERATION_CONSUME = "consume";
   public static final String OPERATION_PUBLISH = "publish";
   public static final String OPERATION_SEND = "send";
 
-  public static final String TAG_SPAN_KIND = "span.kind";
-  public static final String SPAN_KIND_PRODUCER = "producer";
-  public static final String SPAN_KIND_CONSUMER = "consumer";
-
+  public static final String TAG_MSG_OPERATION = "messaging.operation";
   public static final String TAG_MESSAGING_SYSTEM = "messaging.system";
-  public static final String MESSAGING_SYSTEM = "SolacePubSub+";
-
   public static final String TAG_MSG_DEST = "messaging.destination.name";
   public static final String TAG_MSG_OPERATION_NAME = "messaging.operation.name";
   public static final String TAG_MSG_OPERATION_TYPE = "messaging.operation.type";
   public static final String TAG_MSG_SOLACE_API_NAME = "messaging.solace.api.name";
-  public static final String SOLACE_API_NAME_JCSMP = "jcsmp";
   public static final String TAG_MSG_SOLACE_API_VERSION = "messaging.solace.api.version";
-  public static final String SOLACE_API_JCSMP_VERSION = new JCSMPVersion().getSwVersion();
   public static final String SOLACE_API_NAME_SCST_BINDER = "spring-cloud-stream-binder-solace";
-  public static final String SOLACE_API_NAME_SCST_BINDER_VERSION = "1.0.0"; //new SolaceBinderClientInfoProvider().getSoftwareVersion();
-  public static final String TAG_SOLACE_DELIVERY_MODE = "messaging.solace.delivery.mode";
   public static final String TAG_SOLACE_DESTINATION_TYPE = "messaging.solace.destination.type";
-  public static final String TAG_MSG_DEST_ANONYMOUS = "messaging.destination.anonymous";
-  public static final String TAG_MSG_DEST_TEMPORARY = "messaging.destination.temporary";
   public static final String TAG_MSG_SOLACE_TOPIC = "messaging.solace.message.topic";
-  public static final String TAG_MSG_APP_MSG_ID = "messaging.message.id";
-
   public static final String TAG_ERROR_TYPE = "error.type";
+
+  public static final String MESSAGING_SYSTEM = "SolacePubSub+";
+  public static final String SOLACE_API_NAME_JCSMP = "jcsmp";
+  public static final String SOLACE_API_JCSMP_VERSION = new JCSMPVersion().getSwVersion();
+  public static final String SOLACE_API_NAME_SCST_BINDER_VERSION = "1.0.0"; //new SolaceBinderClientInfoProvider().getSoftwareVersion();
   public static final String ERROR_STATUS = "error";
 
-  private static KeyValue createTag(String key, String value) {
+  public static KeyValue createTag(String key, String value) {
     return KeyValue.newBuilder().setKey(key)
         .setValue(AnyValue.newBuilder().setStringValue(value).build()).build();
   }
@@ -143,22 +132,29 @@ public class JaegerQueryUtil {
   }
 
   private static void verifyBrokerOperationSpans(List<TracesData> traces, int expectedSpans,
-      String operation, SpanKind spanKind) {
+      SpanKind spanKind, String operation, KeyValue... additionalTags) {
     List<KeyValue> tags = new ArrayList<>();
     tags.add(createTag(TAG_MSG_OPERATION, operation));
     tags.add(createTag(TAG_MESSAGING_SYSTEM, MESSAGING_SYSTEM));
+
+    if (additionalTags != null) {
+      tags.addAll(List.of(additionalTags));
+    }
+
     verifySpans(traces, spanKind, tags, expectedSpans);
   }
 
-  public static void verifyBrokerReceiveSpans(List<TracesData> traces, int expectedSpans) {
-    verifyBrokerOperationSpans(traces, expectedSpans, OPERATION_RECEIVE,
-        SpanKind.SPAN_KIND_CONSUMER);
+  public static void verifyBrokerReceiveSpans(List<TracesData> traces, int expectedSpans,
+      KeyValue... additionalTags) {
+    verifyBrokerOperationSpans(traces, expectedSpans, SpanKind.SPAN_KIND_CONSUMER,
+        OPERATION_RECEIVE, additionalTags);
   }
 
-  public static void verifyBrokerSendSpans(List<TracesData> traces, int expectedSpans) {
-    verifyBrokerOperationSpans(traces, expectedSpans, OPERATION_SEND, SpanKind.SPAN_KIND_PRODUCER);
+  public static void verifyBrokerSendSpans(List<TracesData> traces, int expectedSpans,
+      KeyValue... additionalTags) {
+    verifyBrokerOperationSpans(traces, expectedSpans, SpanKind.SPAN_KIND_PRODUCER, OPERATION_SEND,
+        additionalTags);
   }
-
 
   public static List<TracesData> findTraces(String jaegerQueryServerUrl, String serviceName,
       int expectedTraces, int expectedSpans) {

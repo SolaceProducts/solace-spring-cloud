@@ -1,7 +1,7 @@
 spring:
   cloud:
     function:
-      definition: consumer1;source1
+      definition: manualAckFunction;source1
 
     stream:
       poller:
@@ -10,12 +10,12 @@ spring:
 
       bindings:
         source1-out-0:
-          destination: solace/supply/consumerQueue
+          destination: solace/supply/manualAckQueue
           binder: local-solace
 
-        consumer1-in-0:
-          destination: consumerQueue
-          group: consumerGroup
+        manualAckFunction-in-0:
+          destination: manualAckQueue
+          group: manualAckGroup
           binder: local-solace
 
       binders:
@@ -39,9 +39,9 @@ spring:
             queueMaxMsgRedelivery: 2
 
         bindings:
-          consumer1-in-0:
+          manualAckFunction-in-0:
             consumer:
-              queueAdditionalSubscriptions: solace/supply/consumerQueue
+              queueAdditionalSubscriptions: solace/supply/manualAckQueue
 
 server:
   port: 0

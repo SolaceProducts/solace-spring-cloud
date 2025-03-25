@@ -2,16 +2,15 @@ spring:
   cloud:
     function:
       definition: processor1;source1
-      #definition: processor1;
 
     stream:
       poller:
-        initialDelay: 3000
-        fixed-delay: 300000 # 30 seconds
+        initialDelay: 2000
+        fixed-delay: 300000 # 300 seconds
 
       bindings:
         source1-out-0:
-          destination: solace/supply/hello
+          destination: solace/supply/processorQueue
           binder: local-solace
 
         processor1-in-0:
@@ -40,11 +39,12 @@ spring:
             provision-durable-queue: true
             provision-error-queue: false
             queue-name-expression: "destination"
+            queueMaxMsgRedelivery: 2
 
         bindings:
           processor1-in-0:
             consumer:
-              queueAdditionalSubscriptions: solace/supply/hello
+              queueAdditionalSubscriptions: solace/supply/processorQueue
 
 server:
   port: 0

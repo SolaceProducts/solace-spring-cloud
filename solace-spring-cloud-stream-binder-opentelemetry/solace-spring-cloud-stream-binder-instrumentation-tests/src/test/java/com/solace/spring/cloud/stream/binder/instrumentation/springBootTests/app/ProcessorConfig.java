@@ -1,4 +1,4 @@
-package com.solace.spring.cloud.stream.binder.instrumentation;
+package com.solace.spring.cloud.stream.binder.instrumentation.springBootTests.app;
 
 import java.util.function.Function;
 import java.util.function.Supplier;

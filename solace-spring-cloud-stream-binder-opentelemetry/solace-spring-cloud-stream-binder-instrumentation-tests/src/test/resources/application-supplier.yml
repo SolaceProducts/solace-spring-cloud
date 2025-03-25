@@ -6,7 +6,7 @@ spring:
     stream:
       poller:
         initialDelay: 2000
-        fixed-delay: 300000 # 30 seconds
+        fixed-delay: 300000 # 300 seconds
       bindings:
         source1-out-0:
           destination: solace/supply/hello

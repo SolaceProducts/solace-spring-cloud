@@ -1,6 +1,7 @@
-package com.solace.spring.cloud.stream.binder.instrumentation;
+package com.solace.spring.cloud.stream.binder.instrumentation.springBootTests;
 
 
+import static com.solace.spring.cloud.stream.binder.instrumentation.util.JaegerQueryUtil.createTag;
 import static com.solace.spring.cloud.stream.binder.instrumentation.util.JaegerQueryUtil.findTraces;
 import static com.solace.spring.cloud.stream.binder.instrumentation.util.JaegerQueryUtil.verifyBrokerReceiveSpans;
 import static com.solace.spring.cloud.stream.binder.instrumentation.util.JaegerQueryUtil.verifyBrokerSendSpans;
@@ -15,6 +16,7 @@ import com.github.dockerjava.api.model.Ulimit;
 import com.solace.it.util.semp.SempClientException;
 import com.solace.it.util.semp.config.BrokerConfiguratorBuilder;
 import com.solace.it.util.semp.config.BrokerConfiguratorBuilder.BrokerConfigurator;
+import com.solace.spring.cloud.stream.binder.instrumentation.springBootTests.app.MainApp;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.ApiException;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnClientUsername;
@@ -88,47 +90,35 @@ class SolaceBinderInstrumentationIT {
   private static final Network network = Network.newNetwork();
 
   private static final GenericContainer<?> jaeger = new GenericContainer<>(
-      DockerImageName.parse(JAEGER_IMAGE))
-      .withNetwork(network)
-      .withNetworkAliases("jaeger-all-in-one")
-      .withEnv("COLLECTOR_OTLP_ENABLED", "true")
+      DockerImageName.parse(JAEGER_IMAGE)).withNetwork(network)
+      .withNetworkAliases("jaeger-all-in-one").withEnv("COLLECTOR_OTLP_ENABLED", "true")
       .withExposedPorts(16686, 4317, 4318, 16685)
       .waitingFor(Wait.forHttp("/").forPort(16686).withStartupTimeout(Duration.ofSeconds(120)));
 
   private static final GenericContainer<?> solbroker = new GenericContainer<>(
-      DockerImageName.parse(SOLACE_IMAGE))
-      .withNetwork(network)
-      .withNetworkAliases("solbroker")
+      DockerImageName.parse(SOLACE_IMAGE)).withNetwork(network).withNetworkAliases("solbroker")
       .withEnv("username_admin_globalaccesslevel", "admin")
       .withEnv("username_admin_password", "admin")
       .withEnv("system_scaling_maxconnectioncount", "100")
       .withEnv("webmanager_redirecthttp_enable", "false")
       .withSharedMemorySize(2L * 1024 * 1024 * 1024) // 2GB
-      .withExposedPorts(8080, 55555, 5672)
-      .withCreateContainerCmdModifier(cmd -> {
+      .withExposedPorts(8080, 55555, 5672).withCreateContainerCmdModifier(cmd -> {
         cmd.withName("solbroker");
-        cmd.getHostConfig().withUlimits(Arrays.asList(
-            new Ulimit("memlock", -1L, -1L),
-            new Ulimit("nofile", 2448L, 1048576L)
-        ));
-      })
-      .waitingFor(Wait.forHttp("/").forPort(8080).withStartupTimeout(Duration.ofSeconds(180)));
+        cmd.getHostConfig().withUlimits(
+            Arrays.asList(new Ulimit("memlock", -1L, -1L), new Ulimit("nofile", 2448L, 1048576L)));
+      }).waitingFor(Wait.forHttp("/").forPort(8080).withStartupTimeout(Duration.ofSeconds(180)));
 
   private static final GenericContainer<?> otelCollector = new GenericContainer<>(
-      DockerImageName.parse(OTEL_COLLECTOR_IMAGE))
-      .withNetwork(network)
-      .withNetworkAliases("otelcollector")
-      .withExposedPorts(13133, 4317)
+      DockerImageName.parse(OTEL_COLLECTOR_IMAGE)).withNetwork(network)
+      .withNetworkAliases("otelcollector").withExposedPorts(13133, 4317)
       .withCreateContainerCmdModifier(cmd -> {
         cmd.withName("otelcollector");
-        cmd.getHostConfig().withPortBindings(
-            new PortBinding(Ports.Binding.bindPort(4317), new ExposedPort(4317)),
-            new PortBinding(Ports.Binding.bindPort(13133), new ExposedPort(13133))
-        );
+        cmd.getHostConfig()
+            .withPortBindings(new PortBinding(Ports.Binding.bindPort(4317), new ExposedPort(4317)),
+                new PortBinding(Ports.Binding.bindPort(13133), new ExposedPort(13133)));
       })
       .withClasspathResourceMapping("otel-collector-config.yaml", "/etc/otel-collector-config.yaml",
-          BindMode.READ_ONLY)
-      .withCommand("--config=/etc/otel-collector-config.yaml")
+          BindMode.READ_ONLY).withCommand("--config=/etc/otel-collector-config.yaml")
       .dependsOn(jaeger, solbroker)
       .waitingFor(Wait.forHttp("/").forPort(13133).withStartupTimeout(Duration.ofSeconds(120)));
 
@@ -184,8 +174,8 @@ class SolaceBinderInstrumentationIT {
     solaceConfigUtil.vpns().enableBasicAuth(MSG_VPN);
 
     try {
-      final ConfigMsgVpnTelemetryProfile telemetryProfile = new ConfigMsgVpnTelemetryProfile()
-          .telemetryProfileName(MSG_VPN).telemetryProfileName(TELEMETRY_PROFILE_NAME)
+      final ConfigMsgVpnTelemetryProfile telemetryProfile = new ConfigMsgVpnTelemetryProfile().telemetryProfileName(
+              MSG_VPN).telemetryProfileName(TELEMETRY_PROFILE_NAME)
           .receiverAclConnectDefaultAction(ReceiverAclConnectDefaultActionEnum.ALLOW)
           .traceEnabled(true).receiverEnabled(true);
       sempV2Api.config().createMsgVpnTelemetryProfile(telemetryProfile, MSG_VPN, null, null);
@@ -194,8 +184,8 @@ class SolaceBinderInstrumentationIT {
     }
 
     try {
-      final ConfigMsgVpnTelemetryProfileTraceFilter traceFilter = new ConfigMsgVpnTelemetryProfileTraceFilter()
-          .msgVpnName(MSG_VPN).telemetryProfileName(TELEMETRY_PROFILE_NAME)
+      final ConfigMsgVpnTelemetryProfileTraceFilter traceFilter = new ConfigMsgVpnTelemetryProfileTraceFilter().msgVpnName(
+              MSG_VPN).telemetryProfileName(TELEMETRY_PROFILE_NAME)
           .traceFilterName(TELEMETRY_PROFILE_TRACE_FILTER_NAME).enabled(true);
       sempV2Api.config()
           .createMsgVpnTelemetryProfileTraceFilter(traceFilter, MSG_VPN, TELEMETRY_PROFILE_NAME,
@@ -205,17 +195,14 @@ class SolaceBinderInstrumentationIT {
     }
 
     try {
-      final String[] subscriptions = {
-          TELEMETRY_PROFILE_TRACE_FILTER_SUBSCRIPTION,
-          TELEMETRY_PROFILE_TRACE_FILTER_SUBSCRIPTION_QUEUES
-      };
+      final String[] subscriptions = {TELEMETRY_PROFILE_TRACE_FILTER_SUBSCRIPTION,
+          TELEMETRY_PROFILE_TRACE_FILTER_SUBSCRIPTION_QUEUES};
 
       for (String s : subscriptions) {
-        final ConfigMsgVpnTelemetryProfileTraceFilterSubscription subscription = new ConfigMsgVpnTelemetryProfileTraceFilterSubscription()
-            .msgVpnName(MSG_VPN).telemetryProfileName(TELEMETRY_PROFILE_NAME)
+        final ConfigMsgVpnTelemetryProfileTraceFilterSubscription subscription = new ConfigMsgVpnTelemetryProfileTraceFilterSubscription().msgVpnName(
+                MSG_VPN).telemetryProfileName(TELEMETRY_PROFILE_NAME)
             .traceFilterName(TELEMETRY_PROFILE_TRACE_FILTER_NAME)
-            .subscriptionSyntax(SubscriptionSyntaxEnum.SMF)
-            .subscription(s);
+            .subscriptionSyntax(SubscriptionSyntaxEnum.SMF).subscription(s);
         sempV2Api.config()
             .createMsgVpnTelemetryProfileTraceFilterSubscription(subscription, MSG_VPN,
                 TELEMETRY_PROFILE_NAME, TELEMETRY_PROFILE_TRACE_FILTER_NAME, null, null);
@@ -225,10 +212,9 @@ class SolaceBinderInstrumentationIT {
     }
 
     try {
-      final ConfigMsgVpnClientUsername clientUsername = new ConfigMsgVpnClientUsername()
-          .msgVpnName(MSG_VPN).clientUsername(TELEMETRY_PROFILE_NAME)
-          .password(TELEMETRY_PROFILE_NAME).enabled(true)
-          .clientProfileName(TRACING_DEFAULT_CLIENT_PROFILE_AND_ACL_PROFILE_NAME)
+      final ConfigMsgVpnClientUsername clientUsername = new ConfigMsgVpnClientUsername().msgVpnName(
+              MSG_VPN).clientUsername(TELEMETRY_PROFILE_NAME).password(TELEMETRY_PROFILE_NAME)
+          .enabled(true).clientProfileName(TRACING_DEFAULT_CLIENT_PROFILE_AND_ACL_PROFILE_NAME)
           .aclProfileName(TRACING_DEFAULT_CLIENT_PROFILE_AND_ACL_PROFILE_NAME);
       sempV2Api.config().createMsgVpnClientUsername(clientUsername, MSG_VPN, null, null);
     } catch (ApiException e) {
@@ -236,9 +222,8 @@ class SolaceBinderInstrumentationIT {
     }
 
     try {
-      final ConfigMsgVpnClientUsername clientUsername = new ConfigMsgVpnClientUsername()
-          .msgVpnName(MSG_VPN).clientUsername("default")
-          .password("default").enabled(true);
+      final ConfigMsgVpnClientUsername clientUsername = new ConfigMsgVpnClientUsername().msgVpnName(
+          MSG_VPN).clientUsername("default").password("default").enabled(true);
       sempV2Api.config().updateMsgVpnClientUsername(clientUsername, MSG_VPN, "default", null, null);
     } catch (ApiException e) {
       throw new SempClientException("Failed to create client username", e);
@@ -250,9 +235,7 @@ class SolaceBinderInstrumentationIT {
     final int numMsgs = 1;
     final String springProfile = "supplier";
 
-    try (var ignored = new SpringApplicationBuilder(MainApp.class)
-        .profiles(springProfile)
-        .run()) {
+    try (var ignored = new SpringApplicationBuilder(MainApp.class).profiles(springProfile).run()) {
       log.info("Staring Application");
 
       List<TracesData> traces = findTraces(jaegerQueryServer, SERVICE_NAME, numMsgs, 2);
@@ -268,16 +251,17 @@ class SolaceBinderInstrumentationIT {
   void testConsumerInstrumentation() {
     final int numMsgs = 1;
     final String springProfile = "consumer";
-    try (var ignored = new SpringApplicationBuilder(MainApp.class)
-        .profiles(springProfile)
-        .run()) {
+    try (var ignored = new SpringApplicationBuilder(MainApp.class).profiles(springProfile).run()) {
       log.info("Staring Application");
 
       List<TracesData> traces = findTraces(jaegerQueryServer, SERVICE_NAME, numMsgs, 6);
+      verifyPublishSpans(traces, numMsgs, "solace/supply/consumerQueue", "topic");
       verifyBrokerReceiveSpans(traces, numMsgs);
       verifyBrokerSendSpans(traces, numMsgs);
-      verifyConsumerReceiveSpans(traces, numMsgs, "consumerQueue", "queue", "solace/supply/hello");
-      verifyConsumerProcessSpans(traces, numMsgs, "consumerQueue", "queue", "solace/supply/hello");
+      verifyConsumerReceiveSpans(traces, numMsgs, "consumerQueue", "queue",
+          "solace/supply/consumerQueue");
+      verifyConsumerProcessSpans(traces, numMsgs, "consumerQueue", "queue",
+          "solace/supply/consumerQueue");
       verifyConsumerInternalSpans(traces, numMsgs);
       log.info("Stopping Application");
     } catch (Exception e) {
@@ -289,19 +273,86 @@ class SolaceBinderInstrumentationIT {
   void testProcessorInstrumentation() {
     final int numMsgs = 1;
     final String springProfile = "processor";
-    try (var ignored = new SpringApplicationBuilder(MainApp.class)
-        .profiles(springProfile)
-        .run()) {
+    try (var ignored = new SpringApplicationBuilder(MainApp.class).profiles(springProfile).run()) {
       log.info("Staring Application");
 
       List<TracesData> traces = findTraces(jaegerQueryServer, SERVICE_NAME, numMsgs, 8);
-      verifyPublishSpans(traces, numMsgs, "solace/supply/hello", "topic");
+      verifyPublishSpans(traces, numMsgs, "solace/supply/processorQueue", "topic");
       verifyBrokerSendSpans(traces, numMsgs);
-      verifyConsumerReceiveSpans(traces, numMsgs, "processorQueue", "queue", "solace/supply/hello");
-      verifyConsumerProcessSpans(traces, numMsgs, "processorQueue", "queue", "solace/supply/hello");
+      verifyConsumerReceiveSpans(traces, numMsgs, "processorQueue", "queue",
+          "solace/supply/processorQueue");
+      verifyConsumerProcessSpans(traces, numMsgs, "processorQueue", "queue",
+          "solace/supply/processorQueue");
       verifyConsumerInternalSpans(traces, numMsgs);
       verifyPublishSpans(traces, numMsgs, "solace/processor/hello", "topic");
       verifyBrokerReceiveSpans(traces, numMsgs * 2);
+      log.info("Stopping Application");
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Test
+  void testDynamicDestinationInstrumentation() {
+    final int numMsgs = 1;
+    final String springProfile = "dynamicDestinationProcessor";
+    try (var ignored = new SpringApplicationBuilder(MainApp.class).profiles(springProfile).run()) {
+      log.info("Staring Application");
+
+      List<TracesData> traces = findTraces(jaegerQueryServer, SERVICE_NAME, numMsgs, 8);
+      verifyPublishSpans(traces, numMsgs, "solace/supply/dynamicDestQ", "topic");
+      verifyBrokerSendSpans(traces, numMsgs);
+      verifyConsumerReceiveSpans(traces, numMsgs, "dynamicDestQ", "queue", "solace/supply/dynamicDestQ");
+      verifyConsumerProcessSpans(traces, numMsgs, "dynamicDestQ", "queue", "solace/supply/dynamicDestQ");
+      verifyConsumerInternalSpans(traces, numMsgs);
+      verifyPublishSpans(traces, numMsgs, "solace/dynamicDestination/hello", "topic");
+      verifyBrokerReceiveSpans(traces, numMsgs * 2);
+      log.info("Stopping Application");
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Test
+  void testManualAckRedeliver() {
+    final int numMsgs = 1;
+    final int numDelivered = 3;
+    final String[] springProfiles = {"manualAck", "requeue"};
+    try (var ignored = new SpringApplicationBuilder(MainApp.class).profiles(springProfiles).run()) {
+      log.info("Staring Application");
+
+      List<TracesData> traces = findTraces(jaegerQueryServer, SERVICE_NAME, numMsgs,
+          (numDelivered * numMsgs * 4) + 2);
+      verifyPublishSpans(traces, numMsgs, "solace/supply/manualAckQueue", "topic");
+      verifyBrokerReceiveSpans(traces, numMsgs);
+      verifyBrokerSendSpans(traces, numDelivered * numMsgs,
+          createTag("messaging.solace.send.outcome", "delivery failed"));
+      verifyConsumerReceiveSpans(traces, numDelivered * numMsgs, "manualAckQueue", "queue",
+          "solace/supply/manualAckQueue");
+      verifyConsumerProcessSpans(traces, numDelivered * numMsgs, "manualAckQueue", "queue",
+          "solace/supply/manualAckQueue");
+      verifyConsumerInternalSpans(traces, numDelivered * numMsgs);
+      log.info("Stopping Application");
+    } catch (Exception e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  @Test
+  void testManualAckReject() {
+    final int numMsgs = 1;
+    final String[] springProfiles = {"manualAck", "reject"};
+    try (var ignored = new SpringApplicationBuilder(MainApp.class).profiles(springProfiles).run()) {
+      log.info("Staring Application");
+
+      List<TracesData> traces = findTraces(jaegerQueryServer, SERVICE_NAME, numMsgs, 6);
+      verifyPublishSpans(traces, numMsgs, "solace/supply/manualAckQueue", "topic");
+      verifyBrokerReceiveSpans(traces, numMsgs);
+      verifyBrokerSendSpans(traces, numMsgs,
+          createTag("messaging.solace.send.outcome", "rejected"));
+      verifyConsumerReceiveSpans(traces, numMsgs, "manualAckQueue", "queue", "solace/supply/manualAckQueue");
+      verifyConsumerProcessSpans(traces, numMsgs, "manualAckQueue", "queue", "solace/supply/manualAckQueue");
+      verifyConsumerInternalSpans(traces, numMsgs);
       log.info("Stopping Application");
     } catch (Exception e) {
       throw new RuntimeException(e);
