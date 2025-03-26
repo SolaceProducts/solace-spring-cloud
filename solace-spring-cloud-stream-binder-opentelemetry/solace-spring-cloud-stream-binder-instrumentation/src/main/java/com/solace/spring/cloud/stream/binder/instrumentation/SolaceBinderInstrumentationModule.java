@@ -32,9 +32,6 @@ public final class SolaceBinderInstrumentationModule extends InstrumentationModu
         SolaceBinderConsumerInstrumentation.InboundXMLMessageListenerProcessMessageMethodAdvice.class.getName(),
         SolaceBinderConsumerInstrumentation.MessageProducerSupportSendMessageMethodAdvice.class.getName(),
 
-        //Other required classes Solace Binder
-        //"com.solace.spring.cloud.stream.binder.config.SolaceBinderClientInfoProvider",
-
         //Other required classes from JCSMP Instrumentation
         "com.solace.messaging.trace.propagation.SolaceJCSMPTextMapGetter",
         "com.solace.messaging.trace.propagation.SolaceJCSMPTextMapSetter",

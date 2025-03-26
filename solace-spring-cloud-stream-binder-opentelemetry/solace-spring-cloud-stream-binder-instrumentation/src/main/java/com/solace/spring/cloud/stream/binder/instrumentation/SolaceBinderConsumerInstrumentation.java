@@ -22,6 +22,7 @@ import static net.bytebuddy.matcher.ElementMatchers.takesArgument;
 import static net.bytebuddy.matcher.ElementMatchers.takesArguments;
 import com.solace.messaging.trace.propagation.SolaceJCSMPTextMapGetter;
 import com.solace.messaging.trace.propagation.SolaceJCSMPTextMapSetter;
+import com.solace.spring.cloud.stream.binder.config.SolaceBinderClientInfoProvider;
 import com.solace.spring.cloud.stream.binder.inbound.InboundXMLMessageListener;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solacesystems.jcsmp.BytesXMLMessage;
@@ -146,12 +147,11 @@ public class SolaceBinderConsumerInstrumentation implements TypeInstrumentation 
         isAnonymous = isTemporary;
       }
 
-      Span processSpan = tracer.spanBuilder(
+     span = tracer.spanBuilder(
               "process " + (isAnonymous ? "(anonymous)" : spanDestName))
           .setSpanKind(CONSUMER)
           .setAttribute(API_NAME.toString(), "spring-cloud-stream-binder-solace")
-          //.setAttribute(API_VERSION.toString(), new SolaceBinderClientInfoProvider().getSoftwareVersion())
-          .setAttribute(API_VERSION.toString(), "1.0.0")
+          .setAttribute(API_VERSION.toString(), SolaceBinderClientInfoProvider.VERSION)
           .setAttribute(DELIVERY_MODE.toString(), message.getDeliveryMode().toString())
           .setAttribute(DESTINATION.toString(), destName)
           .setAttribute(DESTINATION_TYPE.toString(), destKind)
@@ -161,29 +161,26 @@ public class SolaceBinderConsumerInstrumentation implements TypeInstrumentation 
           .setParent(context)
           .startSpan();
 
-      // Add this line to assign the created span to the local variable
-      span = processSpan;
-
       if (destKind.equals("topic endpoint") || destKind.equals("queue")) {
         Destination destination = message.getDestination();
         if (destination instanceof Topic) {
-          processSpan.setAttribute(SOLACE_TOPIC_NAME.toString(), destination.getName());
+          span.setAttribute(SOLACE_TOPIC_NAME.toString(), destination.getName());
         }
       }
 
       if (message.getApplicationMessageId() != null) {
-        processSpan.setAttribute(MESSAGE_ID.toString(), message.getApplicationMessageId());
+        span.setAttribute(MESSAGE_ID.toString(), message.getApplicationMessageId());
       }
 
       if (isTemporary) {
-        processSpan.setAttribute(DESTINATION_TEMPORARY.toString(), true);
+        span.setAttribute(DESTINATION_TEMPORARY.toString(), true);
       }
 
       if (isAnonymous) {
-        processSpan.setAttribute(DESTINATION_ANONYMOUS.toString(), true);
+        span.setAttribute(DESTINATION_ANONYMOUS.toString(), true);
       }
 
-      Scope scope = processSpan.makeCurrent();
+      Scope scope = span.makeCurrent();
       TextMapPropagator propagator = openTelemetry.getPropagators().getTextMapPropagator();
       propagator.inject(Context.current(), message, new SolaceJCSMPTextMapSetter());
 
@@ -239,20 +236,17 @@ public class SolaceBinderConsumerInstrumentation implements TypeInstrumentation 
         channelName = channel.getClass().getSimpleName();
       }
 
-      Span internalSpan = tracer.spanBuilder(channelName + " process")
+      span = tracer.spanBuilder(channelName + " process")
           .setSpanKind(INTERNAL)
           .setAttribute(API_NAME.toString(), "spring-cloud-stream-binder-solace")
-          .setAttribute(API_VERSION.toString(), "1.0.0")
+          .setAttribute(API_VERSION.toString(), SolaceBinderClientInfoProvider.VERSION)
           .setAttribute(OPERATION.toString(), "consume")
           .setAttribute(OPERATION_TYPE.toString(), "process")
           .setAttribute(SYSTEM.toString(), "SolacePubSub+")
           .setParent(context)
           .startSpan();
 
-      // Add this line to assign the created span to the local variable
-      span = internalSpan;
-
-      Scope scope = internalSpan.makeCurrent();
+      Scope scope = span.makeCurrent();
       TextMapPropagator propagator = openTelemetry.getPropagators().getTextMapPropagator();
       propagator.inject(Context.current(), message, new SolaceJCSMPTextMapSetter());
 

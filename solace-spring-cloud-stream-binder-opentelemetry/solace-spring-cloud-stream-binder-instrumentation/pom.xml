@@ -12,34 +12,23 @@
   </parent>
 
   <artifactId>spring-cloud-stream-binder-solace-instrumentation</artifactId>
-  <version>1.0.0-SNAPSHOT</version>
+  <version>5.7.1-SNAPSHOT</version>
   <packaging>jar</packaging>
 
 
-  <name>Solace Spring Cloud Stream Binder Instrumentation</name>
-  <description>A Spring Cloud Stream Solace Binder Instrumentation for use with OpenTelemetry Java
-    Agent
-  </description>
+  <name>Spring Cloud Stream Solace Binder Instrumentation</name>
+  <description>A Spring Cloud Stream Solace Binder Instrumentation for use with OpenTelemetry Java Agent</description>
   <url>
     https://github.com/${repoName}/solace-spring-cloud/tree/${project.scm.tag}/solace-spring-cloud-stream-binder-opentelemetry
   </url>
 
   <properties>
-    <java.version>1.8</java.version>
-    <maven.compiler.source>1.8</maven.compiler.source>
-    <maven.compiler.target>1.8</maven.compiler.target>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <opentelemetry.version>1.40.0</opentelemetry.version>
-    <opentelemetry-tools.version>1.29.0-alpha</opentelemetry-tools.version>
-    <opentelemetry-javaagent-extension.version>2.6.0-alpha
-    </opentelemetry-javaagent-extension.version>
+    <opentelemetry.version>1.48.0</opentelemetry.version>
+    <opentelemetry-javaagent-extension.version>2.14.0-alpha</opentelemetry-javaagent-extension.version>
     <auto-service.version>1.0.1</auto-service.version>
 
-    <junit-platform.version>1.8.2</junit-platform.version>
-    <junit-jupiter.version>5.8.2</junit-jupiter.version>
-    <mockito-platform.version>3.4.0</mockito-platform.version>
-    <testcontainers.version>1.15.2</testcontainers.version>
-    <sol-jcsmp.version>10.25.3-jcsmp_auto_instrument.44353</sol-jcsmp.version>
+    <sol-jcsmp.version>10.26.0</sol-jcsmp.version>
+    <sol-jcsmp-otel-integration.version>1.2.0</sol-jcsmp-otel-integration.version>
   </properties>
 
   <dependencies>
@@ -47,31 +36,8 @@
       <groupId>io.opentelemetry</groupId>
       <artifactId>opentelemetry-api</artifactId>
       <version>${opentelemetry.version}</version>
-    </dependency>
-
-    <!-- Dependencies needed for JCSMP auto-instrumentation -->
-    <dependency>
-      <groupId>com.solacesystems</groupId>
-      <artifactId>sol-jcsmp</artifactId>
-      <version>${sol-jcsmp.version}</version>
       <scope>compile</scope>
     </dependency>
-
-    <dependency>
-      <groupId>com.solace</groupId>
-      <artifactId>solace-opentelemetry-jcsmp-integration</artifactId>
-      <version>1.2.0-SNAPSHOT</version>
-      <scope>compile</scope>
-    </dependency>
-
-    <!-- Dependencies needed for Solace Binder auto-instrumentation -->
-    <dependency>
-      <groupId>com.solace.spring.cloud</groupId>
-      <artifactId>spring-cloud-stream-binder-solace</artifactId>
-      <version>5.7.1-SNAPSHOT</version>
-      <scope>compile</scope>
-    </dependency>
-
     <dependency>
       <groupId>io.opentelemetry.javaagent</groupId>
       <artifactId>opentelemetry-javaagent-extension-api</artifactId>
@@ -90,116 +56,27 @@
       <version>1.14.17</version>
     </dependency>
 
-    <!-- test dependencies -->
+    <!-- Dependencies needed for JCSMP auto-instrumentation -->
     <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-api</artifactId>
-      <version>${junit-jupiter.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter-engine</artifactId>
-      <version>${junit-jupiter.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.junit.platform</groupId>
-      <artifactId>junit-platform-suite-engine</artifactId>
-      <version>${junit-platform.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.junit.platform</groupId>
-      <artifactId>junit-platform-console-standalone</artifactId>
-      <version>${junit-platform.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.junit.platform</groupId>
-      <artifactId>junit-platform-reporting</artifactId>
-      <version>${junit-platform.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.mockito</groupId>
-      <artifactId>mockito-core</artifactId>
-      <version>${mockito-platform.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.solace</groupId>
-      <artifactId>solace-broker-mgmt-client</artifactId>
-      <version>0.0.1.23</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>testcontainers</artifactId>
-      <version>${testcontainers.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.testcontainers</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <version>${testcontainers.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.solace</groupId>
-      <artifactId>solace-testcontainer-extension</artifactId>
-      <version>0.0.3</version>
-      <scope>test</scope>
+      <groupId>com.solacesystems</groupId>
+      <artifactId>sol-jcsmp</artifactId>
+      <version>${sol-jcsmp.version}</version>
+      <scope>compile</scope>
     </dependency>
 
-    <!-- Distributed Tracing Test Dependencies - Start -->
     <dependency>
-      <groupId>io.grpc</groupId>
-      <artifactId>grpc-protobuf</artifactId>
-      <version>1.49.1</version>
-      <scope>test</scope>
+      <groupId>com.solace</groupId>
+      <artifactId>solace-opentelemetry-jcsmp-integration</artifactId>
+      <version>${sol-jcsmp-otel-integration.version}</version>
+      <scope>compile</scope>
     </dependency>
+
+    <!-- Dependencies needed for Solace Binder auto-instrumentation -->
     <dependency>
-      <groupId>io.grpc</groupId>
-      <artifactId>grpc-netty</artifactId>
-      <version>1.49.1</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.grpc</groupId>
-      <artifactId>grpc-stub</artifactId>
-      <version>1.49.1</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.google.protobuf</groupId>
-      <artifactId>protobuf-java</artifactId>
-      <version>3.21.6</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.awaitility</groupId>
-      <artifactId>awaitility</artifactId>
-      <version>4.2.0</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.opentelemetry</groupId>
-      <artifactId>opentelemetry-semconv</artifactId>
-      <version>${opentelemetry-tools.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>io.opentelemetry</groupId>
-      <artifactId>opentelemetry-exporter-otlp</artifactId>
-      <version>${opentelemetry.version}</version>
-      <scope>test</scope>
-    </dependency>
-    <dependency>
-      <groupId>org.slf4j</groupId>
-      <artifactId>slf4j-api</artifactId>
-      <version>1.7.30</version>
-      <scope>test</scope>
+      <groupId>com.solace.spring.cloud</groupId>
+      <artifactId>spring-cloud-stream-binder-solace</artifactId>
+      <version>${project.version}</version>
+      <scope>compile</scope>
     </dependency>
   </dependencies>
 
@@ -207,7 +84,6 @@
     <plugins>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.10.1</version>
         <configuration>
           <annotationProcessorPaths>
             <path>
@@ -221,7 +97,6 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
-        <version>3.2.0</version>
         <configuration>
           <archive>
             <manifestFile>src/main/resources/META-INF/MANIFEST.MF</manifestFile>
@@ -245,12 +120,7 @@
           <injectAllReactorProjects>true</injectAllReactorProjects>
         </configuration>
       </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.0.0-M7</version>
-      </plugin>
-      <plugin>
+      <!--<plugin>
         <groupId>org.apache.felix</groupId>
         <artifactId>maven-bundle-plugin</artifactId>
         <version>5.1.1</version>
@@ -269,12 +139,11 @@
           <archive>
             <manifestSections>
               <manifestSection>
-                <name>com.solace.messaging.trace.propagation</name>
+                <name>com.solace.spring.cloud.stream.binder.instrumentation</name>
                 <manifestEntries>
                   <Specification-Title>${project.name}</Specification-Title>
                   <Specification-Version>${project.version}</Specification-Version>
-                  <Implementation-Title>com.solace.messaging.trace.propagation
-                  </Implementation-Title>
+                  <Implementation-Title>com.solace.spring.cloud.stream.binder.instrumentation</Implementation-Title>
                   <Implementation-Version>${project.version}</Implementation-Version>
                   <Build-Time>${maven.build.timestamp}</Build-Time>
                 </manifestEntries>
@@ -284,34 +153,11 @@
           <instructions>
             <SCM-Revision>${git.commit.id}</SCM-Revision>
             <Export-Package>
-              com.solace.messaging.trace.propagation;version="${project.version}"
+              com.solace.spring.cloud.stream.binder.instrumentation;version="${project.version}"
             </Export-Package>
           </instructions>
         </configuration>
-      </plugin>
+      </plugin>-->
     </plugins>
   </build>
-
-  <profiles>
-    <profile>
-      <id>generateExtraReleaseArtifacts</id>
-      <build>
-        <plugins>
-          <plugin>
-            <groupId>org.apache.maven.plugins</groupId>
-            <artifactId>maven-gpg-plugin</artifactId>
-            <executions>
-              <execution>
-                <id>sign-artifacts</id>
-                <phase>verify</phase>
-                <goals>
-                  <goal>sign</goal>
-                </goals>
-              </execution>
-            </executions>
-          </plugin>
-        </plugins>
-      </build>
-    </profile>
-  </profiles>
 </project>

@@ -1,24 +1,9 @@
-/*
- * Copyright 2023-2025 Solace Corporation
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- * https://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package com.solace.spring.cloud.stream.binder.instrumentation.util;
 
 import static junit.framework.TestCase.fail;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Timestamp;
+import com.solace.spring.cloud.stream.binder.config.SolaceBinderClientInfoProvider;
 import com.solacesystems.jcsmp.JCSMPVersion;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
@@ -59,13 +44,11 @@ public class JaegerQueryUtil {
   public static final String SOLACE_API_NAME_SCST_BINDER = "spring-cloud-stream-binder-solace";
   public static final String TAG_SOLACE_DESTINATION_TYPE = "messaging.solace.destination.type";
   public static final String TAG_MSG_SOLACE_TOPIC = "messaging.solace.message.topic";
-  public static final String TAG_ERROR_TYPE = "error.type";
 
   public static final String MESSAGING_SYSTEM = "SolacePubSub+";
   public static final String SOLACE_API_NAME_JCSMP = "jcsmp";
   public static final String SOLACE_API_JCSMP_VERSION = new JCSMPVersion().getSwVersion();
-  public static final String SOLACE_API_NAME_SCST_BINDER_VERSION = "1.0.0"; //new SolaceBinderClientInfoProvider().getSoftwareVersion();
-  public static final String ERROR_STATUS = "error";
+  public static final String SOLACE_API_NAME_SCST_BINDER_VERSION = SolaceBinderClientInfoProvider.VERSION;
 
   public static KeyValue createTag(String key, String value) {
     return KeyValue.newBuilder().setKey(key)
