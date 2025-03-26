@@ -51,13 +51,14 @@
     <dependency>
       <groupId>com.solacesystems</groupId>
       <artifactId>sol-jcsmp</artifactId>
-      <version>10.26.0</version>
+      <version>${solace.jcsmp.version}</version>
+      <scope>test</scope>
     </dependency>
     <dependency>
       <groupId>com.solace.spring.cloud</groupId>
       <artifactId>spring-cloud-starter-stream-solace</artifactId>
+      <scope>test</scope>
     </dependency>
-
     <dependency>
       <groupId>com.solace.test.integration</groupId>
       <artifactId>pubsubplus-junit-jupiter</artifactId>
@@ -67,7 +68,6 @@
     <dependency>
       <groupId>org.junit.jupiter</groupId>
       <artifactId>junit-jupiter</artifactId>
-      <version>5.8.1</version>
       <scope>test</scope>
     </dependency>
     <dependency>
@@ -103,4 +103,89 @@
       <scope>test</scope>
     </dependency>
   </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-dependency-plugin</artifactId>
+        <version>3.8.1</version>
+        <executions>
+          <execution>
+            <id>download-runtime-dependencies</id>
+            <phase>pre-integration-test</phase>
+            <goals>
+              <goal>copy</goal>
+            </goals>
+            <configuration>
+              <artifactItems>
+                <artifactItem>
+                  <groupId>io.opentelemetry.javaagent</groupId>
+                  <artifactId>opentelemetry-javaagent</artifactId>
+                  <version>2.14.0</version>
+                  <outputDirectory>${project.build.directory}/thirdParty/</outputDirectory>
+                  <destFileName>opentelemetry-javaagent-all.jar</destFileName>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>com.solace</groupId>
+                  <artifactId>solace-opentelemetry-jcsmp-integration</artifactId>
+                  <version>${sol-jcsmp-otel-integration.version}</version>
+                  <outputDirectory>${project.build.directory}/thirdParty/</outputDirectory>
+                  <destFileName>solace-opentelemetry-jcsmp-integration.jar</destFileName>
+                </artifactItem>
+                <artifactItem>
+                  <groupId>com.solace.spring.cloud</groupId>
+                  <artifactId>spring-cloud-stream-binder-solace-instrumentation</artifactId>
+                  <version>${project.version}</version>
+                  <outputDirectory>${project.build.directory}/thirdParty/</outputDirectory>
+                  <destFileName>spring-cloud-stream-binder-solace-instrumentation.jar</destFileName>
+                </artifactItem>
+              </artifactItems>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <configuration>
+          <skip>true</skip>
+        </configuration>
+      </plugin>
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>3.5.2</version>
+        <configuration>
+          <forkCount>1</forkCount>
+          <failIfNoTests>true</failIfNoTests>
+          <includes>
+            <include>**/*IT.class</include>
+          </includes>
+          <!-- the argLine should be a single line -->
+          <argLine>
+            -javaagent:${project.build.directory}/thirdParty/opentelemetry-javaagent-all.jar -Dotel.instrumentation.common.default-enabled=false -Dotel.javaagent.debug=true -Dotel.traces.exporter=otlp -Dotel.metrics.exporter=none -Dotel.logs.exporter=none -Dotel.exporter.otlp.protocol=grpc -Dotel.exporter.otlp.endpoint=http://localhost:4317 -Dotel.resource.attributes=service.name=binder-instrumentation-test -Dotel.service.name=binder-instrumentation-test -Dotel.propagators=solace_jcsmp_tracecontext -Dotel.java.disabled.resource.providers=io.opentelemetry.instrumentation.resources.ProcessResourceProvider -Dotel.bsp.schedule.delay=100 -Dotel.bsp.max.queue.size=500 -Dotel.bsp.max.export.batch.size=5 -Dotel.bsp.export.timeout=10000 -Dotel.instrumentation.solace-opentelemetry-jcsmp-integration.enabled=true -Dotel.instrumentation.spring-cloud-stream-binder-solace-instrumentation.enabled=true -Dotel.javaagent.extensions=${project.build.directory}/thirdParty/solace-opentelemetry-jcsmp-integration.jar,${project.build.directory}/thirdParty/spring-cloud-stream-binder-solace-instrumentation.jar
+          </argLine>
+        </configuration>
+        <executions>
+          <execution>
+            <id>integration-test</id> <!-- Disable the execution defined in the parent pom -->
+            <phase>none</phase>
+            <goals>
+              <goal>integration-test</goal>
+            </goals>
+            <configuration>
+              <skip>true</skip>
+            </configuration>
+          </execution>
+          <execution>
+            <id>otel-auto-instrumentation-integration-test</id>
+            <goals>
+              <goal>integration-test</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
 </project>

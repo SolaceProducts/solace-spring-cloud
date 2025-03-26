@@ -26,9 +26,6 @@
     <opentelemetry.version>1.48.0</opentelemetry.version>
     <opentelemetry-javaagent-extension.version>2.14.0-alpha</opentelemetry-javaagent-extension.version>
     <auto-service.version>1.0.1</auto-service.version>
-
-    <sol-jcsmp.version>10.26.0</sol-jcsmp.version>
-    <sol-jcsmp-otel-integration.version>1.2.0</sol-jcsmp-otel-integration.version>
   </properties>
 
   <dependencies>
@@ -60,7 +57,7 @@
     <dependency>
       <groupId>com.solacesystems</groupId>
       <artifactId>sol-jcsmp</artifactId>
-      <version>${sol-jcsmp.version}</version>
+      <version>${solace.jcsmp.version}</version>
       <scope>compile</scope>
     </dependency>
 
@@ -84,6 +81,7 @@
     <plugins>
       <plugin>
         <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.14.0</version>
         <configuration>
           <annotationProcessorPaths>
             <path>
@@ -97,6 +95,7 @@
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
+        <version>3.4.2</version>
         <configuration>
           <archive>
             <manifestFile>src/main/resources/META-INF/MANIFEST.MF</manifestFile>
@@ -120,44 +119,6 @@
           <injectAllReactorProjects>true</injectAllReactorProjects>
         </configuration>
       </plugin>
-      <!--<plugin>
-        <groupId>org.apache.felix</groupId>
-        <artifactId>maven-bundle-plugin</artifactId>
-        <version>5.1.1</version>
-        <extensions>true</extensions>
-        <executions>
-          <execution>
-            <id>bundle-manifest</id>
-            <phase>process-classes</phase>
-            <goals>
-              <goal>manifest</goal>
-            </goals>
-          </execution>
-        </executions>
-        <configuration>
-          <niceManifest>true</niceManifest>
-          <archive>
-            <manifestSections>
-              <manifestSection>
-                <name>com.solace.spring.cloud.stream.binder.instrumentation</name>
-                <manifestEntries>
-                  <Specification-Title>${project.name}</Specification-Title>
-                  <Specification-Version>${project.version}</Specification-Version>
-                  <Implementation-Title>com.solace.spring.cloud.stream.binder.instrumentation</Implementation-Title>
-                  <Implementation-Version>${project.version}</Implementation-Version>
-                  <Build-Time>${maven.build.timestamp}</Build-Time>
-                </manifestEntries>
-              </manifestSection>
-            </manifestSections>
-          </archive>
-          <instructions>
-            <SCM-Revision>${git.commit.id}</SCM-Revision>
-            <Export-Package>
-              com.solace.spring.cloud.stream.binder.instrumentation;version="${project.version}"
-            </Export-Package>
-          </instructions>
-        </configuration>
-      </plugin>-->
     </plugins>
   </build>
 </project>

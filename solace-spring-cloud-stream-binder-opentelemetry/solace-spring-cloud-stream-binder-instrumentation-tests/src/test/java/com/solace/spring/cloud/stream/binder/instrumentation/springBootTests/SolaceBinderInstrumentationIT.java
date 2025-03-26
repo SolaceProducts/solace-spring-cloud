@@ -47,7 +47,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /*
---ea
+Java system parameters for running the test:
+
 -javaagent:/path/to/opentelemetry-javaagent.jar
 -Dotel.javaagent.extensions=/path/to/solace-opentelemetry-jcsmp-integration-x.x.x.jar,/path/to/spring-cloud-stream-binder-solace-instrumentation-x.x.x.jar
 -Dotel.instrumentation.common.default-enabled=false
