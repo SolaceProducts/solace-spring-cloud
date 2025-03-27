@@ -9,16 +9,16 @@ import static com.solace.spring.cloud.stream.binder.instrumentation.util.JaegerQ
 import static com.solace.spring.cloud.stream.binder.instrumentation.util.JaegerQueryUtil.verifyConsumerProcessSpans;
 import static com.solace.spring.cloud.stream.binder.instrumentation.util.JaegerQueryUtil.verifyConsumerReceiveSpans;
 import static com.solace.spring.cloud.stream.binder.instrumentation.util.JaegerQueryUtil.verifyPublishSpans;
+import static com.solace.test.integration.semp.v2.config.model.ConfigMsgVpn.AuthenticationBasicTypeEnum.INTERNAL;
 import com.github.dockerjava.api.model.ExposedPort;
 import com.github.dockerjava.api.model.PortBinding;
 import com.github.dockerjava.api.model.Ports;
 import com.github.dockerjava.api.model.Ulimit;
-import com.solace.it.util.semp.SempClientException;
-import com.solace.it.util.semp.config.BrokerConfiguratorBuilder;
-import com.solace.it.util.semp.config.BrokerConfiguratorBuilder.BrokerConfigurator;
 import com.solace.spring.cloud.stream.binder.instrumentation.springBootTests.app.MainApp;
+import com.solace.spring.cloud.stream.binder.instrumentation.util.SempClientException;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.ApiException;
+import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpn;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnClientUsername;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnTelemetryProfile;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnTelemetryProfile.ReceiverAclConnectDefaultActionEnum;
@@ -73,15 +73,14 @@ Java system parameters for running the test:
 class SolaceBinderInstrumentationIT {
 
   private static final Logger log = LoggerFactory.getLogger(SolaceBinderInstrumentationIT.class);
-  private static final String SERVICE_NAME = "binder-instrumentation-test";
+  private static final String SERVICE_NAME = "binder-instrumentation-test"; //should match -Dotel.service.name value
 
   private static final String JAEGER_IMAGE = "jaegertracing/all-in-one:latest";
   private static final String SOLACE_IMAGE = "solace/solace-pubsub-standard:latest";
-  private static final String OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector-contrib:0.96.0";
+  private static final String OTEL_COLLECTOR_IMAGE = "otel/opentelemetry-collector-contrib:0.122.0";
   private static String jaegerQueryServer = "";
 
   private static SempV2Api sempV2Api;
-  private static BrokerConfigurator solaceConfigUtil;
   public static final String MSG_VPN = "default";
   public static final String TELEMETRY_PROFILE_NAME = "trace";
   public static final String TELEMETRY_PROFILE_TRACE_FILTER_NAME = "default";
@@ -137,7 +136,6 @@ class SolaceBinderInstrumentationIT {
 
     String sempUrl = String.format("http://%s:%s", solaceHost, solaceSempPort);
     sempV2Api = new SempV2Api(sempUrl, "admin", "admin");
-    solaceConfigUtil = BrokerConfiguratorBuilder.create(sempV2Api).build();
 
     String smfUrl = String.format("tcp://%s:%s", solaceHost, solaceSMFPort);
     System.setProperty("spring.cloud.stream.binders.local-solace.environment.solace.java.host",
@@ -174,8 +172,15 @@ class SolaceBinderInstrumentationIT {
   }
 
   private static void setupPubSubPlusTracing() {
-    solaceConfigUtil.vpns().enableBasicAuth(MSG_VPN);
+    //Enable user password authentication
+    try {
+      ConfigMsgVpn msgVpn = new ConfigMsgVpn().authenticationBasicType(INTERNAL);
+      sempV2Api.config().updateMsgVpn(msgVpn, MSG_VPN, null, null);
+    } catch (ApiException e) {
+      throw new SempClientException(e);
+    }
 
+    //Create telemetry profile for enabling broker tracing
     try {
       final ConfigMsgVpnTelemetryProfile telemetryProfile = new ConfigMsgVpnTelemetryProfile().telemetryProfileName(
               MSG_VPN).telemetryProfileName(TELEMETRY_PROFILE_NAME)
@@ -186,6 +191,7 @@ class SolaceBinderInstrumentationIT {
       throw new SempClientException("Failed to create telemetry profile", e);
     }
 
+    //Create trace filter
     try {
       final ConfigMsgVpnTelemetryProfileTraceFilter traceFilter = new ConfigMsgVpnTelemetryProfileTraceFilter().msgVpnName(
               MSG_VPN).telemetryProfileName(TELEMETRY_PROFILE_NAME)
@@ -197,6 +203,7 @@ class SolaceBinderInstrumentationIT {
       throw new SempClientException("Failed to create trace filter", e);
     }
 
+    //Create trace filter subscriptions
     try {
       final String[] subscriptions = {TELEMETRY_PROFILE_TRACE_FILTER_SUBSCRIPTION,
           TELEMETRY_PROFILE_TRACE_FILTER_SUBSCRIPTION_QUEUES};
@@ -214,6 +221,7 @@ class SolaceBinderInstrumentationIT {
       throw new SempClientException("Failed to create trace filter subscription", e);
     }
 
+    //Create client username for tracing assign the tracing profile
     try {
       final ConfigMsgVpnClientUsername clientUsername = new ConfigMsgVpnClientUsername().msgVpnName(
               MSG_VPN).clientUsername(TELEMETRY_PROFILE_NAME).password(TELEMETRY_PROFILE_NAME)

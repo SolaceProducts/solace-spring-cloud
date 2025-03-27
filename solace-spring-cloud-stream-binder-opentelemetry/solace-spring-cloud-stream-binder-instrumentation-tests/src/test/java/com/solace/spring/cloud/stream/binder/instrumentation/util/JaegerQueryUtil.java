@@ -115,9 +115,10 @@ public class JaegerQueryUtil {
   }
 
   private static void verifyBrokerOperationSpans(List<TracesData> traces, int expectedSpans,
-      SpanKind spanKind, String operation, KeyValue... additionalTags) {
+      SpanKind spanKind, String operationType, String operationName, KeyValue... additionalTags) {
     List<KeyValue> tags = new ArrayList<>();
-    tags.add(createTag(TAG_MSG_OPERATION, operation));
+    tags.add(createTag(TAG_MSG_OPERATION_TYPE, operationType));
+    tags.add(createTag(TAG_MSG_OPERATION_NAME, operationName));
     tags.add(createTag(TAG_MESSAGING_SYSTEM, MESSAGING_SYSTEM));
 
     if (additionalTags != null) {
@@ -130,13 +131,13 @@ public class JaegerQueryUtil {
   public static void verifyBrokerReceiveSpans(List<TracesData> traces, int expectedSpans,
       KeyValue... additionalTags) {
     verifyBrokerOperationSpans(traces, expectedSpans, SpanKind.SPAN_KIND_CONSUMER,
-        OPERATION_RECEIVE, additionalTags);
+        OPERATION_RECEIVE, OPERATION_RECEIVE, additionalTags);
   }
 
   public static void verifyBrokerSendSpans(List<TracesData> traces, int expectedSpans,
       KeyValue... additionalTags) {
-    verifyBrokerOperationSpans(traces, expectedSpans, SpanKind.SPAN_KIND_PRODUCER, OPERATION_SEND,
-        additionalTags);
+    verifyBrokerOperationSpans(traces, expectedSpans, SpanKind.SPAN_KIND_PRODUCER,
+        OPERATION_PUBLISH, OPERATION_SEND, additionalTags);
   }
 
   public static List<TracesData> findTraces(String jaegerQueryServerUrl, String serviceName,

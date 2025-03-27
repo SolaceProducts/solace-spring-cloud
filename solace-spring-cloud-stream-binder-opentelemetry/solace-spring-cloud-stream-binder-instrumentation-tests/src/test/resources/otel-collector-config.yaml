@@ -11,8 +11,8 @@ processors:
   batch:
 
 exporters:
-  logging:
-    loglevel: "info"
+  debug:
+    verbosity: detailed
 
   otlp/jaeger:
     endpoint: jaeger-all-in-one:4317
@@ -23,6 +23,9 @@ receivers:
   otlp:
     protocols:
       grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
 
   solace:
     broker: [solbroker:5672]
@@ -46,4 +49,4 @@ service:
     traces:
       receivers: [solace, otlp]
       processors: [batch, memory_limiter]
-      exporters: [otlp/jaeger, logging]
+      exporters: [otlp/jaeger, debug]

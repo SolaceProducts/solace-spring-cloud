@@ -1,4 +1,4 @@
-package com.solace.it.util.semp;
+package com.solace.spring.cloud.stream.binder.instrumentation.util;
 
 import org.osgi.annotation.versioning.ProviderType;
 
