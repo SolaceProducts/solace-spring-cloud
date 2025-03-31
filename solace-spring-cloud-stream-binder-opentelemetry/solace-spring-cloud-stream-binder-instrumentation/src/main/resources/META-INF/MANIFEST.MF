@@ -1,9 +1,0 @@
-Manifest-Version: 1.0
-Implementation-Title: spring-cloud-stream-binder-solace-instrumentation
-Implementation-Vendor: Solace
-Implementation-URL: https://solace.com/
-Main-Class: io.opentelemetry.javaagent.OpenTelemetryAgent
-Agent-Class: io.opentelemetry.javaagent.OpenTelemetryAgent
-Premain-Class: io.opentelemetry.javaagent.OpenTelemetryAgent
-Can-Redefine-Classes: true
-Can-Retransform-Classes: true

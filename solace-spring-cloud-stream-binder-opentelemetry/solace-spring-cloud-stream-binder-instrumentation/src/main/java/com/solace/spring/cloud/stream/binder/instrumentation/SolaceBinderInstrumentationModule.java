@@ -10,8 +10,7 @@ import java.util.List;
 public final class SolaceBinderInstrumentationModule extends InstrumentationModule {
 
   public SolaceBinderInstrumentationModule() {
-    super("spring-cloud-stream-binder-solace-instrumentation",
-        "spring-cloud-stream-binder-solace-instrumentation-1.0.0");
+    super("spring-cloud-stream-binder-solace-instrumentation");
   }
 
   @Override

@@ -9,3 +9,4 @@ updates:
       - dependency-name: "com.solace.*"
       - dependency-name: "com.solacesystems:*"
       - dependency-name: "org.springframework.*"
+      - dependency-name: "io.opentelemetry.*"

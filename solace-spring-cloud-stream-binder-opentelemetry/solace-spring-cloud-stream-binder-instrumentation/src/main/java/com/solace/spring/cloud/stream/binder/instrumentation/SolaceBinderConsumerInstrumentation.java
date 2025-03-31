@@ -107,7 +107,7 @@ public class SolaceBinderConsumerInstrumentation implements TypeInstrumentation 
       BytesXMLMessage message = messageContainer.getMessage();
       OpenTelemetry openTelemetry = GlobalOpenTelemetry.get();
       Tracer tracer = GlobalOpenTelemetry.getTracer(
-          "spring-cloud-stream-binder-solace-instrumentation", "1.0.0");
+          "spring-cloud-stream-binder-solace-instrumentation");
 
       Context context = Context.current();
       // If there is no current context associated with the current scope, then the context will be equal to the root context.
@@ -220,8 +220,7 @@ public class SolaceBinderConsumerInstrumentation implements TypeInstrumentation 
 
       OpenTelemetry openTelemetry = GlobalOpenTelemetry.get();
       Tracer tracer = GlobalOpenTelemetry.getTracer(
-          "spring-cloud-stream-binder-solace-instrumentation",
-          "1.0.0");
+          "spring-cloud-stream-binder-solace-instrumentation");
 
       Context context = Context.current();
 

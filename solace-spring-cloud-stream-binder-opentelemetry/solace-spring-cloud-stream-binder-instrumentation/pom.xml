@@ -28,29 +28,41 @@
     <auto-service.version>1.0.1</auto-service.version>
   </properties>
 
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.opentelemetry</groupId>
+        <artifactId>opentelemetry-bom</artifactId>
+        <version>${opentelemetry.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>io.opentelemetry.instrumentation</groupId>
+        <artifactId>opentelemetry-instrumentation-bom-alpha</artifactId>
+        <version>${opentelemetry-javaagent-extension.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
   <dependencies>
     <dependency>
       <groupId>io.opentelemetry</groupId>
       <artifactId>opentelemetry-api</artifactId>
-      <version>${opentelemetry.version}</version>
-      <scope>compile</scope>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>io.opentelemetry.javaagent</groupId>
       <artifactId>opentelemetry-javaagent-extension-api</artifactId>
-      <version>${opentelemetry-javaagent-extension.version}</version>
-      <scope>compile</scope>
+      <scope>provided</scope>
     </dependency>
     <dependency>
       <groupId>com.google.auto.service</groupId>
       <artifactId>auto-service-annotations</artifactId>
       <version>${auto-service.version}</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>net.bytebuddy</groupId>
-      <artifactId>byte-buddy</artifactId>
-      <version>1.14.17</version>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Dependencies needed for JCSMP auto-instrumentation -->
@@ -58,14 +70,14 @@
       <groupId>com.solacesystems</groupId>
       <artifactId>sol-jcsmp</artifactId>
       <version>${solace.jcsmp.version}</version>
-      <scope>compile</scope>
+      <scope>provided</scope>
     </dependency>
 
     <dependency>
       <groupId>com.solace</groupId>
       <artifactId>solace-opentelemetry-jcsmp-integration</artifactId>
       <version>${sol-jcsmp-otel-integration.version}</version>
-      <scope>compile</scope>
+      <scope>provided</scope>
     </dependency>
 
     <!-- Dependencies needed for Solace Binder auto-instrumentation -->
@@ -73,7 +85,7 @@
       <groupId>com.solace.spring.cloud</groupId>
       <artifactId>spring-cloud-stream-binder-solace</artifactId>
       <version>${project.version}</version>
-      <scope>compile</scope>
+      <scope>provided</scope>
     </dependency>
   </dependencies>
 
@@ -96,11 +108,6 @@
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
         <version>3.4.2</version>
-        <configuration>
-          <archive>
-            <manifestFile>src/main/resources/META-INF/MANIFEST.MF</manifestFile>
-          </archive>
-        </configuration>
       </plugin>
       <plugin>
         <groupId>pl.project13.maven</groupId>
