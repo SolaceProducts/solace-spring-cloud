@@ -29,8 +29,8 @@ Consult the table below to determine which version of the BOM you need to use:
 | 2023.0.1     | 4.0.0, 4.1.0               | 3.2.x       |
 | 2023.0.2     | 4.2.0                      | 3.3.x       |
 | 2023.0.3     | 4.3.0, 4.4.0, 4.5.0, 4.6.0 | 3.3.x       |
-| 2024.0.0     | 4.7.0                      | 3.4.x       |
-| 2024.0.0     | 4.8.0                      | 3.4.x       |
+| 2024.0.0     | 4.7.0, 4.8.0               | 3.4.x       |
+
 
 ## Including the BOM
 
