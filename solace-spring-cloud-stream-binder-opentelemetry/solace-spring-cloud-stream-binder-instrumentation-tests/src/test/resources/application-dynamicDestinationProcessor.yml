@@ -1,0 +1,50 @@
+spring:
+  cloud:
+    function:
+      definition: dynamicDestinationProcessor1;source1
+
+    stream:
+      poller:
+        initialDelay: 2000
+        fixed-delay: 300000 # 300 seconds
+
+      bindings:
+        source1-out-0:
+          destination: solace/supply/dynamicDestQ
+          binder: local-solace
+
+        dynamicDestinationProcessor1-in-0:
+          destination: dynamicDestQ
+          group: dynamicDestinationProcessorGroup
+          binder: local-solace
+        dynamicDestinationProcessor1-out-0:
+          destination: dummy # won't be used.
+          binder: local-solace
+
+      binders:
+        local-solace:
+          type: solace
+          environment:
+            solace:
+              java:
+                host: tcp://localhost:55555
+                msgVpn: default
+                clientUsername: default
+                clientPassword: default
+
+      solace:
+        default:
+          consumer:
+            add-destination-as-subscription-to-queue: false
+            provision-durable-queue: true
+            provision-error-queue: false
+            queue-name-expression: "destination"
+            queueMaxMsgRedelivery: 2
+
+        bindings:
+          dynamicDestinationProcessor1-in-0:
+            consumer:
+              queueAdditionalSubscriptions: solace/supply/dynamicDestQ
+
+server:
+  port: 0

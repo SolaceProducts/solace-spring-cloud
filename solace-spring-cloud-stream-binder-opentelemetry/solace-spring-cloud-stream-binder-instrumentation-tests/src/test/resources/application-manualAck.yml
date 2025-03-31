@@ -1,0 +1,47 @@
+spring:
+  cloud:
+    function:
+      definition: manualAckFunction;source1
+
+    stream:
+      poller:
+        initialDelay: 2000
+        fixed-delay: 300000 # 300 seconds
+
+      bindings:
+        source1-out-0:
+          destination: solace/supply/manualAckQueue
+          binder: local-solace
+
+        manualAckFunction-in-0:
+          destination: manualAckQueue
+          group: manualAckGroup
+          binder: local-solace
+
+      binders:
+        local-solace:
+          type: solace
+          environment:
+            solace:
+              java:
+                host: tcp://localhost:55555
+                msgVpn: default
+                clientUsername: default
+                clientPassword: default
+
+      solace:
+        default:
+          consumer:
+            add-destination-as-subscription-to-queue: false
+            provision-durable-queue: true
+            provision-error-queue: false
+            queue-name-expression: "destination"
+            queueMaxMsgRedelivery: 2
+
+        bindings:
+          manualAckFunction-in-0:
+            consumer:
+              queueAdditionalSubscriptions: solace/supply/manualAckQueue
+
+server:
+  port: 0

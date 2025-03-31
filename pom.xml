@@ -67,6 +67,8 @@
         <module>solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder</module>
         <module>solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core</module>
         <module>solace-spring-cloud-starters/solace-spring-cloud-stream-starter</module>
+        <module>solace-spring-cloud-stream-binder-opentelemetry/solace-spring-cloud-stream-binder-instrumentation</module>
+        <module>solace-spring-cloud-stream-binder-opentelemetry/solace-spring-cloud-stream-binder-instrumentation-tests</module>
     </modules>
 
     <scm>

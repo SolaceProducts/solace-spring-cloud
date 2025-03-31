@@ -1,0 +1,104 @@
+= Spring Cloud Stream Solace Binder OpenTelemetry Auto-Instrumentation
+
+This module is an link:https://opentelemetry.io/docs/zero-code/java/agent/extensions/[OpenTelemetry Extension] and provides instrumentation for the Spring Cloud Stream Solace Binder operations.
+
+It is designed to work with the link:https://opentelemetry.io/docs/zero-code/java/agent/[OpenTelemetry Java Agent] and the link:https://docs.solace.com/API/API-Developer-Guide-JCSMP/JCSMP-API-Context-Propagation-Distributed-Tracing.htm#Automatic-JCSMP[Solace OpenTelemetry JCSMP Auto-Instrumentation] extension.
+
+
+== Version Compatibility
+
+[options="header"]
+|===
+| Spring Cloud | Solace Spring Cloud BOM    | Spring Boot | Solace JCSMP
+| 2024.0.0     | 4.8.0 and later            | 3.4.x       | 10.26.0 and later
+|===
+
+== Required Dependencies
+
+To enable OpenTelemetry auto-instrumentation for your Spring Cloud Stream Solace Binder application, you need the following `runtime` dependencies:
+
+1. *OpenTelemetry Java Agent*: The core instrumentation agent
+2. *Solace OpenTelemetry JCSMP Integration*: Solace JCSMP messaging client specific instrumentation extension
+3. *Spring Cloud Stream Solace Binder Instrumentation*: Spring Cloud Stream Solace Binder instrumentation extension
+
+=== Obtaining Dependencies
+
+You can download the required JAR files from the following locations:
+
+* *OpenTelemetry Java Agent*: link:https://central.sonatype.com/artifact/io.opentelemetry.javaagent/opentelemetry-javaagent/[Maven Central] or link:https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases[GitHub]
+* *Solace OpenTelemetry JCSMP Integration*: link:https://central.sonatype.com/artifact/com.solace/solace-opentelemetry-jcsmp-integration[Maven Central]
+* *Spring Cloud Stream Binder Solace Instrumentation*: link:https://central.sonatype.com/artifact/com.solace.spring.cloud/spring-cloud-stream-binder-solace-instrumentation[Maven Central]
+
+[IMPORTANT]
+====
+Above dependencies should NOT be included in your application's classpath.
+====
+
+== Configuring the OpenTelemetry Agent
+
+To enable the agent, add the following JVM arguments when starting your application:
+
+----
+-javaagent:/path/to/opentelemetry-javaagent.jar
+----
+
+Refer to the link:https://opentelemetry.io/docs/zero-code/java/agent/getting-started/[OpenTelemetry Java Agent] documentation for configuration options.
+
+=== Example Configuration Parameters
+
+Here's a basic configuration to get started:
+
+----
+-javaagent:/path/to/opentelemetry-javaagent.jar
+-Dotel.javaagent.extensions=/path/to/solace-opentelemetry-jcsmp-integration.jar,/path/to/spring-cloud-stream-binder-solace-instrumentation.jar
+-Dotel.instrumentation.common.default-enabled=false
+-Dotel.javaagent.debug=true
+-Dotel.traces.exporter=otlp
+-Dotel.metrics.exporter=none
+-Dotel.logs.exporter=none
+-Dotel.exporter.otlp.protocol=grpc
+-Dotel.exporter.otlp.endpoint=http://localhost:4317
+-Dotel.resource.attributes=service.name=my-solace-application
+-Dotel.service.name=my-solace-application
+-Dotel.propagators=solace_jcsmp_tracecontext
+-Dotel.java.disabled.resource.providers=io.opentelemetry.instrumentation.resources.ProcessResourceProvider
+-Dotel.instrumentation.solace-opentelemetry-jcsmp-integration.enabled=true
+-Dotel.instrumentation.spring-cloud-stream-binder-solace-instrumentation.enabled=true
+----
+
+== Key Configuration Options Explained
+
+* `otel.instrumentation.common.default-enabled=false`: Disables default instrumentations, only enabling the ones you specify
+* `otel.traces.exporter=otlp`: Uses the OpenTelemetry Protocol (OTLP) exporter for traces
+* `otel.exporter.otlp.endpoint`: The endpoint of your OpenTelemetry receiver
+* `otel.propagators=solace_jcsmp_tracecontext`: Required, Enables the Solace-specific context propagation
+* `otel.javaagent.extensions`: Path to instrumentation extension JARs
+* `otel.instrumentation.solace-opentelemetry-jcsmp-integration.enabled`: Enables Solace JCSMP instrumentation
+* `otel.instrumentation.spring-cloud-stream-binder-solace-instrumentation.enabled`: Enables Spring Cloud Stream Solace Binder instrumentation
+* `otel.java.disabled.resource.providers`: Disables the unwanted resource provider to avoid exposing sensitive information about the java process
+
+Refer to the link:https://opentelemetry.io/docs/zero-code/java/agent/configuration/[OpenTelemetry Java Agent Configuration] documentation for more options, including how to configure application through environment variables or configuration file instead of Java system properties.
+
+[IMPORTANT]
+====
+In the production environment, disable the unwanted resource providers via `otel.java.disabled.resource.providers` or `otel.java.enabled.resource.providers` property to avoid exposing sensitive information. Refer to the link:https://opentelemetry.io/docs/languages/java/configuration/#properties-resource[OpenTelemetry Java Agent Configuration] and link:https://opentelemetry.io/docs/languages/java/configuration/#resourceprovider[OpenTelemetry ResourceProviders] for more information.
+====
+
+=== Example
+
+See link:{docdir}/solace-spring-cloud-stream-binder-instrumentation-tests/[integration tests] for an example of trace data generated by this instrumentation.
+
+== Troubleshooting
+
+If you're not seeing trace data:
+
+1. Enable debug mode with `-Dotel.javaagent.debug=true`
+2. Verify your collector endpoint is correct and accessible
+3. Check that all extension JARs are available and correctly referenced
+4. Ensure the Solace propagator is enabled with `-Dotel.propagators=solace_jcsmp_tracecontext`
+
+== Resources
+For more information about Solace technology in general please visit these resources:
+
+* The Solace Developer Portal website at: https://solace.dev
+* Ask the https://solace.community[Solace community]
