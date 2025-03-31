@@ -1289,9 +1289,9 @@ This is the total size of the messages received (if `name` is a consumer binding
 
 == Solace Binder Application Tracing
 
-Starting with link:{docdir}/../../solace-spring-cloud-bom/[Solace Spring Cloud BOM v4.8.0] and link:{docdir}/../../solace-spring-cloud-starters/solace-spring-cloud-stream-starter/[Solace Binder v5.8.0], the Solace binder supports application tracing. This feature allows you to trace the flow of messages through your application.
+Starting with link:../../solace-spring-cloud-bom/[Solace Spring Cloud BOM v4.8.0] and link:../solace-spring-cloud-stream-starter/[Solace Binder v5.8.0], the Solace binder supports application tracing. This feature allows you to trace the flow of messages through your application.
 
-Refer to the link:{docdir}/../../solace-spring-cloud-stream-binder-opentelemetry/README.adoc[Solace Binder OpenTelemetry Auto-Instrumentation] documentation in this repo for more information.
+Refer to the link:../../solace-spring-cloud-stream-binder-opentelemetry/README.adoc[Solace Binder OpenTelemetry Auto-Instrumentation] documentation in this repo for more information.
 
 == Resources
 
