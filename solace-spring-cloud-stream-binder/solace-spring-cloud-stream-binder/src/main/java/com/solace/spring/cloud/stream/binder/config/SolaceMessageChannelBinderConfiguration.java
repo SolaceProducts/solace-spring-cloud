@@ -34,9 +34,10 @@ import static com.solacesystems.jcsmp.XMLMessage.Outcome.REJECTED;
 
 @Configuration
 @Import({SolaceHealthIndicatorsConfiguration.class, OAuth2ClientAutoConfiguration.class})
-@EnableConfigurationProperties({SolaceExtendedBindingProperties.class})
+@EnableConfigurationProperties({SolaceExtendedBindingProperties.class, SolaceExtendedJavaProperties.class})
 public class SolaceMessageChannelBinderConfiguration {
 	private final JCSMPProperties jcsmpProperties;
+	private final SolaceExtendedJavaProperties solaceExtendedJavaProperties;
 	private final SolaceExtendedBindingProperties solaceExtendedBindingProperties;
 	private final SolaceSessionEventHandler solaceSessionEventHandler;
 
@@ -49,10 +50,12 @@ public class SolaceMessageChannelBinderConfiguration {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SolaceMessageChannelBinderConfiguration.class);
 
 	public SolaceMessageChannelBinderConfiguration(JCSMPProperties jcsmpProperties,
+												   SolaceExtendedJavaProperties solaceExtendedJavaProperties,
 	                                               SolaceExtendedBindingProperties solaceExtendedBindingProperties,
 	                                               @Nullable SolaceSessionEventHandler eventHandler,
 												   @Nullable SolaceSessionOAuth2TokenProvider solaceSessionOAuth2TokenProvider) {
 		this.jcsmpProperties = jcsmpProperties;
+		this.solaceExtendedJavaProperties = solaceExtendedJavaProperties;
 		this.solaceExtendedBindingProperties = solaceExtendedBindingProperties;
 		this.solaceSessionEventHandler = eventHandler;
 		this.solaceSessionOAuth2TokenProvider = solaceSessionOAuth2TokenProvider;
@@ -73,19 +76,26 @@ public class SolaceMessageChannelBinderConfiguration {
 				SpringJCSMPFactory springJCSMPFactory = new SpringJCSMPFactory(solaceJcsmpProperties, solaceSessionOAuth2TokenProvider);
 				jcsmpSession = springJCSMPFactory.createSession();
 			}
-			LOGGER.info("Connecting JCSMP session {}", jcsmpSession.getSessionName());
-			jcsmpSession.connect();
-			if (solaceSessionEventHandler != null) {
-				// after setting the session health indicator status to UP,
-				// we should not be worried about setting its status to DOWN,
-				// as the call closing JCSMP session also delete the context
-				// and terminates the application
-				solaceSessionEventHandler.setSessionHealthUp();
-			}
 
-			if (jcsmpSession instanceof JCSMPBasicSession session &&
-					!session.isRequiredSettlementCapable(Set.of(ACCEPTED,FAILED,REJECTED))) {
-				LOGGER.warn("The connected Solace PubSub+ Broker is not compatible. It doesn't support message NACK capability. Consumer bindings will fail to start.");
+			try {
+				LOGGER.info("Connecting JCSMP session {}", jcsmpSession.getSessionName());
+				jcsmpSession.connect();
+				if (solaceSessionEventHandler != null) {
+					// after setting the session health indicator status to UP,
+					// we should not be worried about setting its status to DOWN,
+					// as the call closing JCSMP session also delete the context
+					// and terminates the application
+					solaceSessionEventHandler.setSessionHealthUp();
+				}
+
+				if (jcsmpSession instanceof JCSMPBasicSession session &&
+						!session.isRequiredSettlementCapable(Set.of(ACCEPTED, FAILED, REJECTED))) {
+					LOGGER.warn("The connected Solace PubSub+ Broker is not compatible. It doesn't support message NACK capability. Consumer bindings will fail to start.");
+				}
+			} catch (JCSMPException e) {
+				if (solaceExtendedJavaProperties.isStartupFailOnConnectError()) {
+					throw e;
+				}
 			}
 		} catch (Exception e) {
 			if (context != null) {
