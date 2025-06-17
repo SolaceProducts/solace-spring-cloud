@@ -26,6 +26,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.lang.Nullable;
 
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
 import java.util.Set;
 
 import static com.solacesystems.jcsmp.XMLMessage.Outcome.ACCEPTED;
@@ -66,15 +69,25 @@ public class SolaceMessageChannelBinderConfiguration {
 		JCSMPProperties solaceJcsmpProperties = (JCSMPProperties) this.jcsmpProperties.clone();
 		solaceJcsmpProperties.setProperty(JCSMPProperties.CLIENT_INFO_PROVIDER, new SolaceBinderClientInfoProvider());
 		try {
-			if (solaceSessionEventHandler != null) {
-				LOGGER.debug("Registering Solace Session Event handler on session");
+			try {
+				if (solaceSessionEventHandler != null) {
+					LOGGER.debug("Registering Solace Session Event handler on session");
 
-				SpringJCSMPFactory springJCSMPFactory = new SpringJCSMPFactory(solaceJcsmpProperties, solaceSessionOAuth2TokenProvider);
-				context = springJCSMPFactory.createContext(new ContextProperties());
-				jcsmpSession = springJCSMPFactory.createSession(context, solaceSessionEventHandler);
-			} else {
-				SpringJCSMPFactory springJCSMPFactory = new SpringJCSMPFactory(solaceJcsmpProperties, solaceSessionOAuth2TokenProvider);
-				jcsmpSession = springJCSMPFactory.createSession();
+					SpringJCSMPFactory springJCSMPFactory =
+							new SpringJCSMPFactory(solaceJcsmpProperties, solaceSessionOAuth2TokenProvider);
+					context = springJCSMPFactory.createContext(new ContextProperties());
+					jcsmpSession = springJCSMPFactory.createSession(context, solaceSessionEventHandler);
+				} else {
+					SpringJCSMPFactory springJCSMPFactory =
+							new SpringJCSMPFactory(solaceJcsmpProperties, solaceSessionOAuth2TokenProvider);
+					jcsmpSession = springJCSMPFactory.createSession();
+				}
+			} catch (JCSMPException exc) {
+				if (solaceExtendedJavaProperties.isStartupFailOnConnectError()) {
+					throw exc;
+				}
+				jcsmpSession = createJCSMPProxySession();
+				return;
 			}
 
 			try {
@@ -122,6 +135,42 @@ public class SolaceMessageChannelBinderConfiguration {
 	@Bean
 	SolaceEndpointProvisioner provisioningProvider() {
 		return new SolaceEndpointProvisioner(jcsmpSession);
+	}
+
+	// Fallback logic for JCSMP session creation in case the initial creation during @PostConstruct fails (e.g., due to
+	// the hostname not being resolvable at startup time). In that case, a dynamic proxy is created that will
+	// retry initialization of the actual session when any method is called on the proxy, and transparently forward any
+	// method calls to the actual session once it is available.
+	// As soon as a real JCSMPSession is available, it will be able to handle all further retry logic by itself.
+
+	private JCSMPSession proxySession;
+
+	private JCSMPSession createJCSMPProxySession() {
+		if (proxySession == null) {
+			proxySession = (JCSMPSession) Proxy.newProxyInstance(this.getClass().getClassLoader(),
+					new Class[] {JCSMPSession.class},
+					new InvocationHandler() {
+
+						@Override
+						public Object invoke(Object proxy, Method method, Object[] arguments) throws Throwable {
+							if (jcsmpSession == proxySession) {
+								synchronized (this) {
+									if (jcsmpSession == proxySession) {
+										initSession();
+									}
+									if (jcsmpSession == proxySession) {
+										throw new IllegalStateException("No JCSMP session available");
+									}
+								}
+							}
+
+							return method.invoke(jcsmpSession, arguments);
+						}
+
+					});
+		}
+
+		return proxySession;
 	}
 
 }
