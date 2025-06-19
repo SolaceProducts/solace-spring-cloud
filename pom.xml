@@ -30,7 +30,7 @@
 
         <!-- Override spring-boot version from solace-spring-boot to latest patch version -->
         <!-- Remove this if the next version of solace-spring-boot works fine -->
-        <spring.boot.version>3.4.4</spring.boot.version>
+        <spring.boot.version>3.5.2</spring.boot.version>
 
         <solace.spring.cloud.stream-starter.version>5.8.1-SNAPSHOT</solace.spring.cloud.stream-starter.version>
 
