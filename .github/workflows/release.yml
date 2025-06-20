@@ -18,8 +18,8 @@ jobs:
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
-          distribution: 'zulu'
+          java-version: "17"
+          distribution: "zulu"
 
       - name: Retrieve secrets from Vault
         id: secrets
@@ -32,12 +32,13 @@ jobs:
           path: jwt-github
           jwtGithubAudience: https://github.com/${{ github.repository_owner }}
           exportToken: true
-          secrets: secret/data/tools/githubactions PACKAGES_ADMIN_USER | PACKAGES_ADMIN_USER ;
+          secrets:
+            secret/data/tools/githubactions PACKAGES_ADMIN_USER | PACKAGES_ADMIN_USER ;
             secret/data/tools/githubactions PACKAGES_ADMIN_TOKEN | PACKAGES_ADMIN_TOKEN ;
             secret/data/tools/githubactions MAVEN_GPG_KEY_PASSPHRASE | MAVEN_GPG_KEY_PASSPHRASE ;
             secret/data/tools/githubactions MAVEN_GPG_KEY | MAVEN_GPG_KEY ;
-            secret/data/tools/githubactions MAVEN_OSSRH_USER | MAVEN_OSSRH_USER ;
-            secret/data/tools/githubactions MAVEN_OSSRH_PASS | MAVEN_OSSRH_PASS ;
+            secret/data/tools/githubactions MAVEN_USERNAME | MAVEN_USERNAME ;
+            secret/data/tools/githubactions MAVEN_PASSWORD | MAVEN_PASSWORD ;
 
       - name: Import GPG key
         uses: crazy-max/ghaction-import-gpg@cb9bde2e2525e640591a934b1fd28eef1dcaf5e5 #v6.2.0
@@ -59,8 +60,6 @@ jobs:
       - name: Deploy to Maven Central
         run: |
           mvn -DreleaseTarget=central \
-          -DstagingProgressTimeoutMinutes=360 \
-          -DstagingProgressPauseDurationSeconds=10 \
           -P releaseCentral \
           -s maven/settings.xml \
           release:prepare release:perform
