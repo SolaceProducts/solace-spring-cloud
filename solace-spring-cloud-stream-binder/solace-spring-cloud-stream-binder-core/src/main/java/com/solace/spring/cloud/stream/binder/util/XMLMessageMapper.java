@@ -1,40 +1,5 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
-import com.fasterxml.jackson.databind.ObjectWriter;
-import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
-import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
-import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
-import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
-import com.solace.spring.cloud.stream.binder.properties.SmfMessageWriterProperties;
-import com.solacesystems.common.util.ByteArray;
-import com.solacesystems.jcsmp.BytesMessage;
-import com.solacesystems.jcsmp.BytesXMLMessage;
-import com.solacesystems.jcsmp.DeliveryMode;
-import com.solacesystems.jcsmp.JCSMPFactory;
-import com.solacesystems.jcsmp.MapMessage;
-import com.solacesystems.jcsmp.SDTMap;
-import com.solacesystems.jcsmp.SDTStream;
-import com.solacesystems.jcsmp.StreamMessage;
-import com.solacesystems.jcsmp.TextMessage;
-import com.solacesystems.jcsmp.XMLContentMessage;
-import com.solacesystems.jcsmp.XMLMessage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.cloud.stream.binder.BinderHeaders;
-import org.springframework.integration.IntegrationMessageHeaderAccessor;
-import org.springframework.integration.StaticMessageHeaderAccessor;
-import org.springframework.integration.acks.AcknowledgmentCallback;
-import org.springframework.integration.support.AbstractIntegrationMessageBuilder;
-import org.springframework.integration.support.DefaultMessageBuilderFactory;
-import org.springframework.integration.support.MessageBuilderFactory;
-import org.springframework.messaging.Message;
-import org.springframework.messaging.MessageHeaders;
-import org.springframework.util.MimeType;
-import org.springframework.util.SerializationUtils;
-
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -56,6 +21,42 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.cloud.stream.binder.BinderHeaders;
+import org.springframework.integration.IntegrationMessageHeaderAccessor;
+import org.springframework.integration.StaticMessageHeaderAccessor;
+import org.springframework.integration.acks.AcknowledgmentCallback;
+import org.springframework.integration.support.AbstractIntegrationMessageBuilder;
+import org.springframework.integration.support.DefaultMessageBuilderFactory;
+import org.springframework.integration.support.MessageBuilderFactory;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.MessageHeaders;
+import org.springframework.util.MimeType;
+import org.springframework.util.SerializationUtils;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.ObjectWriter;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
+import com.solace.spring.cloud.stream.binder.properties.SmfMessageWriterProperties;
+import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solacesystems.common.util.ByteArray;
+import com.solacesystems.jcsmp.BytesMessage;
+import com.solacesystems.jcsmp.BytesXMLMessage;
+import com.solacesystems.jcsmp.DeliveryMode;
+import com.solacesystems.jcsmp.JCSMPFactory;
+import com.solacesystems.jcsmp.MapMessage;
+import com.solacesystems.jcsmp.SDTMap;
+import com.solacesystems.jcsmp.SDTStream;
+import com.solacesystems.jcsmp.StreamMessage;
+import com.solacesystems.jcsmp.TextMessage;
+import com.solacesystems.jcsmp.XMLContentMessage;
+import com.solacesystems.jcsmp.XMLMessage;
 
 public class XMLMessageMapper {
 	private static final Logger LOGGER = LoggerFactory.getLogger(XMLMessageMapper.class);
@@ -91,10 +92,13 @@ public class XMLMessageMapper {
 
 	// exposed for testing
 	XMLMessage mapToSmf(Object payload,
-						Map<String, Object> headers,
+						Map<String, Object> originalHeaders,
 						UUID messageId,
 						SmfMessageWriterProperties writerProperties) {
 		XMLMessage xmlMessage;
+		
+		Map<String, Object> headers = restoreReservedSpringHeaders(originalHeaders);
+		
 		SDTMap metadata = mapHeadersToSmf(headers, writerProperties);
 		rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
 
@@ -345,6 +349,61 @@ public class XMLMessageMapper {
 
 		return builder;
 	}
+	
+	/**
+	 * Creates a copy of the spring reserved headers with new headers so they are not override by spring
+	 * @param headers
+	 */
+	public Map<String, Object> backupReservedSpringHeaders(final Map<String, Object> oldHeaders) {
+
+		if(oldHeaders == null) {
+			return null;
+		}
+				
+		Map<String, Object> headers = new HashMap<String, Object>();
+		headers.putAll(oldHeaders);
+		
+		for(SpringReservedHeaders header : SpringReservedHeaders.values()) {
+			String originalKey = header.getSpringPredefinedHeader();
+			String backupKey = header.getSolaceBackupHeader();
+			
+			Object value = headers.get(originalKey);
+					
+			if (value != null) {
+				LOGGER.debug(String.format("Restore %s=%s", backupKey, value));
+				headers.put(backupKey, value);
+			}						
+		}
+		return Collections.unmodifiableMap( headers );
+	}		
+	
+	/**
+	 * Rename the spring reserved headers to their original name
+	 * @param oldHeaders
+	 * @return
+	 */
+	public Map<String, Object> restoreReservedSpringHeaders(final Map<String, Object> oldHeaders) {
+
+		if(oldHeaders == null) {
+			return null;
+		}
+				
+		Map<String, Object> headers = new HashMap<String, Object>();
+		headers.putAll(oldHeaders);
+		
+		for(SpringReservedHeaders header : SpringReservedHeaders.values()) {
+			String originalKey = header.getSpringPredefinedHeader();
+			String backupKey = header.getSolaceBackupHeader();
+			
+			Object value = headers.get(backupKey);
+					
+			if (value != null) {
+				LOGGER.debug(String.format("Restore %s=%s", originalKey, value));
+				headers.put(originalKey, value);
+			}						
+		}
+		return Collections.unmodifiableMap( headers );
+	}		
 
 	private <T> AbstractIntegrationMessageBuilder<T> injectRootSpringHeaders(AbstractIntegrationMessageBuilder<T> builder,
 																			 AcknowledgmentCallback acknowledgmentCallback,
@@ -461,7 +520,9 @@ public class XMLMessageMapper {
 			headers.put(SolaceBinderHeaders.MESSAGE_VERSION, messageVersion);
 		}
 
-		return new MessageHeaders(headers);
+		Map<String,Object> newHeaders = backupReservedSpringHeaders(headers);		
+		
+		return new MessageHeaders(newHeaders);
 	}
 
 	private void addSDTMapObject(SDTMap sdtMap, Set<String> serializedHeaders, String key, Object object,

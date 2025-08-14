@@ -853,7 +853,7 @@ public class XMLMessageMapperTest {
 					.isInstanceOf(SolaceMessageConversionException.class)
 					.rootCause()
 					.isInstanceOf(IllegalArgumentException.class)
-					.hasMessage("Invalid type as value - %s", SerializableFoo.class.getSimpleName());
+					.hasMessage("Invalid type as value - %s", UUID.class.getSimpleName());
 			case SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES -> {
 				XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(testSpringMessage, writerProperties);
 				Assertions.assertThat(xmlMessage.getProperties().getString("test-serializable"))
@@ -1842,8 +1842,8 @@ public class XMLMessageMapperTest {
 			validateSpringHeaders(springMessage.getHeaders(), expectedXmlMessage);
 
 			// Update the expected default spring headers
-			springHeaders.put(MessageHeaders.ID, springMessage.getHeaders().getId());
-			springHeaders.put(MessageHeaders.TIMESTAMP, springMessage.getHeaders().getTimestamp());
+			springHeaders.put(MessageHeaders.ID, springMessage.getHeaders().get(SpringReservedHeaders.ID.getSolaceBackupHeader()));
+			springHeaders.put(MessageHeaders.TIMESTAMP, springMessage.getHeaders().get(SpringReservedHeaders.TIMESTAMP.getSolaceBackupHeader()));
 
 			i++;
 		} while (i < 3);

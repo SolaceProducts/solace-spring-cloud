@@ -1,6 +1,9 @@
 # Intellij configuration files
 .idea
 **/*.iml
+**/*.settings
+**/*.classpath
+**/*.project
 
 # Build files
 **/target
