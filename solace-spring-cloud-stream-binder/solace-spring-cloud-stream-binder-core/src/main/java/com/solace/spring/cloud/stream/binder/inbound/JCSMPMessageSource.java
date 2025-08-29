@@ -22,6 +22,9 @@ import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPTransportException;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -214,6 +217,18 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			if (isRunning()) {
 				logger.warn("Nothing to do, message source {} is already running", id);
 				return;
+			}
+
+			Map<String, String> headerNameMapping = consumerProperties.getExtension().getHeaderNameMapping();
+			if (headerNameMapping != null && !headerNameMapping.isEmpty()) {
+				Set<String> targetHeaderNames = new HashSet<>(headerNameMapping.values());
+				if (targetHeaderNames.size() < headerNameMapping.size()) {
+					MessagingException exception = new MessagingException(String.format(
+							"Two or more keys map to the same header name in headerNameMapping %s <inbound adapter %s>",
+							consumerProperties.getExtension().getHeaderNameMapping(), id));
+					logger.warn(exception.getMessage());
+					throw exception;
+				}
 			}
 
 			try {
