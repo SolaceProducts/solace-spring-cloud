@@ -63,6 +63,11 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 	 */
 	private boolean nonserializableHeaderConvertToString = false;
 
+	/**
+	 * Mapping from Spring message header names to Solace message user property names.
+	 */
+	private Map<String, String> headerNameMapping = new HashMap<>();
+
 	public DestinationType getDestinationType() {
 		return destinationType;
 	}
@@ -125,5 +130,13 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 
 	public void setNonserializableHeaderConvertToString(boolean nonserializableHeaderConvertToString) {
 		this.nonserializableHeaderConvertToString = nonserializableHeaderConvertToString;
+	}
+
+	public Map<String, String> getHeaderNameMapping() {
+		return headerNameMapping;
+	}
+
+	public void setHeaderNameMapping(Map<String, String> headerNameMapping) {
+		this.headerNameMapping = headerNameMapping;
 	}
 }

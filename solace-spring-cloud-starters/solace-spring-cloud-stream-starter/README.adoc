@@ -384,6 +384,13 @@ The list of headers to exclude when converting consumed Solace message to Spring
 +
 Default: Empty `List&lt;String&gt;`
 
+headerNameMapping::
+Mapping from Solace message user property names to Spring message header names. Useful for retaining Solace message user properties that have the same names as reserved Spring message headers, such as `id`, `timestamp`, `contentType`, `priority`, `correlationId`, `sequenceNumber`, `replyChannel`, `errorChannel`, etc.
++
+Default: Empty `Map&lt;String,String&gt;`
++
+See: <<Header Name Mapping>>
+
 ==== Solace Producer Properties
 
 The following properties are available for Solace producers only and must be prefixed with `spring.cloud.stream.solace.bindings.&lt;bindingName&gt;.producer.` where `bindingName` looks something like `functionName-out-0` as defined in https://docs.spring.io/spring-cloud-stream/reference/{scst-version}/spring-cloud-stream/functional-binding-names.html[Functional Binding Names].
@@ -521,6 +528,13 @@ Default: Empty `Map&lt;String,String[]&gt;` +
 See: <<Overview>> for more info on how this binder uses topic-to-queue mapping to implement Spring Cloud Streams consumer groups.
 +
 NOTE: Does not apply when `destinationType=queue`.
+
+headerNameMapping::
+Mapping from Spring message header names to Solace message user property names. Useful when you need to preserve the original values of Spring message headers that conflict with reserved header names such as `id`, `timestamp`, `contentType`, `priority`, `correlationId`, `sequenceNumber`, `replyChannel`, `errorChannel`, etc.
++
+Default: Empty `Map&lt;String,String&gt;`
++
+See: <<Header Name Mapping>>
 
 ==== Solace Connection Health-Check Properties
 
@@ -756,6 +770,127 @@ Specifies that the dynamic destination is a queue
 
 When absent, the binding’s configured destination-type is used.
 |===
+
+== Header Name Mapping
+
+The Solace Spring Cloud Stream Binder allows you to configure custom mappings between Spring Message header names and JCSMP User Property keys. This feature provides flexibility when you need to preserve the original values of message headers that would otherwise be overwritten by the Spring Cloud Stream framework, such as reserved headers like `id`, `timestamp`, `contentType`, `priority`, `correlationId`, `sequenceNumber`, `replyChannel`, `errorChannel`, etc.
+
+=== Configuration
+
+Header name mapping can be configured per binding or as default configuration for all bindings.
+
+==== Per-Binding Configuration
+
+To configure header name mapping for specific consumer and producer bindings:
+
+[source,yaml]
+----
+spring:
+  cloud:
+    stream:
+      solace:
+        bindings:
+          uppercase-in-0:
+            consumer:
+              headerNameMapping:
+                timestamp: original-timestamp
+                id: original-message-id
+                contentType: original-content-type
+                priority: original-priority
+          uppercase-out-0:
+            producer:
+              headerNameMapping:
+                original-timestamp: timestamp
+                original-message-id: id  
+                original-content-type: contentType
+                original-priority: priority
+----
+
+==== Default Configuration
+
+Configure header name mapping for all bindings:
+
+[source,yaml]
+----
+spring:
+  cloud:
+    stream:
+      solace:
+        default:
+          consumer:
+            headerNameMapping:
+              timestamp: original-timestamp
+              id: original-message-id
+              contentType: original-content-type
+          producer:
+            headerNameMapping:
+              original-timestamp: timestamp
+              original-message-id: id
+              original-content-type: contentType
+----
+
+=== Behavior
+
+==== Consumer Side (Solace to Spring)
+When the binder consumes messages from Solace and converts them to Spring Cloud Stream messages:
+
+1. **Header Mapping Resolution**: The binder examines each Solace user property and checks if it has a corresponding mapping in the `headerNameMapping` configuration
+2. **Mapped Properties**: User properties with configured mappings are converted to Spring message headers using the mapped header name (e.g., `timestamp` user property becomes `original-timestamp` header)
+3. **Unmapped Properties**: User properties without mappings are converted to Spring message headers using their original property names, in which case it may be overwritten if it is Spring Integration reserved header (e.g. id, timestamp etc)
+4. **Reserved Header Preservation**: This allows access to original Solace message metadata that would otherwise be overwritten by Spring Cloud Stream's reserved headers during message processing
+
+==== Producer Side (Spring to Solace)
+When the binder publishes Spring Cloud Stream messages to Solace:
+
+1. **Header Mapping Lookup**: The binder examines each Spring message header and checks if it has a corresponding mapping in the `headerNameMapping` configuration
+2. **Mapped Headers**: Headers with configured mappings are converted to Solace user properties using the mapped property name (e.g., `original-timestamp` header becomes `timestamp` user property)
+3. **Unmapped Headers**: Headers without mappings are converted to Solace user properties using their original header names
+4. **Reserved Header Handling**: This prevents Spring Cloud Stream reserved headers from overwriting important application-specific metadata when publishing to Solace
+
+=== Backward Compatibility
+
+This feature is fully backward compatible:
+
+* If no `headerNameMapping` is configured, the binder behaves exactly as before
+* Existing applications will continue to work without any changes
+
+=== Example Use Cases
+
+==== Preserving Reserved Headers
+When you need to retain the original values of Spring Cloud Stream reserved headers:
+
+[source,yaml]
+----
+spring:
+  cloud:
+    stream:
+      solace:
+        bindings:
+          data-processor-in-0:
+            consumer:
+              headerNameMapping:
+                timestamp: original-timestamp        #Preserve publisher application set timestamp
+                id: original-id             #Preserve publisher application set id
+                correlationId: original-correlationId  #Preserve publisher application set correlation ID
+----
+
+==== Cross-System Integration
+When integrating with legacy systems that expect specific property names:
+
+[source,yaml]
+----
+spring:
+  cloud:
+    stream:
+      solace:
+        bindings:
+          legacy-system-out-0:
+            producer:
+              headerNameMapping:
+                id: MSG_ID
+                timestamp: TS
+                spring-source: SRC_SYS
+----
 
 == Native Payload Types
 

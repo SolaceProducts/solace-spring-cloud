@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder.inbound;
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.SolaceAckUtil;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
+import com.solace.spring.cloud.stream.binder.properties.SmfMessageReaderProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
@@ -43,6 +44,7 @@ public abstract class InboundXMLMessageListener implements Runnable {
 	final FlowReceiverContainer flowReceiverContainer;
 	final ConsumerDestination consumerDestination;
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
+	private final SmfMessageReaderProperties smfMessageReaderProperties;
 	final ThreadLocal<AttributeAccessor> attributesHolder;
 	private final BatchCollector batchCollector;
 	private final XMLMessageMapper xmlMessageMapper;
@@ -79,6 +81,7 @@ public abstract class InboundXMLMessageListener implements Runnable {
 		this.needHolder = needHolder;
 		this.needAttributes = needAttributes;
 		this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
+		this.smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties.getExtension());
 	}
 
 	abstract void handleMessage(Supplier<Message<?>> messageSupplier, Consumer<Message<?>> sendToConsumerHandler,
@@ -228,13 +231,13 @@ public abstract class InboundXMLMessageListener implements Runnable {
 
 	Message<?> createOneMessage(BytesXMLMessage bytesXMLMessage, AcknowledgmentCallback acknowledgmentCallback) {
 		setAttributesIfNecessary(bytesXMLMessage, acknowledgmentCallback);
-		return xmlMessageMapper.mapToSpring(bytesXMLMessage, acknowledgmentCallback, consumerProperties.getExtension());
+		return xmlMessageMapper.mapToSpring(bytesXMLMessage, acknowledgmentCallback, smfMessageReaderProperties);
 	}
 
 	Message<?> createBatchMessage(List<BytesXMLMessage> bytesXMLMessages,
 								  AcknowledgmentCallback acknowledgmentCallback) {
 		setBatchAttributesIfNecessary(bytesXMLMessages, null, acknowledgmentCallback);
-		return xmlMessageMapper.mapBatchedToSpring(bytesXMLMessages, acknowledgmentCallback, consumerProperties.getExtension());
+		return xmlMessageMapper.mapBatchedToSpring(bytesXMLMessages, acknowledgmentCallback, smfMessageReaderProperties);
 	}
 
 	void sendOneToConsumer(final Message<?> message, final BytesXMLMessage bytesXMLMessage)
@@ -297,5 +300,9 @@ public abstract class InboundXMLMessageListener implements Runnable {
 
 	public AtomicBoolean getStopFlag() {
 		return stopFlag;
+	}
+
+	public SmfMessageReaderProperties getSmfMessageReaderProperties() {
+		return smfMessageReaderProperties;
 	}
 }

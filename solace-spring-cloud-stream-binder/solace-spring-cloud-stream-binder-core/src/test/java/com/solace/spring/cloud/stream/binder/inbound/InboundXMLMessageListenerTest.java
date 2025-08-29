@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.inbound;
 
+import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerException;
 import com.solacesystems.jcsmp.JCSMPException;
@@ -11,6 +12,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,7 +34,7 @@ public class InboundXMLMessageListenerTest {
                 .thenThrow(new StaleSessionException("Session has become stale", new JCSMPException("Specific JCSMP exception")));
 
         BasicInboundXMLMessageListener inboundXMLMessageListener = new BasicInboundXMLMessageListener(
-                flowReceiverContainer, consumerDestination, null, null, null, null, null, null,
+                flowReceiverContainer, consumerDestination, new ExtendedConsumerProperties<>(new SolaceConsumerProperties()), null, null, null, null, null,
                 null, null, false);
 
         inboundXMLMessageListener.run();

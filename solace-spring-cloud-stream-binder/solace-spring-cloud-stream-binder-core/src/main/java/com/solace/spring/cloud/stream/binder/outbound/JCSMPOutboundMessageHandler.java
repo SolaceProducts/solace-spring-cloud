@@ -24,6 +24,8 @@ import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
 import com.solacesystems.jcsmp.transaction.RollbackException;
 import com.solacesystems.jcsmp.transaction.TransactedSession;
+import java.util.HashSet;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.BinderHeaders;
@@ -233,6 +235,18 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		}
 
 		try {
+			Map<String, String> headerNameMapping = properties.getExtension().getHeaderNameMapping();
+			if (headerNameMapping != null && !headerNameMapping.isEmpty()) {
+				Set<String> uniqueTargetHeaderNames = new HashSet<>(headerNameMapping.values());
+				if (uniqueTargetHeaderNames.size() < headerNameMapping.size()) {
+					MessagingException exception = new MessagingException(String.format(
+							"Two or more headers map to the same header name in headerNameMapping %s <outbound adapter %s>",
+							properties.getExtension().getHeaderNameMapping(), id));
+					LOGGER.warn(exception.getMessage());
+					throw exception;
+				}
+			}
+
 			producerManager.get(id);
 			if (properties.getExtension().isTransacted()) {
 				LOGGER.info("Creating transacted session  <message handler ID: {}>", id);

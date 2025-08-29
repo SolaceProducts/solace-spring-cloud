@@ -6,6 +6,7 @@ import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.messaging.HeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
+import com.solace.spring.cloud.stream.binder.properties.SmfMessageReaderProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SmfMessageWriterProperties;
@@ -346,6 +347,7 @@ public class JmsCompatibilityIT {
 		}
 
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 		XMLMessageConsumer messageConsumer = null;
 		try {
 			Set<Class<? extends XMLMessage>> processedMessageTypes = new HashSet<>();
@@ -356,7 +358,7 @@ public class JmsCompatibilityIT {
 				public void onReceive(BytesXMLMessage bytesXMLMessage) {
 					LOGGER.info("Got message {}", bytesXMLMessage);
 					try {
-						Message<?> msg = xmlMessageMapper.mapToSpring(bytesXMLMessage, null, consumerProperties);
+						Message<?> msg = xmlMessageMapper.mapToSpring(bytesXMLMessage, null, smfMessageReaderProperties);
 						if (msg.getPayload() instanceof byte[]) {
 							softly.assertThat(msg.getPayload()).isEqualTo("test".getBytes());
 							processedMessageTypes.add(BytesMessage.class);
@@ -436,6 +438,7 @@ public class JmsCompatibilityIT {
 		message.setBooleanProperty(SolaceBinderHeaders.SERIALIZED_PAYLOAD, true);
 
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 		XMLMessageConsumer messageConsumer = null;
 		try {
 			AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
@@ -445,7 +448,7 @@ public class JmsCompatibilityIT {
 				public void onReceive(BytesXMLMessage bytesXMLMessage) {
 					LOGGER.info("Got message {}", bytesXMLMessage);
 					try {
-						softly.assertThat(xmlMessageMapper.mapToSpring(bytesXMLMessage, null, consumerProperties).getPayload())
+						softly.assertThat(xmlMessageMapper.mapToSpring(bytesXMLMessage, null, smfMessageReaderProperties).getPayload())
 								.isEqualTo(payload);
 					} catch (Exception e) {
 						exceptionAtomicReference.set(e);
