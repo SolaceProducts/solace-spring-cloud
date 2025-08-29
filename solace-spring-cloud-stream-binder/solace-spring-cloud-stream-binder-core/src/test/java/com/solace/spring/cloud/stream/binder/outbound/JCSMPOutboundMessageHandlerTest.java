@@ -701,7 +701,7 @@ public class JCSMPOutboundMessageHandlerTest {
 		producerProperties.getExtension().setHeaderNameMapping(Map.of("k1", "v1", "k2", "v1"));
 
 		assertThatThrownBy(() -> messageHandler.start())
-				.hasRootCauseInstanceOf(MessagingException.class)
+				.hasRootCauseInstanceOf(IllegalArgumentException.class)
 				.extracting(throwable -> throwable.getCause().getMessage()).asString()
 				.startsWith("Two or more headers map to the same header name in headerNameMapping");
 	}

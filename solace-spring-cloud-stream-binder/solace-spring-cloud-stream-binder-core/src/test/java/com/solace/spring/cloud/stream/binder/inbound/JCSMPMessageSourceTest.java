@@ -17,7 +17,6 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
-import org.springframework.messaging.MessagingException;
 
 @Timeout(value = 10)
 @ExtendWith(MockitoExtension.class)
@@ -52,7 +51,7 @@ class JCSMPMessageSourceTest {
   void test_startFailedForBadHeaderNameMapping() {
     consumerProperties.getExtension().setHeaderNameMapping(Map.of("k1", "v1", "k2", "v1"));
     assertThatThrownBy(() -> messageSource.start())
-        .isInstanceOf(MessagingException.class)
+        .isInstanceOf(IllegalArgumentException.class)
         .hasMessageStartingWith(
             "Two or more keys map to the same header name in headerNameMapping");
   }

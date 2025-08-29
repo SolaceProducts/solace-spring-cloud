@@ -239,7 +239,7 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 			if (headerNameMapping != null && !headerNameMapping.isEmpty()) {
 				Set<String> uniqueTargetHeaderNames = new HashSet<>(headerNameMapping.values());
 				if (uniqueTargetHeaderNames.size() < headerNameMapping.size()) {
-					MessagingException exception = new MessagingException(String.format(
+					IllegalArgumentException exception = new IllegalArgumentException(String.format(
 							"Two or more headers map to the same header name in headerNameMapping %s <outbound adapter %s>",
 							properties.getExtension().getHeaderNameMapping(), id));
 					LOGGER.warn(exception.getMessage());

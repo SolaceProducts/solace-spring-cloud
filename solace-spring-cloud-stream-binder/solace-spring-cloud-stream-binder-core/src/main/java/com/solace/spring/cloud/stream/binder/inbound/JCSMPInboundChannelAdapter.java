@@ -112,7 +112,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
         if (headerNameMapping != null && !headerNameMapping.isEmpty()) {
             Set<String> targetHeaderNames = new HashSet<>(headerNameMapping.values());
             if (targetHeaderNames.size() < headerNameMapping.size()) {
-                MessagingException exception = new MessagingException(String.format(
+                IllegalArgumentException exception = new IllegalArgumentException(String.format(
                     "Two or more keys map to the same header name in headerNameMapping %s <inbound adapter %s>",
                     consumerProperties.getExtension().getHeaderNameMapping(), id));
                 logger.warn(exception.getMessage());
