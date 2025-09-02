@@ -2326,34 +2326,6 @@ public class XMLMessageMapperTest {
 		assertEquals("some-value", properties.getString("original-unmapped-header"));
 	}
 
-	//@Test
-	void testApplyHeaderNameMapping_DuplicateSpringHeadersToSolaceUserPropertyNameMapping()
-			throws SDTException {
-		Map<String, String> headerToUserPropertyKeyMapping = new LinkedHashMap<>();
-		headerToUserPropertyKeyMapping.put("original-timestamp-header", "timestamp");
-		headerToUserPropertyKeyMapping.put("original-app-header", "timestamp");
-
-		Message<?> springMessage = MessageBuilder.withPayload("test")
-				.setHeader("original-timestamp-header", "2025-01-01T00:00:00Z")
-				.setHeader("original-app-header", "test-app")
-				.setHeader("original-unmapped-header", "some-value").build();
-
-		SolaceProducerProperties producerProperties = new SolaceProducerProperties();
-		producerProperties.setHeaderNameMapping(headerToUserPropertyKeyMapping);
-		SmfMessageWriterProperties writerProperties = new SmfMessageWriterProperties(
-				producerProperties);
-
-		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(springMessage, writerProperties);
-
-		//Log contains warning about duplicate mapping
-		SDTMap properties = xmlMessage.getProperties();
-		assertEquals("2025-01-01T00:00:00Z", properties.getString("timestamp"));
-
-		assertEquals("2025-01-01T00:00:00Z", properties.getString("original-timestamp-header"));
-		assertEquals("test-app", properties.getString("original-app-header"));
-		assertEquals("some-value", properties.getString("original-unmapped-header"));
-	}
-
 	@Test
 	void testApplyHeaderNameMapping_SolaceUserPropertiesToSpringHeadersMapping() throws SDTException {
 		Map<String, String> headerToUserPropertyKeyMapping = new LinkedHashMap<>();
@@ -2509,7 +2481,7 @@ public class XMLMessageMapperTest {
 		headerToUserPropertyKeyMapping.put("original-timestamp-header", "timestamp");
 		headerToUserPropertyKeyMapping.put("original-app-header", "app");
 
-		List<String> excludedHeaders = List.of("original-timestamp-header", "original-app-header");
+		List<String> excludedHeaders = List.of("original-timestamp-header");
 
 		Message<?> springMessage = MessageBuilder.withPayload("test")
 				.setHeader("original-timestamp-header", "2025-01-01T00:00:00Z")
@@ -2530,7 +2502,7 @@ public class XMLMessageMapperTest {
 
 		//Excluded headers should not be present in the properties
 		assertNull(properties.getString("original-timestamp-header"));
-		assertNull(properties.getString("original-app-header"));
+		assertEquals("test-app", properties.getString("original-app-header"));
 		assertEquals("some-value", properties.getString("original-unmapped-header"));
 	}
 
