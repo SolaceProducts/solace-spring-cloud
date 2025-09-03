@@ -23,7 +23,7 @@
         <maven.compiler.target>17</maven.compiler.target>
         <maven.compiler.source>17</maven.compiler.source>
 
-        <solace.jcsmp.version>10.27.3</solace.jcsmp.version>
+        <solace.jcsmp.version>10.28.1</solace.jcsmp.version>
         <solace.jms.version>10.28.1</solace.jms.version>
         <sol-jcsmp-otel-integration.version>1.2.0</sol-jcsmp-otel-integration.version>
     </properties>
