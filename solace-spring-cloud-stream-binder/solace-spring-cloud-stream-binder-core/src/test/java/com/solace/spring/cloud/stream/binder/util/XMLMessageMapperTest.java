@@ -2321,8 +2321,8 @@ public class XMLMessageMapperTest {
 		assertEquals("2025-01-01T00:00:00Z", properties.getString("timestamp"));
 		assertEquals("test-app", properties.getString("app"));
 
-		assertEquals("2025-01-01T00:00:00Z", properties.getString("original-timestamp-header"));
-		assertEquals("test-app", properties.getString("original-app-header"));
+		assertNull(properties.getString("original-timestamp-header"));
+		assertNull(properties.getString("original-app-header"));
 		assertEquals("some-value", properties.getString("original-unmapped-header"));
 	}
 
@@ -2334,7 +2334,7 @@ public class XMLMessageMapperTest {
 		headerToUserPropertyKeyMapping.put("app", "mapped-app-header");
 
 		TextMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-		xmlMessage.setText("test");
+		xmlMessage.setText("test-payload");
 		SDTMap properties = JCSMPFactory.onlyInstance().createMap();
 		properties.putString("id", "12345");
 		properties.putString("timestamp", "2025-01-01T00:00:00Z");
@@ -2357,37 +2357,7 @@ public class XMLMessageMapperTest {
 		assertNotEquals("2025-01-01T00:00:00Z", springMessage.getHeaders().get("timestamp"));
 		assertNotNull(springMessage.getHeaders().get("id"));
 		assertNotNull(springMessage.getHeaders().get("timestamp"));
-		assertEquals("test-app", springMessage.getHeaders().get("app"));
-		assertEquals("some-value", springMessage.getHeaders().get("unmapped-user-prop"));
-	}
-
-	//@Test
-	void testApplyHeaderNameMapping_DuplicateSolaceUserPropertiesToSpringHeadersMapping()
-			throws SDTException {
-		Map<String, String> headerToUserPropertyKeyMapping = new LinkedHashMap<>();
-		headerToUserPropertyKeyMapping.put("timestamp", "mapped-timestamp-header");
-		headerToUserPropertyKeyMapping.put("app", "mapped-timestamp-header");
-
-		TextMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
-		xmlMessage.setText("test");
-		SDTMap properties = JCSMPFactory.onlyInstance().createMap();
-		properties.putString("timestamp", "2025-01-01T00:00:00Z");
-		properties.putString("app", "test-app");
-		properties.putString("unmapped-user-prop", "some-value");
-		xmlMessage.setProperties(properties);
-
-		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
-		consumerProperties.setHeaderNameMapping(headerToUserPropertyKeyMapping);
-		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
-
-		Message<?> springMessage = xmlMessageMapper.mapToSpring(xmlMessage, null, smfMessageReaderProperties);
-
-		assertEquals("2025-01-01T00:00:00Z", springMessage.getHeaders().get("mapped-timestamp-header"));
-
-		//id and timestamp is Spring Integration reserved headers, original values will not be preserved
-		assertNotEquals("2025-01-01T00:00:00Z", springMessage.getHeaders().get("timestamp"));
-		assertNotNull(springMessage.getHeaders().get("timestamp"));
-		assertEquals("test-app", springMessage.getHeaders().get("app"));
+		assertNull(springMessage.getHeaders().get("app"));
 		assertEquals("some-value", springMessage.getHeaders().get("unmapped-user-prop"));
 	}
 
@@ -2473,6 +2443,10 @@ public class XMLMessageMapperTest {
 		assertEquals(42, properties.getInteger("num").intValue());
 		assertEquals(true, properties.getBoolean("bool"));
 		assertEquals("unmapped-value", properties.getString("unmapped-header"));
+
+		assertNull(properties.getString("string-header"));
+		assertNull(properties.getInteger("number-header"));
+		assertNull(properties.getBoolean("boolean-header"));
 	}
 
 	@Test
@@ -2502,7 +2476,8 @@ public class XMLMessageMapperTest {
 
 		//Excluded headers should not be present in the properties
 		assertNull(properties.getString("original-timestamp-header"));
-		assertEquals("test-app", properties.getString("original-app-header"));
+		//original-app-header is mapped to "app" header - original-app-header should not be present in the properties
+		assertNull(properties.getString("original-app-header"));
 		assertEquals("some-value", properties.getString("original-unmapped-header"));
 	}
 
@@ -2537,6 +2512,7 @@ public class XMLMessageMapperTest {
 		assertEquals("some-value", springMessage.getHeaders().get("unmapped-user-prop"));
 
 		//Excluded header should not be present in the Spring message headers, and won't be mapped
+		//Exclusion is applied before header mapping
 		assertNull(springMessage.getHeaders().get("mapped-excluded-header"));
 		assertNull(springMessage.getHeaders().get("excluded-header"));
 	}

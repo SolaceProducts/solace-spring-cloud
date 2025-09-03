@@ -114,7 +114,7 @@ public class XMLMessageMapper {
 			String targetKey = keyMapping.getValue();
 
       if (result.containsKey(sourceKey)) {
-        result.put(targetKey, result.get(sourceKey));
+        result.put(targetKey, result.remove(sourceKey));
       }
 		}
 		return Collections.unmodifiableMap(result);
