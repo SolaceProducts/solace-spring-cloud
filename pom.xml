@@ -21,7 +21,7 @@
         <repoName>SolaceProducts</repoName>
 
         <!-- This is the version of Spring Cloud we have targeted for this build -->
-        <spring.cloud.version>2024.0.0</spring.cloud.version>
+        <spring.cloud.version>2024.0.2</spring.cloud.version>
 
         <!-- This is the version of Solace Spring Boot we have targeted for this build -->
         <!-- This also dictates the expected version of Spring Boot -->
@@ -30,7 +30,7 @@
 
         <!-- Override spring-boot version from solace-spring-boot to latest patch version -->
         <!-- Remove this if the next version of solace-spring-boot works fine -->
-        <spring.boot.version>3.4.4</spring.boot.version>
+        <spring.boot.version>3.4.9</spring.boot.version>
 
         <solace.spring.cloud.stream-starter.version>5.8.2-SNAPSHOT</solace.spring.cloud.stream-starter.version>
 
