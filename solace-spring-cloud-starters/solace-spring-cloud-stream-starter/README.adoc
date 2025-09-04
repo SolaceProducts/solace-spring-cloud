@@ -1213,14 +1213,14 @@ spring:
         bindings:
           uppercase-in-0:
             consumer:
-              headerNameMapping:
+              header-name-mapping:
                 timestamp: original-timestamp
                 id: original-message-id
                 contentType: original-content-type
                 priority: original-priority
           uppercase-out-0:
             producer:
-              headerNameMapping:
+              header-name-mapping:
                 original-timestamp: timestamp
                 original-message-id: id
                 original-content-type: contentType
