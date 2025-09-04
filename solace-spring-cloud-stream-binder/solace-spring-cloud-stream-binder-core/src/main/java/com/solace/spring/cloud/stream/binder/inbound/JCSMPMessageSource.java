@@ -4,6 +4,7 @@ import com.solace.spring.cloud.stream.binder.health.SolaceBinderHealthAccessor;
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.JCSMPAcknowledgementCallbackFactory;
 import com.solace.spring.cloud.stream.binder.inbound.acknowledge.SolaceAckUtil;
 import com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor;
+import com.solace.spring.cloud.stream.binder.properties.SmfMessageReaderProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.EndpointProvider;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
@@ -21,6 +22,9 @@ import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPTransportException;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
@@ -52,6 +56,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private final EndpointProperties endpointProperties;
 	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;
+	private final SmfMessageReaderProperties smfMessageReaderProperties;
 	private FlowReceiverContainer flowReceiverContainer;
 	private JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
 	private XMLMessageMapper xmlMessageMapper;
@@ -78,6 +83,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 		this.consumerProperties = consumerProperties;
 		this.endpointProperties = endpointProperties;
 		this.solaceMeterAccessor = solaceMeterAccessor;
+		this.smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties.getExtension());
 	}
 
 	@Override
@@ -157,7 +163,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private Message<?> processMessage(MessageContainer messageContainer) {
 		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createCallback(messageContainer);
 		try {
-			return xmlMessageMapper.mapToSpring(messageContainer.getMessage(), acknowledgmentCallback, true, consumerProperties.getExtension());
+			return xmlMessageMapper.mapToSpring(messageContainer.getMessage(), acknowledgmentCallback, true, smfMessageReaderProperties);
 		} catch (Exception e) {
 			//TODO If one day the errorChannel or attributesHolder can be retrieved, use those instead
 			logger.warn("XMLMessage {} cannot be consumed. It will be requeued",
@@ -184,7 +190,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			return xmlMessageMapper.mapBatchedToSpring(batchedMessages.get()
 					.stream()
 					.map(MessageContainer::getMessage)
-					.collect(Collectors.toList()), acknowledgmentCallback, true, consumerProperties.getExtension());
+					.collect(Collectors.toList()), acknowledgmentCallback, true, smfMessageReaderProperties);
 		} catch (Exception e) {
 			logger.warn("Message batch cannot be consumed. It will be requeued", e);
 			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {
@@ -211,6 +217,18 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			if (isRunning()) {
 				logger.warn("Nothing to do, message source {} is already running", id);
 				return;
+			}
+
+			Map<String, String> headerNameMapping = consumerProperties.getExtension().getHeaderNameMapping();
+			if (headerNameMapping != null && !headerNameMapping.isEmpty()) {
+				Set<String> targetHeaderNames = new HashSet<>(headerNameMapping.values());
+				if (targetHeaderNames.size() < headerNameMapping.size()) {
+					IllegalArgumentException exception = new IllegalArgumentException(String.format(
+							"Two or more keys map to the same header name in headerNameMapping %s <inbound adapter %s>",
+							consumerProperties.getExtension().getHeaderNameMapping(), id));
+					logger.warn(exception.getMessage());
+					throw exception;
+				}
 			}
 
 			try {

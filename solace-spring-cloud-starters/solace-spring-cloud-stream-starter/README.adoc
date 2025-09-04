@@ -384,6 +384,13 @@ The list of headers to exclude when converting consumed Solace message to Spring
 +
 Default: Empty `List&lt;String&gt;`
 
+headerNameMapping::
+Mapping from Solace message user property names to Spring message header names. Useful for retaining Solace message user properties that have the same names as reserved Spring message headers, such as `id`, `timestamp`, `contentType`, `priority`, `correlationId`, `sequenceNumber`, `replyChannel`, `errorChannel`, etc.
++
+Default: Empty `Map&lt;String,String&gt;`
++
+See: <<Header Name Mapping>>
+
 ==== Solace Producer Properties
 
 The following properties are available for Solace producers only and must be prefixed with `spring.cloud.stream.solace.bindings.&lt;bindingName&gt;.producer.` where `bindingName` looks something like `functionName-out-0` as defined in https://docs.spring.io/spring-cloud-stream/reference/{scst-version}/spring-cloud-stream/functional-binding-names.html[Functional Binding Names].
@@ -521,6 +528,13 @@ Default: Empty `Map&lt;String,String[]&gt;` +
 See: <<Overview>> for more info on how this binder uses topic-to-queue mapping to implement Spring Cloud Streams consumer groups.
 +
 NOTE: Does not apply when `destinationType=queue`.
+
+headerNameMapping::
+Mapping from Spring message header names to Solace message user property names. Useful when you need to preserve the original values of Spring message headers that conflict with reserved header names such as `id`, `timestamp`, `contentType`, `priority`, `correlationId`, `sequenceNumber`, `replyChannel`, `errorChannel`, etc.
++
+Default: Empty `Map&lt;String,String&gt;`
++
+See: <<Header Name Mapping>>
 
 ==== Solace Connection Health-Check Properties
 
@@ -1181,6 +1195,37 @@ public Function<Message<SDTMap>, Message<SDTMap>> transform() {
 If the consumer binding was configured with `maxAttempts > 1`, then on the following reprocessing attempts, the payload will still contain the key `"new-key"` from the previous attempt.
 
 If this behavior is undesirable, then you should configure your consumers `maxAttempts` to `1` and rely on <<Message Redelivery>> to handle reprocessing.
+
+== Header Name Mapping
+
+The Solace Spring Cloud Stream Binder allows you to configure custom mappings between Spring Message header names and JCSMP User Property keys. This feature provides flexibility when you need to preserve the original values of message headers that would otherwise be overwritten by the Spring Cloud Stream reserved headers, such as `id`, `timestamp`, `contentType`, `priority`, `correlationId`, `sequenceNumber`, `replyChannel`, `errorChannel`, etc.
+
+Header name mapping can be configured per binding or as default configuration for all bindings.
+
+.Example: consumer and producer header name mapping:
+
+[source,yaml]
+----
+spring:
+  cloud:
+    stream:
+      solace:
+        bindings:
+          uppercase-in-0:
+            consumer:
+              header-name-mapping:
+                timestamp: original-timestamp
+                id: original-message-id
+                contentType: original-content-type
+                priority: original-priority
+          uppercase-out-0:
+            producer:
+              header-name-mapping:
+                original-timestamp: timestamp
+                original-message-id: id
+                original-content-type: contentType
+                original-priority: priority
+----
 
 == Consumer Bindings Pause/Resume
 

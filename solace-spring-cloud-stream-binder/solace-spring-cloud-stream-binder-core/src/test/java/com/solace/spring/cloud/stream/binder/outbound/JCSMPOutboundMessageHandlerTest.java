@@ -694,4 +694,15 @@ public class JCSMPOutboundMessageHandlerTest {
 				.build();
 		return createCorrelationKey(correlationData, msg);
 	}
+
+	@CartesianTest(name = "[{index}] transacted={0}")
+	public void test_startFailedForBadHeaderNameMapping(@Values(booleans = {false, true}) boolean transacted) {
+		producerProperties.getExtension().setTransacted(transacted);
+		producerProperties.getExtension().setHeaderNameMapping(Map.of("k1", "v1", "k2", "v1"));
+
+		assertThatThrownBy(() -> messageHandler.start())
+				.hasRootCauseInstanceOf(IllegalArgumentException.class)
+				.extracting(throwable -> throwable.getCause().getMessage()).asString()
+				.startsWith("Two or more headers map to the same header name in headerNameMapping");
+	}
 }

@@ -19,6 +19,7 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.XMLMessage.Outcome;
 import com.solacesystems.jcsmp.impl.JCSMPBasicSession;
 import com.solacesystems.jcsmp.transaction.RollbackException;
+import java.util.Map;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,6 +106,18 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
                     consumerProperties.getConcurrency(), id));
             logger.warn(exception.getMessage());
             throw exception;
+        }
+
+        Map<String, String> headerNameMapping = consumerProperties.getExtension().getHeaderNameMapping();
+        if (headerNameMapping != null && !headerNameMapping.isEmpty()) {
+            Set<String> targetHeaderNames = new HashSet<>(headerNameMapping.values());
+            if (targetHeaderNames.size() < headerNameMapping.size()) {
+                IllegalArgumentException exception = new IllegalArgumentException(String.format(
+                    "Two or more keys map to the same header name in headerNameMapping %s <inbound adapter %s>",
+                    consumerProperties.getExtension().getHeaderNameMapping(), id));
+                logger.warn(exception.getMessage());
+                throw exception;
+            }
         }
 
         if (jcsmpSession instanceof JCSMPBasicSession jcsmpBasicSession

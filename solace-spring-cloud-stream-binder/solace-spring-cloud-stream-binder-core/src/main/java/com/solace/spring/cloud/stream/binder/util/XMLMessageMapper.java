@@ -7,8 +7,9 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
-import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
+import com.solace.spring.cloud.stream.binder.properties.SmfMessageReaderProperties;
 import com.solace.spring.cloud.stream.binder.properties.SmfMessageWriterProperties;
+import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solacesystems.common.util.ByteArray;
 import com.solacesystems.jcsmp.BytesMessage;
 import com.solacesystems.jcsmp.BytesXMLMessage;
@@ -39,7 +40,6 @@ import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -89,13 +89,44 @@ public class XMLMessageMapper {
 				writerProperties);
 	}
 
+	Map<String, Object> applyHeaderNameMapping(final Map<String, Object> sourceHeaders,
+			Map<String, String> headerKeyMapping) {
+		if (sourceHeaders == null || sourceHeaders.isEmpty() || headerKeyMapping == null
+				|| headerKeyMapping.isEmpty()) {
+			return sourceHeaders;
+		}
+
+		//Optimization for performance: check if there are any applicable mappings
+		boolean hasApplicableMappings = false;
+		for (String sourceKey : headerKeyMapping.keySet()) {
+			if (sourceHeaders.containsKey(sourceKey)) {
+				hasApplicableMappings = true;
+				break;
+			}
+		}
+		if (!hasApplicableMappings) {
+			return sourceHeaders;
+		}
+
+		Map<String, Object> result = new HashMap<>(sourceHeaders);
+		for (Map.Entry<String, String> keyMapping : headerKeyMapping.entrySet()) {
+			String sourceKey = keyMapping.getKey();
+			String targetKey = keyMapping.getValue();
+
+      if (result.containsKey(sourceKey)) {
+        result.put(targetKey, result.remove(sourceKey));
+      }
+		}
+		return Collections.unmodifiableMap(result);
+	}
+
 	// exposed for testing
 	XMLMessage mapToSmf(Object payload,
 						Map<String, Object> headers,
 						UUID messageId,
 						SmfMessageWriterProperties writerProperties) {
 		XMLMessage xmlMessage;
-		SDTMap metadata = mapHeadersToSmf(headers, writerProperties);
+		SDTMap metadata = mapHeadersToSmf(applyHeaderNameMapping(headers, writerProperties.getHeaderNameMapping()), writerProperties);
 		rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
 
 		if (payload instanceof byte[]) {
@@ -222,18 +253,18 @@ public class XMLMessageMapper {
 	}
 
 	public Message<List<?>> mapBatchedToSpring(List<? extends XMLMessage> xmlMessages,
-											   AcknowledgmentCallback acknowledgmentCallback, SolaceConsumerProperties solaceConsumerProperties)
+											   AcknowledgmentCallback acknowledgmentCallback, SmfMessageReaderProperties smfMessageReaderProperties)
 			throws SolaceMessageConversionException {
-		return mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, solaceConsumerProperties);
+		return mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, smfMessageReaderProperties);
 	}
 
 	public Message<List<?>> mapBatchedToSpring(List<? extends XMLMessage> xmlMessages,
 											   AcknowledgmentCallback acknowledgmentCallback,
-											   boolean setRawMessageHeader, SolaceConsumerProperties solaceConsumerProperties) throws SolaceMessageConversionException {
+											   boolean setRawMessageHeader, SmfMessageReaderProperties smfMessageReaderProperties) throws SolaceMessageConversionException {
 		List<Map<String, Object>> batchedHeaders = new ArrayList<>();
 		List<Object> batchedPayloads = new ArrayList<>();
 		for (XMLMessage xmlMessage : xmlMessages) {
-			Message<?> message = mapToSpringInternal(xmlMessage, solaceConsumerProperties).build();
+			Message<?> message = mapToSpringInternal(xmlMessage, smfMessageReaderProperties).build();
 			batchedHeaders.add(message.getHeaders());
 			batchedPayloads.add(message.getPayload());
 		}
@@ -244,24 +275,20 @@ public class XMLMessageMapper {
 				.build();
 	}
 
-	public Message<?> mapToSpring(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback, SolaceConsumerProperties solaceConsumerProperties)
+	public Message<?> mapToSpring(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback, SmfMessageReaderProperties smfMessageReaderProperties)
 			throws SolaceMessageConversionException {
-		return mapToSpring(xmlMessage, acknowledgmentCallback, false, solaceConsumerProperties);
+		return mapToSpring(xmlMessage, acknowledgmentCallback, false, smfMessageReaderProperties);
 	}
 
 	public Message<?> mapToSpring(XMLMessage xmlMessage, AcknowledgmentCallback acknowledgmentCallback,
-								  boolean setRawMessageHeader, SolaceConsumerProperties solaceConsumerProperties) throws SolaceMessageConversionException {
-		return injectRootSpringHeaders(mapToSpringInternal(xmlMessage, solaceConsumerProperties), acknowledgmentCallback, setRawMessageHeader ?
+								  boolean setRawMessageHeader, SmfMessageReaderProperties smfMessageReaderProperties) throws SolaceMessageConversionException {
+		return injectRootSpringHeaders(mapToSpringInternal(xmlMessage, smfMessageReaderProperties), acknowledgmentCallback, setRawMessageHeader ?
 				xmlMessage : null).build();
 	}
 
-	private AbstractIntegrationMessageBuilder<?> mapToSpringInternal(XMLMessage xmlMessage, SolaceConsumerProperties solaceConsumerProperties)
+	private AbstractIntegrationMessageBuilder<?> mapToSpringInternal(XMLMessage xmlMessage, SmfMessageReaderProperties smfMessageReaderProperties)
 			throws SolaceMessageConversionException {
 		SDTMap metadata = xmlMessage.getProperties();
-		//TODO This needs to be made into a Set for performance reasons.
-		// Do this by taking the same approach as SmfMessageWriterProperties.
-		// i.e. create a corresponding SmfMessageReaderProperties class (which we need to do anyway).
-		List<String> excludedHeaders = solaceConsumerProperties.getHeaderExclusions();
 
 		Object payload;
 		if (xmlMessage instanceof BytesMessage) {
@@ -316,7 +343,7 @@ public class XMLMessageMapper {
 
 		AbstractIntegrationMessageBuilder<?> builder = MESSAGE_BUILDER_FACTORY
 				.withPayload(payload)
-				.copyHeaders(mapHeadersToSpring(metadata, excludedHeaders))
+				.copyHeaders(mapHeadersToSpring(metadata, smfMessageReaderProperties))
 				.setHeaderIfAbsent(MessageHeaders.CONTENT_TYPE, xmlMessage.getHTTPContentType());
 
 		if (isNullPayload) {
@@ -328,7 +355,7 @@ public class XMLMessageMapper {
 			if (!header.getValue().isReadable()) {
 				continue;
 			}
-			if (excludedHeaders != null && excludedHeaders.contains(header.getKey())) {
+			if (smfMessageReaderProperties.getHeaderExclusions() != null && smfMessageReaderProperties.getHeaderExclusions().contains(header.getKey())) {
 				continue;
 			}
 			if (ignoredHeaderProperties.contains(header.getKey())) {
@@ -365,6 +392,7 @@ public class XMLMessageMapper {
 					SolaceBinderHeaderMeta.META.containsKey(header.getKey())) {
 				continue;
 			}
+
 			if (writerProperties.getHeaderExclusions() != null &&
 					writerProperties.getHeaderExclusions().contains(header.getKey())) {
 				continue;
@@ -398,13 +426,13 @@ public class XMLMessageMapper {
 		return metadata;
 	}
 
-	MessageHeaders mapHeadersToSpring(SDTMap metadata, Collection<String> excludedHeaders) {
+	MessageHeaders mapHeadersToSpring(SDTMap metadata, SmfMessageReaderProperties smfMessageReaderProperties) {
 		if (metadata == null) {
 			return new MessageHeaders(Collections.emptyMap());
 		}
 
-		final Collection<String> exclusionList =
-				excludedHeaders != null ? excludedHeaders : Collections.emptyList();
+		final Set<String> exclusionList = smfMessageReaderProperties.getHeaderExclusions() != null
+				? smfMessageReaderProperties.getHeaderExclusions() : Collections.emptySet();
 
 		Map<String,Object> headers = new HashMap<>();
 
@@ -461,7 +489,7 @@ public class XMLMessageMapper {
 			headers.put(SolaceBinderHeaders.MESSAGE_VERSION, messageVersion);
 		}
 
-		return new MessageHeaders(headers);
+		return new MessageHeaders(applyHeaderNameMapping(headers, smfMessageReaderProperties.getHeaderNameMapping()));
 	}
 
 	private void addSDTMapObject(SDTMap sdtMap, Set<String> serializedHeaders, String key, Object object,

@@ -10,6 +10,7 @@ import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
+import com.solace.spring.cloud.stream.binder.properties.SmfMessageReaderProperties;
 import com.solace.spring.cloud.stream.binder.properties.SmfMessageWriterProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
@@ -29,6 +30,7 @@ import com.solacesystems.jcsmp.StreamMessage;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.XMLContentMessage;
 import com.solacesystems.jcsmp.XMLMessage;
+import java.util.LinkedHashMap;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.assertj.core.api.Assertions;
@@ -106,6 +108,10 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.junit.jupiter.params.provider.Arguments.arguments;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 public class XMLMessageMapperTest {
@@ -880,8 +886,9 @@ public class XMLMessageMapperTest {
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
-		Message<?> springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
-		Mockito.verify(xmlMessageMapper).mapToSpring(xmlMessage, acknowledgmentCallback, false, consumerProperties);
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
+		Message<?> springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
+		Mockito.verify(xmlMessageMapper).mapToSpring(xmlMessage, acknowledgmentCallback, false, smfMessageReaderProperties);
 
 		validateSpringPayload(springMessage.getPayload(), expectedPayload);
 		validateSpringHeaders(springMessage.getHeaders(), xmlMessage);
@@ -911,8 +918,9 @@ public class XMLMessageMapperTest {
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
-		Message<List<?>> springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, consumerProperties);
-		Mockito.verify(xmlMessageMapper).mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, consumerProperties);
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
+		Message<List<?>> springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, smfMessageReaderProperties);
+		Mockito.verify(xmlMessageMapper).mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, smfMessageReaderProperties);
 
 		validateSpringBatchPayload(springMessage.getPayload(), expectedPayloads);
 		validateSpringBatchHeaders(springMessage.getHeaders(), xmlMessages);
@@ -936,7 +944,8 @@ public class XMLMessageMapperTest {
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
-		Message<?> springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, true, consumerProperties);
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
+		Message<?> springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, true, smfMessageReaderProperties);
 
 		validateSpringPayload(springMessage.getPayload(), expectedPayload);
 		validateSpringHeaders(springMessage.getHeaders(), xmlMessage);
@@ -966,7 +975,8 @@ public class XMLMessageMapperTest {
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
-		Message<List<?>> springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, true, consumerProperties);
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
+		Message<List<?>> springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, true, smfMessageReaderProperties);
 
 		validateSpringBatchPayload(springMessage.getPayload(), expectedPayloads);
 		validateSpringBatchHeaders(springMessage.getHeaders(), xmlMessages);
@@ -997,19 +1007,20 @@ public class XMLMessageMapperTest {
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 		Message<?> springMessage;
 		MessageHeaders springMessageHeaders;
 		if (batchMode) {
 			List<MT> xmlMessages = Collections.singletonList(xmlMessage);
-			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, consumerProperties);
-			Mockito.verify(xmlMessageMapper).mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, consumerProperties);
+			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, smfMessageReaderProperties);
+			Mockito.verify(xmlMessageMapper).mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, smfMessageReaderProperties);
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
 					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
-			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
-			Mockito.verify(xmlMessageMapper).mapToSpring(xmlMessage, acknowledgmentCallback, false, consumerProperties);
+			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
+			Mockito.verify(xmlMessageMapper).mapToSpring(xmlMessage, acknowledgmentCallback, false, smfMessageReaderProperties);
 			springMessageHeaders = springMessage.getHeaders();
 		}
 
@@ -1118,20 +1129,21 @@ public class XMLMessageMapperTest {
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 		Message<?> springMessage;
 		MessageHeaders springMessageHeaders;
 		if (batchMode) {
 			List<TextMessage> xmlMessages = Collections.singletonList(xmlMessage);
-			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, consumerProperties);
-			Mockito.verify(xmlMessageMapper).mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, consumerProperties);
+			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, smfMessageReaderProperties);
+			Mockito.verify(xmlMessageMapper).mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, smfMessageReaderProperties);
 
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
 							.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
-			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
-			Mockito.verify(xmlMessageMapper).mapToSpring(xmlMessage, acknowledgmentCallback, false, consumerProperties);
+			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
+			Mockito.verify(xmlMessageMapper).mapToSpring(xmlMessage, acknowledgmentCallback, false, smfMessageReaderProperties);
 			springMessageHeaders = springMessage.getHeaders();
 		}
 
@@ -1264,21 +1276,22 @@ public class XMLMessageMapperTest {
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 
 		Message<?> springMessage;
 		MessageHeaders springMessageHeaders;
 		if (batchMode) {
 			List<TextMessage> xmlMessages = Collections.singletonList(xmlMessage);
-			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, consumerProperties);
-			Mockito.verify(xmlMessageMapper).mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, consumerProperties);
+			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, smfMessageReaderProperties);
+			Mockito.verify(xmlMessageMapper).mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, smfMessageReaderProperties);
 
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
 					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
-			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
-			Mockito.verify(xmlMessageMapper).mapToSpring(xmlMessage, acknowledgmentCallback, false, consumerProperties);
+			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
+			Mockito.verify(xmlMessageMapper).mapToSpring(xmlMessage, acknowledgmentCallback, false, smfMessageReaderProperties);
 			springMessageHeaders = springMessage.getHeaders();
 		}
 
@@ -1328,21 +1341,22 @@ public class XMLMessageMapperTest {
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 
 		Message<?> springMessage;
 		MessageHeaders springMessageHeaders;
 		if (batchMode) {
 			List<TextMessage> xmlMessages = Collections.singletonList(xmlMessage);
-			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, consumerProperties);
-			Mockito.verify(xmlMessageMapper).mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, consumerProperties);
+			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, smfMessageReaderProperties);
+			Mockito.verify(xmlMessageMapper).mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, smfMessageReaderProperties);
 
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
 					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
-			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
-			Mockito.verify(xmlMessageMapper).mapToSpring(xmlMessage, acknowledgmentCallback, false, consumerProperties);
+			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
+			Mockito.verify(xmlMessageMapper).mapToSpring(xmlMessage, acknowledgmentCallback, false, smfMessageReaderProperties);
 			springMessageHeaders = springMessage.getHeaders();
 		}
 
@@ -1383,16 +1397,17 @@ public class XMLMessageMapperTest {
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 		MapAssert<String, Object> headersAssert;
 		if (batchMode) {
 			headersAssert = Assertions.assertThat(Objects.requireNonNull(xmlMessageMapper
-									.mapBatchedToSpring(Collections.singletonList(xmlMessage), acknowledgmentCallback, consumerProperties)
+									.mapBatchedToSpring(Collections.singletonList(xmlMessage), acknowledgmentCallback, smfMessageReaderProperties)
 									.getHeaders()
 					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class))
 					.get(0))
 					.asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class));
 		} else {
-			headersAssert = Assertions.assertThat(xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties)
+			headersAssert = Assertions.assertThat(xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties)
 					.getHeaders());
 		}
 		headersAssert.extractingByKey(SolaceHeaders.DELIVERY_COUNT).isEqualTo(deliveryCount);
@@ -1415,18 +1430,19 @@ public class XMLMessageMapperTest {
 
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 
 		Message<?> springMessage;
 		MessageHeaders springMessageHeaders;
 		if (batchMode) {
 			List<TextMessage> xmlMessages = Collections.singletonList(xmlMessage);
-			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, consumerProperties);
+			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, smfMessageReaderProperties);
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
 					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
-			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
+			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
 			springMessageHeaders = springMessage.getHeaders();
 		}
 
@@ -1446,18 +1462,19 @@ public class XMLMessageMapperTest {
 		BytesMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 
 		Message<?> springMessage;
 		MessageHeaders springMessageHeaders;
 		if (batchMode) {
 			List<BytesMessage> xmlMessages = Collections.singletonList(xmlMessage);
-			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, consumerProperties);
+			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, smfMessageReaderProperties);
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
 					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
-			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
+			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
 			springMessageHeaders = springMessage.getHeaders();
 		}
 
@@ -1474,8 +1491,9 @@ public class XMLMessageMapperTest {
 		xmlMessage.writeBytes(payload); // Write Payload as XML Attachment
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 
-		Message<?> springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
+		Message<?> springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
 		MessageHeaders springMessageHeaders = springMessage.getHeaders();
 
 		assertNull(springMessageHeaders.get(SolaceBinderHeaders.NULL_PAYLOAD, Boolean.class));
@@ -1499,13 +1517,14 @@ public class XMLMessageMapperTest {
 		xmlMessage.setProperties(metadata);
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 
 		Message<?> springMessage;
 		if (batchMode) {
 			springMessage = xmlMessageMapper.mapBatchedToSpring(Collections.singletonList(xmlMessage),
-					acknowledgmentCallback, consumerProperties);
+					acknowledgmentCallback, smfMessageReaderProperties);
 		} else {
-			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
+			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
 		}
 
 		if (batchMode) {
@@ -1609,7 +1628,8 @@ public class XMLMessageMapperTest {
 		List<String> serializedHeaders = Arrays.asList(key, key);
 		sdtMap.putString(SolaceBinderHeaders.SERIALIZED_HEADERS, objectWriter.writeValueAsString(serializedHeaders));
 
-		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap, List.of());
+		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap,
+				new SmfMessageReaderProperties(new SolaceConsumerProperties()));
 
 		assertThat(messageHeaders.keySet(), hasItem(key));
 		assertThat(messageHeaders.keySet(), not(hasItem(SolaceBinderHeaders.SERIALIZED_HEADERS)));
@@ -1623,25 +1643,11 @@ public class XMLMessageMapperTest {
 		SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
 		sdtMap.putObject(key, null);
 
-		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap, List.of());
+		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap,
+				new SmfMessageReaderProperties(new SolaceConsumerProperties()));
 
 		assertThat(messageHeaders.keySet(), hasItem(key));
 		assertNull(messageHeaders.get(key));
-	}
-
-	@Test
-	void testMapSDTMapToMessageHeaders_WithNullExcludedHeader() throws Exception {
-		SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
-		for (int i = 0; i < 10; i++) {
-			sdtMap.putObject("headerKey" + i, UUID.randomUUID().toString());
-		}
-
-		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap, null);
-
-		for (int i = 0; i < 10; i++) {
-			String key = "headerKey" + i;
-			assertEquals(sdtMap.get(key), messageHeaders.get(key));
-		}
 	}
 
 	@ParameterizedTest(name = "[{index}] batchMode={0}")
@@ -1655,6 +1661,7 @@ public class XMLMessageMapperTest {
 		AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
 		consumerProperties.setHeaderExclusions(excludedHeaders);
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 
 		SDTMap metadata = JCSMPFactory.onlyInstance().createMap();
 		Mockito.when(xmlMessage.getProperties()).thenReturn(metadata);
@@ -1666,13 +1673,13 @@ public class XMLMessageMapperTest {
 		MessageHeaders springMessageHeaders;
 		if (batchMode) {
 			List<BytesMessage> xmlMessages = Collections.singletonList(xmlMessage);
-			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, consumerProperties);
+			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, smfMessageReaderProperties);
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
 					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
-			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
+			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
 			springMessageHeaders = springMessage.getHeaders();
 		}
 
@@ -1694,7 +1701,10 @@ public class XMLMessageMapperTest {
 		}
 
 		List<String> excludedHeaders = List.of("headerKey1", "headerKey2", "headerKey5");
-		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap, excludedHeaders);
+		SolaceConsumerProperties solaceConsumerProperties = new SolaceConsumerProperties();
+		solaceConsumerProperties.setHeaderExclusions(excludedHeaders);
+		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap,
+				new SmfMessageReaderProperties(solaceConsumerProperties));
 
 		for (int i = 0; i < 10; i++) {
 			String key = "headerKey" + i;
@@ -1714,7 +1724,10 @@ public class XMLMessageMapperTest {
 		sdtMap.putObject("retainedHeader", "test");
 
 		List<String> excludedHeaders = List.of(SolaceBinderHeaders.MESSAGE_VERSION, SolaceBinderHeaders.SERIALIZED_HEADERS);
-		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap, excludedHeaders);
+		SolaceConsumerProperties solaceConsumerProperties = new SolaceConsumerProperties();
+		solaceConsumerProperties.setHeaderExclusions(excludedHeaders);
+		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap,
+				new SmfMessageReaderProperties(solaceConsumerProperties));
 
 		sdtMap.keySet().forEach(key -> {
 			if (excludedHeaders.contains(key)) {
@@ -1739,7 +1752,8 @@ public class XMLMessageMapperTest {
 		sdtMap.putString(SolaceBinderHeaders.SERIALIZED_HEADERS, objectWriter.writeValueAsString(serializedHeaders));
 		sdtMap.putString(SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING, "base64");
 
-		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap, List.of());
+		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap,
+				new SmfMessageReaderProperties(new SolaceConsumerProperties()));
 
 		assertThat(messageHeaders.keySet(), hasItem(key));
 		assertThat(messageHeaders.keySet(), not(hasItem(SolaceBinderHeaders.SERIALIZED_HEADERS)));
@@ -1754,7 +1768,8 @@ public class XMLMessageMapperTest {
 		Set<String> serializedHeaders = Collections.singleton(key);
 		sdtMap.putString(SolaceBinderHeaders.SERIALIZED_HEADERS, objectWriter.writeValueAsString(serializedHeaders));
 
-		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap, List.of());
+		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap,
+				new SmfMessageReaderProperties(new SolaceConsumerProperties()));
 
 		assertThat(messageHeaders.keySet(), not(hasItem(key)));
 		assertThat(messageHeaders.keySet(), not(hasItem(SolaceBinderHeaders.SERIALIZED_HEADERS)));
@@ -1769,7 +1784,8 @@ public class XMLMessageMapperTest {
 		sdtMap.putString(SolaceBinderHeaders.SERIALIZED_HEADERS, objectWriter.writeValueAsString(serializedHeaders));
 		sdtMap.putString(SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING, "base64");
 
-		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap, List.of());
+		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap,
+				new SmfMessageReaderProperties(new SolaceConsumerProperties()));
 
 		assertThat(messageHeaders.keySet(), hasItem(key));
 		assertNull(messageHeaders.get(key));
@@ -1787,7 +1803,7 @@ public class XMLMessageMapperTest {
 		sdtMap.putString(SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING, "abc");
 
 		SolaceMessageConversionException exception = assertThrows(SolaceMessageConversionException.class,
-				() -> xmlMessageMapper.mapHeadersToSpring(sdtMap, List.of()));
+				() -> xmlMessageMapper.mapHeadersToSpring(sdtMap, new SmfMessageReaderProperties(new SolaceConsumerProperties())));
 		assertThat(exception.getMessage(), containsString("encoding is not supported"));
 	}
 
@@ -1799,7 +1815,8 @@ public class XMLMessageMapperTest {
 			sdtMap.putBytes(header, value);
 		}
 
-		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap, List.of());
+		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap,
+				new SmfMessageReaderProperties(new SolaceConsumerProperties()));
 
 		for (String header : JMS_INVALID_HEADER_NAMES) {
 			assertThat(messageHeaders.keySet(), hasItem(header));
@@ -1826,6 +1843,7 @@ public class XMLMessageMapperTest {
 		expectedXmlMessage.setHTTPContentType(MimeTypeUtils.TEXT_PLAIN_VALUE);
 
 		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
 		Message<?> springMessage = expectedSpringMessage;
 		XMLMessage xmlMessage;
 		int i = 0;
@@ -1838,7 +1856,7 @@ public class XMLMessageMapperTest {
 
 			LOGGER.info("Iteration {} - XMLMessage to Message<?>:\n{}", i, xmlMessage);
 			AcknowledgmentCallback acknowledgmentCallback = Mockito.mock(AcknowledgmentCallback.class);
-			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, consumerProperties);
+			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
 			validateSpringHeaders(springMessage.getHeaders(), expectedXmlMessage);
 
 			// Update the expected default spring headers
@@ -2279,5 +2297,223 @@ public class XMLMessageMapperTest {
 				Arguments.of(JCSMPFactory.onlyInstance().createMessage(MapMessage.class)),
 				Arguments.of(JCSMPFactory.onlyInstance().createMessage(StreamMessage.class))
 		);
+	}
+
+	@Test
+	void testApplyHeaderNameMapping_SpringHeadersToSolaceUserPropertyNameMapping() throws SDTException {
+		Map<String, String> headerToUserPropertyKeyMapping = new LinkedHashMap<>();
+		headerToUserPropertyKeyMapping.put("original-timestamp-header", "timestamp");
+		headerToUserPropertyKeyMapping.put("original-app-header", "app");
+
+		Message<?> springMessage = MessageBuilder.withPayload("test")
+				.setHeader("original-timestamp-header", "2025-01-01T00:00:00Z")
+				.setHeader("original-app-header", "test-app")
+				.setHeader("original-unmapped-header", "some-value").build();
+
+		SolaceProducerProperties producerProperties = new SolaceProducerProperties();
+		producerProperties.setHeaderNameMapping(headerToUserPropertyKeyMapping);
+		SmfMessageWriterProperties writerProperties = new SmfMessageWriterProperties(
+				producerProperties);
+
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(springMessage, writerProperties);
+
+		SDTMap properties = xmlMessage.getProperties();
+		assertEquals("2025-01-01T00:00:00Z", properties.getString("timestamp"));
+		assertEquals("test-app", properties.getString("app"));
+
+		assertNull(properties.getString("original-timestamp-header"));
+		assertNull(properties.getString("original-app-header"));
+		assertEquals("some-value", properties.getString("original-unmapped-header"));
+	}
+
+	@Test
+	void testApplyHeaderNameMapping_SolaceUserPropertiesToSpringHeadersMapping() throws SDTException {
+		Map<String, String> headerToUserPropertyKeyMapping = new LinkedHashMap<>();
+		headerToUserPropertyKeyMapping.put("id", "mapped-id-header");
+		headerToUserPropertyKeyMapping.put("timestamp", "mapped-timestamp-header");
+		headerToUserPropertyKeyMapping.put("app", "mapped-app-header");
+
+		TextMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		xmlMessage.setText("test-payload");
+		SDTMap properties = JCSMPFactory.onlyInstance().createMap();
+		properties.putString("id", "12345");
+		properties.putString("timestamp", "2025-01-01T00:00:00Z");
+		properties.putString("app", "test-app");
+		properties.putString("unmapped-user-prop", "some-value");
+		xmlMessage.setProperties(properties);
+
+		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		consumerProperties.setHeaderNameMapping(headerToUserPropertyKeyMapping);
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
+
+		Message<?> springMessage = xmlMessageMapper.mapToSpring(xmlMessage, null, smfMessageReaderProperties);
+
+		assertEquals("12345", springMessage.getHeaders().get("mapped-id-header"));
+		assertEquals("2025-01-01T00:00:00Z", springMessage.getHeaders().get("mapped-timestamp-header"));
+		assertEquals("test-app", springMessage.getHeaders().get("mapped-app-header"));
+
+		//id and timestamp is Spring Integration reserved headers, original values will not be preserved
+		assertNotEquals("12345", springMessage.getHeaders().get("id"));
+		assertNotEquals("2025-01-01T00:00:00Z", springMessage.getHeaders().get("timestamp"));
+		assertNotNull(springMessage.getHeaders().get("id"));
+		assertNotNull(springMessage.getHeaders().get("timestamp"));
+		assertNull(springMessage.getHeaders().get("app"));
+		assertEquals("some-value", springMessage.getHeaders().get("unmapped-user-prop"));
+	}
+
+	@ParameterizedTest(name = "{index} testApplyHeaderNameMapping_ProducerBackwardCompatibility - {1}")
+	@MethodSource("publisherBackwardCompatibilityArguments")
+	void testApplyHeaderNameMapping_ProducerBackwardCompatibility(
+			SolaceProducerProperties producerProperties, String scenario) throws SDTException {
+		Message<?> springMessage = MessageBuilder.withPayload("test").setHeader("my-header", "my-value")
+				.build();
+
+		SmfMessageWriterProperties writerProperties = new SmfMessageWriterProperties(
+				producerProperties);
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(springMessage, writerProperties);
+
+		verify(xmlMessageMapper).applyHeaderNameMapping(anyMap(),
+				eq(writerProperties.getHeaderNameMapping()));
+
+		SDTMap properties = xmlMessage.getProperties();
+		assertEquals("my-value", properties.getString("my-header"));
+	}
+
+	private static Stream<Arguments> publisherBackwardCompatibilityArguments() {
+		SolaceProducerProperties producerPropertiesWithEmptyHeaderMapping = new SolaceProducerProperties();
+		producerPropertiesWithEmptyHeaderMapping.setHeaderNameMapping(
+				new LinkedHashMap<>());
+
+		return Stream.of(arguments(new SolaceProducerProperties(), "Default Producer Properties"),
+				arguments(producerPropertiesWithEmptyHeaderMapping,
+						"Producer Properties with Empty Mapping"));
+	}
+
+	@ParameterizedTest(name = "{index} testApplyHeaderNameMapping_ConsumerBackwardCompatibility - {1}")
+	@MethodSource("consumerBackwardCompatibilityArguments")
+	void testApplyHeaderNameMapping_ConsumerBackwardCompatibility(
+			SolaceConsumerProperties consumerProperties, String scenario) throws SDTException {
+		TextMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		xmlMessage.setText("test");
+		SDTMap properties = JCSMPFactory.onlyInstance().createMap();
+		properties.putString("my-header", "my-value");
+		xmlMessage.setProperties(properties);
+
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
+
+		Message<?> springMessage = xmlMessageMapper.mapToSpring(xmlMessage, null,
+				smfMessageReaderProperties);
+
+		verify(xmlMessageMapper).applyHeaderNameMapping(anyMap(), anyMap());
+
+		assertEquals("my-value", springMessage.getHeaders().get("my-header"));
+	}
+
+	private static Stream<Arguments> consumerBackwardCompatibilityArguments() {
+		SolaceConsumerProperties consumerPropertiesWithEmptyHeaderMapping = new SolaceConsumerProperties();
+		consumerPropertiesWithEmptyHeaderMapping.setHeaderNameMapping(
+				new LinkedHashMap<>());
+
+		return Stream.of(arguments(new SolaceConsumerProperties(), "Default Consumer Properties"),
+				arguments(consumerPropertiesWithEmptyHeaderMapping,
+						"Consumer Properties with Empty Mapping"));
+	}
+
+	@Test
+	void testApplyHeaderNameMapping_MultipleMappingsAndTypes() throws SDTException {
+		Map<String, String> headerToUserPropertyKeyMapping = new LinkedHashMap<>();
+		headerToUserPropertyKeyMapping.put("string-header", "str");
+		headerToUserPropertyKeyMapping.put("number-header", "num");
+		headerToUserPropertyKeyMapping.put("boolean-header", "bool");
+
+		// Create test message with different types
+		Message<?> springMessage = MessageBuilder.withPayload("test")
+				.setHeader("string-header", "string-value").setHeader("number-header", 42)
+				.setHeader("boolean-header", true).setHeader("unmapped-header", "unmapped-value").build();
+
+		SolaceProducerProperties producerProperties = new SolaceProducerProperties();
+		producerProperties.setHeaderNameMapping(headerToUserPropertyKeyMapping);
+		SmfMessageWriterProperties writerProperties = new SmfMessageWriterProperties(
+				producerProperties);
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(springMessage, writerProperties);
+
+		// Verify all mappings work correctly
+		SDTMap properties = xmlMessage.getProperties();
+		assertEquals("string-value", properties.getString("str"));
+		assertEquals(42, properties.getInteger("num").intValue());
+		assertEquals(true, properties.getBoolean("bool"));
+		assertEquals("unmapped-value", properties.getString("unmapped-header"));
+
+		assertNull(properties.getString("string-header"));
+		assertNull(properties.getInteger("number-header"));
+		assertNull(properties.getBoolean("boolean-header"));
+	}
+
+	@Test
+	void testApplyHeaderNameMapping_producerHeaderExclusionWithMapping() throws SDTException {
+		Map<String, String> headerToUserPropertyKeyMapping = new LinkedHashMap<>();
+		headerToUserPropertyKeyMapping.put("original-timestamp-header", "timestamp");
+		headerToUserPropertyKeyMapping.put("original-app-header", "app");
+
+		List<String> excludedHeaders = List.of("original-timestamp-header");
+
+		Message<?> springMessage = MessageBuilder.withPayload("test")
+				.setHeader("original-timestamp-header", "2025-01-01T00:00:00Z")
+				.setHeader("original-app-header", "test-app")
+				.setHeader("original-unmapped-header", "some-value").build();
+
+		SolaceProducerProperties producerProperties = new SolaceProducerProperties();
+		producerProperties.setHeaderNameMapping(headerToUserPropertyKeyMapping);
+		producerProperties.setHeaderExclusions(excludedHeaders);
+		SmfMessageWriterProperties writerProperties = new SmfMessageWriterProperties(
+				producerProperties);
+
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(springMessage, writerProperties);
+
+		SDTMap properties = xmlMessage.getProperties();
+		assertEquals("2025-01-01T00:00:00Z", properties.getString("timestamp"));
+		assertEquals("test-app", properties.getString("app"));
+
+		//Excluded headers should not be present in the properties
+		assertNull(properties.getString("original-timestamp-header"));
+		//original-app-header is mapped to "app" header - original-app-header should not be present in the properties
+		assertNull(properties.getString("original-app-header"));
+		assertEquals("some-value", properties.getString("original-unmapped-header"));
+	}
+
+	@Test
+	void testApplyHeaderNameMapping_consumerHeaderExclusionWithMapping() throws SDTException {
+		Map<String, String> headerToUserPropertyKeyMapping = new LinkedHashMap<>();
+		headerToUserPropertyKeyMapping.put("timestamp", "mapped-timestamp-header");
+		headerToUserPropertyKeyMapping.put("excluded-header", "mapped-excluded-header");
+
+		List<String> excludedHeaders = List.of("excluded-header");
+
+		TextMessage xmlMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
+		xmlMessage.setText("test");
+		SDTMap properties = JCSMPFactory.onlyInstance().createMap();
+		properties.putString("timestamp", "2025-01-01T00:00:00Z");
+		properties.putString("unmapped-user-prop", "some-value");
+		properties.putString("excluded-header", "some-value");
+		xmlMessage.setProperties(properties);
+
+		SolaceConsumerProperties consumerProperties = new SolaceConsumerProperties();
+		consumerProperties.setHeaderNameMapping(headerToUserPropertyKeyMapping);
+		consumerProperties.setHeaderExclusions(excludedHeaders);
+		SmfMessageReaderProperties smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties);
+
+		Message<?> springMessage = xmlMessageMapper.mapToSpring(xmlMessage, null, smfMessageReaderProperties);
+
+		assertEquals("2025-01-01T00:00:00Z", springMessage.getHeaders().get("mapped-timestamp-header"));
+
+		//timestamp is Spring Integration reserved headers, original values will not be preserved
+		assertNotEquals("2025-01-01T00:00:00Z", springMessage.getHeaders().get("timestamp"));
+		assertNotNull(springMessage.getHeaders().get("timestamp"));
+		assertEquals("some-value", springMessage.getHeaders().get("unmapped-user-prop"));
+
+		//Excluded header should not be present in the Spring message headers, and won't be mapped
+		//Exclusion is applied before header mapping
+		assertNull(springMessage.getHeaders().get("mapped-excluded-header"));
+		assertNull(springMessage.getHeaders().get("excluded-header"));
 	}
 }

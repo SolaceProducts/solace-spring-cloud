@@ -4,6 +4,8 @@ import com.solace.spring.cloud.stream.binder.util.BatchWaitStrategy;
 import com.solace.spring.cloud.stream.binder.util.EndpointType;
 import com.solacesystems.jcsmp.EndpointProperties;
 import jakarta.validation.constraints.Min;
+import java.util.HashMap;
+import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.util.Assert;
 
@@ -126,6 +128,12 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 	 * The number of milliseconds before republished messages are discarded or moved to a Dead Message Queue.
 	 */
 	private Long errorMsgTtl = null;
+
+	/**
+	 * Mapping from Solace message user property names to Spring message header names.
+	 * Useful for retaining Solace message user properties that have the same names as reserved Spring message headers, such as timestamp, id, contentType, etc.
+	 */
+	private Map<String, String> headerNameMapping = new HashMap<>();
 	// ------------------------
 
 	public EndpointType getEndpointType() {
@@ -309,5 +317,13 @@ public class SolaceConsumerProperties extends SolaceCommonProperties {
 
 	public void setHeaderExclusions(List<String> headerExclusions) {
 		this.headerExclusions = headerExclusions;
+	}
+
+	public Map<String, String> getHeaderNameMapping() {
+		return headerNameMapping;
+	}
+
+	public void setHeaderNameMapping(Map<String, String> headerNameMapping) {
+		this.headerNameMapping = headerNameMapping;
 	}
 }
