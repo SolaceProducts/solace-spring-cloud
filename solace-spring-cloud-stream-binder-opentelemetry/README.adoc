@@ -11,6 +11,7 @@ It is designed to work with the link:https://opentelemetry.io/docs/zero-code/jav
 |===
 | Spring Cloud | Solace Spring Cloud BOM    | Spring Boot | Solace JCSMP
 | 2024.0.0     | 4.8.0 and later            | 3.4.x       | 10.26.0 and later
+| 2024.0.2     | 4.9.0 and later            | 3.4.x       | 10.28.0 and later
 |===
 
 == Required Dependencies
