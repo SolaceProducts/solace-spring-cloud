@@ -1,5 +1,6 @@
 package com.solace.spring.cloud.stream.binder.provisioning;
 
+import com.solace.spring.cloud.stream.binder.util.SolaceSessionManager;
 import com.solace.spring.cloud.stream.binder.properties.SolaceCommonProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
@@ -37,12 +38,12 @@ import java.util.stream.Collectors;
 public class SolaceEndpointProvisioner
 		implements ProvisioningProvider<ExtendedConsumerProperties<SolaceConsumerProperties>,ExtendedProducerProperties<SolaceProducerProperties>> {
 
-	private final JCSMPSession jcsmpSession;
+	private final SolaceSessionManager solaceSessionManager;
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(SolaceEndpointProvisioner.class);
 
-	public SolaceEndpointProvisioner(JCSMPSession jcsmpSession) {
-		this.jcsmpSession = jcsmpSession;
+	public SolaceEndpointProvisioner(SolaceSessionManager solaceSessionManager) {
+		this.solaceSessionManager = solaceSessionManager;
 	}
 
 	@Override
@@ -186,14 +187,14 @@ public class SolaceEndpointProvisioner
 			if (isDurable) {
 				endpoint = endpointProvider.createInstance(name);
 				if (doDurableProvisioning) {
-					jcsmpSession.provision(endpoint, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
+					solaceSessionManager.getSession().provision(endpoint, endpointProperties, JCSMPSession.FLAG_IGNORE_ALREADY_EXISTS);
 				} else {
 					LOGGER.debug("Provisioning is disabled, {} will not be provisioned nor will its configuration be validated",
 							name);
 				}
 			} else {
 				// EndpointProperties will be applied during consumer creation
-				endpoint = endpointProvider.createTemporaryEndpoint(name, jcsmpSession);
+				endpoint = endpointProvider.createTemporaryEndpoint(name, solaceSessionManager.getSession());
 			}
 		} catch (Exception e) {
 			String action = isDurable ? "provision durable" : "create temporary";
@@ -222,7 +223,7 @@ public class SolaceEndpointProvisioner
 					endpointType, endpoint.getName());
 			final ConsumerFlowProperties testFlowProperties = consumerFlowProperties.setEndpoint(endpoint)
 					.setStartState(false);
-			jcsmpSession.createFlow(null, testFlowProperties, endpointProperties).close();
+			solaceSessionManager.getSession().createFlow(null, testFlowProperties, endpointProperties).close();
 			LOGGER.info("Connected test consumer flow to {} {}, closing it",
 					endpointType, endpoint.getName());
 		} catch (JCSMPException e) {
@@ -266,7 +267,7 @@ public class SolaceEndpointProvisioner
 		try {
 			Topic topic = JCSMPFactory.onlyInstance().createTopic(topicName);
 			try {
-				jcsmpSession.addSubscription(queue, topic, JCSMPSession.WAIT_FOR_CONFIRM);
+				solaceSessionManager.getSession().addSubscription(queue, topic, JCSMPSession.WAIT_FOR_CONFIRM);
 			} catch (JCSMPErrorResponseException e) {
 				if (e.getSubcodeEx() == JCSMPErrorResponseSubcodeEx.SUBSCRIPTION_ALREADY_PRESENT) {
 					LOGGER.info("Queue {} is already subscribed to topic {}, SUBSCRIPTION_ALREADY_PRESENT error will be ignored...",

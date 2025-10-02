@@ -1,0 +1,73 @@
+spring:
+  cloud:
+    function:
+      definition: "sink;otherSink;source;otherSource;processor;otherProcessor;"
+    stream:
+      bindingRetryInterval: 1 # seconds
+      binders:
+        solace1:
+          type: solace
+          environment:
+            spring.cloud.stream.solace.binder.session-initialization-mode: lazy
+            spring.cloud.stream.solace.default.consumer.provision-durable-queue: false
+            spring.cloud.stream.solace.default.producer.provision-durable-queue: false
+            solace.java:
+              host: localhost
+              connectRetries: 1
+              connectRetriesPerHost: 1
+              reconnectRetryWaitInMillis: 500
+        solace2:
+          type: solace
+          environment:
+            spring.cloud.stream.solace.binder.session-initialization-mode: lazy
+            spring.cloud.stream.solace.default.consumer.provision-durable-queue: false
+            spring.cloud.stream.solace.default.producer.provision-durable-queue: false
+            solace.java:
+              host: localhost
+              connectRetries: 1
+              connectRetriesPerHost: 1
+              reconnectRetryWaitInMillis: 500
+      bindings:
+        sink-in-0:
+          destination: sink-in-0
+          group: myConsumerGroup
+          binder: solace1
+        otherSink-in-0:
+          destination: otherSink-in-0
+          group: myConsumerGroup
+          binder: solace2
+        source-out-0:
+          destination: source-out-0
+          binder: solace1
+        otherSource-out-0:
+          destination: otherSource-out-0
+          binder: solace2
+        processor-in-0:
+          destination: processor-in-0
+          group: myConsumerGroup
+          binder: solace1
+        processor-out-0:
+          destination: processor-out-0
+          binder: solace1
+        otherProcessor-in-0:
+          destination: otherProcessor-in-0
+          group: myConsumerGroup
+          binder: solace2
+        otherProcessor-out-0:
+          destination: otherProcessor-out-0
+          binder: solace2
+
+      default-binder: solace1
+
+management:
+  endpoint:
+    health:
+      show-components: always
+      show-details: always
+  endpoints:
+    web: # Actuator web endpoint configuration. For more info: https://docs.spring.io/spring-boot/docs/current/reference/html/actuator.html#actuator.endpoints
+      exposure:
+        include: 'health,metrics'
+  health:
+    binders:
+      enabled: true

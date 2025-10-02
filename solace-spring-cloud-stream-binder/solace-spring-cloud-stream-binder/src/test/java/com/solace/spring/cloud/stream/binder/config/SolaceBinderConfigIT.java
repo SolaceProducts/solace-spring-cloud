@@ -2,6 +2,9 @@ package com.solace.spring.cloud.stream.binder.config;
 
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
+import com.solace.spring.cloud.stream.binder.util.DefaultSolaceSessionManager;
+import com.solace.spring.cloud.stream.binder.util.SolaceSessionManager;
+import com.solace.spring.cloud.stream.binder.properties.SolaceBinderConfigurationProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBindingProperties;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
@@ -37,14 +40,17 @@ import java.util.regex.Pattern;
 public class SolaceBinderConfigIT {
 	private SolaceMessageChannelBinderConfiguration binderConfiguration;
 	private String clientName;
+	private SolaceSessionManager solaceSessionManager;
 
 	@BeforeEach
 	void setUp(JCSMPProperties jcsmpProperties, ApplicationContext applicationContext, TestInfo testInfo) {
 		clientName = UUID.randomUUID().toString();
 		jcsmpProperties.setProperty(JCSMPProperties.CLIENT_NAME, clientName);
 
-		binderConfiguration = new SolaceMessageChannelBinderConfiguration(jcsmpProperties,
-				new SolaceExtendedBindingProperties(), null, null);
+		solaceSessionManager = new DefaultSolaceSessionManager(jcsmpProperties,
+				new SolaceBinderClientInfoProvider(), null, null);
+		binderConfiguration = new SolaceMessageChannelBinderConfiguration(solaceSessionManager,
+				new SolaceExtendedBindingProperties(), new SolaceBinderConfigurationProperties());
 		AutowireCapableBeanFactory beanFactory = applicationContext.getAutowireCapableBeanFactory();
 		beanFactory.autowireBean(binderConfiguration);
 		binderConfiguration = (SolaceMessageChannelBinderConfiguration) beanFactory.initializeBean(binderConfiguration,
@@ -56,7 +62,8 @@ public class SolaceBinderConfigIT {
 			throws Exception {
 		MonitorMsgVpnClient client;
 		SolaceMessageChannelBinder solaceMessageChannelBinder = binderConfiguration.solaceMessageChannelBinder(
-				binderConfiguration.provisioningProvider(),
+				solaceSessionManager,
+				binderConfiguration.provisioningProvider(solaceSessionManager),
 				null,
 				null,
 				null);

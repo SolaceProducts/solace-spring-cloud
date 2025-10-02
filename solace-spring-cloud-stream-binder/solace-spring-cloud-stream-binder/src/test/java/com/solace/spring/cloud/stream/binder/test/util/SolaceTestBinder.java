@@ -1,12 +1,14 @@
 package com.solace.spring.cloud.stream.binder.test.util;
 
 import com.solace.spring.cloud.stream.binder.SolaceMessageChannelBinder;
+import com.solace.spring.cloud.stream.binder.util.DefaultSolaceSessionManager;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.provisioning.EndpointProvider;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisioner;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.util.EndpointType;
+import com.solace.spring.cloud.stream.binder.util.SolaceSessionManager;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.ApiException;
 import com.solacesystems.jcsmp.AccessDeniedException;
@@ -14,6 +16,7 @@ import com.solacesystems.jcsmp.Endpoint;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
+import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.AbstractPollableConsumerTestBinder;
@@ -34,11 +37,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.doReturn;
 
 public class SolaceTestBinder
 		extends AbstractPollableConsumerTestBinder<SolaceMessageChannelBinder, ExtendedConsumerProperties<SolaceConsumerProperties>, ExtendedProducerProperties<SolaceProducerProperties>> {
 
 	private final JCSMPSession jcsmpSession;
+  private final JCSMPProperties jcsmpProperties;
 	private final SempV2Api sempV2Api;
 	private final AnnotationConfigApplicationContext applicationContext;
 	private final Map<String, EndpointType> endpoints = new HashMap<>();
@@ -46,11 +51,25 @@ public class SolaceTestBinder
 	private final Map<String, String> bindingNameToErrorQueueName = new HashMap<>();
 	private static final Logger LOGGER = LoggerFactory.getLogger(SolaceTestBinder.class);
 
-	public SolaceTestBinder(JCSMPSession jcsmpSession, SempV2Api sempV2Api) {
+	public SolaceTestBinder(JCSMPProperties jcsmpProperties, JCSMPSession jcsmpSession, SempV2Api sempV2Api) {
 		this.applicationContext = new AnnotationConfigApplicationContext(Config.class);
-		this.jcsmpSession = jcsmpSession;
+    this.jcsmpProperties = jcsmpProperties;
+    this.jcsmpSession = jcsmpSession;
 		this.sempV2Api = sempV2Api;
-		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(jcsmpSession, new SolaceEndpointProvisioner(jcsmpSession));
+
+    SolaceSessionManager defaultSolaceSessionManager = null;
+    if(jcsmpProperties == null) {
+      defaultSolaceSessionManager = Mockito.mock(DefaultSolaceSessionManager.class);
+      try {
+        doReturn(jcsmpSession).when(defaultSolaceSessionManager).getSession();
+      } catch (JCSMPException e) {
+        throw new RuntimeException(e);
+      }
+    } else {
+      defaultSolaceSessionManager = new DefaultSolaceSessionManager(
+          jcsmpProperties, null, null, null);
+    }
+		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(defaultSolaceSessionManager, new SolaceEndpointProvisioner(defaultSolaceSessionManager));
 		binder.setApplicationContext(this.applicationContext);
 		this.setPollableConsumerBinder(binder);
 	}

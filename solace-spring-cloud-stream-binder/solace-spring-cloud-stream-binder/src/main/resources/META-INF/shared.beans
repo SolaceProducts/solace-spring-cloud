@@ -3,3 +3,4 @@ com.solace.spring.cloud.stream.binder.meter.SolaceMeterAccessor
 org.springframework.security.oauth2.client.registration.ClientRegistrationRepository
 org.springframework.security.oauth2.client.OAuth2AuthorizedClientService
 org.springframework.security.oauth2.client.web.OAuth2AuthorizedClientRepository
+com.solace.spring.cloud.stream.binder.util.SolaceSessionManager
