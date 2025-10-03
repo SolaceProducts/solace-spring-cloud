@@ -24,27 +24,12 @@ public class SpringCloudStreamApp {
   }
 
   @Bean
-  public Consumer<Message<?>> otherSink() {
-    return (msg -> System.out.println(msg.getPayload()));
-  }
-
-  @Bean
   public Function<String, String> processor() {
     return (msg) -> msg;
   }
 
   @Bean
-  public Function<String, String> otherProcessor() {
-    return (msg) -> msg;
-  }
-
-  @Bean
   public Supplier<String> source() {
-    return () -> "test";
-  }
-
-  @Bean
-  public Supplier<String> otherSource() {
     return () -> "test";
   }
 

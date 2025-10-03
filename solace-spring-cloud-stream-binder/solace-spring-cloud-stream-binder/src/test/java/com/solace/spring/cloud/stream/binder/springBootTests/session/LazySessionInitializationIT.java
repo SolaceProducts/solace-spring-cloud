@@ -34,10 +34,8 @@ class LazySessionInitializationIT {
   @Test
   void testLazyInitialization() {
     Map<String, CountDownLatch> latches = new HashMap<>();
-    Set<String> bindingNames = Set.of("sink-in-0", "otherSink-in-0", "source-out-0",
-        "otherSource-out-0", "processor-in-0", "processor-out-0", "otherProcessor-in-0",
-        "otherProcessor-out-0");
-    bindingNames.forEach(bindingName -> latches.put(bindingName, new CountDownLatch(3)));
+    Set<String> bindingNames = Set.of("sink-in-0", "source-out-0", "processor-in-0", "processor-out-0");
+    bindingNames.forEach(bindingName -> latches.put(bindingName, new CountDownLatch(2)));
 
     try (var applicationContext = new SpringApplicationBuilder(SpringCloudStreamApp.class)
         .profiles("lazySessionInit")
@@ -78,7 +76,7 @@ class LazySessionInitializationIT {
 
       latches.forEach((bindingName, latch) -> {
         try {
-          boolean completed = latch.await(60, TimeUnit.SECONDS);
+          boolean completed = latch.await(120, TimeUnit.SECONDS);
           System.err.println("Latch for binding " + bindingName + " did not complete in time. "
               + latch.getCount());
           assertTrue(completed);

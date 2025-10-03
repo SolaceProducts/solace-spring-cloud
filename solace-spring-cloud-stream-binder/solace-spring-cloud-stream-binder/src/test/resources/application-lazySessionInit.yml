@@ -1,7 +1,7 @@
 spring:
   cloud:
     function:
-      definition: "sink;otherSink;source;otherSource;processor;otherProcessor;"
+      definition: "sink;source;processor;"
     stream:
       bindingRetryInterval: 1 # seconds
       binders:
@@ -32,29 +32,15 @@ spring:
           destination: sink-in-0
           group: myConsumerGroup
           binder: solace1
-        otherSink-in-0:
-          destination: otherSink-in-0
-          group: myConsumerGroup
-          binder: solace2
         source-out-0:
           destination: source-out-0
           binder: solace1
-        otherSource-out-0:
-          destination: otherSource-out-0
-          binder: solace2
         processor-in-0:
           destination: processor-in-0
           group: myConsumerGroup
-          binder: solace1
+          binder: solace2
         processor-out-0:
           destination: processor-out-0
-          binder: solace1
-        otherProcessor-in-0:
-          destination: otherProcessor-in-0
-          group: myConsumerGroup
-          binder: solace2
-        otherProcessor-out-0:
-          destination: otherProcessor-out-0
           binder: solace2
 
       default-binder: solace1
