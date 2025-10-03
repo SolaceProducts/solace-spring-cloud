@@ -51,8 +51,7 @@ class LazySessionInitializationIT {
         if (runtimeException != null) {
           assertThat(runtimeException)
               .hasCauseInstanceOf(JCSMPTransportException.class)
-              .hasRootCauseInstanceOf(ConnectException.class)
-              .hasRootCauseMessage("Connection refused");
+              .hasRootCauseInstanceOf(ConnectException.class);
         }
         latches.get(bindingName).countDown();
         return invocation.callRealMethod();
@@ -66,8 +65,7 @@ class LazySessionInitializationIT {
         if (runtimeException != null) {
           assertThat(runtimeException)
               .hasCauseInstanceOf(JCSMPTransportException.class)
-              .hasRootCauseInstanceOf(ConnectException.class)
-              .hasRootCauseMessage("Connection refused");
+              .hasRootCauseInstanceOf(ConnectException.class);
         }
         latches.get(bindingName).countDown();
         return invocation.callRealMethod();

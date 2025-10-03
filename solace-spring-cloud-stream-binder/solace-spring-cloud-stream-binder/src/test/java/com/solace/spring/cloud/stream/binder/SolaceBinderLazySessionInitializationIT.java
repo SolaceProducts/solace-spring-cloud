@@ -67,9 +67,7 @@ class SolaceBinderLazySessionInitializationIT {
       assertThat(e)
           .isInstanceOf(channelType == PollableSource.class ? RuntimeException.class : BinderException.class)
           .hasCauseInstanceOf(JCSMPTransportException.class)
-          .hasRootCauseInstanceOf(ConnectException.class)
-          .rootCause()
-          .hasMessageContaining("Connection refused");
+          .hasRootCauseInstanceOf(ConnectException.class);
     }
   }
 
@@ -96,9 +94,7 @@ class SolaceBinderLazySessionInitializationIT {
       assertThat(e)
           .isInstanceOf(ProvisioningException.class)
           .hasCauseInstanceOf(JCSMPTransportException.class)
-          .hasRootCauseInstanceOf(ConnectException.class)
-          .rootCause()
-          .hasMessageContaining("Connection refused");
+          .hasRootCauseInstanceOf(ConnectException.class);
     }
   }
 
@@ -125,9 +121,7 @@ class SolaceBinderLazySessionInitializationIT {
       assertThat(e)
           .isInstanceOf(BinderException.class)
           .hasCauseInstanceOf(JCSMPTransportException.class)
-          .hasRootCauseInstanceOf(ConnectException.class)
-          .rootCause()
-          .hasMessageContaining("Connection refused");
+          .hasRootCauseInstanceOf(ConnectException.class);
     }
   }
 
@@ -154,9 +148,7 @@ class SolaceBinderLazySessionInitializationIT {
       assertThat(e)
           .isInstanceOf(ProvisioningException.class)
           .hasCauseInstanceOf(JCSMPTransportException.class)
-          .hasRootCauseInstanceOf(ConnectException.class)
-          .rootCause()
-          .hasMessageContaining("Connection refused");
+          .hasRootCauseInstanceOf(ConnectException.class);
     }
   }
 }

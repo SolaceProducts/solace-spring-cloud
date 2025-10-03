@@ -75,7 +75,7 @@ public class SolaceMessageChannelBinder
 	public void destroy() {
 		sessionProducerManager.release(errorHandlerProducerKey);
 		consumersRemoteStopFlag.set(true);
-		((DefaultSolaceSessionManager)solaceSessionManager).close();
+		solaceSessionManager.close();
 	}
 
 	@Override

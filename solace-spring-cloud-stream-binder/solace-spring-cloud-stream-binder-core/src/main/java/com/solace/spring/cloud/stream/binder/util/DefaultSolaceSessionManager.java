@@ -102,6 +102,7 @@ public class DefaultSolaceSessionManager implements SolaceSessionManager {
     }
   }
 
+  @Override
   public void close() {
     synchronized (sessionLock) {
       if (jcsmpSession != null) {
