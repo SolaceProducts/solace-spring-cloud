@@ -75,8 +75,6 @@ class LazySessionInitializationIT {
       latches.forEach((bindingName, latch) -> {
         try {
           boolean completed = latch.await(120, TimeUnit.SECONDS);
-          System.err.println("Latch for binding " + bindingName + " did not complete in time. "
-              + latch.getCount());
           assertTrue(completed);
         } catch (InterruptedException e) {
           Thread.currentThread().interrupt();
