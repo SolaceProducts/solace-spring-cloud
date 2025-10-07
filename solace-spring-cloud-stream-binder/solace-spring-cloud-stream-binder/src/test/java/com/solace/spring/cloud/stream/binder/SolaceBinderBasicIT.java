@@ -142,12 +142,12 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 	@BeforeEach
 	void setUp(JCSMPSession jcsmpSession, SempV2Api sempV2Api) {
-		setJcsmpSession(jcsmpSession);
+    setJcsmpSession(jcsmpSession);
 		setSempV2Api(sempV2Api);
 	}
 
 	@AfterEach
-	void tearDown() {
+	void tearDown() throws Exception {
 		super.cleanup();
 		close();
 	}

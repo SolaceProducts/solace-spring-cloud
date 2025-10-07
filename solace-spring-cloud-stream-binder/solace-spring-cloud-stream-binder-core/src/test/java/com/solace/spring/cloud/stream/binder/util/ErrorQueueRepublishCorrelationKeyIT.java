@@ -54,7 +54,12 @@ public class ErrorQueueRepublishCorrelationKeyIT {
 	@BeforeEach
 	public void setUp(JCSMPSession jcsmpSession) throws Exception {
 		String producerManagerKey = UUID.randomUUID().toString();
-		JCSMPSessionProducerManager producerManager = new JCSMPSessionProducerManager(jcsmpSession);
+		DefaultSolaceSessionManager defaultSolaceSessionManager = Mockito.mock(
+				DefaultSolaceSessionManager.class);
+		Mockito.when(defaultSolaceSessionManager.getSession()).thenReturn(jcsmpSession);
+
+		JCSMPSessionProducerManager producerManager = new JCSMPSessionProducerManager(
+				defaultSolaceSessionManager);
 		producer = producerManager.get(producerManagerKey);
 
 		errorQueueInfrastructure = Mockito.spy(new ErrorQueueInfrastructure(producerManager, producerManagerKey,

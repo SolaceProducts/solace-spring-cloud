@@ -34,4 +34,12 @@ public class SolaceSessionEventHandler extends DefaultSolaceOAuth2SessionEventHa
 	public void setSessionHealthUp() {
 		this.sessionHealthIndicator.up();
 	}
+
+	public void setSessionHealthDown() {
+		this.sessionHealthIndicator.down(null, false);
+	}
+
+	public void setSessionHealthReconnecting() {
+		this.sessionHealthIndicator.reconnecting(null);
+	}
 }

@@ -4,6 +4,7 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties
 import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties;
 import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.test.integration.semp.v2.SempV2Api;
+import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -35,12 +36,14 @@ public class SpringCloudStreamContext extends PartitionCapableBinderTests<Solace
 		implements ExtensionContext.Store.CloseableResource {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SpringCloudStreamContext.class);
 	private JCSMPSession jcsmpSession;
+  private JCSMPProperties jcsmpProperties;
 	private SempV2Api sempV2Api;
 
-	public SpringCloudStreamContext(JCSMPSession jcsmpSession, SempV2Api sempV2Api) {
-		this.jcsmpSession = Objects.requireNonNull(jcsmpSession);
-		this.sempV2Api = sempV2Api;
-	}
+  public SpringCloudStreamContext(JCSMPProperties jcsmpProperties, JCSMPSession jcsmpSession, SempV2Api sempV2Api) {
+    this.jcsmpProperties = Objects.requireNonNull(jcsmpProperties);
+    this.jcsmpSession = Objects.requireNonNull(jcsmpSession);
+    this.sempV2Api = sempV2Api;
+  }
 
 	/**
 	 * Should only be used by subclasses.
@@ -67,7 +70,7 @@ public class SpringCloudStreamContext extends PartitionCapableBinderTests<Solace
 				throw new IllegalStateException("JCSMPSession cannot be null or closed");
 			}
 			logger.info("Creating new test binder");
-			testBinder = new SolaceTestBinder(jcsmpSession, sempV2Api);
+			testBinder = new SolaceTestBinder(jcsmpProperties, jcsmpSession, sempV2Api);
 		}
 		return testBinder;
 	}
@@ -124,7 +127,7 @@ public class SpringCloudStreamContext extends PartitionCapableBinderTests<Solace
 	}
 
 	@Override
-	public void close() {
+	public void close() throws Exception {
 		if (testBinder != null) {
 			LOGGER.info("Destroying binder");
 			testBinder.getBinder().destroy();
@@ -157,6 +160,10 @@ public class SpringCloudStreamContext extends PartitionCapableBinderTests<Solace
 	protected void setJcsmpSession(JCSMPSession jcsmpSession) {
 		this.jcsmpSession = jcsmpSession;
 	}
+
+  public void setJcsmpProperties(JCSMPProperties jcsmpProperties) {
+    this.jcsmpProperties = jcsmpProperties;
+  }
 
 	/**
 	 * Should only be used by subclasses.

@@ -180,6 +180,19 @@ See https://github.com/SolaceProducts/solace-spring-boot/tree/master/solace-spri
 The Solace session can be configured to use OAuth2 authentication. See https://github.com/SolaceDev/solace-spring-boot/tree/master/solace-spring-boot-starters/solace-java-spring-boot-starter#using-oauth2-authentication-scheme-with-solace-java-api[JCSMP Spring Boot: Using OAuth2 Authentication Scheme] for more info.
 ====
 
+==== Solace Binder Properties
+
+The following properties are available for configuring the Solace binder itself and must be prefixed with `spring.cloud.stream.solace.binder.`.
+
+sessionInitializationMode::
+Specifies when the Solace session should be initialized for the binder.
++
+When set to `lazy`, the session will be created only when the first binding (producer or consumer) is created that requires it.
++
+When set to `eager`, the session will be created immediately when the binder is initialized, regardless of whether any bindings exist.
++
+Default: `eager`
+
 ==== Solace Consumer Properties
 
 The following properties are available for Solace consumers only and must be prefixed with `spring.cloud.stream.solace.bindings.&lt;bindingName&gt;.consumer.` where `bindingName` looks something like `functionName-in-0` as defined in https://docs.spring.io/spring-cloud-stream/reference/{scst-version}/spring-cloud-stream/functional-binding-names.html[Functional Binding Names].
