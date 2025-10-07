@@ -51,10 +51,6 @@ public class DefaultSolaceSessionManager implements SolaceSessionManager {
   }
 
   private void createSessionIfNeeded() throws JCSMPException {
-    if (jcsmpSession != null) {
-      return;
-    }
-
     synchronized (sessionLock) {
       if (jcsmpSession != null) {
         return;
