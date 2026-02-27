@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.Status;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -115,7 +115,7 @@ class FlowHealthIndicatorTest {
 			default:
 				throw new IllegalArgumentException("Test error: No handling for status=" + status);
 		}
-		Health health = healthIndicator.getHealth(false);
+		Health health = healthIndicator.health();
 		softly.assertThat(health.getStatus()).isEqualTo(new Status(status));
 		softly.assertThat(health.getDetails()).isEmpty();
 	}

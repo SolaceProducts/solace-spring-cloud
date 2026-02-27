@@ -20,8 +20,8 @@ import io.micrometer.core.instrument.Statistic;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.assertj.core.api.SoftAssertions;
 import org.assertj.core.api.ThrowingConsumer;
-import org.springframework.boot.actuate.health.NamedContributor;
-import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.health.contributor.Status;
+import org.springframework.boot.health.contributor.HealthContributors;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
@@ -360,32 +360,32 @@ public class SolaceSpringCloudStreamAssertions {
 	public static ThrowingConsumer<BindingsHealthContributor> isSingleBindingHealthAvailable(String bindingName, int concurrency, Status status) {
 		return bindingsHealthContributor -> assertThat(StreamSupport.stream(bindingsHealthContributor.spliterator(), false))
 				.singleElement()
-				.satisfies(bindingContrib -> assertThat(bindingContrib.getName()).isEqualTo(bindingName))
+				.satisfies(bindingContrib -> assertThat(bindingContrib.name()).isEqualTo(bindingName))
 
-				.extracting(NamedContributor::getContributor)
+				.extracting(HealthContributors.Entry::contributor)
 				.asInstanceOf(InstanceOfAssertFactories.type(BindingHealthContributor.class))
 				.satisfies(SolaceSpringCloudStreamAssertions.isBindingHealthAvailable(concurrency, status));
 	}
 
 	public static ThrowingConsumer<BindingHealthContributor> isBindingHealthAvailable(int concurrency, Status status) {
 		return bindingHealthContributor -> assertThat(StreamSupport.stream(bindingHealthContributor.spliterator(), false))
-				.asInstanceOf(InstanceOfAssertFactories.list(NamedContributor.class))
+				.asInstanceOf(InstanceOfAssertFactories.list(HealthContributors.Entry.class))
 				.singleElement()
 
-				.satisfies(bindingContrib -> assertThat(bindingContrib.getName()).isEqualTo("flows"))
-				.extracting(NamedContributor::getContributor)
+				.satisfies(bindingContrib -> assertThat(bindingContrib.name()).isEqualTo("flows"))
+				.extracting(HealthContributors.Entry::contributor)
 				.asInstanceOf(InstanceOfAssertFactories.type(FlowsHealthContributor.class))
 
 				.extracting(flowsContrib -> StreamSupport.stream(flowsContrib.spliterator(), false))
-				.asInstanceOf(InstanceOfAssertFactories.stream(NamedContributor.class))
-				.satisfies(flowsContrib -> assertThat(flowsContrib.stream().map(NamedContributor::getName))
+				.asInstanceOf(InstanceOfAssertFactories.stream(HealthContributors.Entry.class))
+				.satisfies(flowsContrib -> assertThat(flowsContrib.stream().map(HealthContributors.Entry::name))
 						.containsExactlyElementsOf(IntStream.range(0, concurrency)
 								.mapToObj(i -> "flow-" + i).collect(Collectors.toSet())))
 
 
-				.extracting(NamedContributor::getContributor)
+				.extracting(HealthContributors.Entry::contributor)
 				.asInstanceOf(InstanceOfAssertFactories.list(FlowHealthIndicator.class))
-				.extracting(flowIndicator -> flowIndicator.getHealth(false))
+				.extracting(flowIndicator -> flowIndicator.health(false))
 				.allSatisfy(health -> assertThat(health.getStatus()).isEqualTo(status));
 	}
 }

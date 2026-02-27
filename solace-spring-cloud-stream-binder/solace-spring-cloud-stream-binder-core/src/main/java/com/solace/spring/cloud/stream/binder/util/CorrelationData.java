@@ -1,12 +1,12 @@
 package com.solace.spring.cloud.stream.binder.util;
 
+import java.util.concurrent.CompletableFuture;
+
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessagingException;
-import org.springframework.util.concurrent.ListenableFuture;
-import org.springframework.util.concurrent.SettableListenableFuture;
 
 public class CorrelationData {
-	private final SettableListenableFuture<Void> future = new SettableListenableFuture<>();
+	private final CompletableFuture<Void> future = new CompletableFuture<>();
 
 	private Message<?> message;
 
@@ -14,7 +14,7 @@ public class CorrelationData {
 	 * Return a future to check the success/failure of the publish operation.
 	 * @return the future.
 	 */
-	public ListenableFuture<Void> getFuture() {
+	public CompletableFuture<Void> getFuture() {
 		return this.future;
 	}
 
@@ -27,10 +27,10 @@ public class CorrelationData {
 	}
 
 	void success() {
-		this.future.set(null);
+		this.future.complete(null);
 	}
 
 	void failed(MessagingException cause) {
-		this.future.setException(cause);
+		this.future.completeExceptionally(cause);
 	}
 }

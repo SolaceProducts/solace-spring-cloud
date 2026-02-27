@@ -1,12 +1,13 @@
 package com.solace.spring.cloud.stream.binder.health.contributors;
 
-import org.springframework.boot.actuate.health.CompositeHealthContributor;
-import org.springframework.boot.actuate.health.HealthContributor;
-import org.springframework.boot.actuate.health.NamedContributor;
+import org.springframework.boot.health.contributor.CompositeHealthContributor;
+import org.springframework.boot.health.contributor.HealthContributor;
+import org.springframework.boot.health.contributor.HealthContributors;
 
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.stream.Stream;
 
 public class BindingsHealthContributor implements CompositeHealthContributor {
 	private final Map<String, BindingHealthContributor> bindingHealthContributor = new HashMap<>();
@@ -25,10 +26,17 @@ public class BindingsHealthContributor implements CompositeHealthContributor {
 	}
 
 	@Override
-	public Iterator<NamedContributor<HealthContributor>> iterator() {
+	public Iterator<HealthContributors.Entry> iterator() {
 		return bindingHealthContributor.entrySet()
 				.stream()
-				.map((entry) -> NamedContributor.of(entry.getKey(), (HealthContributor) entry.getValue()))
+				.map((entry) -> new HealthContributors.Entry(entry.getKey(), (HealthContributor) entry.getValue()))
 				.iterator();
+	}
+
+	@Override
+	public Stream<HealthContributors.Entry> stream() {
+		return bindingHealthContributor.entrySet()
+				.stream()
+				.map((entry) -> new HealthContributors.Entry(entry.getKey(), (HealthContributor) entry.getValue()));
 	}
 }

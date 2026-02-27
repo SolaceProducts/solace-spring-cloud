@@ -1,12 +1,13 @@
 package com.solace.spring.cloud.stream.binder.health.contributors;
 
-import org.springframework.boot.actuate.health.CompositeHealthContributor;
-import org.springframework.boot.actuate.health.HealthContributor;
-import org.springframework.boot.actuate.health.NamedContributor;
+import org.springframework.boot.health.contributor.CompositeHealthContributor;
+import org.springframework.boot.health.contributor.HealthContributor;
+import org.springframework.boot.health.contributor.HealthContributors;
 
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Set;
+import java.util.stream.Stream;
 
 public class BindingHealthContributor implements CompositeHealthContributor {
 	private final FlowsHealthContributor flowsHealthContributor;
@@ -22,10 +23,15 @@ public class BindingHealthContributor implements CompositeHealthContributor {
 	}
 
 	@Override
-	public Iterator<NamedContributor<HealthContributor>> iterator() {
-		Set<NamedContributor<HealthContributor>> contributors = Collections
-				.singleton(NamedContributor.of(FLOWS, flowsHealthContributor));
+	public Iterator<HealthContributors.Entry> iterator() {
+		Set<HealthContributors.Entry> contributors = Collections
+				.singleton(new HealthContributors.Entry(FLOWS, flowsHealthContributor));
 		return contributors.iterator();
+	}
+
+	@Override
+	public Stream<HealthContributors.Entry> stream() {
+		return Stream.of(new HealthContributors.Entry(FLOWS, flowsHealthContributor));
 	}
 
 	public FlowsHealthContributor getFlowsHealthContributor() {

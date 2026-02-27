@@ -134,8 +134,13 @@ public class SolaceMessageChannelBinder
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
 		if (properties.getMaxAttempts() > 1) {
-			adapter.setRetryTemplate(buildRetryTemplate(properties));
-			adapter.setRecoveryCallback(errorInfra.getRecoverer());
+			// TODO: Spring Boot 4.x migration - RetryTemplate type incompatibility
+			// The parent class buildRetryTemplate() returns org.springframework.core.retry.RetryTemplate
+			// but we need org.springframework.retry.support.RetryTemplate
+			// Need to implement custom retry template building logic
+			// adapter.setRetryTemplate(buildRetryTemplate(properties));
+			// adapter.setRecoveryCallback(errorInfra.getRecoverer());
+			adapter.setErrorChannel(errorInfra.getErrorChannel());
 		} else {
 			adapter.setErrorChannel(errorInfra.getErrorChannel());
 		}

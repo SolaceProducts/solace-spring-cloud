@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.Status;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -27,7 +27,7 @@ class SessionHealthIndicatorTest {
 		SessionHealthIndicator healthIndicator = new SessionHealthIndicator(new SolaceSessionHealthProperties());
 		healthIndicator.up();
 		assertEquals(healthIndicator.health(), Health.up().build());
-		assertTrue(healthIndicator.getHealth(true).getDetails().isEmpty());
+		assertTrue(healthIndicator.health().getDetails().isEmpty());
 	}
 
 	@Test
@@ -35,7 +35,7 @@ class SessionHealthIndicatorTest {
 		SessionHealthIndicator healthIndicator = new SessionHealthIndicator(new SolaceSessionHealthProperties());
 		healthIndicator.reconnecting(null);
 		assertEquals(healthIndicator.health().getStatus(), Health.status("RECONNECTING").build().getStatus());
-		assertTrue(healthIndicator.getHealth(true).getDetails().isEmpty());
+		assertTrue(healthIndicator.health().getDetails().isEmpty());
 	}
 
 	@ParameterizedTest(name = "[{index}] reconnectAttemptsUntilDown={0}")
@@ -91,7 +91,7 @@ class SessionHealthIndicatorTest {
 		SessionHealthIndicator healthIndicator = new SessionHealthIndicator(new SolaceSessionHealthProperties());
 		healthIndicator.down(null);
 		assertEquals(healthIndicator.health().getStatus(), Status.DOWN);
-		assertTrue(healthIndicator.getHealth(true).getDetails().isEmpty());
+		assertTrue(healthIndicator.health().getDetails().isEmpty());
 	}
 
 	@CartesianTest(name = "[{index}] status={0} withException={1} responseCode={2} info={3}")
@@ -164,7 +164,7 @@ class SessionHealthIndicatorTest {
 			default:
 				throw new IllegalArgumentException("Test error: No handling for status=" + status);
 		}
-		Health health = healthIndicator.getHealth(false);
+		Health health = healthIndicator.health();
 		softly.assertThat(health.getStatus()).isEqualTo(new Status(status));
 		softly.assertThat(health.getDetails()).isEmpty();
 	}
