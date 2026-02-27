@@ -1,9 +1,9 @@
 package com.solace.spring.cloud.stream.binder.health.contributors;
 
 import com.solace.spring.cloud.stream.binder.health.indicators.SessionHealthIndicator;
-import org.springframework.boot.actuate.health.CompositeHealthContributor;
-import org.springframework.boot.actuate.health.HealthContributor;
-import org.springframework.boot.actuate.health.NamedContributor;
+import org.springframework.boot.health.CompositeHealthContributor;
+import org.springframework.boot.health.HealthContributor;
+import org.springframework.boot.health.NamedContributor;
 
 import java.util.ArrayList;
 import java.util.Iterator;
