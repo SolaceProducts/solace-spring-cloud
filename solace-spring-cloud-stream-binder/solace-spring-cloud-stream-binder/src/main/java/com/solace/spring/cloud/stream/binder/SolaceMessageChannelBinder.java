@@ -146,6 +146,7 @@ public class SolaceMessageChannelBinder
 		}
 
 		adapter.setErrorMessageStrategy(errorMessageStrategy);
+		adapter.setBeanFactory(getBeanFactory());
 		return adapter;
 	}
 
@@ -194,6 +195,7 @@ public class SolaceMessageChannelBinder
 
 			ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group,
 					consumerProperties, true);
+			messageSource.setBeanFactory(getBeanFactory());
 			return new PolledConsumerResources(messageSource, errorInfra);
 		} catch (Exception e) {
 			throw new RuntimeException("Failed to create polled consumer.", e);

@@ -27,7 +27,7 @@ class SessionHealthIndicatorTest {
 		SessionHealthIndicator healthIndicator = new SessionHealthIndicator(new SolaceSessionHealthProperties());
 		healthIndicator.up();
 		assertEquals(healthIndicator.health(), Health.up().build());
-		assertTrue(healthIndicator.health().getDetails().isEmpty());
+		assertTrue(healthIndicator.health(true).getDetails().isEmpty());
 	}
 
 	@Test
@@ -35,7 +35,7 @@ class SessionHealthIndicatorTest {
 		SessionHealthIndicator healthIndicator = new SessionHealthIndicator(new SolaceSessionHealthProperties());
 		healthIndicator.reconnecting(null);
 		assertEquals(healthIndicator.health().getStatus(), Health.status("RECONNECTING").build().getStatus());
-		assertTrue(healthIndicator.health().getDetails().isEmpty());
+		assertTrue(healthIndicator.health(true).getDetails().isEmpty());
 	}
 
 	@ParameterizedTest(name = "[{index}] reconnectAttemptsUntilDown={0}")
@@ -91,7 +91,7 @@ class SessionHealthIndicatorTest {
 		SessionHealthIndicator healthIndicator = new SessionHealthIndicator(new SolaceSessionHealthProperties());
 		healthIndicator.down(null);
 		assertEquals(healthIndicator.health().getStatus(), Status.DOWN);
-		assertTrue(healthIndicator.health().getDetails().isEmpty());
+		assertTrue(healthIndicator.health(true).getDetails().isEmpty());
 	}
 
 	@CartesianTest(name = "[{index}] status={0} withException={1} responseCode={2} info={3}")
