@@ -37,6 +37,7 @@ import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
+import org.springframework.retry.RecoveryCallback;
 import org.springframework.retry.backoff.ExponentialBackOffPolicy;
 import org.springframework.retry.policy.SimpleRetryPolicy;
 import org.springframework.retry.support.RetryTemplate;
@@ -138,7 +139,7 @@ public class SolaceMessageChannelBinder
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
 		if (properties.getMaxAttempts() > 1) {
 			adapter.setRetryTemplate(buildSolaceRetryTemplate(properties));
-			// The error channel will handle recovery when retries are exhausted
+			adapter.setRecoveryCallback(wrapRecoveryCallback(errorInfra.getRecoverer()));
 		} else {
 			adapter.setErrorChannel(errorInfra.getErrorChannel());
 		}
@@ -286,6 +287,21 @@ public class SolaceMessageChannelBinder
 		retryTemplate.setBackOffPolicy(backOffPolicy);
 
 		return retryTemplate;
+	}
+
+	/**
+	 * Wraps ErrorMessageSendingRecoverer into a RecoveryCallback to bridge the type incompatibility
+	 * between Spring Integration and Spring Retry in Spring Boot 4.x.
+	 */
+	private RecoveryCallback<Object> wrapRecoveryCallback(org.springframework.integration.handler.advice.ErrorMessageSendingRecoverer recoverer) {
+		return context -> {
+			Throwable lastThrowable = context.getLastThrowable();
+			if (lastThrowable != null) {
+				// RetryContext implements AttributeAccessor, so we can pass it directly
+				recoverer.recover(context, lastThrowable);
+			}
+			return null;
+		};
 	}
 
 	/**
