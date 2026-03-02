@@ -37,6 +37,9 @@ import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
+import org.springframework.retry.backoff.ExponentialBackOffPolicy;
+import org.springframework.retry.policy.SimpleRetryPolicy;
+import org.springframework.retry.support.RetryTemplate;
 
 import java.util.List;
 import java.util.UUID;
@@ -134,13 +137,8 @@ public class SolaceMessageChannelBinder
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
 		if (properties.getMaxAttempts() > 1) {
-			// TODO: Spring Boot 4.x migration - RetryTemplate type incompatibility
-			// The parent class buildRetryTemplate() returns org.springframework.core.retry.RetryTemplate
-			// but we need org.springframework.retry.support.RetryTemplate
-			// Need to implement custom retry template building logic
-			// adapter.setRetryTemplate(buildRetryTemplate(properties));
-			// adapter.setRecoveryCallback(errorInfra.getRecoverer());
-			adapter.setErrorChannel(errorInfra.getErrorChannel());
+			adapter.setRetryTemplate(buildSolaceRetryTemplate(properties));
+			// The error channel will handle recovery when retries are exhausted
 		} else {
 			adapter.setErrorChannel(errorInfra.getErrorChannel());
 		}
@@ -264,6 +262,30 @@ public class SolaceMessageChannelBinder
 
 	public void setSolaceBinderHealthAccessor(@Nullable SolaceBinderHealthAccessor solaceBinderHealthAccessor) {
 		this.solaceBinderHealthAccessor = solaceBinderHealthAccessor;
+	}
+
+	/**
+	 * Build a RetryTemplate for message retry handling.
+	 * This is a custom implementation to work around the type incompatibility between
+	 * Spring Cloud Stream's RetryTemplate (org.springframework.core.retry.RetryTemplate)
+	 * and Spring Retry's RetryTemplate (org.springframework.retry.support.RetryTemplate).
+	 */
+	private RetryTemplate buildSolaceRetryTemplate(ExtendedConsumerProperties<?> properties) {
+		RetryTemplate retryTemplate = new RetryTemplate();
+
+		// Configure retry policy
+		SimpleRetryPolicy retryPolicy = new SimpleRetryPolicy();
+		retryPolicy.setMaxAttempts(properties.getMaxAttempts());
+		retryTemplate.setRetryPolicy(retryPolicy);
+
+		// Configure backoff policy
+		ExponentialBackOffPolicy backOffPolicy = new ExponentialBackOffPolicy();
+		backOffPolicy.setInitialInterval(properties.getBackOffInitialInterval());
+		backOffPolicy.setMultiplier(properties.getBackOffMultiplier());
+		backOffPolicy.setMaxInterval(properties.getBackOffMaxInterval());
+		retryTemplate.setBackOffPolicy(backOffPolicy);
+
+		return retryTemplate;
 	}
 
 	/**
