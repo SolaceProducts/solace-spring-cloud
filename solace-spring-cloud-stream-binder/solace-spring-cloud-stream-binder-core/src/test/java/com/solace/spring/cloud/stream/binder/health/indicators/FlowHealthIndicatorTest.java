@@ -115,7 +115,7 @@ class FlowHealthIndicatorTest {
 			default:
 				throw new IllegalArgumentException("Test error: No handling for status=" + status);
 		}
-		Health health = healthIndicator.health();
+		Health health = healthIndicator.health(false);
 		softly.assertThat(health.getStatus()).isEqualTo(new Status(status));
 		softly.assertThat(health.getDetails()).isEmpty();
 	}
