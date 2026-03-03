@@ -12,9 +12,9 @@ import com.solace.spring.cloud.stream.binder.properties.SolaceProducerProperties
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceConsumerDestination;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisioner;
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
-import com.solace.spring.cloud.stream.binder.util.DefaultSolaceSessionManager;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
+import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solace.spring.cloud.stream.binder.util.SolaceSessionManager;
@@ -194,7 +194,7 @@ public class SolaceMessageChannelBinder
 
 			ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group,
 					consumerProperties, true);
-			messageSource.setBeanFactory(getBeanFactory());
+			//messageSource.setBeanFactory(getBeanFactory());
 			return new PolledConsumerResources(messageSource, errorInfra);
 		} catch (Exception e) {
 			throw new RuntimeException("Failed to create polled consumer.", e);
@@ -292,13 +292,25 @@ public class SolaceMessageChannelBinder
 	/**
 	 * Wraps ErrorMessageSendingRecoverer into a RecoveryCallback to bridge the type incompatibility
 	 * between Spring Integration and Spring Retry in Spring Boot 4.x.
+	 * The callback sends the error to the error channel, where SolaceErrorMessageHandler will requeue
+	 * the message. We must NOT call AckUtils.autoAck() after this, so we throw an exception to prevent
+	 * the autoAck in RetryableInboundXMLMessageListener from executing.
 	 */
 	private RecoveryCallback<Object> wrapRecoveryCallback(org.springframework.integration.handler.advice.ErrorMessageSendingRecoverer recoverer) {
 		return context -> {
 			Throwable lastThrowable = context.getLastThrowable();
 			if (lastThrowable != null) {
+				// Send error message to error channel
 				// RetryContext implements AttributeAccessor, so we can pass it directly
+				// SolaceErrorMessageHandler will call AckUtils.requeue() or republish to error queue
 				recoverer.recover(context, lastThrowable);
+
+				// Throw an exception to prevent AckUtils.autoAck() from being called
+				// in RetryableInboundXMLMessageListener (line 76), which would ACK the message
+				// after the error handler already requeued it.
+				// The exception will be caught in InboundXMLMessageListener.processMessage()
+				// but since the message was already requeued by the error handler, no further action needed.
+				throw new SolaceAcknowledgmentException("Message already requeued by error handler", lastThrowable);
 			}
 			return null;
 		};
