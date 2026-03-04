@@ -8,12 +8,14 @@ import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
+import org.springframework.core.AttributeAccessorSupport;
 import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
+import org.springframework.integration.core.RecoveryCallback;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
-import org.springframework.retry.RecoveryCallback;
-import org.springframework.retry.support.RetryTemplate;
+import org.springframework.core.retry.RetryException;
+import org.springframework.core.retry.RetryTemplate;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -53,28 +55,42 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 	void handleMessage(Supplier<Message<?>> messageSupplier, Consumer<Message<?>> sendToConsumerHandler,
 								 AcknowledgmentCallback acknowledgmentCallback, boolean isBatched)
 			throws SolaceAcknowledgmentException {
-		Message<?> message = retryTemplate.execute((context) -> {
-			attributesHolder.set(context);
-			return messageSupplier.get();
-		}, (context) -> {
-			recoveryCallback.recover(context);
+		Message<?> message;
+		try {
+			message = retryTemplate.execute(() -> messageSupplier.get());
+		}
+		catch (RetryException ex) {
+			if (recoveryCallback != null) {
+				AttributeAccessor attributeAccessor = attributesHolder.get();
+				if (attributeAccessor == null) {
+					attributeAccessor = new AttributeAccessorSupport() {};
+				}
+				recoveryCallback.recover(attributeAccessor, ex.getCause());
+			}
 			AckUtils.autoAck(acknowledgmentCallback);
-			return null;
-		});
+			return;
+		}
 
 		if (message == null) {
 			return;
 		}
 
-		retryTemplate.execute((context) -> {
-			attributesHolder.set(context);
-			sendToConsumerHandler.accept(message);
+		try {
+			retryTemplate.execute(() -> {
+				sendToConsumerHandler.accept(message);
+				AckUtils.autoAck(acknowledgmentCallback);
+				return null;
+			});
+		}
+		catch (RetryException ex) {
+			if (recoveryCallback != null) {
+				AttributeAccessor attributeAccessor = attributesHolder.get();
+				if (attributeAccessor == null) {
+					attributeAccessor = new AttributeAccessorSupport() {};
+				}
+				recoveryCallback.recover(attributeAccessor, ex.getCause());
+			}
 			AckUtils.autoAck(acknowledgmentCallback);
-			return null;
-		}, (context) -> {
-			Object toReturn = recoveryCallback.recover(context);
-			AckUtils.autoAck(acknowledgmentCallback);
-			return toReturn;
-		});
+		}
 	}
 }

@@ -678,8 +678,9 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		binderBindUnbindLatency();
 
-		final AtomicInteger numRetriesRemaining = new AtomicInteger(consumerProperties.getMaxAttempts());
-		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, numRetriesRemaining.get() + 1,
+		final AtomicInteger numRetriesRemaining =  maxAttempts > 1   ? new AtomicInteger(consumerProperties.getMaxAttempts() + 1)
+		  : new AtomicInteger(consumerProperties.getMaxAttempts());
+					consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, numRetriesRemaining.get() + 1,
 				() -> messages.forEach(moduleOutputChannel::send),
 				(msg, callback) -> {
 					softly.assertThat(msg).satisfies(isValidMessage(channelType, consumerProperties, messages));

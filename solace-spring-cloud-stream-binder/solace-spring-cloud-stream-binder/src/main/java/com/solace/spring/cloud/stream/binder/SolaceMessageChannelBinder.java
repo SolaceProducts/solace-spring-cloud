@@ -33,14 +33,11 @@ import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.core.MessageProducer;
+import org.springframework.integration.core.RecoveryCallback;
 import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
-import org.springframework.retry.RecoveryCallback;
-import org.springframework.retry.backoff.ExponentialBackOffPolicy;
-import org.springframework.retry.policy.SimpleRetryPolicy;
-import org.springframework.retry.support.RetryTemplate;
 
 import java.util.List;
 import java.util.UUID;
@@ -138,8 +135,8 @@ public class SolaceMessageChannelBinder
 
 		ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group, properties);
 		if (properties.getMaxAttempts() > 1) {
-			adapter.setRetryTemplate(buildSolaceRetryTemplate(properties));
-			adapter.setRecoveryCallback(wrapRecoveryCallback(errorInfra.getRecoverer()));
+			adapter.setRetryTemplate(buildRetryTemplate(properties));
+			adapter.setRecoveryCallback(errorInfra.getRecoverer());
 		} else {
 			adapter.setErrorChannel(errorInfra.getErrorChannel());
 		}
@@ -263,57 +260,6 @@ public class SolaceMessageChannelBinder
 
 	public void setSolaceBinderHealthAccessor(@Nullable SolaceBinderHealthAccessor solaceBinderHealthAccessor) {
 		this.solaceBinderHealthAccessor = solaceBinderHealthAccessor;
-	}
-
-	/**
-	 * Build a RetryTemplate for message retry handling.
-	 * This is a custom implementation to work around the type incompatibility between
-	 * Spring Cloud Stream's RetryTemplate (org.springframework.core.retry.RetryTemplate)
-	 * and Spring Retry's RetryTemplate (org.springframework.retry.support.RetryTemplate).
-	 */
-	private RetryTemplate buildSolaceRetryTemplate(ExtendedConsumerProperties<?> properties) {
-		RetryTemplate retryTemplate = new RetryTemplate();
-
-		// Configure retry policy
-		SimpleRetryPolicy retryPolicy = new SimpleRetryPolicy();
-		retryPolicy.setMaxAttempts(properties.getMaxAttempts());
-		retryTemplate.setRetryPolicy(retryPolicy);
-
-		// Configure backoff policy
-		ExponentialBackOffPolicy backOffPolicy = new ExponentialBackOffPolicy();
-		backOffPolicy.setInitialInterval(properties.getBackOffInitialInterval());
-		backOffPolicy.setMultiplier(properties.getBackOffMultiplier());
-		backOffPolicy.setMaxInterval(properties.getBackOffMaxInterval());
-		retryTemplate.setBackOffPolicy(backOffPolicy);
-
-		return retryTemplate;
-	}
-
-	/**
-	 * Wraps ErrorMessageSendingRecoverer into a RecoveryCallback to bridge the type incompatibility
-	 * between Spring Integration and Spring Retry in Spring Boot 4.x.
-	 * The callback sends the error to the error channel, where SolaceErrorMessageHandler will requeue
-	 * the message. We must NOT call AckUtils.autoAck() after this, so we throw an exception to prevent
-	 * the autoAck in RetryableInboundXMLMessageListener from executing.
-	 */
-	private RecoveryCallback<Object> wrapRecoveryCallback(org.springframework.integration.handler.advice.ErrorMessageSendingRecoverer recoverer) {
-		return context -> {
-			Throwable lastThrowable = context.getLastThrowable();
-			if (lastThrowable != null) {
-				// Send error message to error channel
-				// RetryContext implements AttributeAccessor, so we can pass it directly
-				// SolaceErrorMessageHandler will call AckUtils.requeue() or republish to error queue
-				recoverer.recover(context, lastThrowable);
-
-				// Throw an exception to prevent AckUtils.autoAck() from being called
-				// in RetryableInboundXMLMessageListener (line 76), which would ACK the message
-				// after the error handler already requeued it.
-				// The exception will be caught in InboundXMLMessageListener.processMessage()
-				// but since the message was already requeued by the error handler, no further action needed.
-				throw new SolaceAcknowledgmentException("Message already requeued by error handler", lastThrowable);
-			}
-			return null;
-		};
 	}
 
 	/**

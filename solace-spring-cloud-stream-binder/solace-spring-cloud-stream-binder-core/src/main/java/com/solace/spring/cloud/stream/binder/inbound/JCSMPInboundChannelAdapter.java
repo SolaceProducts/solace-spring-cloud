@@ -30,11 +30,9 @@ import org.springframework.integration.core.Pausable;
 import org.springframework.integration.endpoint.MessageProducerSupport;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessagingException;
-import org.springframework.retry.RecoveryCallback;
-import org.springframework.retry.RetryCallback;
-import org.springframework.retry.RetryContext;
-import org.springframework.retry.RetryListener;
-import org.springframework.retry.support.RetryTemplate;
+import org.springframework.integration.core.RecoveryCallback;
+import org.springframework.core.retry.RetryListener;
+import org.springframework.core.retry.RetryTemplate;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 import org.springframework.util.Assert;
 
@@ -194,7 +192,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
         }
 
         if (retryTemplate != null) {
-            retryTemplate.registerListener(new SolaceRetryListener(endpointName));
+            retryTemplate.setRetryListener(new SolaceRetryListener(endpointName));
         }
 
         executorService = buildThreadPool(consumerProperties.getConcurrency(), consumerProperties.getBindingName());
@@ -391,31 +389,43 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
         private final String queueName;
 
+        //TODO: May be attemptCount won't reset to 0 as expected
+        private int attemptCount = 0;
+
         private SolaceRetryListener(String queueName) {
             this.queueName = queueName;
         }
 
-        @Override
-        public <T, E extends Throwable> boolean open(RetryContext context, RetryCallback<T, E> callback) {
-            return true;
-        }
+
 
         @Override
-        public <T, E extends Throwable> void close(RetryContext context, RetryCallback<T, E> callback, Throwable throwable) {
+        public void onRetryFailure(org.springframework.core.retry.RetryPolicy retryPolicy,
+                                   org.springframework.core.retry.Retryable<?> retryable,
+                                   Throwable throwable) {
 
-        }
+            attemptCount++;
+            logger.warn("Failed to consume a message from destination {} - attempt {}", queueName, attemptCount);
 
-        @Override
-        public <T, E extends Throwable> void onError(RetryContext context, RetryCallback<T, E> callback, Throwable throwable) {
-            logger.warn("Failed to consume a message from destination {} - attempt {}", queueName, context.getRetryCount());
+            // Check if we should abort retry for certain exceptions
             for (Throwable nestedThrowable : ExceptionUtils.getThrowableList(throwable)) {
                 if (nestedThrowable instanceof SolaceMessageConversionException ||
                         nestedThrowable instanceof RollbackException) {
-                    // Do not retry if these exceptions are thrown
-                    context.setExhaustedOnly();
-                    break;
+                    // These exceptions should not be retried - rethrow to abort
+                    logger.warn("Non-retryable exception encountered: {}", nestedThrowable.getClass().getName());
+                    if (throwable instanceof RuntimeException) {
+                        throw (RuntimeException) throwable;
+                    }
+                    throw new RuntimeException(throwable);
                 }
             }
+        }
+
+        @Override
+        public void onRetrySuccess(org.springframework.core.retry.RetryPolicy retryPolicy,
+                                   org.springframework.core.retry.Retryable<?> retryable,
+                                   Object result) {
+            // Reset attempt count on success
+            attemptCount = 0;
         }
     }
 }

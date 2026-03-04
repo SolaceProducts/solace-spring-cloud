@@ -125,7 +125,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
-		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts(),
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts() > 1 ? consumerProperties.getMaxAttempts() + 1 : consumerProperties.getMaxAttempts(),
 				() -> messages.forEach(moduleOutputChannel::send),
 				(msg, callback) -> {
 					logger.info("Received message {}", StaticMessageHeaderAccessor.getId(msg));
@@ -276,7 +276,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 
 		String queueName = binder.getConsumerQueueName(consumerBinding);
 
-		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts() + 1,
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts() > 1 ? consumerProperties.getMaxAttempts() + 2 : consumerProperties.getMaxAttempts() + 1,
 				() -> messages.forEach(moduleOutputChannel::send),
 				(msg, callback) -> {
 					logger.info("Received message {}", StaticMessageHeaderAccessor.getId(msg));
