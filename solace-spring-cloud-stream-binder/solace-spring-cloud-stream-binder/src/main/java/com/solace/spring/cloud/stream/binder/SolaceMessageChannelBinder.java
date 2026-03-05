@@ -14,7 +14,6 @@ import com.solace.spring.cloud.stream.binder.provisioning.SolaceEndpointProvisio
 import com.solace.spring.cloud.stream.binder.provisioning.SolaceProvisioningUtil;
 import com.solace.spring.cloud.stream.binder.util.ErrorQueueInfrastructure;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
-import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import com.solace.spring.cloud.stream.binder.util.SolaceErrorMessageHandler;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solace.spring.cloud.stream.binder.util.SolaceSessionManager;
@@ -33,7 +32,6 @@ import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
 import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.core.MessageProducer;
-import org.springframework.integration.core.RecoveryCallback;
 import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessageChannel;
@@ -191,7 +189,6 @@ public class SolaceMessageChannelBinder
 
 			ErrorInfrastructure errorInfra = registerErrorInfrastructure(destination, group,
 					consumerProperties, true);
-			//messageSource.setBeanFactory(getBeanFactory());
 			return new PolledConsumerResources(messageSource, errorInfra);
 		} catch (Exception e) {
 			throw new RuntimeException("Failed to create polled consumer.", e);
