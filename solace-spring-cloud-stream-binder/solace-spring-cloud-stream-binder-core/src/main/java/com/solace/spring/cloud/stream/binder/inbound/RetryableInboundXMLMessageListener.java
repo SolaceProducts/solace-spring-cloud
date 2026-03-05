@@ -45,7 +45,7 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 				solaceMeterAccessor,
 				remoteStopFlag,
 				attributesHolder,
-				false,
+				true,
 				true);
 		this.retryTemplate = retryTemplate;
 		this.recoveryCallback = recoveryCallback;
