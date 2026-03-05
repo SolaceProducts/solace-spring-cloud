@@ -389,22 +389,16 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
         private final String queueName;
 
-        //TODO: May be attemptCount won't reset to 0 as expected
-        private int attemptCount = 0;
-
         private SolaceRetryListener(String queueName) {
             this.queueName = queueName;
         }
-
-
 
         @Override
         public void onRetryFailure(org.springframework.core.retry.RetryPolicy retryPolicy,
                                    org.springframework.core.retry.Retryable<?> retryable,
                                    Throwable throwable) {
 
-            attemptCount++;
-            logger.warn("Failed to consume a message from destination {} - attempt {}", queueName, attemptCount);
+            logger.warn("Failed to consume a message from destination {}", queueName);
 
             // Check if we should abort retry for certain exceptions
             for (Throwable nestedThrowable : ExceptionUtils.getThrowableList(throwable)) {
@@ -424,8 +418,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
         public void onRetrySuccess(org.springframework.core.retry.RetryPolicy retryPolicy,
                                    org.springframework.core.retry.Retryable<?> retryable,
                                    Object result) {
-            // Reset attempt count on success
-            attemptCount = 0;
+            // Retry succeeded, no action needed
         }
     }
 }
