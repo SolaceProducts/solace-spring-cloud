@@ -383,7 +383,7 @@ class SolaceBinderInstrumentationIT {
     try (var ignored = new SpringApplicationBuilder(MainApp.class).profiles(springProfile).run()) {
       log.info("Staring Application");
 
-      List<TracesData> traces = findTraces(jaegerQueryServer, SERVICE_NAME, numMsgs, 8);
+      List<TracesData> traces = findTraces(jaegerQueryServer, SERVICE_NAME, numMsgs, 9);
       verifyPublishSpans(traces, numMsgs, "solace/supply/errorHandlingTestQueue", "topic");
       verifyBrokerReceiveSpans(traces, numMsgs);
       verifyBrokerSendSpans(traces, numMsgs);
@@ -391,7 +391,7 @@ class SolaceBinderInstrumentationIT {
           "solace/supply/errorHandlingTestQueue");
       verifyConsumerProcessSpans(traces, numMsgs, "errorHandlingTestQueue", "queue",
           "solace/supply/errorHandlingTestQueue");
-      verifyConsumerInternalSpans(traces, numMsgs * maxAttempts);
+      verifyConsumerInternalSpans(traces, numMsgs * (maxAttempts + 1)); //1 initial + 3 retry attempts
       log.info("Stopping Application");
     } catch (Exception e) {
       throw new RuntimeException(e);
