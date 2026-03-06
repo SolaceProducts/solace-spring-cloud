@@ -25,6 +25,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.core.AttributeAccessor;
+import org.springframework.core.retry.RetryPolicy;
+import org.springframework.core.retry.RetryState;
+import org.springframework.core.retry.Retryable;
 import org.springframework.integration.context.OrderlyShutdownCapable;
 import org.springframework.integration.core.Pausable;
 import org.springframework.integration.endpoint.MessageProducerSupport;
@@ -394,31 +397,26 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
         }
 
         @Override
-        public void onRetryFailure(org.springframework.core.retry.RetryPolicy retryPolicy,
-                                   org.springframework.core.retry.Retryable<?> retryable,
-                                   Throwable throwable) {
+        public void onRetryableExecution(RetryPolicy retryPolicy, Retryable<?> retryable, RetryState retryState) {
+            //Successful on initial attempt
+            if (retryState.isSuccessful()) {
+                return;
+            }
 
-            logger.warn("Failed to consume a message from destination {}", queueName);
+            logger.warn("Failed to consume a message from destination {} - attempt {}", queueName, retryState.getRetryCount());
 
-            // Check if we should abort retry for certain exceptions
+            // Check if it is non-retryable exception to abort retry immediately instead of waiting for retry exhaustion
+            Throwable throwable = retryState.getLastException();
             for (Throwable nestedThrowable : ExceptionUtils.getThrowableList(throwable)) {
                 if (nestedThrowable instanceof SolaceMessageConversionException ||
-                        nestedThrowable instanceof RollbackException) {
-                    // These exceptions should not be retried - rethrow to abort
-                    logger.warn("Non-retryable exception encountered: {}", nestedThrowable.getClass().getName());
-                    if (throwable instanceof RuntimeException) {
-                        throw (RuntimeException) throwable;
+                    nestedThrowable instanceof RollbackException) {
+                    if (throwable instanceof RuntimeException runtimeException) {
+                        logger.warn("Non-retryable exception encountered: {}", nestedThrowable.getClass().getName());
+                        throw runtimeException;
                     }
-                    throw new RuntimeException(throwable);
+                    throw new RuntimeException("Non-retryable exception '%s' encountered".formatted(nestedThrowable.getClass()), throwable);
                 }
             }
-        }
-
-        @Override
-        public void onRetrySuccess(org.springframework.core.retry.RetryPolicy retryPolicy,
-                                   org.springframework.core.retry.Retryable<?> retryable,
-                                   Object result) {
-            // Retry succeeded, no action needed
         }
     }
 }
