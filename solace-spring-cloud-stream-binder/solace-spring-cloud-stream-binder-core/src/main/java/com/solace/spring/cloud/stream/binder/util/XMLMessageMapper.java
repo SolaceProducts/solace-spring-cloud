@@ -226,13 +226,13 @@ public class XMLMessageMapper {
 			Message<List<?>> batchedMessage = (Message<List<?>>) message;
 
 			@SuppressWarnings("unchecked") List<Map<String, Object>> batchedHeaders = (List<Map<String, Object>>)
-					batchedMessage.getHeaders().get(SolaceBinderHeaders.BATCHED_HEADERS, List.class);
+					batchedMessage.getHeaders().get(BinderHeaders.BATCH_HEADERS, List.class);
 
 			if (batchedHeaders != null && batchedHeaders.size() != batchedMessage.getPayload().size()) {
 				throw new IllegalArgumentException(String.format(
 						"Batched message %s must have matching lengths for payload (was %s) and the %s header (was %s)",
 						StaticMessageHeaderAccessor.getId(batchedMessage), batchedMessage.getPayload().size(),
-						SolaceBinderHeaders.BATCHED_HEADERS, batchedHeaders.size()));
+						BinderHeaders.BATCH_HEADERS, batchedHeaders.size()));
 			}
 
 			return IntStream.range(0, batchedMessage.getPayload().size())
@@ -271,7 +271,7 @@ public class XMLMessageMapper {
 
 		AbstractIntegrationMessageBuilder<List<?>> builder = MESSAGE_BUILDER_FACTORY.withPayload(batchedPayloads);
 		return injectRootSpringHeaders(builder, acknowledgmentCallback, setRawMessageHeader ? xmlMessages : null)
-				.setHeader(SolaceBinderHeaders.BATCHED_HEADERS, batchedHeaders)
+				.setHeader(BinderHeaders.BATCH_HEADERS, batchedHeaders)
 				.build();
 	}
 

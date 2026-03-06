@@ -1,9 +1,9 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.integration.support.ErrorMessageUtils;
@@ -61,7 +61,7 @@ public class ErrorChannelSendingCorrelationKey {
 			AttributeAccessor attributes = ErrorMessageUtils.getAttributeAccessor(inputMessage, null);
 			if (rawMessages != null && !rawMessages.isEmpty()) {
 				attributes.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_RAW_MESSAGE,
-						inputMessage.getHeaders().containsKey(SolaceBinderHeaders.BATCHED_HEADERS) ?
+						inputMessage.getHeaders().containsKey(BinderHeaders.BATCH_HEADERS) ?
 								rawMessages : rawMessages.get(0));
 			}
 			LOGGER.debug("Sending message {} to error channel {}", inputMessage.getHeaders().getId(), errorChannel);

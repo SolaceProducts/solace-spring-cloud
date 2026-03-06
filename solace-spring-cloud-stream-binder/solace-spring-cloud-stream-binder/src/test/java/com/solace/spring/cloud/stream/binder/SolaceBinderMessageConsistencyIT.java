@@ -1,6 +1,5 @@
 package com.solace.spring.cloud.stream.binder;
 
-import static com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders.BATCHED_HEADERS;
 import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.APPLICATION_MESSAGE_ID;
 import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.CORRELATION_ID;
 import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.DMQ_ELIGIBLE;
@@ -52,6 +51,7 @@ import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
+import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.config.BindingProperties;
@@ -102,7 +102,7 @@ public class SolaceBinderMessageConsistencyIT {
       });
 
       AbstractListAssert<?, List<?>, Object, ObjectAssert<Object>> headerAssert =
-          batchMode ? softly.assertThat(msg.getHeaders().get(BATCHED_HEADERS)).asList()
+          batchMode ? softly.assertThat(msg.getHeaders().get(BinderHeaders.BATCH_HEADERS)).asList()
               .hasSize(consumerProperties.getExtension().getBatchMaxSize())
               : softly.assertThat(Collections.singletonList(msg.getHeaders()));
       headerAssert.allSatisfy(headers -> {

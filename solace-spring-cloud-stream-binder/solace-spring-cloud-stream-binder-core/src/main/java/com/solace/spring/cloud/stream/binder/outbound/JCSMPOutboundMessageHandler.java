@@ -109,9 +109,9 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 
 		List<XMLMessage> smfMessages;
 		List<Destination> dynamicDestinations;
-		if (message.getHeaders().containsKey(SolaceBinderHeaders.BATCHED_HEADERS)) {
+		if (message.getHeaders().containsKey(BinderHeaders.BATCH_HEADERS)) {
 			LOGGER.debug("Detected header {}, handling as batched message (Message<List<?>>) <message handler ID: {}>",
-					SolaceBinderHeaders.BATCHED_HEADERS, id);
+					BinderHeaders.BATCH_HEADERS, id);
 			smfMessages = xmlMessageMapper.mapBatchedToSmf(message, smfMessageWriterProperties);
 
 			BatchProxyCorrelationKey batchProxyCorrelationKey = transactedSession == null ?
@@ -124,11 +124,11 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 			}
 
 			// after successfully running xmlMessageMapper.mapBatchMessage(),
-			// SolaceBinderHeaders.BATCHED_HEADERS is verified to be well-formed
+			// BinderHeaders.BATCH_HEADERS is verified to be well-formed
 
 			@SuppressWarnings("unchecked")
 			List<Map<String, Object>> batchedHeaders = (List<Map<String, Object>>) message.getHeaders()
-					.getOrDefault(SolaceBinderHeaders.BATCHED_HEADERS,
+					.getOrDefault(BinderHeaders.BATCH_HEADERS,
 							Collections.nCopies(smfMessages.size(), Collections.emptyMap()));
 
 			dynamicDestinations = batchedHeaders.stream()
