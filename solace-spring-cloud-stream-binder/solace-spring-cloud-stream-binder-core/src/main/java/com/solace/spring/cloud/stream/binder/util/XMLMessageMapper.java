@@ -336,7 +336,6 @@ public class XMLMessageMapper {
 		AbstractIntegrationMessageBuilder<?> builder = MESSAGE_BUILDER_FACTORY
 				.withPayload(payload)
 				.copyHeaders(mapHeadersToSpring(metadata, smfMessageReaderProperties));
-				//.setHeaderIfAbsent(MessageHeaders.CONTENT_TYPE, xmlMessage.getHTTPContentType());
 
 		if (isNullPayload) {
 			LOGGER.debug("Null payload detected, setting Spring header {}", SolaceBinderHeaders.NULL_PAYLOAD);
