@@ -389,8 +389,8 @@ public class XMLMessageMapper {
 				continue;
 			}
 
-			Object contentType = headers.get(MessageHeaders.CONTENT_TYPE);
-			if (contentType != null) {
+			if (MessageHeaders.CONTENT_TYPE.equals(header.getKey()) && header.getValue() != null) {
+				Object contentType = header.getValue();
 				// derived from StaticMessageHeaderAccessor.getContentType(Message<?>)
 				rethrowableCall(metadata::putString, MessageHeaders.CONTENT_TYPE,
 						contentType instanceof MimeType ? contentType.toString() : MimeType.valueOf(contentType.toString()).toString());
