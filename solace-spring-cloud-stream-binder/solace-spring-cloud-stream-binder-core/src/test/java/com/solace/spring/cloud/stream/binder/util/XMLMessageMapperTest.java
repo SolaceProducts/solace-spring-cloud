@@ -324,6 +324,7 @@ public class XMLMessageMapperTest {
 					 SolaceHeaders.APPLICATION_MESSAGE_TYPE,
 					 SolaceHeaders.CORRELATION_ID,
 					 SolaceHeaders.HTTP_CONTENT_ENCODING,
+					 SolaceHeaders.HTTP_CONTENT_TYPE,
 					 SolaceHeaders.SENDER_ID,
 					 SolaceBinderHeaders.TARGET_DESTINATION_TYPE ->
 						RandomStringUtils.randomAlphanumeric(10);
@@ -380,6 +381,8 @@ public class XMLMessageMapperTest {
 						assertEquals(expectedValue, xmlMessage.isReplyMessage());
 				case SolaceHeaders.HTTP_CONTENT_ENCODING ->
 						assertEquals(expectedValue, xmlMessage.getHTTPContentEncoding());
+				case SolaceHeaders.HTTP_CONTENT_TYPE ->
+						assertEquals(expectedValue, xmlMessage.getHTTPContentType());
 				case SolaceHeaders.PRIORITY ->
 						assertEquals(expectedValue, xmlMessage.getPriority());
 				case SolaceHeaders.REPLY_TO ->
@@ -552,16 +555,16 @@ public class XMLMessageMapperTest {
 	@ParameterizedTest
 	@ValueSource(classes = {String.class, MimeType.class})
 	void testMapSpringMessageToXMLMessage_contentTypeHeader(
-			Class<?> contentTypeClass) {
+			Class<?> contentTypeClass) throws SDTException {
 		Message<?> testSpringMessage = new DefaultMessageBuilderFactory()
 				.withPayload("test")
 				.setHeader(MessageHeaders.CONTENT_TYPE, MimeType.class.isAssignableFrom(contentTypeClass) ?
 						MimeTypeUtils.TEXT_PLAIN : MimeTypeUtils.TEXT_PLAIN_VALUE)
 				.build();
 
-		Assertions.assertThat(xmlMessageMapper.mapToSmf(testSpringMessage,
-						new SmfMessageWriterProperties(new SolaceProducerProperties())))
-				.extracting(XMLMessage::getHTTPContentType)
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(testSpringMessage,
+				new SmfMessageWriterProperties(new SolaceProducerProperties()));
+		Assertions.assertThat(xmlMessage.getProperties().getString(MessageHeaders.CONTENT_TYPE))
 				.isEqualTo(MimeTypeUtils.TEXT_PLAIN_VALUE);
 	}
 
@@ -706,6 +709,7 @@ public class XMLMessageMapperTest {
 					 SolaceHeaders.APPLICATION_MESSAGE_TYPE,
 					 SolaceHeaders.CORRELATION_ID,
 					 SolaceHeaders.HTTP_CONTENT_ENCODING,
+					 SolaceHeaders.HTTP_CONTENT_TYPE,
 					 SolaceHeaders.SENDER_ID,
 					 SolaceBinderHeaders.PARTITION_KEY ->
 						RandomStringUtils.randomAlphanumeric(10);
@@ -754,6 +758,8 @@ public class XMLMessageMapperTest {
 						assertEquals(expectedValue, xmlMessage.getExpiration());
 				case SolaceHeaders.HTTP_CONTENT_ENCODING ->
 						assertEquals(expectedValue, xmlMessage.getHTTPContentEncoding());
+				case SolaceHeaders.HTTP_CONTENT_TYPE ->
+						assertEquals(expectedValue, xmlMessage.getHTTPContentType());
 				case SolaceHeaders.IS_REPLY ->
 						assertEquals(expectedValue, xmlMessage.isReplyMessage());
 				case SolaceHeaders.PRIORITY ->
@@ -1084,6 +1090,9 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.HTTP_CONTENT_ENCODING:
 					Mockito.when(xmlMessage.getHTTPContentEncoding()).thenReturn(header.getKey());
 					break;
+				case SolaceHeaders.HTTP_CONTENT_TYPE:
+					Mockito.when(xmlMessage.getHTTPContentType()).thenReturn(header.getKey());
+					break;
 				case SolaceHeaders.PRIORITY:
 					Mockito.when(xmlMessage.getPriority()).thenReturn(ThreadLocalRandom.current().nextInt());
 					break;
@@ -1177,6 +1186,9 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceHeaders.HTTP_CONTENT_ENCODING:
 					assertEquals(xmlMessage.getHTTPContentEncoding(), actualValue);
+					break;
+				case SolaceHeaders.HTTP_CONTENT_TYPE:
+					assertEquals(xmlMessage.getHTTPContentType(), actualValue);
 					break;
 				case SolaceHeaders.IS_REPLY:
 					assertEquals(xmlMessage.isReplyMessage(), actualValue);
@@ -1888,7 +1900,7 @@ public class XMLMessageMapperTest {
 		assertEquals(DeliveryMode.PERSISTENT, xmlMessage.getDeliveryMode());
 		Assertions.assertThat(new GenericMessage<>(springMessagePayload, springMessageHeaders))
 				.extracting(StaticMessageHeaderAccessor::getContentType)
-				.hasToString(xmlMessage.getHTTPContentType());
+				.hasToString(xmlMessage.getProperties().getString(MessageHeaders.CONTENT_TYPE));
 
 		SDTMap metadata = xmlMessage.getProperties();
 

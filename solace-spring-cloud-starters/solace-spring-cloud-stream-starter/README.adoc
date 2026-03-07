@@ -642,6 +642,11 @@ Note that, while the Delivery Count feature is in controlled availability, `Enab
 | Read/Write
 | The HTTP content encoding header value from interaction with an HTTP client.
 
+| solace_httpContentType
+| String
+| Read/Write
+| The HTTP content type header value from interaction with an HTTP client.
+
 | solace_isReply
 | Boolean
 | Read/Write
