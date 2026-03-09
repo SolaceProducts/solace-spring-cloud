@@ -389,7 +389,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
         }
     }
 
-    private static RetryPolicy withNonRetryableExceptions(RetryPolicy delegate) {
+    protected static RetryPolicy withNonRetryableExceptions(RetryPolicy delegate) {
         return new RetryPolicy() {
             @Override
             public boolean shouldRetry(Throwable throwable) {

@@ -12,7 +12,6 @@ import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionExcepti
 import com.solacesystems.jcsmp.transaction.RollbackException;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.commons.lang3.RandomStringUtils;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,7 +20,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
-import org.springframework.core.retry.RetryPolicy;
 import org.springframework.core.retry.RetryTemplate;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.core.RecoveryCallback;
@@ -30,7 +28,7 @@ import org.springframework.messaging.support.MessageBuilder;
 @ExtendWith(MockitoExtension.class)
 class RetryableInboundXMLMessageListenerTest {
 
-  private static final int MAX_RETRIES = 2; // 1 initial + 2 retries = 3 total attempts
+  private static final int MAX_RETRIES = 3; // 1 initial + 3 retries = 4 total attempts
 
   private RetryableInboundXMLMessageListener listener;
   private ThreadLocal<AttributeAccessor> attributesHolder;
@@ -56,7 +54,8 @@ class RetryableInboundXMLMessageListenerTest {
     consumerProperties.populateBindingName(RandomStringUtils.randomAlphanumeric(10));
 
     RetryTemplate retryTemplate = new RetryTemplate();
-    retryTemplate.setRetryPolicy(buildNonRetryablePolicy());
+    retryTemplate.setRetryPolicy(
+        JCSMPInboundChannelAdapter.withNonRetryableExceptions(retryTemplate.getRetryPolicy()));
 
     listener = new RetryableInboundXMLMessageListener(
         flowReceiverContainer,
@@ -129,37 +128,9 @@ class RetryableInboundXMLMessageListenerTest {
         false
     );
 
-    // With MAX_RETRIES=2, the policy allows more than 1 attempt (retries happen)
-    assertThat(callCount.get()).isGreaterThan(1);
+    int expectedAttempts = MAX_RETRIES + 1;
+    assertThat(callCount).hasValue(expectedAttempts);
     verify(recoveryCallback).recover(any(AttributeAccessor.class), any(RuntimeException.class));
     verify(acknowledgmentCallback).acknowledge(AcknowledgmentCallback.Status.ACCEPT);
-  }
-
-  /**
-   * Builds a RetryPolicy that mirrors
-   * {@code JCSMPInboundChannelAdapter.withNonRetryableExceptions()}.
-   */
-  private static RetryPolicy buildNonRetryablePolicy() {
-    return new RetryPolicy() {
-      @Override
-      public boolean shouldRetry(Throwable throwable) {
-        for (Throwable t : ExceptionUtils.getThrowableList(throwable)) {
-          if (t instanceof SolaceMessageConversionException || t instanceof RollbackException) {
-            return false;
-          }
-        }
-        return true;
-      }
-
-      @Override
-      public java.time.Duration getTimeout() {
-        return java.time.Duration.ofSeconds(5);
-      }
-
-      @Override
-      public org.springframework.util.backoff.BackOff getBackOff() {
-        return new org.springframework.util.backoff.FixedBackOff(0L, MAX_RETRIES);
-      }
-    };
   }
 }

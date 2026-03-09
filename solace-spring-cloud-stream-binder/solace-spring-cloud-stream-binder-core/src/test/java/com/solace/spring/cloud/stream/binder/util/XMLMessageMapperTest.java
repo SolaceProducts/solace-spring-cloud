@@ -83,7 +83,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
-import org.testcontainers.shaded.com.fasterxml.jackson.core.JsonProcessingException;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
@@ -1957,12 +1956,12 @@ public class XMLMessageMapperTest {
 	}
 
 	private void validateSpringHeaders(MessageHeaders messageHeaders, XMLMessage xmlMessage)
-			throws SDTException, JsonProcessingException {
+			throws SDTException {
 		validateSpringHeaders(messageHeaders, xmlMessage, false, xmlMessage.getProperties());
 	}
 
 	private void validateSpringHeaders(MessageHeaders messageHeaders, XMLMessage xmlMessage, SDTMap expectedHeaders)
-			throws SDTException, JsonProcessingException {
+			throws SDTException {
 		validateSpringHeaders(messageHeaders, xmlMessage, false, expectedHeaders);
 	}
 	private void validateSpringBatchHeaders(MessageHeaders batchMessageHeaders, List<? extends XMLMessage> xmlMessages) {
@@ -1998,7 +1997,7 @@ public class XMLMessageMapperTest {
 
 	private void validateSpringHeaders(MessageHeaders messageHeaders, XMLMessage xmlMessage, boolean batchMode,
 									   SDTMap expectedHeaders)
-			throws SDTException, JsonProcessingException {
+			throws SDTException {
 		List<String> nonReadableBinderHeaderMeta = SolaceBinderHeaderMeta.META
 				.entrySet()
 				.stream()
