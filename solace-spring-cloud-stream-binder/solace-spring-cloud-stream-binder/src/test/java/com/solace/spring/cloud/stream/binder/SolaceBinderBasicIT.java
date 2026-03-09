@@ -785,9 +785,10 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 		consumerBinding.unbind();
 	}
 
-	@CartesianTest(name = "[{index}] exceptionType={0}")
+	@CartesianTest(name = "[{index}] batchMode={0}, exceptionType={1}")
 	@Execution(ExecutionMode.CONCURRENT)
 	public void testConsumerNonRetryableExceptionTriggersImmediateRecovery(
+			@Values(booleans = {false, true}) boolean batchMode,
 			@Values(strings = {"SolaceMessageConversionException", "RollbackException"}) String exceptionType,
 			JCSMPSession jcsmpSession,
 			SempV2Api sempV2Api,
@@ -807,20 +808,24 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 				destination0, moduleOutputChannel, createProducerProperties(testInfo));
 
 		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setBatchMode(batchMode);
 		consumerProperties.setMaxAttempts(3); // high enough to observe whether retries happen
 		consumerProperties.getExtension().setAutoBindErrorQueue(true);
 		Binding<DirectChannel> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
 				destination0, group0, moduleInputChannel, consumerProperties);
 
-		List<Message<?>> messages = List.of(
-				MessageBuilder.withPayload(UUID.randomUUID().toString().getBytes())
+		List<Message<?>> messages = IntStream.range(0,
+						batchMode ? consumerProperties.getExtension().getBatchMaxSize() : 1)
+				.mapToObj(i -> MessageBuilder.withPayload(UUID.randomUUID().toString().getBytes())
 						.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
-						.build());
+						.build())
+				.collect(Collectors.toList());
 
 		binderBindUnbindLatency();
 
 		AtomicInteger handlerCallCount = new AtomicInteger(0);
 
+		// numMessagesToReceive=1: non-retryable exception means exactly 1 handler invocation
 		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, 1,
 				() -> messages.forEach(moduleOutputChannel::send),
 				(msg, callback) -> {
