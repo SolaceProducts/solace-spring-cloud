@@ -196,6 +196,7 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
         if (retryTemplate != null) {
             retryTemplate.setRetryListener(new SolaceRetryListener(endpointName));
+            retryTemplate.setRetryPolicy(withNonRetryableExceptions(retryTemplate.getRetryPolicy()));
         }
 
         executorService = buildThreadPool(consumerProperties.getConcurrency(), consumerProperties.getBindingName());
@@ -388,6 +389,31 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
         }
     }
 
+    private static RetryPolicy withNonRetryableExceptions(RetryPolicy delegate) {
+        return new RetryPolicy() {
+            @Override
+            public boolean shouldRetry(Throwable throwable) {
+                for (Throwable t : ExceptionUtils.getThrowableList(throwable)) {
+                    if (t instanceof SolaceMessageConversionException ||
+                        t instanceof RollbackException) {
+                        return false;
+                    }
+                }
+                return delegate.shouldRetry(throwable);
+            }
+
+            @Override
+            public java.time.Duration getTimeout() {
+                return delegate.getTimeout();
+            }
+
+            @Override
+            public org.springframework.util.backoff.BackOff getBackOff() {
+                return delegate.getBackOff();
+            }
+        };
+    }
+
     private static final class SolaceRetryListener implements RetryListener {
 
         private final String queueName;
@@ -398,25 +424,11 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
 
         @Override
         public void onRetryableExecution(RetryPolicy retryPolicy, Retryable<?> retryable, RetryState retryState) {
-            //Successful on initial attempt
             if (retryState.isSuccessful()) {
                 return;
             }
-
-            logger.warn("Failed to consume a message from destination {} - attempt {}", queueName, retryState.getRetryCount());
-
-            // Check if it is non-retryable exception to abort retry immediately instead of waiting for retry exhaustion
-            Throwable throwable = retryState.getLastException();
-            for (Throwable nestedThrowable : ExceptionUtils.getThrowableList(throwable)) {
-                if (nestedThrowable instanceof SolaceMessageConversionException ||
-                    nestedThrowable instanceof RollbackException) {
-                    if (throwable instanceof RuntimeException runtimeException) {
-                        logger.warn("Non-retryable exception encountered: {}", nestedThrowable.getClass().getName());
-                        throw runtimeException;
-                    }
-                    throw new RuntimeException("Non-retryable exception '%s' encountered".formatted(nestedThrowable.getClass()), throwable);
-                }
-            }
+            logger.warn("Failed to consume a message from destination {} - attempt {}",
+                queueName, retryState.getRetryCount());
         }
     }
 }

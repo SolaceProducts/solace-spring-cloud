@@ -8,10 +8,10 @@ import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
-import org.springframework.core.AttributeAccessorSupport;
 import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.core.RecoveryCallback;
+import org.springframework.integration.support.ErrorMessageUtils;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.core.retry.RetryException;
@@ -57,15 +57,12 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 			throws SolaceAcknowledgmentException {
 		Message<?> message;
 		try {
+			attributesHolder.set(ErrorMessageUtils.getAttributeAccessor(null, null));
 			message = retryTemplate.execute(() -> messageSupplier.get());
 		}
 		catch (RetryException ex) {
 			if (recoveryCallback != null) {
-				AttributeAccessor attributeAccessor = attributesHolder.get();
-				if (attributeAccessor == null) {
-					attributeAccessor = new AttributeAccessorSupport() {};
-				}
-				recoveryCallback.recover(attributeAccessor, ex.getCause());
+				recoveryCallback.recover(attributesHolder.get(), ex.getCause());
 			}
 			AckUtils.autoAck(acknowledgmentCallback);
 			return;
@@ -76,6 +73,7 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 		}
 
 		try {
+			attributesHolder.set(ErrorMessageUtils.getAttributeAccessor(null, null));
 			retryTemplate.execute(() -> {
 				sendToConsumerHandler.accept(message);
 				AckUtils.autoAck(acknowledgmentCallback);
@@ -84,11 +82,7 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 		}
 		catch (RetryException ex) {
 			if (recoveryCallback != null) {
-				AttributeAccessor attributeAccessor = attributesHolder.get();
-				if (attributeAccessor == null) {
-					attributeAccessor = new AttributeAccessorSupport() {};
-				}
-				recoveryCallback.recover(attributeAccessor, ex.getCause());
+				recoveryCallback.recover(attributesHolder.get(), ex.getCause());
 			}
 			AckUtils.autoAck(acknowledgmentCallback);
 		}
