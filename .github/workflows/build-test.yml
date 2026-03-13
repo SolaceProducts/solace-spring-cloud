@@ -27,6 +27,11 @@ jobs:
     if: needs.dupe_check.outputs.should_skip != 'true'
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+
     steps:
       - uses: actions/checkout@v4
 
