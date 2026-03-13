@@ -13,6 +13,7 @@ It is designed to work with the link:https://opentelemetry.io/docs/zero-code/jav
 | 2024.0.0     | 4.8.0 and later            | 3.4.x       | 10.26.0 and later
 | 2024.0.2     | 4.9.0 and later            | 3.4.x       | 10.28.0 and later
 | 2025.0.0     | 4.10.0 and later           | 3.5.x       | 10.28.0 and later
+| 2025.2.2     | 6.0.0 and later            | 4.0.x       | 10.29.1 and later
 |===
 
 == Required Dependencies
