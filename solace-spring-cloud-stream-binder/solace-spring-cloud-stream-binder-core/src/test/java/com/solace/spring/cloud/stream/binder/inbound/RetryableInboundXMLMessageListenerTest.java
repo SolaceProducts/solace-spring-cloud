@@ -89,8 +89,7 @@ class RetryableInboundXMLMessageListenerTest {
     );
 
     assertThat(callCount).hasValue(1);
-    verify(recoveryCallback).recover(any(AttributeAccessor.class),
-        any(SolaceMessageConversionException.class));
+    verify(recoveryCallback).recover(any(), any(SolaceMessageConversionException.class));
     verify(acknowledgmentCallback).acknowledge(AcknowledgmentCallback.Status.ACCEPT);
   }
 
@@ -109,7 +108,7 @@ class RetryableInboundXMLMessageListenerTest {
     );
 
     assertThat(callCount).hasValue(1);
-    verify(recoveryCallback).recover(any(AttributeAccessor.class), any(RuntimeException.class));
+    verify(recoveryCallback).recover(any(), any(RuntimeException.class));
     verify(acknowledgmentCallback).acknowledge(AcknowledgmentCallback.Status.ACCEPT);
   }
 
@@ -130,7 +129,7 @@ class RetryableInboundXMLMessageListenerTest {
 
     int expectedAttempts = MAX_RETRIES + 1;
     assertThat(callCount).hasValue(expectedAttempts);
-    verify(recoveryCallback).recover(any(AttributeAccessor.class), any(RuntimeException.class));
+    verify(recoveryCallback).recover(any(), any(RuntimeException.class));
     verify(acknowledgmentCallback).acknowledge(AcknowledgmentCallback.Status.ACCEPT);
   }
 }
