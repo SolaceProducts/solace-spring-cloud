@@ -46,7 +46,6 @@ public class BasicInboundXMLMessageListener extends InboundXMLMessageListener {
 				solaceMeterAccessor,
 				remoteStopFlag,
 				attributesHolder,
-				needHolderAndAttributes,
 				needHolderAndAttributes);
 		this.errorHandlerFunction = errorHandlerFunction;
 	}

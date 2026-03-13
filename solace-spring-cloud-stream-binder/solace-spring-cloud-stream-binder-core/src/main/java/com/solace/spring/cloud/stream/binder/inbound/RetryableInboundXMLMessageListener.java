@@ -45,7 +45,6 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 				solaceMeterAccessor,
 				remoteStopFlag,
 				attributesHolder,
-				false,
 				true);
 		this.retryTemplate = retryTemplate;
 		this.recoveryCallback = recoveryCallback;
@@ -55,40 +54,35 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 	void handleMessage(Supplier<Message<?>> messageSupplier, Consumer<Message<?>> sendToConsumerHandler,
 								 AcknowledgmentCallback acknowledgmentCallback, boolean isBatched)
 			throws SolaceAcknowledgmentException {
+
+		Message<?> message;
 		try {
-			Message<?> message;
-			try {
-				attributesHolder.set(ErrorMessageUtils.getAttributeAccessor(null, null));
-				message = retryTemplate.execute(() -> messageSupplier.get());
-			}
-			catch (RetryException ex) {
-				if (recoveryCallback != null) {
-					recoveryCallback.recover(attributesHolder.get(), ex.getCause());
-				}
-				AckUtils.autoAck(acknowledgmentCallback);
-				return;
-			}
-
-			if (message == null) {
-				return;
-			}
-
-			try {
-				attributesHolder.set(ErrorMessageUtils.getAttributeAccessor(message, null));
-				retryTemplate.execute(() -> {
-					sendToConsumerHandler.accept(message);
-					AckUtils.autoAck(acknowledgmentCallback);
-					return null;
-				});
-			}
-			catch (RetryException ex) {
-				if (recoveryCallback != null) {
-					recoveryCallback.recover(attributesHolder.get(), ex.getCause());
-				}
+			message = retryTemplate.execute(() -> messageSupplier.get());
+		}
+		catch (RetryException ex) {
+			if (recoveryCallback != null) {
+				recoveryCallback.recover(attributesHolder.get(), ex.getCause());
 				AckUtils.autoAck(acknowledgmentCallback);
 			}
-		} finally {
-			attributesHolder.remove();
+			return;
+		}
+
+		if (message == null) {
+			return;
+		}
+
+		try {
+			retryTemplate.execute(() -> {
+				sendToConsumerHandler.accept(message);
+				AckUtils.autoAck(acknowledgmentCallback);
+				return null;
+			});
+		}
+		catch (RetryException ex) {
+			if (recoveryCallback != null) {
+				recoveryCallback.recover(attributesHolder.get(), ex.getCause());
+				AckUtils.autoAck(acknowledgmentCallback);
+			}
 		}
 	}
 }

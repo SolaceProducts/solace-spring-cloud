@@ -4,9 +4,6 @@ import org.springframework.boot.health.contributor.CompositeHealthContributor;
 import org.springframework.boot.health.contributor.HealthContributor;
 import org.springframework.boot.health.contributor.HealthContributors;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.Set;
 import java.util.stream.Stream;
 
 public class BindingHealthContributor implements CompositeHealthContributor {
@@ -20,13 +17,6 @@ public class BindingHealthContributor implements CompositeHealthContributor {
 	@Override
 	public HealthContributor getContributor(String name) {
 		return name.equals(FLOWS) ? flowsHealthContributor : null;
-	}
-
-	@Override
-	public Iterator<HealthContributors.Entry> iterator() {
-		Set<HealthContributors.Entry> contributors = Collections
-				.singleton(new HealthContributors.Entry(FLOWS, flowsHealthContributor));
-		return contributors.iterator();
 	}
 
 	@Override
