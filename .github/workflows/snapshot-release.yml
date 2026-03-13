@@ -25,6 +25,6 @@ jobs:
           distribution: zulu
           java-version: 17
       - name: Publish package
-        run: mvn --batch-mode deploy -DreleaseTarget=github
+        run: mvn --batch-mode deploy -s maven/settings.xml -DreleaseTarget=github
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

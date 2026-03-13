@@ -36,7 +36,7 @@ jobs:
           java-version: 17
           cache: maven
       - name: Build and run Tests
-        run: mvn clean verify
+        run: mvn clean verify -s maven/settings.xml
       - name: Upload Test Artifacts
         if: always()
         uses: actions/upload-artifact@v4
