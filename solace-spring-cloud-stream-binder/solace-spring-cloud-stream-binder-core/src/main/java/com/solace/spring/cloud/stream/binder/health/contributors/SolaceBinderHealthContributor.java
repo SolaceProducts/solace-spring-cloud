@@ -1,13 +1,11 @@
 package com.solace.spring.cloud.stream.binder.health.contributors;
 
 import com.solace.spring.cloud.stream.binder.health.indicators.SessionHealthIndicator;
-import org.springframework.boot.actuate.health.CompositeHealthContributor;
-import org.springframework.boot.actuate.health.HealthContributor;
-import org.springframework.boot.actuate.health.NamedContributor;
+import org.springframework.boot.health.contributor.CompositeHealthContributor;
+import org.springframework.boot.health.contributor.HealthContributor;
+import org.springframework.boot.health.contributor.HealthContributors;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.stream.Stream;
 
 public class SolaceBinderHealthContributor implements CompositeHealthContributor {
 	private final SessionHealthIndicator sessionHealthIndicator;
@@ -39,10 +37,10 @@ public class SolaceBinderHealthContributor implements CompositeHealthContributor
 	}
 
 	@Override
-	public Iterator<NamedContributor<HealthContributor>> iterator() {
-		List<NamedContributor<HealthContributor>> contributors = new ArrayList<>();
-		contributors.add(NamedContributor.of(CONNECTION, sessionHealthIndicator));
-		contributors.add(NamedContributor.of(BINDINGS, bindingsHealthContributor));
-		return contributors.iterator();
+	public Stream<HealthContributors.Entry> stream() {
+		return Stream.of(
+				new HealthContributors.Entry(CONNECTION, sessionHealthIndicator),
+				new HealthContributors.Entry(BINDINGS, bindingsHealthContributor)
+		);
 	}
 }

@@ -678,8 +678,9 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		binderBindUnbindLatency();
 
-		final AtomicInteger numRetriesRemaining = new AtomicInteger(consumerProperties.getMaxAttempts());
-		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, numRetriesRemaining.get() + 1,
+		final AtomicInteger numRetriesRemaining =  maxAttempts > 1   ? new AtomicInteger(consumerProperties.getMaxAttempts() + 1)
+		  : new AtomicInteger(consumerProperties.getMaxAttempts());
+					consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, numRetriesRemaining.get() + 1,
 				() -> messages.forEach(moduleOutputChannel::send),
 				(msg, callback) -> {
 					softly.assertThat(msg).satisfies(isValidMessage(channelType, consumerProperties, messages));
@@ -775,6 +776,76 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		assertThat(binder.getConsumerErrorQueueName(consumerBinding))
 				.satisfies(errorQueueHasMessages(jcsmpSession, messages));
+		retryAssert(() -> assertThat(sempV2Api.monitor()
+				.getMsgVpnQueueMsgs(vpnName, binder.getConsumerQueueName(consumerBinding), 2, null, null, null)
+				.getData())
+				.hasSize(0));
+
+		producerBinding.unbind();
+		consumerBinding.unbind();
+	}
+
+	@CartesianTest(name = "[{index}] batchMode={0}, exceptionType={1}")
+	@Execution(ExecutionMode.CONCURRENT)
+	public void testConsumerNonRetryableExceptionTriggersImmediateRecovery(
+			@Values(booleans = {false, true}) boolean batchMode,
+			@Values(strings = {"SolaceMessageConversionException", "RollbackException"}) String exceptionType,
+			JCSMPSession jcsmpSession,
+			SempV2Api sempV2Api,
+			TestInfo testInfo) throws Exception {
+		SolaceTestBinder binder = getBinder();
+		ConsumerInfrastructureUtil<DirectChannel> consumerInfrastructureUtil =
+				createConsumerInfrastructureUtil(DirectChannel.class);
+
+		DirectChannel moduleOutputChannel = createBindableChannel("output", new BindingProperties());
+		DirectChannel moduleInputChannel = consumerInfrastructureUtil.createChannel("input", new BindingProperties());
+
+		String destination0 = RandomStringUtils.randomAlphanumeric(10);
+		String group0 = RandomStringUtils.randomAlphanumeric(10);
+		String vpnName = (String) jcsmpSession.getProperty(JCSMPProperties.VPN_NAME);
+
+		Binding<MessageChannel> producerBinding = binder.bindProducer(
+				destination0, moduleOutputChannel, createProducerProperties(testInfo));
+
+		ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties = createConsumerProperties();
+		consumerProperties.setBatchMode(batchMode);
+		consumerProperties.setMaxAttempts(3); // high enough to observe whether retries happen
+		consumerProperties.getExtension().setAutoBindErrorQueue(true);
+		Binding<DirectChannel> consumerBinding = consumerInfrastructureUtil.createBinding(binder,
+				destination0, group0, moduleInputChannel, consumerProperties);
+
+		List<Message<?>> messages = IntStream.range(0,
+						batchMode ? consumerProperties.getExtension().getBatchMaxSize() : 1)
+				.mapToObj(i -> MessageBuilder.withPayload(UUID.randomUUID().toString().getBytes())
+						.setHeader(MessageHeaders.CONTENT_TYPE, MimeTypeUtils.TEXT_PLAIN_VALUE)
+						.build())
+				.collect(Collectors.toList());
+
+		binderBindUnbindLatency();
+
+		AtomicInteger handlerCallCount = new AtomicInteger(0);
+
+		// numMessagesToReceive=1: non-retryable exception means exactly 1 handler invocation
+		consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, 1,
+				() -> messages.forEach(moduleOutputChannel::send),
+				(msg, callback) -> {
+					handlerCallCount.incrementAndGet();
+					callback.run();
+					if ("RollbackException".equals(exceptionType)) {
+						throw new RuntimeException(new RollbackException("non-retryable rollback"));
+					} else {
+						throw new SolaceMessageConversionException("non-retryable conversion failure");
+					}
+				});
+
+		// Non-retryable exception must NOT be retried — handler called exactly once despite maxAttempts=3
+		assertThat(handlerCallCount).hasValue(1);
+
+		// Recovery was triggered — message ends up in the error queue
+		assertThat(binder.getConsumerErrorQueueName(consumerBinding))
+				.satisfies(errorQueueHasMessages(jcsmpSession, messages));
+
+		// Main queue is drained — message was not requeued
 		retryAssert(() -> assertThat(sempV2Api.monitor()
 				.getMsgVpnQueueMsgs(vpnName, binder.getConsumerQueueName(consumerBinding), 2, null, null, null)
 				.getData())

@@ -17,8 +17,9 @@ spring:
           error-handler-definition: customErrorHandler #Binding error handler
           destination: errorHandlingTestQueue
           group: consumerGroup
-          maxAttempts: 3
           binder: local-solace
+          consumer:
+            maxAttempts: 3
 
       binders:
         local-solace:

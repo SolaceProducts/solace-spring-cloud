@@ -8,8 +8,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.junitpioneer.jupiter.cartesian.CartesianTest;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.Status;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -18,7 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SessionHealthIndicatorTest {
 	@Test
-	public void testInitialHealth() {
+	void testInitialHealth() {
 		assertNull(new SessionHealthIndicator(new SolaceSessionHealthProperties()).health());
 	}
 
@@ -27,7 +27,7 @@ class SessionHealthIndicatorTest {
 		SessionHealthIndicator healthIndicator = new SessionHealthIndicator(new SolaceSessionHealthProperties());
 		healthIndicator.up();
 		assertEquals(healthIndicator.health(), Health.up().build());
-		assertTrue(healthIndicator.getHealth(true).getDetails().isEmpty());
+		assertTrue(healthIndicator.health(true).getDetails().isEmpty());
 	}
 
 	@Test
@@ -35,7 +35,7 @@ class SessionHealthIndicatorTest {
 		SessionHealthIndicator healthIndicator = new SessionHealthIndicator(new SolaceSessionHealthProperties());
 		healthIndicator.reconnecting(null);
 		assertEquals(healthIndicator.health().getStatus(), Health.status("RECONNECTING").build().getStatus());
-		assertTrue(healthIndicator.getHealth(true).getDetails().isEmpty());
+		assertTrue(healthIndicator.health(true).getDetails().isEmpty());
 	}
 
 	@ParameterizedTest(name = "[{index}] reconnectAttemptsUntilDown={0}")
@@ -59,7 +59,7 @@ class SessionHealthIndicatorTest {
 
 	@ParameterizedTest(name = "[{index}] resetStatus={0}")
 	@ValueSource(strings = {"DOWN", "UP"})
-	public void testReconnectingDownThresholdReset(String resetStatus, SoftAssertions softly) {
+	void testReconnectingDownThresholdReset(String resetStatus, SoftAssertions softly) {
 		SolaceSessionHealthProperties properties = new SolaceSessionHealthProperties();
 		properties.setReconnectAttemptsUntilDown(1L);
 		SessionHealthIndicator healthIndicator = new SessionHealthIndicator(properties);
@@ -91,11 +91,11 @@ class SessionHealthIndicatorTest {
 		SessionHealthIndicator healthIndicator = new SessionHealthIndicator(new SolaceSessionHealthProperties());
 		healthIndicator.down(null);
 		assertEquals(healthIndicator.health().getStatus(), Status.DOWN);
-		assertTrue(healthIndicator.getHealth(true).getDetails().isEmpty());
+		assertTrue(healthIndicator.health(true).getDetails().isEmpty());
 	}
 
 	@CartesianTest(name = "[{index}] status={0} withException={1} responseCode={2} info={3}")
-	public void testDetails(@CartesianTest.Values(strings = {"DOWN", "RECONNECTING", "UP"}) String status,
+	void testDetails(@CartesianTest.Values(strings = {"DOWN", "RECONNECTING", "UP"}) String status,
 							@CartesianTest.Values(booleans = {false, true}) boolean withException,
 							@CartesianTest.Values(ints = {-1, 0, 1}) int responseCode,
 							@CartesianTest.Values(strings = {"", "some-info"}) String info,
@@ -148,7 +148,7 @@ class SessionHealthIndicatorTest {
 
 	@ParameterizedTest(name = "[{index}] status={0}")
 	@ValueSource(strings = {"DOWN", "RECONNECTING", "UP"})
-	public void testWithoutDetails(String status, SoftAssertions softly) {
+	void testWithoutDetails(String status, SoftAssertions softly) {
 		SessionHealthIndicator healthIndicator = new SessionHealthIndicator(new SolaceSessionHealthProperties());
 		SessionEventArgs sessionEventArgs = new SessionEventArgsImpl(null, "some-info", new RuntimeException("test"), 1);
 		switch (status) {
@@ -164,7 +164,7 @@ class SessionHealthIndicatorTest {
 			default:
 				throw new IllegalArgumentException("Test error: No handling for status=" + status);
 		}
-		Health health = healthIndicator.getHealth(false);
+		Health health = healthIndicator.health(false);
 		softly.assertThat(health.getStatus()).isEqualTo(new Status(status));
 		softly.assertThat(health.getDetails()).isEmpty();
 	}

@@ -34,7 +34,7 @@ import com.solacesystems.jcsmp.transaction.RollbackException;
 import com.solacesystems.jcsmp.transaction.TransactedSession;
 import org.apache.commons.lang3.RandomStringUtils;
 import org.assertj.core.api.SoftAssertions;
-import org.junit.function.ThrowingRunnable;
+import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -414,7 +414,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers, flowReceiverContainer.getTransactedSession());
 
-		ThrowingRunnable verifyExpectedState = () -> {
+		Executable verifyExpectedState = () -> {
 			validateNumEnqueuedMessages(sempV2Api, queue.getName(), 0);
 			validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
 			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
@@ -422,12 +422,12 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.ACCEPT);
 		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-		verifyExpectedState.run();
+		verifyExpectedState.execute();
 
 		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
 			acknowledgmentCallback.acknowledge(status);
 			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-			verifyExpectedState.run();
+			verifyExpectedState.execute();
 		}
 
 		if (transacted) {
@@ -456,7 +456,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers, flowReceiverContainer.getTransactedSession());
 
-		ThrowingRunnable verifyExpectedState = () -> {
+		Executable verifyExpectedState = () -> {
 			validateNumEnqueuedMessages(sempV2Api, queue.getName(), transacted ? numMessages : 0);
 			validateNumRedeliveredMessages(sempV2Api, queue.getName(), transacted ? numMessages : 0);
 			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
@@ -464,12 +464,12 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
 		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-		verifyExpectedState.run();
+		verifyExpectedState.execute();
 
 		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
 			acknowledgmentCallback.acknowledge(status);
 			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-			verifyExpectedState.run();
+			verifyExpectedState.execute();
 		}
 
 		if (transacted) {
@@ -494,7 +494,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers, flowReceiverContainer.getTransactedSession());
 
-		ThrowingRunnable verifyExpectedState = () -> {
+		Executable verifyExpectedState = () -> {
 			validateNumEnqueuedMessages(sempV2Api, queue.getName(), 0);
 			validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
 			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
@@ -504,12 +504,12 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REJECT);
 		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-		verifyExpectedState.run();
+		verifyExpectedState.execute();
 
 		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
 			acknowledgmentCallback.acknowledge(status);
 			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-			verifyExpectedState.run();
+			verifyExpectedState.execute();
 		}
 	}
 
@@ -534,7 +534,7 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 		AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(acknowledgementCallbackFactory,
 				messageContainers, flowReceiverContainer.getTransactedSession());
 
-		ThrowingRunnable verifyExpectedState = () -> {
+		Executable verifyExpectedState = () -> {
 			validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
 			validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
 			validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
@@ -542,12 +542,12 @@ public class JCSMPAcknowledgementCallbackFactoryIT {
 
 		acknowledgmentCallback.acknowledge(AcknowledgmentCallback.Status.REQUEUE);
 		assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-		verifyExpectedState.run();
+		verifyExpectedState.execute();
 
 		for (AcknowledgmentCallback.Status status : AcknowledgmentCallback.Status.values()) {
 			acknowledgmentCallback.acknowledge(status);
 			assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
-			verifyExpectedState.run();
+			verifyExpectedState.execute();
 		}
 
 		if (transacted) {

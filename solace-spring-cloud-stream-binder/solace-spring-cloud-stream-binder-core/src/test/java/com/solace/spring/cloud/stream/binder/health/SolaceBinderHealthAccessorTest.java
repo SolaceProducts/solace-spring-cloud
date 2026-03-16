@@ -14,7 +14,7 @@ import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.boot.actuate.health.NamedContributor;
+import org.springframework.boot.health.contributor.HealthContributors;
 
 import java.util.UUID;
 import java.util.stream.StreamSupport;
@@ -49,16 +49,16 @@ public class SolaceBinderHealthAccessorTest {
 
 		assertThat(StreamSupport.stream(healthContributor.getSolaceBindingsHealthContributor().spliterator(), false))
 				.singleElement()
-				.satisfies(n -> assertThat(n.getName()).isEqualTo(bindingName))
-				.extracting(NamedContributor::getContributor)
+				.satisfies(n -> assertThat(n.name()).isEqualTo(bindingName))
+				.extracting(HealthContributors.Entry::contributor)
 				.asInstanceOf(InstanceOfAssertFactories.type(BindingHealthContributor.class))
 				.extracting(BindingHealthContributor::getFlowsHealthContributor)
 				.asInstanceOf(InstanceOfAssertFactories.type(FlowsHealthContributor.class))
 				.extracting(c -> StreamSupport.stream(c.spliterator(), false))
-				.asInstanceOf(InstanceOfAssertFactories.stream(NamedContributor.class))
+				.asInstanceOf(InstanceOfAssertFactories.stream(HealthContributors.Entry.class))
 				.singleElement()
-				.satisfies(n -> assertThat(n.getName()).isEqualTo("flow-" + concurrencyIdx))
-				.extracting(NamedContributor::getContributor)
+				.satisfies(n -> assertThat(n.name()).isEqualTo("flow-" + concurrencyIdx))
+				.extracting(HealthContributors.Entry::contributor)
 				.isInstanceOf(FlowHealthIndicator.class);
 	}
 
@@ -88,13 +88,13 @@ public class SolaceBinderHealthAccessorTest {
 		if (bindingHealthContributorExists) {
 			assertThat(StreamSupport.stream(healthContributor.getSolaceBindingsHealthContributor().spliterator(), false))
 					.singleElement()
-					.satisfies(n -> assertThat(n.getName()).isEqualTo(bindingName))
-					.extracting(NamedContributor::getContributor)
+					.satisfies(n -> assertThat(n.name()).isEqualTo(bindingName))
+					.extracting(HealthContributors.Entry::contributor)
 					.asInstanceOf(InstanceOfAssertFactories.type(BindingHealthContributor.class))
 					.extracting(BindingHealthContributor::getFlowsHealthContributor)
 					.asInstanceOf(InstanceOfAssertFactories.type(FlowsHealthContributor.class))
 					.extracting(c -> StreamSupport.stream(c.spliterator(), false))
-					.asInstanceOf(InstanceOfAssertFactories.stream(NamedContributor.class))
+					.asInstanceOf(InstanceOfAssertFactories.stream(HealthContributors.Entry.class))
 					.isEmpty();
 		} else {
 			assertThat(StreamSupport.stream(healthContributor.getSolaceBindingsHealthContributor().spliterator(), false))

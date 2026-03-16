@@ -2,8 +2,12 @@ package com.solace.spring.cloud.stream.binder.springBootTests.oauth2;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import java.io.File;
+import java.io.FileInputStream;
+import java.security.KeyStore;
 import java.time.Duration;
 import java.util.function.Consumer;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManagerFactory;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.slf4j.Logger;
@@ -23,7 +27,7 @@ public interface MessagingServiceFreeTierBrokerTestContainerWithTlsAndOAuthSetup
       MessagingServiceFreeTierBrokerTestContainerWithTlsAndOAuthSetup.class);
 
   ComposeContainer COMPOSE_CONTAINER = new ComposeContainer(
-      new File(FULL_DOCKER_COMPOSE_FILE_PATH)).withLocalCompose(true).withPull(true)
+      new File(FULL_DOCKER_COMPOSE_FILE_PATH)).withPull(true)
       .withExposedService(PUBSUB_BROKER_SERVICE_NAME, 8080)
       .withExposedService(PUBSUB_BROKER_SERVICE_NAME, 55443)
       .withExposedService(PUBSUB_BROKER_SERVICE_NAME, 55555)
@@ -43,11 +47,33 @@ public interface MessagingServiceFreeTierBrokerTestContainerWithTlsAndOAuthSetup
 
   @BeforeAll
   static void startContainer() {
-    System.setProperty("javax.net.ssl.trustStore",
-        new File("src/test/resources/oauth2/certs/client/client-truststore.p12").getAbsolutePath());
-    System.setProperty("javax.net.ssl.trustStorePassword", "changeMe123");
+    String trustStorePath = new File(
+        "src/test/resources/oauth2/certs/client/client-truststore.p12").getAbsolutePath();
+    String trustStorePassword = "changeMe123";
+
+    System.setProperty("javax.net.ssl.trustStore", trustStorePath);
+    System.setProperty("javax.net.ssl.trustStorePassword", trustStorePassword);
     System.setProperty("javax.net.ssl.trustStoreType", "PKCS12");
-    //System.setProperty("javax.net.debug", "all");
+
+    // Explicitly override the JVM default SSLContext so that Spring Security's RestClient
+    // (used for OAuth2 token requests) trusts the test CA. This is necessary because
+    // SSLContext.getDefault() may have been initialized before the system properties were set
+    // (e.g., during Testcontainers Docker client initialization), caching a context that
+    // does not include the test CA certificate.
+    try {
+      KeyStore trustStore = KeyStore.getInstance("PKCS12");
+      try (FileInputStream fis = new FileInputStream(trustStorePath)) {
+        trustStore.load(fis, trustStorePassword.toCharArray());
+      }
+      TrustManagerFactory tmf = TrustManagerFactory.getInstance(
+          TrustManagerFactory.getDefaultAlgorithm());
+      tmf.init(trustStore);
+      SSLContext sslContext = SSLContext.getInstance("TLS");
+      sslContext.init(null, tmf.getTrustManagers(), null);
+      SSLContext.setDefault(sslContext);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to configure default SSL context for OAuth2 tests", e);
+    }
 
     COMPOSE_CONTAINER.start();
   }

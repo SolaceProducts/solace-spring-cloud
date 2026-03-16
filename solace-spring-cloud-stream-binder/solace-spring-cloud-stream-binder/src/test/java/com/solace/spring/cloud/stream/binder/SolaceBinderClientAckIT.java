@@ -604,7 +604,7 @@ public class SolaceBinderClientAckIT<T> {
         context.binderBindUnbindLatency();
         String queueName = binder.getConsumerQueueName(consumerBinding);
 
-        consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts() + 1,
+        consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts()> 1 ? consumerProperties.getMaxAttempts() + 2 :consumerProperties.getMaxAttempts() + 1,
                 () -> messages.forEach(moduleOutputChannel::send),
                 (msg, callback) -> {
                     if (isRedelivered(msg, batchMode)) {
@@ -781,7 +781,7 @@ public class SolaceBinderClientAckIT<T> {
         context.binderBindUnbindLatency();
         String queueName = binder.getConsumerQueueName(consumerBinding);
 
-        consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts() + 1,
+        consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts() > 1 ? consumerProperties.getMaxAttempts() + 2 : consumerProperties.getMaxAttempts() + 1,
                 () -> messages.forEach(moduleOutputChannel::send),
                 (msg, callback) -> {
                     if (isRedelivered(msg, batchMode)) {
@@ -1026,7 +1026,7 @@ public class SolaceBinderClientAckIT<T> {
         String queueName = binder.getConsumerQueueName(consumerBinding);
         String errorQueueName = binder.getConsumerErrorQueueName(consumerBinding);
 
-        consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts() + 1,
+        consumerInfrastructureUtil.sendAndSubscribe(moduleInputChannel, consumerProperties.getMaxAttempts() > 1 ? consumerProperties.getMaxAttempts() + 2 : consumerProperties.getMaxAttempts() + 1,
                 () -> messages.forEach(moduleOutputChannel::send),
                 (msg, callback) -> {
                     if (isRedelivered(msg, batchMode)) {

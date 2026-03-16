@@ -184,9 +184,13 @@ public class JCSMPOutboundMessageHandlerTest {
 
 		AtomicInteger timesSuccessResolved = new AtomicInteger(0);
 		AtomicInteger timesFailureResolved = new AtomicInteger(0);
-		correlationData.getFuture().addCallback(
-				v -> timesSuccessResolved.incrementAndGet(),
-				e -> timesFailureResolved.incrementAndGet());
+		correlationData.getFuture().whenComplete((v, e) -> {
+			if (e == null) {
+				timesSuccessResolved.incrementAndGet();
+			} else {
+				timesFailureResolved.incrementAndGet();
+			}
+		});
 
 		if (transacted) {
 			Mockito.verify(transactedSession).commit();
@@ -228,9 +232,13 @@ public class JCSMPOutboundMessageHandlerTest {
 
 		AtomicInteger timesSuccessResolved = new AtomicInteger(0);
 		AtomicInteger timesFailureResolved = new AtomicInteger(0);
-		correlationData.getFuture().addCallback(
-				v -> timesSuccessResolved.incrementAndGet(),
-				e -> timesFailureResolved.incrementAndGet());
+		correlationData.getFuture().whenComplete((v, e) -> {
+			if (e == null) {
+				timesSuccessResolved.incrementAndGet();
+			} else {
+				timesFailureResolved.incrementAndGet();
+			}
+		});
 
 		JCSMPException exception = new JCSMPException("ooooops");
 		getCorrelationKeys().forEach(k -> pubEventHandlerCaptor.getValue()
@@ -261,9 +269,13 @@ public class JCSMPOutboundMessageHandlerTest {
 
 		AtomicInteger timesSuccessResolved = new AtomicInteger(0);
 		AtomicInteger timesFailureResolved = new AtomicInteger(0);
-		correlationData.getFuture().addCallback(
-				v -> timesSuccessResolved.incrementAndGet(),
-				e -> timesFailureResolved.incrementAndGet());
+		correlationData.getFuture().whenComplete((v, e) -> {
+			if (e == null) {
+				timesSuccessResolved.incrementAndGet();
+			} else {
+				timesFailureResolved.incrementAndGet();
+			}
+		});
 
 
 		List<Object> correlationKeys = getCorrelationKeys();

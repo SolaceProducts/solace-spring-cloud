@@ -5,12 +5,11 @@
   <parent>
     <groupId>com.solace.spring.cloud</groupId>
     <artifactId>solace-spring-cloud-parent</artifactId>
-    <version>4.11.1-SNAPSHOT</version>
+    <version>6.0.0-SNAPSHOT</version>
     <relativePath>../../solace-spring-cloud-parent/pom.xml</relativePath>
   </parent>
 
   <artifactId>spring-cloud-stream-binder-solace-instrumentation</artifactId>
-  <version>5.11.1-SNAPSHOT</version>
   <packaging>jar</packaging>
 
 
@@ -22,7 +21,7 @@
 
   <properties>
     <opentelemetry.version>1.48.0</opentelemetry.version>
-    <opentelemetry-javaagent-extension.version>2.20.1-alpha</opentelemetry-javaagent-extension.version>
+    <opentelemetry-javaagent-extension.version>2.25.0-alpha</opentelemetry-javaagent-extension.version>
     <auto-service.version>1.0.1</auto-service.version>
   </properties>
 

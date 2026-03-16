@@ -30,8 +30,8 @@ import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.mockito.Mockito;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.actuate.health.NamedContributor;
-import org.springframework.boot.actuate.health.Status;
+import org.springframework.boot.health.contributor.Status;
+import org.springframework.boot.health.contributor.HealthContributors;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.cloud.stream.binder.Binding;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
@@ -117,7 +117,7 @@ public class SolaceBinderHealthIT {
 				.extracting(c -> c.getContributor(consumerProperties.getBindingName()))
 				.extracting(BindingHealthContributor::getFlowsHealthContributor)
 				.extracting(f -> StreamSupport.stream(f.spliterator(), false))
-				.asInstanceOf(InstanceOfAssertFactories.stream(NamedContributor.class))
+				.asInstanceOf(InstanceOfAssertFactories.stream(HealthContributors.Entry.class))
 				.isEmpty();
 
 		logger.info("Starting binding...");

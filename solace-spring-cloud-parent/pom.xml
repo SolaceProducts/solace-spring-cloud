@@ -5,7 +5,7 @@
     <parent>
         <groupId>com.solace.spring.cloud</groupId>
         <artifactId>solace-spring-cloud-build</artifactId>
-        <version>4.11.1-SNAPSHOT</version>
+        <version>6.0.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
@@ -23,8 +23,8 @@
         <maven.compiler.target>17</maven.compiler.target>
         <maven.compiler.source>17</maven.compiler.source>
 
-        <solace.jcsmp.version>10.28.1</solace.jcsmp.version>
-        <solace.jms.version>10.28.1</solace.jms.version>
+        <solace.jcsmp.version>10.29.1</solace.jcsmp.version>
+        <solace.jms.version>10.29.1</solace.jms.version>
         <sol-jcsmp-otel-integration.version>1.2.0</sol-jcsmp-otel-integration.version>
     </properties>
 
@@ -75,7 +75,7 @@
             <plugins>
                 <plugin>
                     <artifactId>maven-surefire-plugin</artifactId>
-                    <version>2.22.2</version>
+                    <version>3.2.5</version>
                     <configuration>
                         <argLine>
                             --add-opens java.base/java.lang=ALL-UNNAMED
@@ -93,7 +93,7 @@
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-failsafe-plugin</artifactId>
-                    <version>2.22.2</version>
+                    <version>3.2.5</version>
                     <executions>
                         <execution>
                             <id>integration-test</id>

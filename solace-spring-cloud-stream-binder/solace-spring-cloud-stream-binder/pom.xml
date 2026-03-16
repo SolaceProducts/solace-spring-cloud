@@ -5,12 +5,11 @@
     <parent>
         <groupId>com.solace.spring.cloud</groupId>
         <artifactId>solace-spring-cloud-parent</artifactId>
-        <version>4.11.1-SNAPSHOT</version>
+        <version>6.0.0-SNAPSHOT</version>
         <relativePath>../../solace-spring-cloud-parent/pom.xml</relativePath>
     </parent>
 
     <artifactId>spring-cloud-stream-binder-solace</artifactId>
-    <version>5.11.1-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Solace Spring Cloud Stream Binder</name>
@@ -52,6 +51,11 @@
 
         <dependency>
             <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-oauth2-client</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
             <optional>true</optional>
         </dependency>
@@ -73,7 +77,7 @@
         <dependency>
             <groupId>org.junit-pioneer</groupId>
             <artifactId>junit-pioneer</artifactId>
-            <version>1.9.1</version>
+            <version>2.3.0</version>
             <scope>test</scope>
         </dependency>
 
@@ -81,13 +85,6 @@
             <groupId>com.solace.test.integration</groupId>
             <artifactId>pubsubplus-junit-jupiter</artifactId>
             <version>${solace.integration.test.support.version}</version>
-            <scope>test</scope>
-        </dependency>
-
-        <dependency>
-            <groupId>commons-logging</groupId>
-            <artifactId>commons-logging</artifactId>
-            <version>1.2</version>
             <scope>test</scope>
         </dependency>
 
@@ -120,7 +117,7 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-oauth2-client</artifactId>
+            <artifactId>spring-boot-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -163,7 +160,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <version>2.22.2</version>
+                <version>3.2.5</version>
                 <executions>
                     <execution>
                         <id>integration-test</id>

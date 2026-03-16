@@ -10,20 +10,21 @@ import com.solace.spring.cloud.stream.binder.health.handlers.SolaceSessionEventH
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.IntStream;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
     initializers = ConfigDataApplicationContextInitializer.class)
-@ExtendWith(PubSubPlusExtension.class)
+@ExtendWith({PubSubPlusExtension.class, MockitoExtension.class})
 class DefaultSolaceSessionManagerIT {
 
   private JCSMPProperties jcsmpProperties;
@@ -65,7 +66,7 @@ class DefaultSolaceSessionManagerIT {
         jcsmpProperties, null, solaceSessionEventHandler, null);
 
     CountDownLatch latch = new CountDownLatch(10);
-    List<JCSMPSession> sessions = new ArrayList<>();
+    List<JCSMPSession> sessions = new CopyOnWriteArrayList<>();
     Runnable task = () -> {
       try {
         JCSMPSession session = sessionManager.getSession();

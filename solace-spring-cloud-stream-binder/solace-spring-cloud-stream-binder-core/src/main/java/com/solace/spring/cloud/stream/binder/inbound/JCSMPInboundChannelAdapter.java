@@ -25,16 +25,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.core.AttributeAccessor;
+import org.springframework.core.retry.RetryPolicy;
+import org.springframework.core.retry.RetryState;
+import org.springframework.core.retry.Retryable;
 import org.springframework.integration.context.OrderlyShutdownCapable;
 import org.springframework.integration.core.Pausable;
 import org.springframework.integration.endpoint.MessageProducerSupport;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessagingException;
-import org.springframework.retry.RecoveryCallback;
-import org.springframework.retry.RetryCallback;
-import org.springframework.retry.RetryContext;
-import org.springframework.retry.RetryListener;
-import org.springframework.retry.support.RetryTemplate;
+import org.springframework.integration.core.RecoveryCallback;
+import org.springframework.core.retry.RetryListener;
+import org.springframework.core.retry.RetryTemplate;
 import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
 import org.springframework.util.Assert;
 
@@ -194,7 +195,8 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
         }
 
         if (retryTemplate != null) {
-            retryTemplate.registerListener(new SolaceRetryListener(endpointName));
+            retryTemplate.setRetryListener(new SolaceRetryListener(endpointName));
+            retryTemplate.setRetryPolicy(withNonRetryableExceptions(retryTemplate.getRetryPolicy()));
         }
 
         executorService = buildThreadPool(consumerProperties.getConcurrency(), consumerProperties.getBindingName());
@@ -387,6 +389,31 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
         }
     }
 
+    protected static RetryPolicy withNonRetryableExceptions(RetryPolicy delegate) {
+        return new RetryPolicy() {
+            @Override
+            public boolean shouldRetry(Throwable throwable) {
+                for (Throwable t : ExceptionUtils.getThrowableList(throwable)) {
+                    if (t instanceof SolaceMessageConversionException ||
+                        t instanceof RollbackException) {
+                        return false;
+                    }
+                }
+                return delegate.shouldRetry(throwable);
+            }
+
+            @Override
+            public java.time.Duration getTimeout() {
+                return delegate.getTimeout();
+            }
+
+            @Override
+            public org.springframework.util.backoff.BackOff getBackOff() {
+                return delegate.getBackOff();
+            }
+        };
+    }
+
     private static final class SolaceRetryListener implements RetryListener {
 
         private final String queueName;
@@ -396,26 +423,12 @@ public class JCSMPInboundChannelAdapter extends MessageProducerSupport implement
         }
 
         @Override
-        public <T, E extends Throwable> boolean open(RetryContext context, RetryCallback<T, E> callback) {
-            return true;
-        }
-
-        @Override
-        public <T, E extends Throwable> void close(RetryContext context, RetryCallback<T, E> callback, Throwable throwable) {
-
-        }
-
-        @Override
-        public <T, E extends Throwable> void onError(RetryContext context, RetryCallback<T, E> callback, Throwable throwable) {
-            logger.warn("Failed to consume a message from destination {} - attempt {}", queueName, context.getRetryCount());
-            for (Throwable nestedThrowable : ExceptionUtils.getThrowableList(throwable)) {
-                if (nestedThrowable instanceof SolaceMessageConversionException ||
-                        nestedThrowable instanceof RollbackException) {
-                    // Do not retry if these exceptions are thrown
-                    context.setExhaustedOnly();
-                    break;
-                }
+        public void onRetryableExecution(RetryPolicy retryPolicy, Retryable<?> retryable, RetryState retryState) {
+            if (retryState.isSuccessful()) {
+                return;
             }
+            logger.warn("Failed to consume a message from destination {} - attempt {}",
+                queueName, retryState.getRetryCount());
         }
     }
 }
