@@ -717,14 +717,6 @@ TIP: Use link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream
 | Default Value
 | Description
 
-| solace_scst_batchedHeaders
-| List<Map<String, Object>>
-| Read
-|
-| Only applicable when `batchMode` is `true`.
-
-The consolidated list of message headers for a batch of messages where the headers for each payload element is in this list’s corresponding index.
-
 | solace_scst_confirmCorrelation
 | CorrelationData
 | Write
@@ -924,7 +916,7 @@ https://docs.spring.io/spring-cloud-stream/reference/{scst-version}/spring-cloud
 Consumer<Message<List<Payload>>> input() {
 	return batchMsg -> { // <1>
 		List<Payload> batchedPayloads = batchMsg.getPayload();
-		List<Map<String, Object>> batchedHeaders = (List<Map<String, Object>>) batchMsg.getHeaders().get(SolaceBinderHeaders.BATCHED_HEADERS); // <2>
+		List<Map<String, Object>> batchedHeaders = (List<Map<String, Object>>) batchMsg.getHeaders().get(BinderHeaders.BATCH_HEADERS); // <2>
 
 		for (int i = 0; i < batchedPayloads.size(); i++) {
 			Payload payload = batchedPayloads.get(i);
@@ -935,7 +927,7 @@ Consumer<Message<List<Payload>>> input() {
 }
 ----
 <1> A batch of messages is really just a single Spring `Message` whose payload is a list of individual message payloads.
-<2> The `solace_scst_batchedHeaders` message header contains the consolidated list of message headers for each of the individual messages in the batch.
+<2> The `scst_batchHeaders` (i.e. BinderHeaders.BATCH_HEADERS) message header contains the consolidated list of message headers for each of the individual messages in the batch.
 
 .Transacted Batch Consumers
 [TIP]
@@ -983,13 +975,13 @@ Supplier<Message<List<Payload>>> output() {
 
 		// construct batched message
 		return MessageBuilder.withPayload(batchedPayloads)
-				.setHeader(SolaceBinderHeaders.BATCHED_HEADERS, batchedHeaders)
+				.setHeader(BinderHeaders.BATCH_HEADERS, batchedHeaders)
 				.build();
 	};
 }
 ----
 
-The producer binding will look for the `solace_scst_batchedHeaders` message header to determine if the supplied Spring message is either a batched Spring message or a regular Spring message.
+The producer binding will look for the `scst_batchHeaders` message header to determine if the supplied Spring message is either a batched Spring message or a regular Spring message.
 
 If the producer binding detects that it has received a batched Spring message, then it will individually publish each item in the batch.
 
@@ -1286,7 +1278,7 @@ public void send(String payload, long timeout, TimeUnit unit) {
 .CorrelationData with Batched Messages
 [NOTE]
 ====
-When using <<Batch Producers>>, the `SolaceBinderHeaders.CONFIRM_CORRELATION` header must be set at the root of the batched message, and **not** in the `SolaceBinderHeaders.BATCHED_HEADERS` header.
+When using <<Batch Producers>>, the `SolaceBinderHeaders.CONFIRM_CORRELATION` header must be set at the root of the batched message, and **not** in the `BinderHeaders.BATCH_HEADERS` header.
 
 The `CorrelationData.getFuture()` will be resolved:
 
