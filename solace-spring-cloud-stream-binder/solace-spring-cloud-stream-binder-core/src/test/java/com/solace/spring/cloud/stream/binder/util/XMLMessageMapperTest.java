@@ -1,10 +1,5 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
-import com.fasterxml.jackson.databind.ObjectWriter;
 import com.solace.spring.cloud.stream.binder.messaging.HeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
@@ -88,6 +83,10 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.databind.ObjectWriter;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hamcrest.CoreMatchers.not;
@@ -119,7 +118,9 @@ public class XMLMessageMapperTest {
 	private final ObjectWriter objectWriter = OBJECT_MAPPER.writer();
 	private final ObjectReader objectReader = OBJECT_MAPPER.reader();
 
-	private static final String BATCH_HEADERS = "scst_batchHeaders"; //Same value as org.springframework.cloud.stream.binder.BinderHeaders.BATCH_HEADERS;
+	//TODO: Remove this redundant declaration when issue https://github.com/spring-cloud/spring-cloud-stream/issues/3182 is fixed
+	//Same value as org.springframework.cloud.stream.binder.BinderHeaders.BATCH_HEADERS;
+	private static final String BATCH_HEADERS = "scst_batchHeaders";
 
 	@Spy
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
@@ -1959,12 +1960,12 @@ public class XMLMessageMapperTest {
 	}
 
 	private void validateSpringHeaders(MessageHeaders messageHeaders, XMLMessage xmlMessage)
-			throws SDTException, JsonProcessingException {
+			throws SDTException {
 		validateSpringHeaders(messageHeaders, xmlMessage, false, xmlMessage.getProperties());
 	}
 
 	private void validateSpringHeaders(MessageHeaders messageHeaders, XMLMessage xmlMessage, SDTMap expectedHeaders)
-			throws SDTException, JsonProcessingException {
+			throws SDTException {
 		validateSpringHeaders(messageHeaders, xmlMessage, false, expectedHeaders);
 	}
 	private void validateSpringBatchHeaders(MessageHeaders batchMessageHeaders, List<? extends XMLMessage> xmlMessages) {
@@ -2000,7 +2001,7 @@ public class XMLMessageMapperTest {
 
 	private void validateSpringHeaders(MessageHeaders messageHeaders, XMLMessage xmlMessage, boolean batchMode,
 									   SDTMap expectedHeaders)
-			throws SDTException, JsonProcessingException {
+			throws SDTException {
 		List<String> nonReadableBinderHeaderMeta = SolaceBinderHeaderMeta.META
 				.entrySet()
 				.stream()

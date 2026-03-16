@@ -32,6 +32,7 @@ Consult the table below to determine which version of the BOM you need to use:
 | 2024.0.0     | 4.7.0, 4.8.0               | 3.4.x       |
 | 2024.0.2     | 4.9.0                      | 3.4.x       |
 | 2025.0.0     | 4.10.0, 4.11.0             | 3.5.x       |
+| 2025.1.1     | 6.0.0                      | 4.0.x       |
 ## Including the BOM
 
 In addition to showing how to include the BOM, the following snippets also shows how to use "version-less" Solace dependencies (`spring-cloud-starter-stream-solace` in this case) when using the BOM.

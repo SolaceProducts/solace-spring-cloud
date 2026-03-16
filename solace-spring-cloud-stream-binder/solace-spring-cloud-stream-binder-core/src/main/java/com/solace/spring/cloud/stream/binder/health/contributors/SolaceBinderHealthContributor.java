@@ -5,9 +5,6 @@ import org.springframework.boot.health.contributor.CompositeHealthContributor;
 import org.springframework.boot.health.contributor.HealthContributor;
 import org.springframework.boot.health.contributor.HealthContributors;
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
 import java.util.stream.Stream;
 
 public class SolaceBinderHealthContributor implements CompositeHealthContributor {
@@ -37,14 +34,6 @@ public class SolaceBinderHealthContributor implements CompositeHealthContributor
 
 	public BindingsHealthContributor getSolaceBindingsHealthContributor() {
 		return bindingsHealthContributor;
-	}
-
-	@Override
-	public Iterator<HealthContributors.Entry> iterator() {
-		List<HealthContributors.Entry> contributors = new ArrayList<>();
-		contributors.add(new HealthContributors.Entry(CONNECTION, sessionHealthIndicator));
-		contributors.add(new HealthContributors.Entry(BINDINGS, bindingsHealthContributor));
-		return contributors.iterator();
 	}
 
 	@Override
