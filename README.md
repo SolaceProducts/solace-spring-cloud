@@ -34,6 +34,14 @@ These are the projects contained within this repository:
 
 ## Building Locally
 
+### Prerequisites
+
+This project depends on `solace-integration-test-support-bom` which is published to GitHub Packages. You must configure Maven authentication before building.
+
+**See:** [solace-integration-test-support Maven configuration](https://github.com/SolaceDev/solace-integration-test-support#configuring-maven-to-pull-the-artifacts)
+
+### Running the Build
+
 To build the artifacts locally, simply clone this repository and run `mvn package` at the root of the project.
 This will build everything.
 

@@ -8,7 +8,6 @@ import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.core.AttributeAccessor;
-import org.springframework.core.AttributeAccessorSupport;
 import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.core.RecoveryCallback;
@@ -45,7 +44,6 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 				solaceMeterAccessor,
 				remoteStopFlag,
 				attributesHolder,
-				true,
 				true);
 		this.retryTemplate = retryTemplate;
 		this.recoveryCallback = recoveryCallback;
@@ -55,19 +53,16 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 	void handleMessage(Supplier<Message<?>> messageSupplier, Consumer<Message<?>> sendToConsumerHandler,
 								 AcknowledgmentCallback acknowledgmentCallback, boolean isBatched)
 			throws SolaceAcknowledgmentException {
+
 		Message<?> message;
 		try {
 			message = retryTemplate.execute(() -> messageSupplier.get());
 		}
 		catch (RetryException ex) {
 			if (recoveryCallback != null) {
-				AttributeAccessor attributeAccessor = attributesHolder.get();
-				if (attributeAccessor == null) {
-					attributeAccessor = new AttributeAccessorSupport() {};
-				}
-				recoveryCallback.recover(attributeAccessor, ex.getCause());
+				recoveryCallback.recover(attributesHolder.get(), ex.getCause());
+				AckUtils.autoAck(acknowledgmentCallback);
 			}
-			AckUtils.autoAck(acknowledgmentCallback);
 			return;
 		}
 
@@ -84,13 +79,9 @@ class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 		}
 		catch (RetryException ex) {
 			if (recoveryCallback != null) {
-				AttributeAccessor attributeAccessor = attributesHolder.get();
-				if (attributeAccessor == null) {
-					attributeAccessor = new AttributeAccessorSupport() {};
-				}
-				recoveryCallback.recover(attributeAccessor, ex.getCause());
+				recoveryCallback.recover(attributesHolder.get(), ex.getCause());
+				AckUtils.autoAck(acknowledgmentCallback);
 			}
-			AckUtils.autoAck(acknowledgmentCallback);
 		}
 	}
 }

@@ -1,9 +1,5 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.ObjectReader;
-import com.fasterxml.jackson.databind.ObjectWriter;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
@@ -56,6 +52,10 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectReader;
+import tools.jackson.databind.ObjectWriter;
 
 public class XMLMessageMapper {
 	private static final Logger LOGGER = LoggerFactory.getLogger(XMLMessageMapper.class);

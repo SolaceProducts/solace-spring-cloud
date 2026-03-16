@@ -51,7 +51,6 @@ public abstract class InboundXMLMessageListener implements Runnable {
 	private final Consumer<Message<?>> messageConsumer;
 	private final JCSMPAcknowledgementCallbackFactory ackCallbackFactory;
 	@Nullable private final SolaceMeterAccessor solaceMeterAccessor;
-	private final boolean needHolder;
 	private final boolean needAttributes;
 	private final AtomicBoolean stopFlag = new AtomicBoolean(false);
 	private final Supplier<Boolean> remoteStopFlag;
@@ -67,7 +66,6 @@ public abstract class InboundXMLMessageListener implements Runnable {
 							  @Nullable SolaceMeterAccessor solaceMeterAccessor,
 							  @Nullable AtomicBoolean remoteStopFlag,
 							  ThreadLocal<AttributeAccessor> attributesHolder,
-							  boolean needHolder,
 							  boolean needAttributes) {
 		this.flowReceiverContainer = flowReceiverContainer;
 		this.consumerDestination = consumerDestination;
@@ -78,7 +76,6 @@ public abstract class InboundXMLMessageListener implements Runnable {
 		this.solaceMeterAccessor = solaceMeterAccessor;
 		this.remoteStopFlag = () -> remoteStopFlag != null && remoteStopFlag.get();
 		this.attributesHolder = attributesHolder;
-		this.needHolder = needHolder;
 		this.needAttributes = needAttributes;
 		this.xmlMessageMapper = flowReceiverContainer.getXMLMessageMapper();
 		this.smfMessageReaderProperties = new SmfMessageReaderProperties(consumerProperties.getExtension());
@@ -147,9 +144,7 @@ public abstract class InboundXMLMessageListener implements Runnable {
 				processMessage(messageContainer);
 			}
 		} finally {
-			if (needHolder || needAttributes) {
-				attributesHolder.remove();
-			}
+			attributesHolder.remove();
 		}
 	}
 
@@ -283,10 +278,7 @@ public abstract class InboundXMLMessageListener implements Runnable {
 
 	private void setAttributesIfNecessary(Object rawXmlMessage, Message<?> message,
 										  AcknowledgmentCallback acknowledgmentCallback) {
-		if (needHolder) {
-			attributesHolder.set(ErrorMessageUtils.getAttributeAccessor(null, null));
-		}
-
+		attributesHolder.set(ErrorMessageUtils.getAttributeAccessor(null, null));
 		if (needAttributes) {
 			AttributeAccessor attributes = attributesHolder.get();
 			if (attributes != null) {
