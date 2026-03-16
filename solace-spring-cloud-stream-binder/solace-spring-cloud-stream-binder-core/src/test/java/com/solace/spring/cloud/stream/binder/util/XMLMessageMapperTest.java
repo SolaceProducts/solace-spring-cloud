@@ -118,6 +118,10 @@ public class XMLMessageMapperTest {
 	private final ObjectWriter objectWriter = OBJECT_MAPPER.writer();
 	private final ObjectReader objectReader = OBJECT_MAPPER.reader();
 
+	//TODO: Remove this redundant declaration when issue https://github.com/spring-cloud/spring-cloud-stream/issues/3182 is fixed
+	//Same value as org.springframework.cloud.stream.binder.BinderHeaders.BATCH_HEADERS;
+	private static final String BATCH_HEADERS = "scst_batchHeaders";
+
 	@Spy
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 
@@ -192,7 +196,7 @@ public class XMLMessageMapperTest {
 				.withPayload(messageContents.stream()
 						.map(ImmutablePair::getLeft)
 						.toList())
-				.setHeader(SolaceBinderHeaders.BATCHED_HEADERS,
+				.setHeader(BinderHeaders.BATCH_HEADERS,
 						messageContents.stream().map(ImmutablePair::getRight).toList())
 				.build();
 
@@ -276,7 +280,7 @@ public class XMLMessageMapperTest {
 		List<String> payloads = IntStream.range(0, 10).mapToObj(i -> "asdasd").toList();
 
 		Message<List<String>> batchedMessage = MessageBuilder.withPayload(payloads)
-				.setHeader(SolaceBinderHeaders.BATCHED_HEADERS,
+				.setHeader(BinderHeaders.BATCH_HEADERS,
 						isEmpty ? List.of() : IntStream.range(0, payloads.size() / 2).mapToObj(i -> Map.of()).toList())
 				.build();
 
@@ -342,7 +346,7 @@ public class XMLMessageMapperTest {
 						JCSMPFactory.onlyInstance().createQueue(RandomStringUtils.randomAlphanumeric(10));
 				case SolaceHeaders.USER_DATA ->
 						RandomStringUtils.randomAlphanumeric(10).getBytes();
-				case SolaceBinderHeaders.BATCHED_HEADERS ->
+				case BATCH_HEADERS ->
 						List.of(Map.of("foo", "bar"));
 				case SolaceBinderHeaders.CONFIRM_CORRELATION ->
 						new CorrelationData();
@@ -399,7 +403,7 @@ public class XMLMessageMapperTest {
 				case SolaceBinderHeaders.PARTITION_KEY ->
 						assertEquals(expectedValue, xmlMessage.getProperties()
 								.getString(XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY));
-				case SolaceBinderHeaders.BATCHED_HEADERS,
+				case BATCH_HEADERS,
 					 SolaceBinderHeaders.CONFIRM_CORRELATION,
 					 SolaceBinderHeaders.TARGET_DESTINATION_TYPE ->
 						// These Spring headers aren't ever reflected in the SMF message
@@ -468,7 +472,7 @@ public class XMLMessageMapperTest {
 					assertEquals("base64", xmlMessage.getProperties().getString(header.getKey()));
 					break;
 				case SolaceBinderHeaders.SERIALIZED_PAYLOAD:
-				case SolaceBinderHeaders.BATCHED_HEADERS:
+				case BATCH_HEADERS:
 				case SolaceBinderHeaders.CONFIRM_CORRELATION:
 				case SolaceBinderHeaders.NULL_PAYLOAD:
 				case SolaceBinderHeaders.TARGET_DESTINATION_TYPE:
@@ -987,7 +991,7 @@ public class XMLMessageMapperTest {
 		validateSpringBatchHeaders(springMessage.getHeaders(), xmlMessages);
 		assertEquals(xmlMessages, StaticMessageHeaderAccessor.getSourceData(springMessage));
 		Assertions.assertThat(springMessage.getHeaders())
-				.extractingByKey(SolaceBinderHeaders.BATCHED_HEADERS)
+				.extractingByKey(BinderHeaders.BATCH_HEADERS)
 				.asList()
 				.allSatisfy(springMessageHeaders -> Assertions.assertThat(springMessageHeaders)
 						.asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class))
@@ -1021,7 +1025,7 @@ public class XMLMessageMapperTest {
 			Mockito.verify(xmlMessageMapper).mapBatchedToSpring(xmlMessages, acknowledgmentCallback, false, smfMessageReaderProperties);
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
-					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+					.get(BinderHeaders.BATCH_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
 			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
@@ -1147,7 +1151,7 @@ public class XMLMessageMapperTest {
 
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
-							.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+							.get(BinderHeaders.BATCH_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
 			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
@@ -1298,7 +1302,7 @@ public class XMLMessageMapperTest {
 
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
-					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+					.get(BinderHeaders.BATCH_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
 			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
@@ -1363,7 +1367,7 @@ public class XMLMessageMapperTest {
 
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
-					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+					.get(BinderHeaders.BATCH_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
 			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
@@ -1374,7 +1378,7 @@ public class XMLMessageMapperTest {
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : readableLocalHeaders) {
 			Object actualValue = springMessageHeaders.get(header.getKey());
 			switch (header.getKey()) {
-				case SolaceBinderHeaders.BATCHED_HEADERS:
+				case BATCH_HEADERS:
 				case SolaceBinderHeaders.NULL_PAYLOAD:
 					assertNull(actualValue);
 					break;
@@ -1414,7 +1418,7 @@ public class XMLMessageMapperTest {
 			headersAssert = Assertions.assertThat(Objects.requireNonNull(xmlMessageMapper
 									.mapBatchedToSpring(Collections.singletonList(xmlMessage), acknowledgmentCallback, smfMessageReaderProperties)
 									.getHeaders()
-					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class))
+					.get(BinderHeaders.BATCH_HEADERS, List.class))
 					.get(0))
 					.asInstanceOf(InstanceOfAssertFactories.map(String.class, Object.class));
 		} else {
@@ -1450,7 +1454,7 @@ public class XMLMessageMapperTest {
 			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, smfMessageReaderProperties);
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
-					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+					.get(BinderHeaders.BATCH_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
 			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
@@ -1482,7 +1486,7 @@ public class XMLMessageMapperTest {
 			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, smfMessageReaderProperties);
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
-					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+					.get(BinderHeaders.BATCH_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
 			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
@@ -1687,7 +1691,7 @@ public class XMLMessageMapperTest {
 			springMessage = xmlMessageMapper.mapBatchedToSpring(xmlMessages, acknowledgmentCallback, smfMessageReaderProperties);
 			@SuppressWarnings("unchecked")
 			Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(springMessage.getHeaders()
-					.get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+					.get(BinderHeaders.BATCH_HEADERS, List.class)).get(0);
 			springMessageHeaders = new MessageHeaders(messageHeaders);
 		} else {
 			springMessage = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, smfMessageReaderProperties);
@@ -1949,7 +1953,7 @@ public class XMLMessageMapperTest {
 									headerKey = XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY;
 							case XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY ->
 									headerValue = expectedHeaders.getOrDefault(SolaceBinderHeaders.PARTITION_KEY, headerValue);
-							case SolaceBinderHeaders.BATCHED_HEADERS,
+							case BATCH_HEADERS,
 								 SolaceBinderHeaders.CONFIRM_CORRELATION,
 								 SolaceBinderHeaders.TARGET_DESTINATION_TYPE -> {
 								// These Spring headers aren't ever reflected in the SMF message
@@ -1989,7 +1993,7 @@ public class XMLMessageMapperTest {
 				.hasEntrySatisfying(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, deliveryAttempt ->
 						Assertions.assertThat(deliveryAttempt).isNotNull()
 								.asInstanceOf(InstanceOfAssertFactories.ATOMIC_INTEGER).hasValue(0))
-				.extractingByKey(SolaceBinderHeaders.BATCHED_HEADERS)
+				.extractingByKey(BinderHeaders.BATCH_HEADERS)
 				.isNotNull()
 				.asInstanceOf(InstanceOfAssertFactories.list(Map.class))
 				.hasSameSizeAs(xmlMessages)

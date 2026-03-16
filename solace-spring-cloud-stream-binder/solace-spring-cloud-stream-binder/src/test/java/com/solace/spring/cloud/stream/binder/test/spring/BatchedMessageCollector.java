@@ -1,6 +1,6 @@
 package com.solace.spring.cloud.stream.binder.test.spring;
 
-import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
+import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.integration.support.MessageBuilder;
 
 import java.util.ArrayList;
@@ -26,7 +26,7 @@ public class BatchedMessageCollector<T, V> implements Collector<T, MessageBuilde
 	@Override
 	public Supplier<MessageBuilder<List<V>>> supplier() {
 		return () -> MessageBuilder.<List<V>>withPayload(new ArrayList<>())
-				.setHeader(SolaceBinderHeaders.BATCHED_HEADERS, new ArrayList<Map<String, Object>>());
+				.setHeader(BinderHeaders.BATCH_HEADERS, new ArrayList<Map<String, Object>>());
 	}
 
 	@Override
@@ -35,7 +35,7 @@ public class BatchedMessageCollector<T, V> implements Collector<T, MessageBuilde
 			builder.getPayload().add(getPayload.apply(elem));
 			@SuppressWarnings("unchecked")
 			List<Map<String, Object>> batchedHeaders = (List<Map<String, Object>>) builder.getHeaders()
-					.get(SolaceBinderHeaders.BATCHED_HEADERS);
+					.get(BinderHeaders.BATCH_HEADERS);
 			batchedHeaders.add(getHeaders.apply(elem));
 		};
 	}
@@ -45,10 +45,10 @@ public class BatchedMessageCollector<T, V> implements Collector<T, MessageBuilde
 		return (left, right) -> {
 			@SuppressWarnings("unchecked")
 			List<Map<String, Object>> leftBatchedHeaders = (List<Map<String, Object>>) left.getHeaders()
-					.get(SolaceBinderHeaders.BATCHED_HEADERS);
+					.get(BinderHeaders.BATCH_HEADERS);
 			@SuppressWarnings("unchecked")
 			List<Map<String, Object>> rightBatchedHeaders = (List<Map<String, Object>>) right.getHeaders()
-					.get(SolaceBinderHeaders.BATCHED_HEADERS);
+					.get(BinderHeaders.BATCH_HEADERS);
 			leftBatchedHeaders.addAll(rightBatchedHeaders);
 			left.getPayload().addAll(right.getPayload());
 			return left;

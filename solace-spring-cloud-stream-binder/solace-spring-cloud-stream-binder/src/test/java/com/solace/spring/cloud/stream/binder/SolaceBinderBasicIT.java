@@ -430,7 +430,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 				}
 
 				moduleOutputChannel.send(MessageBuilder.withPayload(messages.stream().map(Message::getPayload).toList())
-						.setHeader(SolaceBinderHeaders.BATCHED_HEADERS,
+						.setHeader(BinderHeaders.BATCH_HEADERS,
 								messages.stream().map(Message::getHeaders).toList())
 						.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
 						.build());
@@ -1846,7 +1846,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		Message<?> message = batched ?
 				MessageBuilder.withPayload(List.of("payload".getBytes(StandardCharsets.UTF_8)))
-						.setHeader(SolaceBinderHeaders.BATCHED_HEADERS,
+						.setHeader(BinderHeaders.BATCH_HEADERS,
 								List.of(Map.of("unsupported", new SerializableFoo("foo"))))
 						.build() :
 				MessageBuilder.withPayload("payload".getBytes(StandardCharsets.UTF_8))
@@ -1885,7 +1885,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 
 		Message<?> message = batched ?
 				MessageBuilder.withPayload(List.of(new SerializableFoo("foo")))
-						.setHeader(SolaceBinderHeaders.BATCHED_HEADERS, List.of(Map.of()))
+						.setHeader(BinderHeaders.BATCH_HEADERS, List.of(Map.of()))
 						.build() :
 				MessageBuilder.withPayload(new SerializableFoo("foo")).build();
 
@@ -1955,7 +1955,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 					if (batchMode) {
 						@SuppressWarnings("unchecked")
 						Map<String, Object> messageHeaders = (Map<String, Object>) Objects.requireNonNull(
-								msg.getHeaders().get(SolaceBinderHeaders.BATCHED_HEADERS, List.class)).get(0);
+								msg.getHeaders().get(BinderHeaders.BATCH_HEADERS, List.class)).get(0);
 						springMessageHeaders = new MessageHeaders(messageHeaders);
 					} else {
 						springMessageHeaders = msg.getHeaders();

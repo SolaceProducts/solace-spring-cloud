@@ -22,6 +22,7 @@ import org.assertj.core.api.SoftAssertions;
 import org.assertj.core.api.ThrowingConsumer;
 import org.springframework.boot.health.contributor.Status;
 import org.springframework.boot.health.contributor.HealthContributors;
+import org.springframework.cloud.stream.binder.BinderHeaders;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.PollableSource;
 import org.springframework.integration.IntegrationMessageHeaderAccessor;
@@ -72,7 +73,7 @@ public class SolaceSpringCloudStreamAssertions {
 
 			if (isBatched) {
 				assertThat(message.getHeaders())
-						.extractingByKey(SolaceBinderHeaders.BATCHED_HEADERS)
+						.extractingByKey(BinderHeaders.BATCH_HEADERS)
 						.isNotNull()
 						.isInstanceOf(List.class)
 						.asList()
@@ -101,7 +102,7 @@ public class SolaceSpringCloudStreamAssertions {
 		return message -> {
 			if (isBatched) {
 				assertThat(message.getHeaders())
-						.extractingByKey(SolaceBinderHeaders.BATCHED_HEADERS)
+						.extractingByKey(BinderHeaders.BATCH_HEADERS)
 						.isNotNull()
 						.isInstanceOf(List.class)
 						.asList()
@@ -173,7 +174,7 @@ public class SolaceSpringCloudStreamAssertions {
 
 				assertThat(message.getHeaders())
 						.containsKey(IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT)
-						.extractingByKey(SolaceBinderHeaders.BATCHED_HEADERS)
+						.extractingByKey(BinderHeaders.BATCH_HEADERS)
 						.isNotNull()
 						.isInstanceOf(List.class)
 						.asList()
