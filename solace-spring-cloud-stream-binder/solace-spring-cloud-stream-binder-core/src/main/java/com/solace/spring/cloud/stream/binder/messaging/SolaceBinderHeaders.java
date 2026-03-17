@@ -47,7 +47,10 @@ public final class SolaceBinderHeaders {
 	 * <br>
 	 * <p>Is {@code true} if a Solace Spring Cloud Stream binder has serialized the payload before publishing
 	 * it to a broker. Is undefined otherwise.</p>
+	 *
+	 * @deprecated since 6.0.0, scheduled for removal. Automatic payload serialization won't be supported in the future, application must make sure payload is supported by SMF. Unsupported types will throw an exception.
 	 */
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public static final String SERIALIZED_PAYLOAD = PREFIX + "serializedPayload";
 
 	/**
@@ -56,7 +59,9 @@ public final class SolaceBinderHeaders {
 	 * <br>
 	 * <p>A JSON String array of header names where each entry indicates that that header’s value was serialized by a
 	 * Solace Spring Cloud Stream binder before publishing it to a broker.</p>
+	 * @deprecated since 6.0.0, scheduled for removal. Automatic header serialization won't be supported in the future, application must make sure headers value are supported by SMF. Unsupported types will throw an exception.
 	 */
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public static final String SERIALIZED_HEADERS = PREFIX + "serializedHeaders";
 
 	/**
@@ -65,7 +70,9 @@ public final class SolaceBinderHeaders {
 	 * <p><b>Default Value: </b>{@code "base64"}</p>
 	 * <br>
 	 * <p>The encoding algorithm used to encode the headers indicated by {@link #SERIALIZED_HEADERS}.</p>
+	 * @deprecated since 6.0.0, scheduled for removal. Automatic header serialization won't be supported in the future.
 	 */
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public static final String SERIALIZED_HEADERS_ENCODING = PREFIX + "serializedHeadersEncoding";
 
 	/**

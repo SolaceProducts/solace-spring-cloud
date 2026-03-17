@@ -398,6 +398,27 @@ public class XMLMessageMapper {
 				continue;
 			}
 
+			//TODO: Same CONTENT_TYPE logic as PR# 452
+			if (MessageHeaders.CONTENT_TYPE.equals(header.getKey()) && header.getValue() != null) {
+				Object contentType = header.getValue();
+				// derived from StaticMessageHeaderAccessor.getContentType(Message<?>)
+				rethrowableCall(metadata::putString, MessageHeaders.CONTENT_TYPE,
+						contentType instanceof MimeType ? contentType.toString() : MimeType.valueOf(contentType.toString()).toString());
+				continue;
+			}
+
+			if(SmfMessageHeaderWriteCompatibility.NATIVE_ONLY.equals(writerProperties.getHeaderTypeCompatibility())) {
+				if (MessageHeaders.ID.equals(header.getKey()) && header.getValue() instanceof UUID id) {
+					rethrowableCall(metadata::putString, MessageHeaders.ID, id.toString());
+					continue;
+				}
+				if (IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT.equals(header.getKey()) && header.getValue() instanceof AtomicInteger deliveryAttempt) {
+					//TODO: Confirm if the DELIVERY_ATTEMPT header should be included in native-only mode?
+					//rethrowableCall(metadata::putInteger, IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, deliveryAttempt.get());
+					continue;
+				}
+			}
+
 			addSDTMapObject(metadata, serializedHeaders, header.getKey(), header.getValue(), writerProperties);
 		}
 

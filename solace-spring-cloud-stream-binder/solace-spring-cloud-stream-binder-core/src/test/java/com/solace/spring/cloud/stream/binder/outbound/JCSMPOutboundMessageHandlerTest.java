@@ -160,23 +160,14 @@ public class JCSMPOutboundMessageHandlerTest {
 	@CartesianTest(name = "[{index}] batched={0} transacted={1} payloadType={2}")
 	public void test_responseReceived_withInTimeout(
 			@Values(booleans = {false, true}) boolean batched,
-			@Values(booleans = {false, true}) boolean transacted,
-			@Values(classes = {String.class, List.class}) Class<?> payloadType) throws Exception {
+			@Values(booleans = {false, true}) boolean transacted) throws Exception {
 		producerProperties.getExtension().setTransacted(transacted);
 		messageHandler.start();
 
 		CorrelationData correlationData = new CorrelationData();
 		BatchingConfig batchingConfig = new BatchingConfig().setEnabled(batched);
 		messageHandler.handleMessage(MessageGenerator.generateMessage(
-						i -> {
-							if (payloadType.equals(List.class)) {
-								return List.of("test-0", "test-1", "test-2");
-							} else if (payloadType.equals(String.class)) {
-								return "test";
-							} else {
-								throw new IllegalArgumentException("No test for payload type " + payloadType);
-							}
-						},
+						i -> "test",
 						i -> Map.of(),
 						batchingConfig)
 				.setHeader(SolaceBinderHeaders.CONFIRM_CORRELATION, correlationData)
@@ -636,10 +627,10 @@ public class JCSMPOutboundMessageHandlerTest {
 				.isEmpty();
 		assertThat(messageHandler.getSmfMessageWriterProperties().getHeaderTypeCompatibility())
 				.as("Test error: headerTypeCompatibility should be default")
-				.isEqualTo(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES);
+				.isEqualTo(SmfMessageHeaderWriteCompatibility.NATIVE_ONLY);
 		assertThat(messageHandler.getSmfMessageWriterProperties().getPayloadTypeCompatibility())
 				.as("Test error: payloadTypeCompatibility should be default")
-				.isEqualTo(SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES);
+				.isEqualTo(SmfMessagePayloadWriteCompatibility.NATIVE_ONLY);
 
 		byte[] bytesPayload = RandomStringUtils.randomAlphanumeric(100).getBytes(StandardCharsets.UTF_8);
 		SerializableFoo serializablePayload = new SerializableFoo("foo", "bar");
