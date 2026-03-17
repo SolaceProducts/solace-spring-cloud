@@ -408,13 +408,10 @@ public class XMLMessageMapper {
 			}
 
 			if(SmfMessageHeaderWriteCompatibility.NATIVE_ONLY.equals(writerProperties.getHeaderTypeCompatibility())) {
-				if (MessageHeaders.ID.equals(header.getKey()) && header.getValue() instanceof UUID id) {
-					rethrowableCall(metadata::putString, MessageHeaders.ID, id.toString());
+				if (MessageHeaders.ID.equals(header.getKey()) && header.getValue() instanceof UUID) {
 					continue;
 				}
-				if (IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT.equals(header.getKey()) && header.getValue() instanceof AtomicInteger deliveryAttempt) {
-					//TODO: Confirm if the DELIVERY_ATTEMPT header should be included in native-only mode?
-					//rethrowableCall(metadata::putInteger, IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT, deliveryAttempt.get());
+				if (IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT.equals(header.getKey()) && header.getValue() instanceof AtomicInteger) {
 					continue;
 				}
 			}

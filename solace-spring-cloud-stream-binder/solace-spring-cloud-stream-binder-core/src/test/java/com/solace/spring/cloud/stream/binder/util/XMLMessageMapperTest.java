@@ -1947,11 +1947,10 @@ public class XMLMessageMapperTest {
 									headerKey = XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY;
 							case XMLMessage.MessageUserPropertyConstants.QUEUE_PARTITION_KEY ->
 									headerValue = expectedHeaders.getOrDefault(SolaceBinderHeaders.PARTITION_KEY, headerValue);
-							case MessageHeaders.ID ->
-									headerValue = headerValue.toString();
 							case BATCH_HEADERS,
 								 SolaceBinderHeaders.CONFIRM_CORRELATION,
-								 SolaceBinderHeaders.TARGET_DESTINATION_TYPE -> {
+								 SolaceBinderHeaders.TARGET_DESTINATION_TYPE,
+								 MessageHeaders.ID -> {
 								// These Spring headers aren't ever reflected in the SMF message
 								Assertions.assertThat(metadata.keySet()).doesNotContain(headerKey);
 								return;
