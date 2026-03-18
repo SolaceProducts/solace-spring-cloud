@@ -61,7 +61,6 @@ public class XMLMessageMapper {
 	private static final Logger LOGGER = LoggerFactory.getLogger(XMLMessageMapper.class);
 	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 	private static final MessageBuilderFactory MESSAGE_BUILDER_FACTORY = new DefaultMessageBuilderFactory();
-	static final int MESSAGE_VERSION = 1;
 	static final Encoder DEFAULT_ENCODING = Encoder.BASE64;
 
 	private final ObjectWriter stringSetWriter = OBJECT_MAPPER.writerFor(new TypeReference<Set<String>>(){});
@@ -127,7 +126,6 @@ public class XMLMessageMapper {
 						SmfMessageWriterProperties writerProperties) {
 		XMLMessage xmlMessage;
 		SDTMap metadata = mapHeadersToSmf(applyHeaderNameMapping(headers, writerProperties.getHeaderNameMapping()), writerProperties);
-		rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
 
 		if (payload instanceof byte[]) {
 			BytesMessage bytesMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
@@ -481,12 +479,6 @@ public class XMLMessageMapper {
 					}
 					headers.put(h, value);
 				});
-
-		if (!exclusionList.contains(SolaceBinderHeaders.MESSAGE_VERSION) &&
-				metadata.containsKey(SolaceBinderHeaders.MESSAGE_VERSION)) {
-			int messageVersion = rethrowableCall(metadata::getInteger, SolaceBinderHeaders.MESSAGE_VERSION);
-			headers.put(SolaceBinderHeaders.MESSAGE_VERSION, messageVersion);
-		}
 
 		return new MessageHeaders(applyHeaderNameMapping(headers, smfMessageReaderProperties.getHeaderNameMapping()));
 	}

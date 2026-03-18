@@ -33,15 +33,6 @@ public final class SolaceBinderHeaders {
 	public static final String PARTITION_KEY = PREFIX + "partitionKey";
 
 	/**
-	 * <p><b>Acceptable Value Type:</b> {@link Integer}</p>
-	 * <p><b>Access:</b> Read</p>
-	 * <p><b>Default Value: </b>{@code 1}</p>
-	 * <br>
-	 * <p>A static number set by the publisher to indicate the Spring Cloud Stream Solace message version.</p>
-	 */
-	public static final String MESSAGE_VERSION = PREFIX + "messageVersion";
-
-	/**
 	 * <p><b>Acceptable Value Type:</b> {@link Boolean}</p>
 	 * <p><b>Access:</b> Internal Binder Use Only</p>
 	 * <br>

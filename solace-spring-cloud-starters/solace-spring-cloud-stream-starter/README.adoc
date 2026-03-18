@@ -728,12 +728,6 @@ TIP: Use link:../../solace-spring-cloud-stream-binder/solace-spring-cloud-stream
 |
 | A CorrelationData instance for messaging confirmations
 
-| solace_scst_messageVersion
-| Integer
-| Read
-| 1
-| A static number set by the publisher to indicate the Spring Cloud Stream Solace message version.
-
 | solace_scst_nullPayload
 | Boolean
 | Read
