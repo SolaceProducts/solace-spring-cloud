@@ -878,6 +878,37 @@ The `queueNameExpression` property's default SpEL expression conforms to the abo
 | The configured Spring binding properties.
 |===
 
+[TIP]
+====
+To use a pre-existing queue by its exact name (e.g. one provisioned administratively), set `queueNameExpression` to a literal string expression:
+[source,yaml]
+----
+spring.cloud.stream.solace.bindings.<bindingName>.consumer.queueNameExpression: "'my/existing/queue/name'"
+----
+====
+
+[TIP]
+====
+To use the binding's `destination` value directly as the queue name, set `queueNameExpression` to `"destination"`:
+
+[source,yaml]
+----
+spring.cloud.stream.bindings.<bindingName>.destination: "my/existing/queue/name"
+spring.cloud.stream.solace.bindings.<bindingName>.consumer.queueNameExpression: "destination"
+----
+====
+
+[TIP]
+====
+To apply this across all consumer bindings, set the default `queueNameExpression` instead of configuring it per binding:
+[source,yaml]
+----
+spring.cloud.stream.bindings.<bindingName1>.destination: "queue1"
+spring.cloud.stream.bindings.<bindingName2>.destination: "queue2"
+spring.cloud.stream.solace.default.consumer.queueNameExpression: "destination"
+----
+====
+
 === Generated Error Queue Name Syntax
 
 By default, generated error queue names have the following form:
@@ -892,6 +923,15 @@ group::
 The consumer `group` name.
 
 The `errorQueueNameExpression` property's default SpEL expression conforms to the above format. Users can provide any valid SpEL expression in order to generate custom error queue names using the same evaluation context as described in <<Generated Queue Name Syntax>>.
+
+[TIP]
+====
+To use a pre-existing queue by its exact name (e.g. one provisioned administratively), set `errorQueueNameExpression` to a literal string expression:
+[source,yaml]
+----
+spring.cloud.stream.solace.bindings.<bindingName>.consumer.errorQueueNameExpression: "'my/existing/errorQueue/name'"
+----
+====
 
 == Consumer Concurrency
 
