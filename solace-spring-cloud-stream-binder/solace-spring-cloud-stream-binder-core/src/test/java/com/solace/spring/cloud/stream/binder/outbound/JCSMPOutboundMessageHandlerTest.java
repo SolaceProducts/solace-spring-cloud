@@ -157,7 +157,7 @@ public class JCSMPOutboundMessageHandlerTest {
 		}
 	}
 
-	@CartesianTest(name = "[{index}] batched={0} transacted={1} payloadType={2}")
+	@CartesianTest(name = "[{index}] batched={0} transacted={1}")
 	public void test_responseReceived_withInTimeout(
 			@Values(booleans = {false, true}) boolean batched,
 			@Values(booleans = {false, true}) boolean transacted) throws Exception {
