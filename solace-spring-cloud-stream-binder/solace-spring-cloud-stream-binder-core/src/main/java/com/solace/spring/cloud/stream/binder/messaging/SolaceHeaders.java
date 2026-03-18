@@ -94,6 +94,14 @@ public final class SolaceHeaders {
 	public static final String HTTP_CONTENT_ENCODING = PREFIX + "httpContentEncoding";
 
 	/**
+	 * <p><b>Acceptable Value Type:</b> {@link String}</p>
+	 * <p><b>Access:</b> Read/Write</p>
+	 * <br>
+	 * <p>The HTTP content type header value from interaction with an HTTP client.</p>
+	 */
+	public static final String HTTP_CONTENT_TYPE = PREFIX + "httpContentType";
+
+	/**
 	 * <p><b>Acceptable Value Type:</b> {@link Boolean}</p>
 	 * <p><b>Access:</b> Read/Write</p>
 	 * <br>

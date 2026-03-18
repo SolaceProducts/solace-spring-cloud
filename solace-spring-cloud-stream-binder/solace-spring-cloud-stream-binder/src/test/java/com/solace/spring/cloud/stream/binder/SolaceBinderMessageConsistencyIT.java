@@ -4,13 +4,13 @@ import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.APPL
 import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.CORRELATION_ID;
 import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.DMQ_ELIGIBLE;
 import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.HTTP_CONTENT_ENCODING;
+import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.HTTP_CONTENT_TYPE;
 import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.PRIORITY;
 import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.REPLY_TO;
 import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.SENDER_ID;
 import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.SENDER_TIMESTAMP;
 import static com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders.USER_DATA;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.messaging.MessageHeaders.CONTENT_TYPE;
 import com.solace.spring.boot.autoconfigure.SolaceJavaAutoConfiguration;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
 import com.solace.spring.cloud.stream.binder.test.junit.extension.SpringCloudStreamExtension;
@@ -60,7 +60,6 @@ import org.springframework.integration.channel.DirectChannel;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
-import org.springframework.util.MimeType;
 
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class, initializers = ConfigDataApplicationContextInitializer.class)
 @ExtendWith(PubSubPlusExtension.class)
@@ -236,17 +235,12 @@ public class SolaceBinderMessageConsistencyIT {
     assertThat(msgHeaders.get(CORRELATION_ID, String.class)).isEqualTo("myCorrelationID");
     assertThat(msgHeaders.get(DMQ_ELIGIBLE, Boolean.class)).isTrue();
     assertThat(msgHeaders.get(HTTP_CONTENT_ENCODING, String.class)).isEqualTo("deflate");
+    assertThat(msgHeaders.get(HTTP_CONTENT_TYPE, String.class)).isEqualTo("text/html; charset=utf-8");
     assertThat(msgHeaders.get(PRIORITY, Integer.class)).isEqualTo(3);
     assertThat(msgHeaders.get(REPLY_TO, Topic.class)).isEqualTo(someDestination);
     assertThat(msgHeaders.get(SENDER_ID, String.class)).isEqualTo("senderId");
     assertThat(msgHeaders.get(SENDER_TIMESTAMP, Long.class)).isEqualTo(10_000_000L);
     assertThat(msgHeaders.get(USER_DATA, byte[].class)).isEqualTo("someUserData".getBytes(StandardCharsets.UTF_8));
-    if (msgHeaders.get(CONTENT_TYPE) instanceof MimeType) {
-      assertThat(msgHeaders.get(CONTENT_TYPE, MimeType.class)).isEqualTo(MimeType.valueOf("text/html; charset=utf-8"));
-    } else {
-      assertThat(msgHeaders.get(CONTENT_TYPE, String.class)).isEqualTo("text/html; charset=utf-8");
-    }
-
 
     assertThat(msgHeaders.get("withBooleanValue", Boolean.class)).isTrue();
     assertThat(msgHeaders.get("withStringValue", String.class)).isEqualTo("stringValue");
