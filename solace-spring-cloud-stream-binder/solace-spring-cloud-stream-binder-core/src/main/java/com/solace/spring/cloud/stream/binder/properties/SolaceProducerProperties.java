@@ -49,18 +49,27 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 
 	/**
 	 * The compatibility mode for message headers when they're being written to the SMF message.
+	 *
+	 * @deprecated since 6.0.0, scheduled for removal. Only headers which are natively supported by SMF are allowed to be written. Unsupported types will throw an exception.
 	 */
-	private SmfMessageHeaderWriteCompatibility headerTypeCompatibility = SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES;
+	@Deprecated(forRemoval = true, since = "6.0.0")
+	private SmfMessageHeaderWriteCompatibility headerTypeCompatibility = SmfMessageHeaderWriteCompatibility.NATIVE_ONLY;
 
 	/**
 	 * The compatibility mode for message payloads when they're being written to the SMF message.
+	 *
+	 * @deprecated since 6.0.0, scheduled for removal. Only payloads which are natively supported by SMF are allowed to be written. Unsupported types will throw an exception.
 	 */
-	private SmfMessagePayloadWriteCompatibility payloadTypeCompatibility = SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES;
+	@Deprecated(forRemoval = true, since = "6.0.0")
+	private SmfMessagePayloadWriteCompatibility payloadTypeCompatibility = SmfMessagePayloadWriteCompatibility.NATIVE_ONLY;
 
 	/**
 	 * When set to true, irreversibly convert non-serializable headers to strings. An exception is thrown otherwise.
 	 * Only applies when {@link #headerTypeCompatibility} is set to {@link SmfMessageHeaderWriteCompatibility#SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES}.
+	 *
+	 * @deprecated since 6.0.0, scheduled for removal.
 	 */
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	private boolean nonserializableHeaderConvertToString = false;
 
 	/**
@@ -108,26 +117,32 @@ public class SolaceProducerProperties extends SolaceCommonProperties {
 		this.headerExclusions = headerExclusions;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public SmfMessageHeaderWriteCompatibility getHeaderTypeCompatibility() {
 		return headerTypeCompatibility;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public void setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility headerTypeCompatibility) {
 		this.headerTypeCompatibility = headerTypeCompatibility;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public SmfMessagePayloadWriteCompatibility getPayloadTypeCompatibility() {
 		return payloadTypeCompatibility;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public void setPayloadTypeCompatibility(SmfMessagePayloadWriteCompatibility payloadTypeCompatibility) {
 		this.payloadTypeCompatibility = payloadTypeCompatibility;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public boolean isNonserializableHeaderConvertToString() {
 		return nonserializableHeaderConvertToString;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public void setNonserializableHeaderConvertToString(boolean nonserializableHeaderConvertToString) {
 		this.nonserializableHeaderConvertToString = nonserializableHeaderConvertToString;
 	}

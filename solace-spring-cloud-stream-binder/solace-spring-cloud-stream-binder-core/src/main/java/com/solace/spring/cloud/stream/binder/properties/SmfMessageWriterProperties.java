@@ -11,8 +11,12 @@ import java.util.Set;
 
 public class SmfMessageWriterProperties {
 	private Set<String> headerExclusions;
+
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	private SmfMessageHeaderWriteCompatibility headerTypeCompatibility;
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	private SmfMessagePayloadWriteCompatibility payloadTypeCompatibility;
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	private boolean nonSerializableHeaderConvertToString;
 	private final Map<String, String> headerNameMapping;
 
@@ -32,26 +36,32 @@ public class SmfMessageWriterProperties {
 		this.headerExclusions = headerExclusions;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public SmfMessageHeaderWriteCompatibility getHeaderTypeCompatibility() {
 		return headerTypeCompatibility;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public void setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility headerTypeCompatibility) {
 		this.headerTypeCompatibility = headerTypeCompatibility;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public SmfMessagePayloadWriteCompatibility getPayloadTypeCompatibility() {
 		return payloadTypeCompatibility;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public void setPayloadTypeCompatibility(SmfMessagePayloadWriteCompatibility payloadTypeCompatibility) {
 		this.payloadTypeCompatibility = payloadTypeCompatibility;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public boolean isNonSerializableHeaderConvertToString() {
 		return nonSerializableHeaderConvertToString;
 	}
 
+	@Deprecated(forRemoval = true, since = "6.0.0")
 	public void setNonSerializableHeaderConvertToString(boolean nonSerializableHeaderConvertToString) {
 		this.nonSerializableHeaderConvertToString = nonSerializableHeaderConvertToString;
 	}

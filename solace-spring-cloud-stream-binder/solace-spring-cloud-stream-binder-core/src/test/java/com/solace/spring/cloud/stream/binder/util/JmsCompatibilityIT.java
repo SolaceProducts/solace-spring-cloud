@@ -163,8 +163,11 @@ public class JmsCompatibilityIT {
 			springMessageBuilder.setHeader(headerMeta.getKey(), value);
 		}
 
+		SmfMessageWriterProperties writerProperties = new SmfMessageWriterProperties(new SolaceProducerProperties());
+		writerProperties.setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES);
+		writerProperties.setPayloadTypeCompatibility(SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES);
 		XMLMessage jcsmpMessage = xmlMessageMapper.mapToSmf(springMessageBuilder.build(),
-				new SmfMessageWriterProperties(new SolaceProducerProperties()));
+				writerProperties);
 
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
@@ -212,11 +215,13 @@ public class JmsCompatibilityIT {
 		final String headerName = "abc";
 		final SerializableFoo headerValue = new SerializableFoo("Abc", "def");
 
+		SmfMessageWriterProperties writerProperties = new SmfMessageWriterProperties(new SolaceProducerProperties());
+		writerProperties.setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES);
 		XMLMessage jcsmpMessage = xmlMessageMapper.mapToSmf(new DefaultMessageBuilderFactory()
 				.withPayload("test")
 				.setHeader(headerName, headerValue)
 				.build(),
-				new SmfMessageWriterProperties(new SolaceProducerProperties()));
+				writerProperties);
 
 		AtomicReference<Exception> exceptionAtomicReference = new AtomicReference<>();
 		CountDownLatch latch = new CountDownLatch(1);
@@ -422,8 +427,11 @@ public class JmsCompatibilityIT {
 		});
 
 		jmsConnection.start();
-		jcsmpProducer.send(xmlMessageMapper.mapToSmf(new DefaultMessageBuilderFactory().withPayload(payload).build(),
-						new SmfMessageWriterProperties(new SolaceProducerProperties())),
+
+		SmfMessageWriterProperties writerProperties = new SmfMessageWriterProperties(new SolaceProducerProperties());
+		writerProperties.setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES);
+		writerProperties.setPayloadTypeCompatibility(SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES);
+		jcsmpProducer.send(xmlMessageMapper.mapToSmf(new DefaultMessageBuilderFactory().withPayload(payload).build(), writerProperties),
 				jcsmpTopic);
 
 		assertTrue(latch.await(1, TimeUnit.MINUTES));
