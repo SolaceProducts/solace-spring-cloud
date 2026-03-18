@@ -22,10 +22,6 @@ public class SolaceMessageHeaderErrorMessageStrategy implements ErrorMessageStra
 			inputMessage = null;
 		} else {
 			inputMessage = attributeAccessor.getAttribute(ErrorMessageUtils.INPUT_MESSAGE_CONTEXT_KEY);
-			Object sourceData = attributeAccessor.getAttribute(ATTR_SOLACE_RAW_MESSAGE);
-			if (sourceData != null) {
-				headers.put(IntegrationMessageHeaderAccessor.SOURCE_DATA, sourceData);
-			}
 			Object ackCallback = attributeAccessor.getAttribute(ATTR_SOLACE_ACKNOWLEDGMENT_CALLBACK);
 			if (ackCallback != null) {
 				headers.put(IntegrationMessageHeaderAccessor.ACKNOWLEDGMENT_CALLBACK, ackCallback);

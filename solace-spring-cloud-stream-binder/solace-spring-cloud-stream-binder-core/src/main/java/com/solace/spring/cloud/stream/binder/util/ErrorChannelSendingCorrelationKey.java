@@ -59,11 +59,11 @@ public class ErrorChannelSendingCorrelationKey {
 		MessagingException exception = new MessagingException(inputMessage, msg, cause);
 		if (errorChannel != null) {
 			AttributeAccessor attributes = ErrorMessageUtils.getAttributeAccessor(inputMessage, null);
-			if (rawMessages != null && !rawMessages.isEmpty()) {
+			/*if (rawMessages != null && !rawMessages.isEmpty()) {
 				attributes.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_RAW_MESSAGE,
 						inputMessage.getHeaders().containsKey(BinderHeaders.BATCH_HEADERS) ?
 								rawMessages : rawMessages.get(0));
-			}
+			}*/
 			LOGGER.debug("Sending message {} to error channel {}", inputMessage.getHeaders().getId(), errorChannel);
 			errorChannel.send(errorMessageStrategy.buildErrorMessage(exception, attributes));
 		}

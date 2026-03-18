@@ -197,12 +197,12 @@ public class SolaceMessageChannelBinder
 
 	@Override
 	protected void postProcessPollableSource(DefaultPollableMessageSource bindingTarget) {
-		bindingTarget.setAttributesProvider((accessor, message) -> {
+		/*bindingTarget.setAttributesProvider((accessor, message) -> {
 			Object sourceData = StaticMessageHeaderAccessor.getSourceData(message);
 			if (sourceData == null || sourceData instanceof XMLMessage || sourceData instanceof List) {
 				accessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_RAW_MESSAGE, sourceData);
 			}
-		});
+		});*/
 	}
 
 	@Override

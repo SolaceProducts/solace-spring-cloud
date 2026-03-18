@@ -111,7 +111,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 		context.createChannel(inputErrorChannelName, DirectChannel.class, msg -> {
 			logger.info("Got error message: {}", StaticMessageHeaderAccessor.getId(msg));
 			softly.assertThat(msg).satisfies(isValidConsumerErrorMessage(channelType, consumerProperties,
-					true, messages));
+					false, messages));
 			errorLatch.countDown();
 		});
 
@@ -362,7 +362,7 @@ public class SolaceBinderCustomErrorMessageHandlerIT {
 		final CountDownLatch errorLatch = new CountDownLatch(1);
 		context.createChannel(outputErrorChannelName, PublishSubscribeChannel.class, msg -> {
 			logger.info("Got error message: " + msg);
-			softly.assertThat(msg).satisfies(isValidProducerErrorMessage(true));
+			softly.assertThat(msg).satisfies(isValidProducerErrorMessage(false));
 			errorLatch.countDown();
 		});
 
