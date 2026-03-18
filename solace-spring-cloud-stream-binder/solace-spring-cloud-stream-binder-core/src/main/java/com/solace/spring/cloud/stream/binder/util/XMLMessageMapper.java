@@ -166,14 +166,6 @@ public class XMLMessageMapper {
 			throw exception;
 		}
 
-		Object contentType = headers.get(MessageHeaders.CONTENT_TYPE);
-		if (contentType != null) {
-			// derived from StaticMessageHeaderAccessor.getContentType(Message<?>)
-			xmlMessage.setHTTPContentType(contentType instanceof MimeType ?
-					contentType.toString() :
-					MimeType.valueOf(contentType.toString()).toString());
-		}
-
 		// Copy Solace properties from Spring Message to JCSMP XMLMessage
 		for (Map.Entry<String, SolaceHeaderMeta<?>> header : SolaceHeaderMeta.META.entrySet()) {
 			if (!header.getValue().isWritable()) {
@@ -343,8 +335,7 @@ public class XMLMessageMapper {
 
 		AbstractIntegrationMessageBuilder<?> builder = MESSAGE_BUILDER_FACTORY
 				.withPayload(payload)
-				.copyHeaders(mapHeadersToSpring(metadata, smfMessageReaderProperties))
-				.setHeaderIfAbsent(MessageHeaders.CONTENT_TYPE, xmlMessage.getHTTPContentType());
+				.copyHeaders(mapHeadersToSpring(metadata, smfMessageReaderProperties));
 
 		if (isNullPayload) {
 			LOGGER.debug("Null payload detected, setting Spring header {}", SolaceBinderHeaders.NULL_PAYLOAD);
@@ -398,7 +389,6 @@ public class XMLMessageMapper {
 				continue;
 			}
 
-			//TODO: Same CONTENT_TYPE logic as PR# 452
 			if (MessageHeaders.CONTENT_TYPE.equals(header.getKey()) && header.getValue() != null) {
 				Object contentType = header.getValue();
 				// derived from StaticMessageHeaderAccessor.getContentType(Message<?>)
