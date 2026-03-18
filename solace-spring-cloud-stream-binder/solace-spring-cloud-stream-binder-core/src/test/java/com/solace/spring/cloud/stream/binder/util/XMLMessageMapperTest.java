@@ -255,6 +255,8 @@ public class XMLMessageMapperTest {
 		Assertions.assertThat(xmlMessageMapper.mapBatchedToSmf(MessageBuilder.withPayload(payloads).build(),
 						new SmfMessageWriterProperties(new SolaceProducerProperties())))
 				.hasSameSizeAs(payloads)
+				.allSatisfy(m -> Assertions.assertThat(m.getProperties().keySet())
+						.containsOnly(SolaceBinderHeaders.MESSAGE_VERSION))
 				.asInstanceOf(InstanceOfAssertFactories.list(TextMessage.class))
 				.extracting(TextMessage::getText)
 				.containsExactlyInAnyOrderElementsOf(payloads);
@@ -456,6 +458,10 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.REDELIVERED:
 					assertFalse(xmlMessage.getRedelivered());
 					break;
+				case SolaceBinderHeaders.MESSAGE_VERSION:
+					assertEquals(Integer.valueOf(XMLMessageMapper.MESSAGE_VERSION),
+							xmlMessage.getProperties().getInteger(header.getKey()));
+					break;
 				case SolaceBinderHeaders.SERIALIZED_HEADERS:
 					String serializedHeadersJson = xmlMessage.getProperties().getString(header.getKey());
 					assertThat(serializedHeadersJson, not(emptyString()));
@@ -614,6 +620,7 @@ public class XMLMessageMapperTest {
 	@Test
 	void testMapXMLMessageToErrorXMLMessage() throws Exception {
 		SDTMap headers = JCSMPFactory.onlyInstance().createMap();
+		headers.putInteger(SolaceBinderHeaders.MESSAGE_VERSION, 1);
 		headers.putString("a", "abc");
 		TextMessage inputMessage = JCSMPFactory.onlyInstance().createMessage(TextMessage.class);
 		inputMessage.setText("test-payload");
@@ -822,7 +829,8 @@ public class XMLMessageMapperTest {
 
 		Assertions.assertThat(xmlMessage.getProperties())
 				.satisfies(p -> Assertions.assertThat(p.keySet()).containsExactlyInAnyOrderElementsOf(
-						testSpringMessage.getHeaders().keySet().stream()
+						Stream.concat(Stream.of(SolaceBinderHeaders.MESSAGE_VERSION),
+										testSpringMessage.getHeaders().keySet().stream())
 								.filter(k -> !MessageHeaders.ID.equals(k))
 								.filter(k -> !"test-unsupported".equals(k))
 								.toList()))
@@ -1119,6 +1127,9 @@ public class XMLMessageMapperTest {
 				case SolaceHeaders.USER_DATA:
 					Mockito.when(xmlMessage.getUserData()).thenReturn(header.getKey().getBytes());
 					break;
+				case SolaceBinderHeaders.MESSAGE_VERSION:
+					metadata.putInteger(header.getKey(), ThreadLocalRandom.current().nextInt());
+					break;
 				default:
 					fail(String.format("no test for header %s", header.getKey()));
 			}
@@ -1214,6 +1225,9 @@ public class XMLMessageMapperTest {
 					break;
 				case SolaceHeaders.USER_DATA:
 					assertEquals(xmlMessage.getUserData(), actualValue);
+					break;
+				case SolaceBinderHeaders.MESSAGE_VERSION:
+					assertEquals(xmlMessage.getProperties().get(header.getKey()), actualValue);
 					break;
 				default:
 					if (HeaderMeta.Scope.WIRE.equals(header.getValue().getScope())) {
@@ -1720,10 +1734,11 @@ public class XMLMessageMapperTest {
 	@Test
 	void testMapSDTMapToMessageHeaders_WithExcludedHeader_canExcludeBinderHeaders() throws Exception {
 		SDTMap sdtMap = JCSMPFactory.onlyInstance().createMap();
+		sdtMap.putObject(SolaceBinderHeaders.MESSAGE_VERSION, 10);
 		sdtMap.putObject(SolaceBinderHeaders.SERIALIZED_HEADERS, "header1, header2");
 		sdtMap.putObject("retainedHeader", "test");
 
-		List<String> excludedHeaders = List.of(SolaceBinderHeaders.SERIALIZED_HEADERS);
+		List<String> excludedHeaders = List.of(SolaceBinderHeaders.MESSAGE_VERSION, SolaceBinderHeaders.SERIALIZED_HEADERS);
 		SolaceConsumerProperties solaceConsumerProperties = new SolaceConsumerProperties();
 		solaceConsumerProperties.setHeaderExclusions(excludedHeaders);
 		MessageHeaders messageHeaders = xmlMessageMapper.mapHeadersToSpring(sdtMap,
@@ -1891,6 +1906,8 @@ public class XMLMessageMapperTest {
 				.hasToString(xmlMessage.getProperties().getString(MessageHeaders.CONTENT_TYPE));
 
 		SDTMap metadata = xmlMessage.getProperties();
+
+		assertEquals((Integer) XMLMessageMapper.MESSAGE_VERSION, metadata.getInteger(SolaceBinderHeaders.MESSAGE_VERSION));
 
 		Set<String> serializedHeaders = new HashSet<>();
 
