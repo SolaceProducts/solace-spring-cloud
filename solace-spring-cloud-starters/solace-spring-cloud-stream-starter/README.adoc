@@ -431,7 +431,9 @@ When set to `native_only`, only headers which are natively supported by SMF are 
 +
 When set to `serialize_and_encode_non_native_types`, non-native and serializable headers will be serialized to a byte array then encoded into a string with the corresponding  `solace_scst_serializedHeaders` and `solace_scst_serializedHeadersEncoding` headers set accordingly. Native payloads will be written as usual.
 +
-Default: `serialize_and_encode_non_native_types`
+Default: `native_only`
++
+IMPORTANT: `headerTypeCompatibility` has been marked `@Deprecated` in v6.0.0 and will be removed in a future release. The default value has been changed from `serialize_and_encode_non_native_types` to `native_only`. After removal, the behavior will default to `native_only` (only native SMF headers will be supported).
 
 nonserializableHeaderConvertToString::
 When set to `true`, irreversibly convert non-serializable headers to strings. An exception is thrown otherwise.
@@ -441,6 +443,8 @@ Default: `false`
 IMPORTANT: Non-serializable headers should have a meaningful `toString()` implementation. Otherwise enabling this feature may result in potential data loss.
 +
 NOTE: Only applies when `headerTypeCompatibility` is set to `serialize_and_encode_non_native_types`.
++
+IMPORTANT: `nonserializableHeaderConvertToString` has been marked `@Deprecated` in v6.0.0 and will be removed in a future release. This property will become irrelevant when `headerTypeCompatibility` is removed, as only native SMF headers will be supported at that point.
 
 transacted::
 When set to `true`, messages will be delivered using local transactions.
@@ -459,7 +463,9 @@ When set to `native_only`, only payloads which are natively supported by SMF are
 +
 When set to `serialize_non_native_types`, non-native and serializable payloads will be serialized into a byte array with the corresponding  `solace_scst_serializedPayload` header set accordingly. Native payloads will be written as usual.
 +
-Default: `serialize_non_native_types`
+Default: `native_only`
++
+IMPORTANT: `payloadTypeCompatibility` has been marked `@Deprecated` in v6.0.0 and will be removed in a future release. The default value has been changed from `serialize_non_native_types` to `native_only`. After removal, the behavior will default to `native_only` (only native SMF Payloads will be supported).
 
 provisionDurableQueue::
 Whether to provision durable queues for non-anonymous consumer groups or queue destinations. This should only be set to `false` if you have externally pre-provisioned the required queue on the message broker.

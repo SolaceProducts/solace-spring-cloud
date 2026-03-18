@@ -397,7 +397,7 @@ public class XMLMessageMapper {
 				continue;
 			}
 
-			if(SmfMessageHeaderWriteCompatibility.NATIVE_ONLY.equals(writerProperties.getHeaderTypeCompatibility())) {
+      if(SmfMessageHeaderWriteCompatibility.NATIVE_ONLY.equals(writerProperties.getHeaderTypeCompatibility())) {
 				if (MessageHeaders.ID.equals(header.getKey()) && header.getValue() instanceof UUID) {
 					continue;
 				}
