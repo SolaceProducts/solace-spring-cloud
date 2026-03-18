@@ -397,6 +397,15 @@ public class XMLMessageMapper {
 				continue;
 			}
 
+      if(SmfMessageHeaderWriteCompatibility.NATIVE_ONLY.equals(writerProperties.getHeaderTypeCompatibility())) {
+				if (MessageHeaders.ID.equals(header.getKey())) {
+					continue;
+				}
+				if (IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT.equals(header.getKey())) {
+					continue;
+				}
+			}
+
 			addSDTMapObject(metadata, serializedHeaders, header.getKey(), header.getValue(), writerProperties);
 		}
 

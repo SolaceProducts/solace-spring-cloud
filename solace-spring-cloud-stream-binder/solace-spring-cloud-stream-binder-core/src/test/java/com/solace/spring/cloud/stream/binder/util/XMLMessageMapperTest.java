@@ -434,9 +434,10 @@ public class XMLMessageMapperTest {
 			messageBuilder.setHeader(header.getKey(), new Object());
 		}
 
+		SmfMessageWriterProperties writerProperties =  new SmfMessageWriterProperties(new SolaceProducerProperties());
+		writerProperties.setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES);
 		Message<?> testSpringMessage = messageBuilder.build();
-		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(testSpringMessage,
-				new SmfMessageWriterProperties(new SolaceProducerProperties()));
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(testSpringMessage, writerProperties);
 
 		for (Map.Entry<String, ? extends HeaderMeta<?>> header : nonWriteableHeaders) {
 			switch (header.getKey()) {
@@ -507,8 +508,9 @@ public class XMLMessageMapperTest {
 				.setHeader("solace_foo2", undefinedSolaceHeader2)
 				.build();
 
-		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(testSpringMessage,
-				new SmfMessageWriterProperties(new SolaceProducerProperties()));
+		SmfMessageWriterProperties writerProperties =  new SmfMessageWriterProperties(new SolaceProducerProperties());
+		writerProperties.setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES);
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(testSpringMessage, writerProperties);
 
 		assertEquals(undefinedSolaceHeader1, xmlMessage.getProperties().getString("solace_foo1"));
 		assertEquals(undefinedSolaceHeader2, SerializationUtils.deserialize(Base64.getDecoder()
@@ -739,6 +741,8 @@ public class XMLMessageMapperTest {
 
 		SmfMessageWriterProperties serializationProperties = new SmfMessageWriterProperties(
 				new SolaceProducerProperties());
+		serializationProperties.setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES);
+		serializationProperties.setPayloadTypeCompatibility(SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES);
 		serializationProperties.getHeaderExclusions().addAll(writeableHeaders.stream()
 				.map(Map.Entry::getKey)
 				.toList());
@@ -1571,8 +1575,9 @@ public class XMLMessageMapperTest {
 		headers.put(key, value);
 		headers.put(BinderHeaders.TARGET_DESTINATION, "redirected-target");
 
-		SDTMap sdtMap = xmlMessageMapper.mapHeadersToSmf(new MessageHeaders(headers),
-				new SmfMessageWriterProperties(new SolaceProducerProperties()));
+		SmfMessageWriterProperties writerProperties = new SmfMessageWriterProperties(new SolaceProducerProperties());
+		writerProperties.setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES);
+		SDTMap sdtMap = xmlMessageMapper.mapHeadersToSmf(new MessageHeaders(headers), writerProperties);
 
 		assertThat(sdtMap.keySet(), hasItem(key));
 		assertThat(sdtMap.keySet(), hasItem(SolaceBinderHeaders.SERIALIZED_HEADERS));
@@ -1603,6 +1608,7 @@ public class XMLMessageMapperTest {
 		String key = "a";
 		Object value = new Object();
 		SmfMessageWriterProperties serializationProperties = new SmfMessageWriterProperties(new SolaceProducerProperties());
+		serializationProperties.setHeaderTypeCompatibility(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES);
 		serializationProperties.setNonSerializableHeaderConvertToString(true);
 		SDTMap sdtMap = xmlMessageMapper.mapHeadersToSmf(new MessageHeaders(Collections.singletonMap(key, value)),
 				serializationProperties);
@@ -1955,7 +1961,9 @@ public class XMLMessageMapperTest {
 									headerValue = expectedHeaders.getOrDefault(SolaceBinderHeaders.PARTITION_KEY, headerValue);
 							case BATCH_HEADERS,
 								 SolaceBinderHeaders.CONFIRM_CORRELATION,
-								 SolaceBinderHeaders.TARGET_DESTINATION_TYPE -> {
+								 SolaceBinderHeaders.TARGET_DESTINATION_TYPE,
+								 MessageHeaders.ID,
+								 IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT -> {
 								// These Spring headers aren't ever reflected in the SMF message
 								Assertions.assertThat(metadata.keySet()).doesNotContain(headerKey);
 								return;
