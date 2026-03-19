@@ -27,7 +27,7 @@ public final class SolaceBinderHeaders {
 	/**
 	 * The prefix used for all headers in this class.
 	 */
-	static final String PREFIX = SolaceHeaders.PREFIX + "scst_";
+	public static final String PREFIX = SolaceHeaders.PREFIX + "scst_";
 
 	/**
 	 * <p><b>Acceptable Value Type:</b> {@link String}</p>

@@ -311,9 +311,7 @@ public class SolaceHeadersTest {
 	}
 
 	private Field getPrefixField(Class<?> headersClass) throws NoSuchFieldException {
-		Field field = headersClass.getDeclaredField("PREFIX");
-		field.setAccessible(true);
-		return field;
+		return headersClass.getDeclaredField("PREFIX");
 	}
 
 	private List<Field> getAllHeaderFields(Class<?> headersClass) {
