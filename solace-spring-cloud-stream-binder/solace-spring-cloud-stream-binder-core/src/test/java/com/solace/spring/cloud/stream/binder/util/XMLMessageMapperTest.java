@@ -255,8 +255,7 @@ public class XMLMessageMapperTest {
 		Assertions.assertThat(xmlMessageMapper.mapBatchedToSmf(MessageBuilder.withPayload(payloads).build(),
 						new SmfMessageWriterProperties(new SolaceProducerProperties())))
 				.hasSameSizeAs(payloads)
-				.allSatisfy(m -> Assertions.assertThat(m.getProperties().keySet())
-						.containsOnly(SolaceBinderHeaders.MESSAGE_VERSION))
+				.allSatisfy(m -> Assertions.assertThat(m.getProperties().keySet()).isEmpty())
 				.asInstanceOf(InstanceOfAssertFactories.list(TextMessage.class))
 				.extracting(TextMessage::getText)
 				.containsExactlyInAnyOrderElementsOf(payloads);
@@ -831,10 +830,13 @@ public class XMLMessageMapperTest {
 		writerProperties.getHeaderExclusions().add("test-unsupported");
 		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(testSpringMessage, writerProperties);
 
+		Stream<String> msgVersionOrEmpty =
+				SmfMessageHeaderWriteCompatibility.NATIVE_ONLY.equals(headerTypeCompatibility) ? Stream.of()
+						: Stream.of(SolaceBinderHeaders.MESSAGE_VERSION);
+
 		Assertions.assertThat(xmlMessage.getProperties())
 				.satisfies(p -> Assertions.assertThat(p.keySet()).containsExactlyInAnyOrderElementsOf(
-						Stream.concat(Stream.of(SolaceBinderHeaders.MESSAGE_VERSION),
-										testSpringMessage.getHeaders().keySet().stream())
+						Stream.concat(msgVersionOrEmpty, testSpringMessage.getHeaders().keySet().stream())
 								.filter(k -> !MessageHeaders.ID.equals(k))
 								.filter(k -> !"test-unsupported".equals(k))
 								.toList()))
@@ -1913,11 +1915,10 @@ public class XMLMessageMapperTest {
 
 		SDTMap metadata = xmlMessage.getProperties();
 
-		assertEquals((Integer) XMLMessageMapper.MESSAGE_VERSION, metadata.getInteger(SolaceBinderHeaders.MESSAGE_VERSION));
-
 		Set<String> serializedHeaders = new HashSet<>();
 
 		if (metadata.containsKey(SolaceBinderHeaders.SERIALIZED_HEADERS)) {
+			assertEquals((Integer) XMLMessageMapper.MESSAGE_VERSION, metadata.getInteger(SolaceBinderHeaders.MESSAGE_VERSION));
 			XMLMessageMapper.Encoder encoder = XMLMessageMapper.Encoder
 					.getByName(metadata.getString(SolaceBinderHeaders.SERIALIZED_HEADERS_ENCODING));
 

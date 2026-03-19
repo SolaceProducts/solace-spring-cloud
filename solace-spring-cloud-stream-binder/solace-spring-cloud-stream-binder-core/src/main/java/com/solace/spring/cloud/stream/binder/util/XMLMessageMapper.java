@@ -127,7 +127,10 @@ public class XMLMessageMapper {
 						SmfMessageWriterProperties writerProperties) {
 		XMLMessage xmlMessage;
 		SDTMap metadata = mapHeadersToSmf(applyHeaderNameMapping(headers, writerProperties.getHeaderNameMapping()), writerProperties);
-		rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
+		if(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES.equals(writerProperties.getHeaderTypeCompatibility()) ||
+				SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES.equals(writerProperties.getPayloadTypeCompatibility())) {
+			rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
+		}
 
 		if (payload instanceof byte[]) {
 			BytesMessage bytesMessage = JCSMPFactory.onlyInstance().createMessage(BytesMessage.class);
