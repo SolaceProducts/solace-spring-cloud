@@ -11,21 +11,20 @@ import com.solace.spring.cloud.stream.binder.util.SessionInitializationMode;
 import com.solace.spring.cloud.stream.binder.util.SolaceSessionManager;
 import com.solacesystems.jcsmp.JCSMPException;
 import jakarta.annotation.PostConstruct;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.security.oauth2.client.autoconfigure.OAuth2ClientAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.stream.config.ProducerMessageHandlerCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.lang.Nullable;
 
 
-@Configuration
-@Import({SolaceSessionConfig.class, SolaceHealthIndicatorsConfiguration.class, OAuth2ClientAutoConfiguration.class})
+@Configuration(proxyBeanMethods = false)
+@Import({SolaceSessionConfig.class, SolaceHealthIndicatorsConfiguration.class, OAuth2ClientAutoConfigurationImportSelector.class})
 @EnableConfigurationProperties({SolaceBinderConfigurationProperties.class, SolaceExtendedBindingProperties.class})
-public class SolaceMessageChannelBinderConfiguration {
+public final class SolaceMessageChannelBinderConfiguration {
 	private final SolaceExtendedBindingProperties solaceExtendedBindingProperties;
 	private final SolaceBinderConfigurationProperties solaceBinderConfigurationProperties;
 	private final SolaceSessionManager solaceSessionManager;
@@ -41,7 +40,7 @@ public class SolaceMessageChannelBinderConfiguration {
 	}
 
 	@PostConstruct
-	public void init() throws JCSMPException {
+	void init() throws JCSMPException {
 		if (SessionInitializationMode.EAGER.equals(solaceBinderConfigurationProperties.getSessionInitializationMode())) {
 			LOGGER.debug("Eagerly initializing Solace session.");
 			solaceSessionManager.getSession();

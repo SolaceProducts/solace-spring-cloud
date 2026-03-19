@@ -7,16 +7,16 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @ConditionalOnClass(MeterRegistry.class)
-public class SolaceMeterConfiguration {
+public final class SolaceMeterConfiguration {
 	@Bean
-	public SolaceMessageMeterBinder solaceMessageMeterBinder() {
+	SolaceMessageMeterBinder solaceMessageMeterBinder() {
 		return new SolaceMessageMeterBinder();
 	}
 
 	@Bean
-	public SolaceMeterAccessor solaceMeterAccessor(SolaceMessageMeterBinder solaceMessageMeterBinder) {
+	SolaceMeterAccessor solaceMeterAccessor(SolaceMessageMeterBinder solaceMessageMeterBinder) {
 		return new SolaceMeterAccessor(solaceMessageMeterBinder);
 	}
 }

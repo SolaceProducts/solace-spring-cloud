@@ -1,7 +1,7 @@
 package com.solace.spring.cloud.stream.binder.test.spring;
 
 import com.solace.spring.cloud.stream.binder.util.BatchWaitStrategy;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 public enum MessageLayout {
 	SINGLE(false),

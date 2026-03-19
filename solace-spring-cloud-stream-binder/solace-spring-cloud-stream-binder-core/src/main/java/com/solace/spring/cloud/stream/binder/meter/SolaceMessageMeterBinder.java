@@ -5,7 +5,7 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.BaseUnits;
 import io.micrometer.core.instrument.binder.MeterBinder;
-import org.springframework.lang.NonNull;
+import org.jspecify.annotations.NonNull;
 
 public class SolaceMessageMeterBinder implements MeterBinder {
 	MeterRegistry registry;

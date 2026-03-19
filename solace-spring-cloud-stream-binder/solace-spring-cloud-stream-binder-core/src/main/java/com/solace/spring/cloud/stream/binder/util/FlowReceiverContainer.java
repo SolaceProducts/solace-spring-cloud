@@ -14,7 +14,7 @@ import com.solacesystems.jcsmp.XMLMessage.Outcome;
 import com.solacesystems.jcsmp.transaction.TransactedSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 
 import java.util.Objects;
 import java.util.Optional;

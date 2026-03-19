@@ -5,9 +5,9 @@ import com.solacesystems.jcsmp.DefaultSolaceOAuth2SessionEventHandler;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.SessionEventArgs;
 import com.solacesystems.jcsmp.SolaceSessionOAuth2TokenProvider;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.lang.Nullable;
 
 public class SolaceSessionEventHandler extends DefaultSolaceOAuth2SessionEventHandler {
 	private final SessionHealthIndicator sessionHealthIndicator;

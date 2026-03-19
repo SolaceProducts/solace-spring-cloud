@@ -31,7 +31,7 @@ import org.springframework.core.retry.Retryable;
 import org.springframework.integration.context.OrderlyShutdownCapable;
 import org.springframework.integration.core.Pausable;
 import org.springframework.integration.endpoint.MessageProducerSupport;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.MessagingException;
 import org.springframework.integration.core.RecoveryCallback;
 import org.springframework.core.retry.RetryListener;

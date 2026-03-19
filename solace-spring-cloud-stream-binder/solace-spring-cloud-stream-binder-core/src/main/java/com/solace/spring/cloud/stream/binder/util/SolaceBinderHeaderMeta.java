@@ -1,12 +1,12 @@
-package com.solace.spring.cloud.stream.binder.messaging;
+package com.solace.spring.cloud.stream.binder.util;
 
-import com.solace.spring.cloud.stream.binder.util.CorrelationData;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
 
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class SolaceBinderHeaderMeta<T> implements HeaderMeta<T> {
+final class SolaceBinderHeaderMeta<T> implements HeaderMeta<T> {
 	public static final Map<String, SolaceBinderHeaderMeta<?>> META = Stream.of(new Object[][] {
 			{SolaceBinderHeaders.PARTITION_KEY, new SolaceBinderHeaderMeta<>(String.class, false, true, Scope.WIRE)},
 			{SolaceBinderHeaders.MESSAGE_VERSION, new SolaceBinderHeaderMeta<>(Integer.class, true, false, Scope.WIRE)},

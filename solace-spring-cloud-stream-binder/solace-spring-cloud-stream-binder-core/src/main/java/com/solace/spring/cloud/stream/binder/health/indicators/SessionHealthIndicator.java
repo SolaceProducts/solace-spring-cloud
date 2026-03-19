@@ -3,9 +3,9 @@ package com.solace.spring.cloud.stream.binder.health.indicators;
 import com.solace.spring.cloud.stream.binder.health.base.SolaceHealthIndicator;
 import com.solace.spring.cloud.stream.binder.properties.SolaceSessionHealthProperties;
 import com.solacesystems.jcsmp.SessionEventArgs;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.lang.Nullable;
 
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;

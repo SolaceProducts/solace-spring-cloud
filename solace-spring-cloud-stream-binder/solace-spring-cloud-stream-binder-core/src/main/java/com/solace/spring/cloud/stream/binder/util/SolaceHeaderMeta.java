@@ -1,5 +1,6 @@
-package com.solace.spring.cloud.stream.binder.messaging;
+package com.solace.spring.cloud.stream.binder.util;
 
+import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.ReplicationGroupMessageId;
 import com.solacesystems.jcsmp.XMLMessage;
@@ -10,7 +11,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class SolaceHeaderMeta<T> implements HeaderMeta<T> {
+final class SolaceHeaderMeta<T> implements HeaderMeta<T> {
 	public static final Map<String, SolaceHeaderMeta<?>> META = Stream.of(new Object[][] {
 			{SolaceHeaders.APPLICATION_MESSAGE_ID, new SolaceHeaderMeta<>(String.class, XMLMessage::getApplicationMessageId, XMLMessage::setApplicationMessageId)},
 			{SolaceHeaders.APPLICATION_MESSAGE_TYPE, new SolaceHeaderMeta<>(String.class, XMLMessage::getApplicationMessageType, XMLMessage::setApplicationMessageType)},

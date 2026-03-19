@@ -5,10 +5,10 @@ import com.solace.spring.cloud.stream.binder.util.FlowReceiverContainer;
 import com.solace.spring.cloud.stream.binder.util.MessageContainer;
 import com.solace.spring.cloud.stream.binder.util.SolaceAcknowledgmentException;
 import com.solacesystems.jcsmp.XMLMessage;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.integration.acks.AcknowledgmentCallback;
-import org.springframework.lang.Nullable;
 
 class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
   private final MessageContainer messageContainer;

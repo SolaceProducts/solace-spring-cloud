@@ -6,9 +6,9 @@ import org.springframework.cloud.stream.binder.Binder;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @ConditionalOnMissingBean(Binder.class)
 @Import({ SolaceMessageChannelBinderConfiguration.class, SolaceJavaAutoConfiguration.class })
-public class SolaceServiceAutoConfiguration {
+public final class SolaceServiceAutoConfiguration {
     
 }

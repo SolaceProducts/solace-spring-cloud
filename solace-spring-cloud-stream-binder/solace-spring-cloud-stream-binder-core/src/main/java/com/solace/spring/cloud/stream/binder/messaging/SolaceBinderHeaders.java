@@ -19,10 +19,15 @@ import org.springframework.messaging.Message;
  * Using headers outside of their intended access-control scenario is not supported.</p>
  */
 public final class SolaceBinderHeaders {
+
+	private SolaceBinderHeaders() {
+		/* This utility class should not be instantiated */
+	 }
+
 	/**
 	 * The prefix used for all headers in this class.
 	 */
-	static final String PREFIX = SolaceHeaders.PREFIX + "scst_";
+	public static final String PREFIX = SolaceHeaders.PREFIX + "scst_";
 
 	/**
 	 * <p><b>Acceptable Value Type:</b> {@link String}</p>
