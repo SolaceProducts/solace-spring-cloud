@@ -11,19 +11,18 @@ import com.solace.spring.cloud.stream.binder.util.SessionInitializationMode;
 import com.solace.spring.cloud.stream.binder.util.SolaceSessionManager;
 import com.solacesystems.jcsmp.JCSMPException;
 import jakarta.annotation.PostConstruct;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.security.oauth2.client.autoconfigure.OAuth2ClientAutoConfiguration;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.stream.config.ProducerMessageHandlerCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.lang.Nullable;
 
 
 @Configuration(proxyBeanMethods = false)
-@Import({SolaceSessionConfig.class, SolaceHealthIndicatorsConfiguration.class, OAuth2ClientAutoConfiguration.class})
+@Import({SolaceSessionConfig.class, SolaceHealthIndicatorsConfiguration.class, OAuth2ClientAutoConfigurationImportSelector.class})
 @EnableConfigurationProperties({SolaceBinderConfigurationProperties.class, SolaceExtendedBindingProperties.class})
 public final class SolaceMessageChannelBinderConfiguration {
 	private final SolaceExtendedBindingProperties solaceExtendedBindingProperties;

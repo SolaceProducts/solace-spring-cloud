@@ -11,7 +11,7 @@ import org.springframework.core.AttributeAccessor;
 import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.core.RecoveryCallback;
-import org.springframework.lang.Nullable;
+import org.jspecify.annotations.Nullable;
 import org.springframework.messaging.Message;
 import org.springframework.core.retry.RetryException;
 import org.springframework.core.retry.RetryTemplate;
