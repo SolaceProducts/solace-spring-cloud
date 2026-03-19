@@ -1,6 +1,6 @@
-package com.solace.spring.cloud.stream.binder.messaging;
+package com.solace.spring.cloud.stream.binder.util;
 
-import com.solace.spring.cloud.stream.binder.test.junit.param.provider.SolaceSpringHeaderArgumentsProvider;
+import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.TextMessage;

@@ -1,9 +1,6 @@
-package com.solace.spring.cloud.stream.binder.test.junit.param.provider;
+package com.solace.spring.cloud.stream.binder.util;
 
-import com.solace.spring.cloud.stream.binder.messaging.HeaderMeta;
-import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
-import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaders;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.params.provider.Arguments;

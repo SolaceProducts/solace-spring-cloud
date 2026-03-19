@@ -1,6 +1,6 @@
-package com.solace.spring.cloud.stream.binder.messaging;
+package com.solace.spring.cloud.stream.binder.util;
 
-public interface HeaderMeta<T> {
+interface HeaderMeta<T> {
 	/**
 	 * The type of header.
 	 * @return header type

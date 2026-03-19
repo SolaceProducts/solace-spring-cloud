@@ -1,8 +1,6 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaderMeta;
 import com.solace.spring.cloud.stream.binder.messaging.SolaceBinderHeaders;
-import com.solace.spring.cloud.stream.binder.messaging.SolaceHeaderMeta;
 import com.solace.spring.cloud.stream.binder.properties.SmfMessageReaderProperties;
 import com.solace.spring.cloud.stream.binder.properties.SmfMessageWriterProperties;
 import com.solace.spring.cloud.stream.binder.properties.SolaceConsumerProperties;
