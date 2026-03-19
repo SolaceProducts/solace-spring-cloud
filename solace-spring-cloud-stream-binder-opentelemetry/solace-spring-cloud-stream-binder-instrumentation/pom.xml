@@ -20,20 +20,12 @@
   </url>
 
   <properties>
-    <opentelemetry.version>1.48.0</opentelemetry.version>
     <opentelemetry-javaagent-extension.version>2.26.0-alpha</opentelemetry-javaagent-extension.version>
     <auto-service.version>1.0.1</auto-service.version>
   </properties>
 
   <dependencyManagement>
     <dependencies>
-      <dependency>
-        <groupId>io.opentelemetry</groupId>
-        <artifactId>opentelemetry-bom</artifactId>
-        <version>${opentelemetry.version}</version>
-        <type>pom</type>
-        <scope>import</scope>
-      </dependency>
       <dependency>
         <groupId>io.opentelemetry.instrumentation</groupId>
         <artifactId>opentelemetry-instrumentation-bom-alpha</artifactId>
