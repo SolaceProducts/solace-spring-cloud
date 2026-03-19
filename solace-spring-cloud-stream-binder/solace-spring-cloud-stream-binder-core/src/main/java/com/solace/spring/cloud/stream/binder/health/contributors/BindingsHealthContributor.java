@@ -7,7 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
-public class BindingsHealthContributor implements CompositeHealthContributor {
+public final class BindingsHealthContributor implements CompositeHealthContributor {
 	private final Map<String, BindingHealthContributor> bindingHealthContributor = new HashMap<>();
 
 	public void addBindingContributor(String bindingName, BindingHealthContributor bindingHealthContributor) {

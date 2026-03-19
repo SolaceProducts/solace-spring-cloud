@@ -2,7 +2,7 @@ package com.solace.spring.cloud.stream.binder.provisioning;
 
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
 
-class SolaceProducerDestination implements ProducerDestination {
+final class SolaceProducerDestination implements ProducerDestination {
 	private String destinationName;
 
 	SolaceProducerDestination(String destinationName) {

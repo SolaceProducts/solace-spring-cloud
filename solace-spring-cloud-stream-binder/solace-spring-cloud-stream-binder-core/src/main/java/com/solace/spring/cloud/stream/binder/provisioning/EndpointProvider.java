@@ -8,7 +8,7 @@ import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.TopicEndpoint;
 
-public interface EndpointProvider<T extends Endpoint> {
+public sealed interface EndpointProvider<T extends Endpoint> permits EndpointProvider.QueueProvider, EndpointProvider.TopicEndpointProvider {
 	QueueProvider QUEUE_PROVIDER = new QueueProvider();
 	TopicEndpointProvider TOPIC_ENDPOINT_PROVIDER = new TopicEndpointProvider();
 
@@ -22,7 +22,7 @@ public interface EndpointProvider<T extends Endpoint> {
 		};
 	}
 
-	class QueueProvider implements EndpointProvider<Queue> {
+	final class QueueProvider implements EndpointProvider<Queue> {
 		@Override
 		public Queue createInstance(String name) {
 			return JCSMPFactory.onlyInstance().createQueue(name);
@@ -34,7 +34,7 @@ public interface EndpointProvider<T extends Endpoint> {
 		}
 	}
 
-	class TopicEndpointProvider implements EndpointProvider<TopicEndpoint> {
+	final class TopicEndpointProvider implements EndpointProvider<TopicEndpoint> {
 		@Override
 		public TopicEndpoint createInstance(String name) {
 			return JCSMPFactory.onlyInstance().createDurableTopicEndpointEx(name);

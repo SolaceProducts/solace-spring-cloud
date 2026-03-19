@@ -3,7 +3,7 @@ package com.solace.spring.cloud.stream.binder.util;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class ErrorQueueRepublishCorrelationKey {
+public final class ErrorQueueRepublishCorrelationKey {
 	private final ErrorQueueInfrastructure errorQueueInfrastructure;
 	private final MessageContainer messageContainer;
 	private final FlowReceiverContainer flowReceiverContainer;

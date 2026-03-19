@@ -6,7 +6,7 @@ import org.springframework.integration.acks.AcknowledgmentCallback;
 /**
  * Utility methods for acting on Solace implementation of {@link AcknowledgmentCallback}.
  */
-public class SolaceAckUtil {
+public final class SolaceAckUtil {
 
   /**
    * Verify if the error queue is enabled for the related message consumer. Beneficial to a consumer

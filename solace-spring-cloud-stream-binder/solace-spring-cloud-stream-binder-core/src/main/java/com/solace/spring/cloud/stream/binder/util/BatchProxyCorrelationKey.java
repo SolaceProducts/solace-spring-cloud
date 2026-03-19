@@ -2,7 +2,7 @@ package com.solace.spring.cloud.stream.binder.util;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class BatchProxyCorrelationKey {
+public final class BatchProxyCorrelationKey {
 	private final Object targetCorrelationKey;
 	private final AtomicInteger numRemaining;
 	private static final int RETURNED_KEY = -1;

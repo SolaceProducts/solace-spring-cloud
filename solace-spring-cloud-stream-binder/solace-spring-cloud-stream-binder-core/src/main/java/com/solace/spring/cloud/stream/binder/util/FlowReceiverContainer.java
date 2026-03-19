@@ -28,7 +28,7 @@ import java.util.concurrent.locks.ReentrantLock;
  * <p>Messaging operations concurrently invoked through this object during a rebind operation are not affected
  * by the rebind.</p>
  */
-public class FlowReceiverContainer {
+public final class FlowReceiverContainer {
 	private final UUID id = UUID.randomUUID();
 	private final JCSMPSession session;
 	private final Endpoint endpoint;

@@ -19,7 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.jspecify.annotations.Nullable;
 
-public class DefaultSolaceSessionManager implements SolaceSessionManager {
+public final class DefaultSolaceSessionManager implements SolaceSessionManager {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(DefaultSolaceSessionManager.class);
 

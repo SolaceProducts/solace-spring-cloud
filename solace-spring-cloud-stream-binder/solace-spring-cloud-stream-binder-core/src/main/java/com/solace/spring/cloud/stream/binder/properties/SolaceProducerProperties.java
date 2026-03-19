@@ -14,7 +14,7 @@ import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBin
 
 @SuppressWarnings("ConfigurationProperties")
 @ConfigurationProperties(DEFAULTS_PREFIX + ".producer")
-public class SolaceProducerProperties extends SolaceCommonProperties {
+public final class SolaceProducerProperties extends SolaceCommonProperties {
 
 	/**
 	 * The type of destination messages are published to.

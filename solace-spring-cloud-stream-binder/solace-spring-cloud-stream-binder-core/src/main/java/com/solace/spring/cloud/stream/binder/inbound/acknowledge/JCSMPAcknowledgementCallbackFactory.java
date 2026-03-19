@@ -8,7 +8,7 @@ import org.springframework.integration.acks.AcknowledgmentCallback;
 
 import java.util.List;
 
-public class JCSMPAcknowledgementCallbackFactory {
+public final class JCSMPAcknowledgementCallbackFactory {
 	private final FlowReceiverContainer flowReceiverContainer;
 	private ErrorQueueInfrastructure errorQueueInfrastructure;
 

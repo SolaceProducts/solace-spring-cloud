@@ -2,7 +2,7 @@ package com.solace.spring.cloud.stream.binder.properties;
 
 import com.solacesystems.jcsmp.EndpointProperties;
 
-public class SolaceCommonProperties {
+public sealed class SolaceCommonProperties permits SolaceConsumerProperties, SolaceProducerProperties {
 	/**
 	 * When set to true, messages will be received/sent using local transactions.
 	 * The maximum transaction size is 256 messages.

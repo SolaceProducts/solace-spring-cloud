@@ -5,7 +5,7 @@ import java.util.concurrent.CompletableFuture;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessagingException;
 
-public class CorrelationData {
+public final class CorrelationData {
 	private final CompletableFuture<Void> future = new CompletableFuture<>();
 
 	private Message<?> message;

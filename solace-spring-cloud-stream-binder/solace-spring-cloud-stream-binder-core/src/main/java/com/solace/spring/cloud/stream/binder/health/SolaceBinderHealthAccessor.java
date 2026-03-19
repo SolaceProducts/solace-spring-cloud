@@ -14,7 +14,7 @@ import java.util.Optional;
  * Always use this instead of directly using health components in Solace binder code.</p>
  * <p>Allows for the Solace binder to still function correctly without actuator on the classpath.</p>
  */
-public class SolaceBinderHealthAccessor {
+public final class SolaceBinderHealthAccessor {
 	private final SolaceBinderHealthContributor solaceBinderHealthContributor;
 	private static final String FLOW_ID_CONCURRENCY_IDX_PREFIX = "flow-";
 

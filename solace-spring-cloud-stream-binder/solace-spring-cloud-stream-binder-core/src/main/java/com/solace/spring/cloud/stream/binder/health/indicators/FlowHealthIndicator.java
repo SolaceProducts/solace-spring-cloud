@@ -4,7 +4,7 @@ import com.solace.spring.cloud.stream.binder.health.base.SolaceHealthIndicator;
 import com.solacesystems.jcsmp.FlowEventArgs;
 import org.jspecify.annotations.Nullable;
 
-public class FlowHealthIndicator extends SolaceHealthIndicator {
+public final class FlowHealthIndicator extends SolaceHealthIndicator {
 	public void up() {
 		super.healthUp();
 	}

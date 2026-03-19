@@ -1,6 +1,6 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-interface HeaderMeta<T> {
+sealed interface HeaderMeta<T> permits SolaceBinderHeaderMeta, SolaceHeaderMeta {
 	/**
 	 * The type of header.
 	 * @return header type

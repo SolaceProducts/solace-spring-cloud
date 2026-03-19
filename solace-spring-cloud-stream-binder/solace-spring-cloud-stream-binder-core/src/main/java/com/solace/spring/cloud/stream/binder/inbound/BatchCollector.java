@@ -16,7 +16,7 @@ import java.util.UUID;
  * Collector which batches message.
  * Message batches can be retrieved from this collector only when batching requirements have been met.
  */
-public class BatchCollector {
+public final class BatchCollector {
 	private final SolaceConsumerProperties consumerProperties;
 	private final List<MessageContainer> batchedMessages;
 	private long batchCollectionStartTimestamp = System.currentTimeMillis();

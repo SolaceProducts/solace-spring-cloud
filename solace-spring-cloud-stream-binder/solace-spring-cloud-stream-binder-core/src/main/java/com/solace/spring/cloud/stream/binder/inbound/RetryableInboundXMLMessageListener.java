@@ -20,7 +20,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
+final class RetryableInboundXMLMessageListener extends InboundXMLMessageListener {
 	private final RetryTemplate retryTemplate;
 	private final RecoveryCallback<?> recoveryCallback;
 

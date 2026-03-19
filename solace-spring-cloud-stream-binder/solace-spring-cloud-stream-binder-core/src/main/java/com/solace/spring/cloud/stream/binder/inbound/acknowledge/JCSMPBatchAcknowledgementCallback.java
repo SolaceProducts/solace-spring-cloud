@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /**
  * Acknowledgment callback for a batch of messages.
  */
-class JCSMPBatchAcknowledgementCallback implements AcknowledgmentCallback {
+final class JCSMPBatchAcknowledgementCallback implements AcknowledgmentCallback {
 
   private final List<JCSMPAcknowledgementCallback> acknowledgementCallbacks;
   private boolean acknowledged = false;

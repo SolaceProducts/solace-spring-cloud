@@ -6,7 +6,7 @@ import org.springframework.validation.annotation.Validated;
 
 @Validated
 @ConfigurationProperties("solace.health-check.connection")
-public class SolaceSessionHealthProperties {
+public final class SolaceSessionHealthProperties {
 	/**
 	 * <p>The number of session reconnect attempts until the health goes {@code DOWN}. This will happen regardless if
 	 * the underlying session is actually still reconnecting. Setting this to {@code 0} will disable this feature.</p>

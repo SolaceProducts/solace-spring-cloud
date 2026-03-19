@@ -5,7 +5,7 @@ import com.solace.spring.cloud.stream.binder.util.SolaceFlowEventHandler;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
 import com.solacesystems.jcsmp.FlowEventArgs;
 
-public class SolaceFlowHealthEventHandler extends SolaceFlowEventHandler {
+public final class SolaceFlowHealthEventHandler extends SolaceFlowEventHandler {
 	private final FlowHealthIndicator flowHealthIndicator;
 
 	public SolaceFlowHealthEventHandler(XMLMessageMapper xmlMessageMapper,

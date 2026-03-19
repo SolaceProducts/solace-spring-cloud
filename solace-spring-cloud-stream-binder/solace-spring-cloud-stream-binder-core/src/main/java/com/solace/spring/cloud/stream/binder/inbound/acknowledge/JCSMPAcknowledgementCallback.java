@@ -10,7 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 
-class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
+final class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
   private final MessageContainer messageContainer;
   private final FlowReceiverContainer flowReceiverContainer;
   private final ErrorQueueInfrastructure errorQueueInfrastructure;

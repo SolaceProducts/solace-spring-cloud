@@ -17,7 +17,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class SolaceErrorMessageHandler implements MessageHandler {
+public final class SolaceErrorMessageHandler implements MessageHandler {
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(SolaceErrorMessageHandler.class);
 

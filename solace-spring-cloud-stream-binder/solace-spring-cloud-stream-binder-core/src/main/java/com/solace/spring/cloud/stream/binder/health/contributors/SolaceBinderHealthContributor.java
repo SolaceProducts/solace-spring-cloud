@@ -7,7 +7,7 @@ import org.springframework.boot.health.contributor.HealthContributors;
 
 import java.util.stream.Stream;
 
-public class SolaceBinderHealthContributor implements CompositeHealthContributor {
+public final class SolaceBinderHealthContributor implements CompositeHealthContributor {
 	private final SessionHealthIndicator sessionHealthIndicator;
 	private final BindingsHealthContributor bindingsHealthContributor;
 	private static final String CONNECTION = "connection";

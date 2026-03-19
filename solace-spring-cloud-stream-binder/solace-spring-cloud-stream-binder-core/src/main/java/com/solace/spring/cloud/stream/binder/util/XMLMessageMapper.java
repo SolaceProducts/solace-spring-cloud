@@ -55,7 +55,7 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.ObjectReader;
 import tools.jackson.databind.ObjectWriter;
 
-public class XMLMessageMapper {
+public final class XMLMessageMapper {
 	private static final Logger LOGGER = LoggerFactory.getLogger(XMLMessageMapper.class);
 	private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 	private static final MessageBuilderFactory MESSAGE_BUILDER_FACTORY = new DefaultMessageBuilderFactory();

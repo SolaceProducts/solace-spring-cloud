@@ -48,7 +48,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-public class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle, Pausable {
+public final class JCSMPMessageSource extends AbstractMessageSource<Object> implements Lifecycle, Pausable {
 	private final String id = UUID.randomUUID().toString();
 	private final SolaceConsumerDestination consumerDestination;
 	private final JCSMPSession jcsmpSession;

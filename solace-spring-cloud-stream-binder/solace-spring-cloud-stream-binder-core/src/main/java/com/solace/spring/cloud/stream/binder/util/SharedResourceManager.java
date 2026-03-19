@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory;
 import java.util.HashSet;
 import java.util.Set;
 
-abstract class SharedResourceManager<T> {
+abstract sealed class SharedResourceManager<T> permits JCSMPSessionProducerManager {
 	private final String type;
 	T sharedResource;
 	private Set<String> registeredIds = new HashSet<>();

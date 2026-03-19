@@ -9,7 +9,7 @@ import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class SolaceSessionEventHandler extends DefaultSolaceOAuth2SessionEventHandler {
+public final class SolaceSessionEventHandler extends DefaultSolaceOAuth2SessionEventHandler {
 	private final SessionHealthIndicator sessionHealthIndicator;
 	private static final Logger LOGGER = LoggerFactory.getLogger(SolaceSessionEventHandler.class);
 

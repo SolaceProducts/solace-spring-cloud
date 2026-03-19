@@ -5,7 +5,7 @@ import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import java.util.Set;
 import java.util.StringJoiner;
 
-public class SolaceConsumerDestination implements ConsumerDestination {
+public final class SolaceConsumerDestination implements ConsumerDestination {
 	private final String bindingDestinationName;
 	private final String physicalGroupName;
 	private final String endpointName;

@@ -9,7 +9,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-public class SmfMessageWriterProperties {
+public final class SmfMessageWriterProperties {
 	private Set<String> headerExclusions;
 
 	@Deprecated(forRemoval = true, since = "6.0.0")

@@ -21,7 +21,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class BasicInboundXMLMessageListener extends InboundXMLMessageListener {
+public final class BasicInboundXMLMessageListener extends InboundXMLMessageListener {
 	private final BiFunction<Message<?>, RuntimeException, Boolean> errorHandlerFunction;
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(BasicInboundXMLMessageListener.class);

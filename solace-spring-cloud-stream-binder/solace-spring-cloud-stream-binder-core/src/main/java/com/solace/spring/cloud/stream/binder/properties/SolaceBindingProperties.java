@@ -4,7 +4,7 @@ import jakarta.validation.Valid;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 import org.springframework.cloud.stream.binder.BinderSpecificPropertiesProvider;
 
-public class SolaceBindingProperties implements BinderSpecificPropertiesProvider {
+public final class SolaceBindingProperties implements BinderSpecificPropertiesProvider {
 
 	@NestedConfigurationProperty
 	@Valid

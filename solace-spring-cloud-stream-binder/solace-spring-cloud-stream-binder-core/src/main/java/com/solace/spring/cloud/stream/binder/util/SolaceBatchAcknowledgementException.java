@@ -2,7 +2,7 @@ package com.solace.spring.cloud.stream.binder.util;
 
 import java.util.Set;
 
-public class SolaceBatchAcknowledgementException extends SolaceAcknowledgmentException {
+public final class SolaceBatchAcknowledgementException extends SolaceAcknowledgmentException {
 
   private final Set<Integer> failedMessageIndexes;
 

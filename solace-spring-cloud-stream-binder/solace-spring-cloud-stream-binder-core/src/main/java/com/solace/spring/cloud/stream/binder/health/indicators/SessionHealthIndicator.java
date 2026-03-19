@@ -11,7 +11,7 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
-public class SessionHealthIndicator extends SolaceHealthIndicator {
+public final class SessionHealthIndicator extends SolaceHealthIndicator {
 	private final AtomicInteger reconnectCount = new AtomicInteger(0);
 	private final SolaceSessionHealthProperties solaceHealthSessionProperties;
 	private final ReentrantLock writeLock = new ReentrantLock();
