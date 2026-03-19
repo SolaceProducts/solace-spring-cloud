@@ -311,13 +311,16 @@ public class SolaceHeadersTest {
 	}
 
 	private Field getPrefixField(Class<?> headersClass) throws NoSuchFieldException {
-		return headersClass.getDeclaredField("PREFIX");
+		Field field = headersClass.getDeclaredField("PREFIX");
+		field.setAccessible(true);
+		return field;
 	}
 
 	private List<Field> getAllHeaderFields(Class<?> headersClass) {
 		return Arrays.stream(headersClass.getDeclaredFields())
 				.filter(f -> Modifier.isPublic(f.getModifiers()))
 				.filter(f -> Modifier.isStatic(f.getModifiers()))
+				.filter(f -> !f.getName().equals("PREFIX"))
 				.collect(Collectors.toList());
 	}
 
