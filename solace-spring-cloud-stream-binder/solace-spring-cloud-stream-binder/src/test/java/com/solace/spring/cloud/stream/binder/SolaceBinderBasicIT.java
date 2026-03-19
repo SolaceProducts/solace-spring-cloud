@@ -42,7 +42,6 @@ import com.solacesystems.jcsmp.PropertyMismatchException;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.Requestor;
 import com.solacesystems.jcsmp.TextMessage;
-import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageConsumer;
 import com.solacesystems.jcsmp.XMLMessageListener;
 import com.solacesystems.jcsmp.XMLMessageProducer;
@@ -535,17 +534,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 						.isEqualTo(m))
 				.asInstanceOf(InstanceOfAssertFactories.type(ErrorMessage.class))
 				.satisfies(
-						m -> assertThat(m.getOriginalMessage()).isEqualTo(message)
-						/*m -> assertThat(m.getHeaders().get(IntegrationMessageHeaderAccessor.SOURCE_DATA))
-								.satisfies(d -> {
-									if (batched) {
-										assertThat(d)
-												.asInstanceOf(InstanceOfAssertFactories.list(XMLMessage.class))
-												.hasSize(batchingConfig.getNumberOfMessages());
-									} else {
-										assertThat(d).isInstanceOf(XMLMessage.class);
-									}
-								})*/)
+						m -> assertThat(m.getOriginalMessage()).isEqualTo(message))
 				.extracting(ErrorMessage::getPayload)
 				.asInstanceOf(InstanceOfAssertFactories.throwable(MessagingException.class))
 				.cause()

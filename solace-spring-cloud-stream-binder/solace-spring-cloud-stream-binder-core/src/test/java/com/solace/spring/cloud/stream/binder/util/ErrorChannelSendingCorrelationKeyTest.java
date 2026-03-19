@@ -65,36 +65,6 @@ public class ErrorChannelSendingCorrelationKeyTest {
 		assertThat(exception.getFailedMessage()).isEqualTo(message);
 	}
 
-	/*@CartesianTest(name = "[{index}] messageLayout={0}")
-	void testRawMessageHeader(
-			@CartesianTest.Enum(MessageLayout.class) MessageLayout messageLayout,
-			SoftAssertions softly) {
-		MessageGenerator.BatchingConfig batchingConfig = new MessageGenerator.BatchingConfig()
-				.setEnabled(messageLayout.isBatched());
-		if (messageLayout == MessageLayout.BATCH_MULTI) {
-			batchingConfig.setNumberOfMessages(100);
-		} else if (messageLayout == MessageLayout.BATCH_SINGLE) {
-			batchingConfig.setNumberOfMessages(1);
-		}
-
-		Message<?> message = MessageGenerator.generateMessage(i -> "test", i -> Map.of(), batchingConfig).build();
-
-		DirectChannel errorChannel = new DirectChannel();
-		ErrorChannelSendingCorrelationKey key = new ErrorChannelSendingCorrelationKey(message, errorChannel,
-				errorMessageStrategy);
-		key.setRawMessages(IntStream.range(0, messageLayout.isBatched() ? batchingConfig.getNumberOfMessages() : 1)
-				.mapToObj(i -> (XMLMessage) JCSMPFactory.onlyInstance().createMessage(TextMessage.class))
-				.toList());
-
-		errorChannel.subscribe(msg -> {
-			//softly.assertThat(msg.getHeaders()).containsKey(IntegrationMessageHeaderAccessor.SOURCE_DATA);
-			softly.assertThat((Object) StaticMessageHeaderAccessor.getSourceData(msg))
-					.isEqualTo(messageLayout.isBatched() ? key.getRawMessages() : key.getRawMessages().get(0));
-		});
-
-		key.send("some failure", new RuntimeException("test"));
-	}*/
-
 	private enum MessageLayout {
 		SERIAL_SINGLE(false), BATCH_MULTI(true), BATCH_SINGLE(true);
 		private final boolean isBatched;
