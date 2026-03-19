@@ -17,21 +17,21 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @ConditionalOnClass(name = "org.springframework.boot.health.contributor.HealthIndicator")
 @ConditionalOnEnabledHealthIndicator("binders")
 @EnableConfigurationProperties({SolaceSessionHealthProperties.class})
-public class SolaceHealthIndicatorsConfiguration {
+public final class SolaceHealthIndicatorsConfiguration {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SolaceHealthIndicatorsConfiguration.class);
 
 	@Bean
-	public SolaceBinderHealthAccessor solaceBinderHealthAccessor(
+	SolaceBinderHealthAccessor solaceBinderHealthAccessor(
 			SolaceBinderHealthContributor solaceBinderHealthContributor) {
 		return new SolaceBinderHealthAccessor(solaceBinderHealthContributor);
 	}
 
 	@Bean
-	public SolaceBinderHealthContributor solaceBinderHealthContributor(
+	SolaceBinderHealthContributor solaceBinderHealthContributor(
 			SolaceSessionHealthProperties solaceSessionHealthProperties) {
 		LOGGER.debug("Creating Solace Connection Health Indicators Hierarchy");
 		return new SolaceBinderHealthContributor(
@@ -41,7 +41,7 @@ public class SolaceHealthIndicatorsConfiguration {
 	}
 
 	@Bean
-	public SolaceSessionEventHandler solaceSessionEventHandler(
+	SolaceSessionEventHandler solaceSessionEventHandler(
 			JCSMPProperties jcsmpProperties,
 			@Nullable  SolaceSessionOAuth2TokenProvider solaceSessionOAuth2TokenProvider,
 			SolaceBinderHealthContributor healthContributor) {

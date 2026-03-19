@@ -8,11 +8,11 @@ import org.springframework.context.annotation.Configuration;
 import java.util.HashMap;
 import java.util.Map;
 
-@Configuration
-public class ExtendedBindingHandlerMappingsProviderConfiguration {
+@Configuration(proxyBeanMethods = false)
+public final class ExtendedBindingHandlerMappingsProviderConfiguration {
 
 	@Bean
-	public MappingsProvider solaceExtendedPropertiesDefaultMappingsProvider() {
+	MappingsProvider solaceExtendedPropertiesDefaultMappingsProvider() {
 		return () -> {
 			Map<ConfigurationPropertyName, ConfigurationPropertyName> mappings = new HashMap<>();
 			mappings.put(ConfigurationPropertyName.of("spring.cloud.stream.solace.bindings"),

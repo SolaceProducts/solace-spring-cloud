@@ -22,10 +22,10 @@ import org.springframework.context.annotation.Import;
 import org.springframework.lang.Nullable;
 
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
 @Import({SolaceSessionConfig.class, SolaceHealthIndicatorsConfiguration.class, OAuth2ClientAutoConfiguration.class})
 @EnableConfigurationProperties({SolaceBinderConfigurationProperties.class, SolaceExtendedBindingProperties.class})
-public class SolaceMessageChannelBinderConfiguration {
+public final class SolaceMessageChannelBinderConfiguration {
 	private final SolaceExtendedBindingProperties solaceExtendedBindingProperties;
 	private final SolaceBinderConfigurationProperties solaceBinderConfigurationProperties;
 	private final SolaceSessionManager solaceSessionManager;
@@ -41,7 +41,7 @@ public class SolaceMessageChannelBinderConfiguration {
 	}
 
 	@PostConstruct
-	public void init() throws JCSMPException {
+	void init() throws JCSMPException {
 		if (SessionInitializationMode.EAGER.equals(solaceBinderConfigurationProperties.getSessionInitializationMode())) {
 			LOGGER.debug("Eagerly initializing Solace session.");
 			solaceSessionManager.getSession();

@@ -10,12 +10,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.lang.Nullable;
 
-@Configuration
-public class SolaceSessionConfig {
+@Configuration(proxyBeanMethods = false)
+public final class SolaceSessionConfig {
 
   @Bean
   @ConditionalOnMissingBean
-  public SolaceSessionManager solaceSessionManager(JCSMPProperties jcsmpProperties,
+  SolaceSessionManager solaceSessionManager(JCSMPProperties jcsmpProperties,
       @Nullable SolaceSessionEventHandler eventHandler,
       @Nullable SolaceSessionOAuth2TokenProvider solaceSessionOAuth2TokenProvider) {
     return new DefaultSolaceSessionManager(jcsmpProperties, new SolaceBinderClientInfoProvider(),
