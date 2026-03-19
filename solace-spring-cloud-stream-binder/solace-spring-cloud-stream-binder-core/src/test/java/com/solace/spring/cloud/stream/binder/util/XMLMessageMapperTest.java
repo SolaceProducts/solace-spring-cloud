@@ -1962,7 +1962,8 @@ public class XMLMessageMapperTest {
 							case BATCH_HEADERS,
 								 SolaceBinderHeaders.CONFIRM_CORRELATION,
 								 SolaceBinderHeaders.TARGET_DESTINATION_TYPE,
-								 MessageHeaders.ID -> {
+								 MessageHeaders.ID,
+								 IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT -> {
 								// These Spring headers aren't ever reflected in the SMF message
 								Assertions.assertThat(metadata.keySet()).doesNotContain(headerKey);
 								return;

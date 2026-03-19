@@ -398,10 +398,10 @@ public class XMLMessageMapper {
 			}
 
       if(SmfMessageHeaderWriteCompatibility.NATIVE_ONLY.equals(writerProperties.getHeaderTypeCompatibility())) {
-				if (MessageHeaders.ID.equals(header.getKey()) && header.getValue() instanceof UUID) {
+				if (MessageHeaders.ID.equals(header.getKey())) {
 					continue;
 				}
-				if (IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT.equals(header.getKey()) && header.getValue() instanceof AtomicInteger) {
+				if (IntegrationMessageHeaderAccessor.DELIVERY_ATTEMPT.equals(header.getKey())) {
 					continue;
 				}
 			}
