@@ -7,7 +7,7 @@ import io.micrometer.core.instrument.binder.BaseUnits;
 import io.micrometer.core.instrument.binder.MeterBinder;
 import org.jspecify.annotations.NonNull;
 
-public class SolaceMessageMeterBinder implements MeterBinder {
+public final class SolaceMessageMeterBinder implements MeterBinder {
 	MeterRegistry registry;
 
 	public static final String METER_NAME_TOTAL_SIZE = "solace.message.size.total";

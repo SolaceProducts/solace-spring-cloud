@@ -9,7 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 
-class TransactedJCSMPAcknowledgementCallback implements AcknowledgmentCallback {
+final class TransactedJCSMPAcknowledgementCallback implements AcknowledgmentCallback {
 	private final TransactedSession transactedSession;
 	private final ErrorQueueInfrastructure errorQueueInfrastructure;
 	private final long creationThreadId = Thread.currentThread().getId();

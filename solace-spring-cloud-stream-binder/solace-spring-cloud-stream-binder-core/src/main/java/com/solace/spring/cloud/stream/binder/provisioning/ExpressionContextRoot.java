@@ -9,7 +9,7 @@ import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 /**
  * The context used to evaluate a queue name expression (SpEL)
  */
-public class ExpressionContextRoot {
+public final class ExpressionContextRoot {
 
     private final String group;
     private final String destination;
@@ -46,7 +46,7 @@ public class ExpressionContextRoot {
         return properties;
     }
 
-    private static class Properties<T> {
+    private static final class Properties<T> {
 
         private final SolaceCommonProperties solace;
         private final T spring;

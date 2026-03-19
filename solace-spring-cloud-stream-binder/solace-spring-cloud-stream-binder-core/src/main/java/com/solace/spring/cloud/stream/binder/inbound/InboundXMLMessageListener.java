@@ -40,7 +40,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-public abstract class InboundXMLMessageListener implements Runnable {
+public abstract sealed class InboundXMLMessageListener implements Runnable permits BasicInboundXMLMessageListener, RetryableInboundXMLMessageListener {
 	final FlowReceiverContainer flowReceiverContainer;
 	final ConsumerDestination consumerDestination;
 	private final ExtendedConsumerProperties<SolaceConsumerProperties> consumerProperties;

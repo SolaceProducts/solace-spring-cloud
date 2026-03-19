@@ -13,7 +13,7 @@ import org.springframework.messaging.MessagingException;
 import java.util.Optional;
 import java.util.UUID;
 
-public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessageProducer> {
+public final class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessageProducer> {
 	private final SolaceSessionManager solaceSessionManager;
 	private final CloudStreamEventHandler publisherEventHandler = new CloudStreamEventHandler();
 

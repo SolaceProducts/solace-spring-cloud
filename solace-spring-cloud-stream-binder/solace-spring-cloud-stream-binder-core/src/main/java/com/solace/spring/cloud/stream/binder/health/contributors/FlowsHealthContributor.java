@@ -8,7 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
-public class FlowsHealthContributor implements CompositeHealthContributor {
+public final class FlowsHealthContributor implements CompositeHealthContributor {
 	private final Map<String, FlowHealthIndicator> flowHealthContributor = new HashMap<>();
 
 	public void addFlowContributor(String flowId, FlowHealthIndicator flowHealthIndicator) {

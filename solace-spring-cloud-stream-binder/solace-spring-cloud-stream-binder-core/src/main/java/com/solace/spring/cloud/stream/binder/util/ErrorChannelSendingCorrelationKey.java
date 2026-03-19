@@ -9,7 +9,7 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessagingException;
 
-public class ErrorChannelSendingCorrelationKey {
+public final class ErrorChannelSendingCorrelationKey {
 	private final Message<?> inputMessage;
 	private final MessageChannel errorChannel;
 	private final ErrorMessageStrategy errorMessageStrategy;

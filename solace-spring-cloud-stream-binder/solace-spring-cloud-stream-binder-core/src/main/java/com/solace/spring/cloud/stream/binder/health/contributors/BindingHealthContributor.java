@@ -5,7 +5,7 @@ import org.springframework.boot.health.contributor.CompositeHealthContributor;
 import org.springframework.boot.health.contributor.HealthContributor;
 import org.springframework.boot.health.contributor.HealthContributors;
 
-public class BindingHealthContributor implements CompositeHealthContributor {
+public final class BindingHealthContributor implements CompositeHealthContributor {
 	private final FlowsHealthContributor flowsHealthContributor;
 	private static final String FLOWS = "flows";
 

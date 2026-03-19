@@ -10,7 +10,7 @@ import org.springframework.messaging.support.ErrorMessage;
 import java.util.HashMap;
 import java.util.Map;
 
-public class SolaceMessageHeaderErrorMessageStrategy implements ErrorMessageStrategy {
+public final class SolaceMessageHeaderErrorMessageStrategy implements ErrorMessageStrategy {
 	public static final String ATTR_SOLACE_RAW_MESSAGE = "solace_sourceData";
 	public static final String ATTR_SOLACE_ACKNOWLEDGMENT_CALLBACK = "solace_acknowledgmentCallback";
 

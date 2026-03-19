@@ -6,7 +6,7 @@ import java.util.StringJoiner;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-public class MessageContainer {
+public final class MessageContainer {
 	private final UUID id = UUID.randomUUID();
 	private final BytesXMLMessage message;
 	private final UUID flowReceiverReferenceId;

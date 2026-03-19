@@ -47,7 +47,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
+public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	private final String id = UUID.randomUUID().toString();
 	private final DestinationType configDestinationType;
 	private final Destination configDestination;

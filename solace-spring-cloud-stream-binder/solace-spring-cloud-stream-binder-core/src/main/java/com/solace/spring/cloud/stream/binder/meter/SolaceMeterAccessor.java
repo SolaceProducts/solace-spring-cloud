@@ -7,7 +7,7 @@ import com.solacesystems.jcsmp.XMLMessage;
  * Always use this instead of directly using meter components in Solace binder code.</p>
  * <p>Allows for the Solace binder to still function correctly without micrometer on the classpath.</p>
  */
-public class SolaceMeterAccessor {
+public final class SolaceMeterAccessor {
 	private final SolaceMessageMeterBinder solaceMessageMeterBinder;
 
 	public SolaceMeterAccessor(SolaceMessageMeterBinder solaceMessageMeterBinder) {

@@ -7,7 +7,7 @@ import org.springframework.cloud.stream.binder.BinderSpecificPropertiesProvider;
 import java.util.Map;
 
 @ConfigurationProperties("spring.cloud.stream.solace")
-public class SolaceExtendedBindingProperties
+public final class SolaceExtendedBindingProperties
 		extends AbstractExtendedBindingProperties<SolaceConsumerProperties,SolaceProducerProperties,SolaceBindingProperties> {
 
 	protected static final String DEFAULTS_PREFIX = "spring.cloud.stream.solace.default";

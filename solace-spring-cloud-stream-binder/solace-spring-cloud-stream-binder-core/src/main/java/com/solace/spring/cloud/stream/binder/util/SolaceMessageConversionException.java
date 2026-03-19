@@ -1,6 +1,6 @@
 package com.solace.spring.cloud.stream.binder.util;
 
-public class SolaceMessageConversionException extends RuntimeException {
+public final class SolaceMessageConversionException extends RuntimeException {
 	public SolaceMessageConversionException(String message) {
 		super(message);
 	}

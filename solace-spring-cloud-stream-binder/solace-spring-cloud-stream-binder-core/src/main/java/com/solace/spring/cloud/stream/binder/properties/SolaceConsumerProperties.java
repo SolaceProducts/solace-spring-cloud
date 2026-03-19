@@ -16,7 +16,7 @@ import static com.solace.spring.cloud.stream.binder.properties.SolaceExtendedBin
 
 @SuppressWarnings("ConfigurationProperties")
 @ConfigurationProperties(DEFAULTS_PREFIX + ".consumer")
-public class SolaceConsumerProperties extends SolaceCommonProperties {
+public final class SolaceConsumerProperties extends SolaceCommonProperties {
 	/**
 	 * The type of endpoint messages are consumed from.
 	 */
