@@ -3,6 +3,7 @@ package com.solace.spring.cloud.stream.binder.config;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.annotation.ImportSelector;
 import org.springframework.core.type.AnnotationMetadata;
+import org.springframework.util.ClassUtils;
 
 class OAuth2ClientAutoConfigurationImportSelector implements ImportSelector {
 
@@ -11,11 +12,9 @@ class OAuth2ClientAutoConfigurationImportSelector implements ImportSelector {
 
   @Override
   public String[] selectImports(@NonNull AnnotationMetadata importingClassMetadata) {
-    try {
-      Class.forName(OAUTH2_AUTO_CONFIG);
+    if (ClassUtils.isPresent(OAUTH2_AUTO_CONFIG, getClass().getClassLoader())) {
       return new String[]{OAUTH2_AUTO_CONFIG};
-    } catch (ClassNotFoundException e) {
-      return new String[0];
     }
+    return new String[0];
   }
 }
