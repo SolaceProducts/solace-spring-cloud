@@ -163,7 +163,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 	private Message<?> processMessage(MessageContainer messageContainer) {
 		AcknowledgmentCallback acknowledgmentCallback = ackCallbackFactory.createCallback(messageContainer);
 		try {
-			return xmlMessageMapper.mapToSpring(messageContainer.getMessage(), acknowledgmentCallback, true, smfMessageReaderProperties);
+			return xmlMessageMapper.mapToSpring(messageContainer.getMessage(), acknowledgmentCallback, false, smfMessageReaderProperties);
 		} catch (Exception e) {
 			//TODO If one day the errorChannel or attributesHolder can be retrieved, use those instead
 			logger.warn("XMLMessage {} cannot be consumed. It will be requeued",
@@ -190,7 +190,7 @@ public class JCSMPMessageSource extends AbstractMessageSource<Object> implements
 			return xmlMessageMapper.mapBatchedToSpring(batchedMessages.get()
 					.stream()
 					.map(MessageContainer::getMessage)
-					.collect(Collectors.toList()), acknowledgmentCallback, true, smfMessageReaderProperties);
+					.collect(Collectors.toList()), acknowledgmentCallback, false, smfMessageReaderProperties);
 		} catch (Exception e) {
 			logger.warn("Message batch cannot be consumed. It will be requeued", e);
 			if (!SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)) {

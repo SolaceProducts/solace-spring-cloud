@@ -141,8 +141,6 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 			dynamicDestinations = Collections.singletonList(getDynamicDestination(message.getHeaders(), correlationKey));
 		}
 
-		correlationKey.setRawMessages(smfMessages);
-
 		try {
 			for (int i = 0; i < smfMessages.size(); i++) {
 				XMLMessage smfMessage = smfMessages.get(i);

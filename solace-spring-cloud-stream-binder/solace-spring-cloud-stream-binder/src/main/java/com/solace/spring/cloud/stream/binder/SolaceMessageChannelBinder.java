@@ -20,24 +20,20 @@ import com.solace.spring.cloud.stream.binder.util.SolaceSessionManager;
 import com.solacesystems.jcsmp.Endpoint;
 import com.solacesystems.jcsmp.EndpointProperties;
 import com.solacesystems.jcsmp.Queue;
-import com.solacesystems.jcsmp.XMLMessage;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.cloud.stream.binder.AbstractMessageChannelBinder;
 import org.springframework.cloud.stream.binder.BinderSpecificPropertiesProvider;
-import org.springframework.cloud.stream.binder.DefaultPollableMessageSource;
 import org.springframework.cloud.stream.binder.ExtendedConsumerProperties;
 import org.springframework.cloud.stream.binder.ExtendedProducerProperties;
 import org.springframework.cloud.stream.binder.ExtendedPropertiesBinder;
 import org.springframework.cloud.stream.provisioning.ConsumerDestination;
 import org.springframework.cloud.stream.provisioning.ProducerDestination;
-import org.springframework.integration.StaticMessageHeaderAccessor;
 import org.springframework.integration.core.MessageProducer;
 import org.springframework.integration.support.ErrorMessageStrategy;
 import org.springframework.lang.Nullable;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
 
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -193,16 +189,6 @@ public class SolaceMessageChannelBinder
 		} catch (Exception e) {
 			throw new RuntimeException("Failed to create polled consumer.", e);
 		}
-	}
-
-	@Override
-	protected void postProcessPollableSource(DefaultPollableMessageSource bindingTarget) {
-		bindingTarget.setAttributesProvider((accessor, message) -> {
-			Object sourceData = StaticMessageHeaderAccessor.getSourceData(message);
-			if (sourceData == null || sourceData instanceof XMLMessage || sourceData instanceof List) {
-				accessor.setAttribute(SolaceMessageHeaderErrorMessageStrategy.ATTR_SOLACE_RAW_MESSAGE, sourceData);
-			}
-		});
 	}
 
 	@Override
