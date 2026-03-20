@@ -44,7 +44,7 @@ In addition to showing how to include the BOM, the following snippets also shows
         <dependency>
             <groupId>com.solace.spring.cloud</groupId>
             <artifactId>solace-spring-cloud-bom</artifactId>
-            <version>4.11.0</version>
+            <version>6.0.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -62,7 +62,7 @@ In addition to showing how to include the BOM, the following snippets also shows
 ### Using it with Gradle
 ```groovy
 dependencies {
-    implementation(platform("com.solace.spring.cloud:solace-spring-cloud-bom:4.11.0"))
+    implementation(platform("com.solace.spring.cloud:solace-spring-cloud-bom:6.0.0"))
     implementation("com.solace.spring.cloud:spring-cloud-starter-stream-solace")
 }
 ```
