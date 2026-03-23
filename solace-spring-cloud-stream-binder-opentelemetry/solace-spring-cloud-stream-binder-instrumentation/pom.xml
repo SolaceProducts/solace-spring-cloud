@@ -20,7 +20,7 @@
   </url>
 
   <properties>
-    <opentelemetry-javaagent-extension.version>2.26.0-alpha</opentelemetry-javaagent-extension.version>
+    <opentelemetry-javaagent-extension.version>2.26.1-alpha</opentelemetry-javaagent-extension.version>
     <auto-service.version>1.0.1</auto-service.version>
   </properties>
 
