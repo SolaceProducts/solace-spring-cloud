@@ -30,7 +30,7 @@
 
         <!-- Override spring-boot version from solace-spring-boot to latest patch version -->
         <!-- Remove this if the next version of solace-spring-boot works fine -->
-        <spring.boot.version>4.0.4</spring.boot.version>
+        <spring.boot.version>4.0.5</spring.boot.version>
 
         <solace.integration.test.support.version>3.0.0</solace.integration.test.support.version>
     </properties>
