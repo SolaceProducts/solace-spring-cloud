@@ -14,11 +14,13 @@ import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager.CloudStreamEventHandler;
 import com.solace.spring.cloud.stream.binder.util.StaticMessageHeaderMapAccessor;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
+import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solacesystems.jcsmp.StaleSessionException;
 import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
@@ -64,6 +66,14 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 	private boolean isRunning = false;
 	private ErrorMessageStrategy errorMessageStrategy;
 
+	// DATAGO-134580: when the broker sends an unsolicited CloseFlow (message-spool shutdown,
+	// DR failover, "Service Unavailable" on GD), JCSMP marks the producer terminally closed.
+	// The session itself stays connected, so the next producer.send(...) throws
+	// StaleSessionException synchronously. We set this flag from the catch block and lazily
+	// recreate the producer at the top of the next handleMessage(...) call.
+	private volatile boolean producerNeedsRecreation = false;
+	private final Object recreateLock = new Object();
+
 	private static final Logger LOGGER = LoggerFactory.getLogger(JCSMPOutboundMessageHandler.class);
 
 	public JCSMPOutboundMessageHandler(ProducerDestination destination,
@@ -94,6 +104,12 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 			String msg1 = String.format("Message handler %s is not running", id);
 			throw handleMessagingException(correlationKey, msg0, new ClosedChannelBindingException(msg1));
 		}
+
+		// DATAGO-134580: if a previous publish marked the producer stale (broker fanned out an
+		// unsolicited CloseFlow), rebuild it before attempting this publish. A failure here is
+		// routed through the normal error channel via handleMessagingException, with the
+		// recreation flag left armed so the next message retries.
+		recreateProducerIfNeeded(correlationKey);
 
 		try {
 			CorrelationData correlationData = message.getHeaders()
@@ -180,6 +196,23 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 				}
 			}
 
+			// DATAGO-134580: when the broker tears down the publisher flow (unsolicited
+			// CloseFlow on message-spool shutdown, DR failover, etc.), JCSMP marks the
+			// XMLMessageProducer terminally closed and every subsequent send throws
+			// StaleSessionException. ClosedFacilityException is the related
+			// already-closed-locally signal. Both mean the producer reference is dead;
+			// arm the recreation flag so the next handleMessage(...) rebuilds it. The
+			// volatile write must happen before the throw below so a concurrent thread
+			// reading the flag sees the update.
+			if (e instanceof StaleSessionException || e instanceof ClosedFacilityException) {
+				if (!producerNeedsRecreation) {
+					LOGGER.warn("Detected stale JCSMP producer for binding {} (cause: {}); will " +
+									"recreate on next message <message handler ID: {}>",
+							properties.getBindingName(), e.getClass().getSimpleName(), id);
+				}
+				producerNeedsRecreation = true;
+			}
+
 			throw handleMessagingException(correlationKey, "Unable to send message(s) to destination", e);
 		} finally {
 			if (solaceMeterAccessor != null) {
@@ -231,6 +264,8 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 			LOGGER.warn("Nothing to do, message handler {} is already running", id);
 			return;
 		}
+		// Clear any stale recreation flag left over from a prior lifecycle.
+		producerNeedsRecreation = false;
 
 		try {
 			Map<String, String> headerNameMapping = properties.getExtension().getHeaderNameMapping();
@@ -246,15 +281,7 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 			}
 
 			producerManager.get(id);
-			if (properties.getExtension().isTransacted()) {
-				LOGGER.info("Creating transacted session  <message handler ID: {}>", id);
-				transactedSession = jcsmpSession.createTransactedSession();
-				producer = transactedSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
-						producerEventHandler);
-			} else {
-				producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
-						producerEventHandler);
-			}
+			createProducerInternal();
 		} catch (Exception e) {
 			String msg = String.format("Unable to get a message producer for session %s", jcsmpSession.getSessionName());
 			LOGGER.warn(msg, e);
@@ -263,6 +290,71 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 		}
 
 		isRunning = true;
+	}
+
+	/**
+	 * Builds the per-binding {@link XMLMessageProducer} (and the underlying
+	 * {@link TransactedSession} when the binding is transacted) using the same flow
+	 * properties and event handler as the initial {@link #start()} call. Extracted from
+	 * {@code start()} so both the initial-create path and the post-CloseFlow recreate path
+	 * share one implementation - the alternative would be duplicating the
+	 * transacted/non-transacted branch in two places.
+	 */
+	private void createProducerInternal() throws JCSMPException {
+		if (properties.getExtension().isTransacted()) {
+			LOGGER.info("Creating transacted session  <message handler ID: {}>", id);
+			transactedSession = jcsmpSession.createTransactedSession();
+			producer = transactedSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
+					producerEventHandler);
+		} else {
+			producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
+					producerEventHandler);
+		}
+	}
+
+	/**
+	 * DATAGO-134580: if a prior {@code producer.send(...)} surfaced a
+	 * {@link StaleSessionException} or {@link ClosedFacilityException}, the broker has torn
+	 * down our publisher flow (typically via unsolicited CloseFlow) and the local producer
+	 * reference points at a terminally closed instance. Close the dead producer (and the
+	 * dead transacted session, if any) and build fresh ones via
+	 * {@link #createProducerInternal()} so the next publish can succeed.
+	 *
+	 * <p>Double-checked-locked so concurrent dispatcher threads do not all recreate. The
+	 * lock guards close + create only; once the flag is cleared, subsequent
+	 * {@link #handleMessage(Message)} calls fall through to the publish path without
+	 * acquiring the lock.
+	 *
+	 * <p>If recreation itself fails (e.g. the broker is still mid-restart from the spool
+	 * shutdown), the flag stays {@code true}, the current in-flight message is surfaced
+	 * via {@link #handleMessagingException} the same way the original failing send was,
+	 * and the next inbound message retries recreation. No internal retry loop, no new
+	 * threads.
+	 */
+	private void recreateProducerIfNeeded(ErrorChannelSendingCorrelationKey correlationKey) throws MessagingException {
+		if (!producerNeedsRecreation) return;
+		synchronized (recreateLock) {
+			if (!producerNeedsRecreation) return;
+			LOGGER.warn("Recreating JCSMP producer for binding {} after stale-flow detection <message handler ID: {}>",
+					properties.getBindingName(), id);
+			try {
+				if (producer != null) producer.close();
+			} catch (Exception closeError) {
+				LOGGER.debug("Failed to close stale producer during recreation <message handler ID: {}>", id, closeError);
+			}
+			try {
+				if (transactedSession != null) transactedSession.close();
+			} catch (Exception closeError) {
+				LOGGER.debug("Failed to close stale transacted session during recreation <message handler ID: {}>", id, closeError);
+			}
+			try {
+				createProducerInternal();
+				producerNeedsRecreation = false;
+			} catch (JCSMPException createError) {
+				throw handleMessagingException(correlationKey,
+						"Failed to recreate JCSMP producer after stale-flow detection", createError);
+			}
+		}
 	}
 
 	@Override
@@ -274,6 +366,8 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 
 	private void closeResources() {
 		LOGGER.info("Stopping producer to {} {} <message handler ID: {}>", configDestinationType, configDestination.getName(), id);
+		// Clear any pending recreation request so a stop/start cycle starts from a clean state.
+		producerNeedsRecreation = false;
 		if (producer != null) {
 			LOGGER.info("Closing producer <message handler ID: {}>", id);
 			producer.close();

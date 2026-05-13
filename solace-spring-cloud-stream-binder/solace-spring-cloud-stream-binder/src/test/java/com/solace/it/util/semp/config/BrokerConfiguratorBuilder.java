@@ -280,6 +280,36 @@ public class BrokerConfiguratorBuilder {
     }
 
     /**
+     * Zeroes out the guaranteed-delivery message-spool quota for a VPN, which causes the broker
+     * to send an unsolicited {@code CloseFlow} to every currently-bound publisher and consumer
+     * flow on that VPN. The session itself is left connected; only the GD flows are torn down.
+     *
+     * <p>Use {@link #restoreMsgSpoolForVpn(String, Long)} (with the previously-captured value)
+     * to put the spool back.
+     *
+     * @param msgVpnName name of the vpn whose spool to disable
+     */
+    public void disableMsgSpoolForVpn(String msgVpnName) {
+      final ConfigMsgVpn vpn = queryVpn(msgVpnName);
+      vpn.maxMsgSpoolUsage(0L);
+      updateVpn(vpn);
+    }
+
+    /**
+     * Restores the guaranteed-delivery message-spool quota for a VPN to the supplied value.
+     * Intended for use after {@link #disableMsgSpoolForVpn(String)} - pass the original quota
+     * captured from {@link #queryVpn(String)} before the disable.
+     *
+     * @param msgVpnName name of the vpn
+     * @param maxMsgSpoolUsageMb the spool quota in megabytes to set
+     */
+    public void restoreMsgSpoolForVpn(String msgVpnName, Long maxMsgSpoolUsageMb) {
+      final ConfigMsgVpn vpn = queryVpn(msgVpnName);
+      vpn.maxMsgSpoolUsage(maxMsgSpoolUsageMb);
+      updateVpn(vpn);
+    }
+
+    /**
      * Queries all vpns on a broker
      *
      * @return collection with all vpns on a broker
