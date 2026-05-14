@@ -862,7 +862,7 @@ public class JCSMPOutboundMessageHandlerTest {
 	 * DATAGO-134580: when {@code session.createProducer(...)} itself fails during recreation
 	 * (e.g. the broker is still mid-restart from the message-spool shutdown), the in-flight
 	 * message must be routed through the error channel via {@code handleMessagingException},
-	 * the {@code producerNeedsRecreation} flag must stay armed, and the next inbound message
+	 * the {@code recreateProducer} flag must stay armed, and the next inbound message
 	 * must retry recreation. This guards against a silent infinite-retry-loop or
 	 * lost-error class of regression.
 	 *
@@ -923,7 +923,7 @@ public class JCSMPOutboundMessageHandlerTest {
 
 	/**
 	 * DATAGO-134580: {@code start()} and {@code closeResources()} both reset the
-	 * {@code producerNeedsRecreation} flag, so a stop/start lifecycle starts from a clean
+	 * {@code recreateProducer} flag, so a stop/start lifecycle starts from a clean
 	 * state regardless of what happened in the prior lifecycle. Without that reset, a stop
 	 * after a stale-flow event followed by a fresh start would gratuitously recreate the
 	 * brand-new producer on the very first message.

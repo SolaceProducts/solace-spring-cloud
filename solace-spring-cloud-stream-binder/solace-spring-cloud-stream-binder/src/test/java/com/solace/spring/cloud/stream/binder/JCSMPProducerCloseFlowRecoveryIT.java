@@ -108,7 +108,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *   <li>{@link #test_persistentQueuePublisher_recoversAcrossRepeatedMessageSpoolCliShutdowns persistentQueuePublisher_recoversAcrossRepeatedMessageSpoolCliShutdowns}
  *       - <b>Repeated bug reproducer.</b> Same disruption as (4) but looped across multiple
  *       consecutive shutdown/restore cycles on the same binding. Proves the
- *       {@code producerNeedsRecreation} flag resets correctly after each successful
+ *       {@code recreateProducer} flag resets correctly after each successful
  *       recreation and that no state accumulates on the binder. A regression that only reset
  *       the flag once (e.g. a non-volatile read or a missed write in the success path) would
  *       reproduce the bug from the second cycle onwards.</li>
@@ -480,7 +480,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 	 * single unsolicited {@code CloseFlow}. This test proves the same fix continues to work
 	 * across multiple consecutive stale-flow events on the same binding, without any
 	 * intermediate {@code stop() / start()}. Concretely it asserts the
-	 * {@code producerNeedsRecreation} flag is correctly cleared after each successful
+	 * {@code recreateProducer} flag is correctly cleared after each successful
 	 * recreation - if it weren't, the second cycle's bug-witness assertion would never see
 	 * a fresh stale exception (the recreated producer from cycle 1 is still considered
 	 * "the new producer" until something tells the handler otherwise).
@@ -565,7 +565,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 				// leave the producer permanently dead from cycle 2 onwards.
 				assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload(
 						"recovery-c" + currentCycle).build()))
-						.as("Cycle %d: publish must recover after broker CLI shutdown; producerNeedsRecreation flag must reset between cycles", currentCycle)
+						.as("Cycle %d: publish must recover after broker CLI shutdown; recreateProducer flag must reset between cycles", currentCycle)
 						.doesNotThrowAnyException();
 			}
 
