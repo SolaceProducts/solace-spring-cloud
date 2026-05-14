@@ -13,7 +13,6 @@ import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
 import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solacesystems.jcsmp.DeliveryMode;
-import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
@@ -53,7 +52,6 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Broker integration tests characterising producer behaviour around the
@@ -67,10 +65,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * reproduce the bug. They are kept as long-term coverage so that any future broker behaviour
  * change (e.g. a future broker version starts ejecting already-bound publisher flows on a
  * spool-quota change) shows up immediately as a test failure rather than a silent regression.
- * The fourth test is the <b>bug reproducer</b> that pins the exact customer-reported failure
- * mode and is what the {@code JCSMPOutboundMessageHandler} fix must turn green. The fifth
- * test loops the bug reproducer across multiple consecutive stale-flow cycles, proving the
- * recreate-on-stale path resets cleanly between events and does not accumulate state.
+ * The fourth test drives the customer-reported broker disruption and asserts that the binding
+ * transparently recovers via the {@code JCSMPOutboundMessageHandler} fix. The fifth test
+ * loops the same disruption across multiple consecutive stale-flow cycles, proving the
+ * recreate path stays effective across repeated events on the same binding.
  *
  * <ol>
  *   <li>{@link #test_persistentTopicPublisher_survivesSpoolToggle persistentTopicPublisher_survivesSpoolToggle}
@@ -94,24 +92,24 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *       {@code CloseFlow}, so the bound publisher flow stays alive across the cycle.</li>
  *
  *   <li>{@link #test_persistentQueuePublisher_recoversAfterMessageSpoolCliShutdown persistentQueuePublisher_recoversAfterMessageSpoolCliShutdown}
- *       - <b>Bug reproducer.</b> Persistent publishing to a Queue destination + a broker-level
+ *       - <b>Recovery test.</b> Persistent publishing to a Queue destination + a broker-level
  *       {@code hardware message-spool shutdown} / {@code no shutdown} cycle driven through
  *       the broker's CLI via {@code docker exec}. This is the only mechanism that actually
  *       fans out unsolicited {@code CloseFlow} (503 Service Unavailable) to every bound
  *       publisher flow without dropping the JCSMP session - matching the customer's
- *       traceback exactly. The first post-shutdown publish surfaces
- *       {@link StaleSessionException}; on master the binding stays stuck in that state. After
- *       the {@code JCSMPOutboundMessageHandler} recreate-on-stale fix lands, the handler
- *       rebuilds the producer at the top of {@code handleMessage(...)} and the next publish
- *       succeeds.</li>
+ *       traceback exactly. On master without the fix the post-shutdown publish surfaces
+ *       {@link StaleSessionException} and the binding stays stuck. With the fix the handler's
+ *       proactive {@code producer.isClosed()} pre-check catches the dead producer at the top
+ *       of {@code handleMessage(...)} and rebuilds it before send, so the publish recovers
+ *       transparently on its first attempt.</li>
  *
  *   <li>{@link #test_persistentQueuePublisher_recoversAcrossRepeatedMessageSpoolCliShutdowns persistentQueuePublisher_recoversAcrossRepeatedMessageSpoolCliShutdowns}
- *       - <b>Repeated bug reproducer.</b> Same disruption as (4) but looped across multiple
- *       consecutive shutdown/restore cycles on the same binding. Proves the
- *       {@code recreateProducer} flag resets correctly after each successful
- *       recreation and that no state accumulates on the binder. A regression that only reset
- *       the flag once (e.g. a non-volatile read or a missed write in the success path) would
- *       reproduce the bug from the second cycle onwards.</li>
+ *       - <b>Repeated recovery test.</b> Same disruption as (4) but looped across multiple
+ *       consecutive shutdown/restore cycles on the same binding. Each cycle the broker tears
+ *       down the current producer (the original in cycle 1, the recreated one in cycle 2,
+ *       and so on) and the proactive check must catch each closure and rebuild. Guards
+ *       against a regression where the recreate path becomes single-use or where state
+ *       accumulates across cycles.</li>
  * </ol>
  *
  * <p>All five tests run in {@link ExecutionMode#SAME_THREAD} because each touches shared
@@ -322,15 +320,16 @@ class JCSMPProducerCloseFlowRecoveryIT {
 	}
 
 	/**
-	 * Bug reproducer (4/5) - persistent queue publisher + broker-level message-spool shutdown.
+	 * Recovery test (4/5) - persistent queue publisher + broker-level message-spool shutdown.
 	 *
-	 * <p>This is the precise customer-reported reproduction. The {@code hardware message-spool
-	 * shutdown} / {@code no shutdown} CLI sequence is the only mechanism that fans out an
-	 * unsolicited {@code CloseFlow} (503 Service Unavailable) to every currently-bound
-	 * publisher flow on the broker <em>without</em> dropping the JCSMP session. SEMPv2-only
-	 * approaches (zeroing the spool quota, toggling queue ingress/egress) either NACK
-	 * publishes asynchronously without invalidating the flow, or also drop the session as a
-	 * side-effect - neither matches the customer's actual failure mode.
+	 * <p>This drives the precise customer-reported failure scenario for DATAGO-134580. The
+	 * {@code hardware message-spool shutdown} / {@code no shutdown} CLI sequence is the
+	 * only mechanism that fans out an unsolicited {@code CloseFlow} (503 Service
+	 * Unavailable) to every currently-bound publisher flow on the broker <em>without</em>
+	 * dropping the JCSMP session. SEMPv2-only approaches (zeroing the spool quota,
+	 * toggling queue ingress/egress) either NACK publishes asynchronously without
+	 * invalidating the flow, or also drop the session as a side-effect - neither matches
+	 * the customer's actual failure mode.
 	 *
 	 * <p>The CLI is reached by finding the running PubSub+ test container via the docker
 	 * client that testcontainers already exposes, then {@code docker exec}ing the
@@ -338,19 +337,20 @@ class JCSMPProducerCloseFlowRecoveryIT {
 	 * stdin. We cannot avoid this layer of indirection because {@code PubSubPlusExtension}
 	 * does not expose the container as a parameter, and SEMPv2 has no equivalent action.
 	 *
-	 * <p>Two assertions:
+	 * <p>Assertions:
 	 * <ol>
-	 *   <li><b>Bug witness</b> - the first post-shutdown publish surfaces
-	 *       {@link MessagingException} with a {@link JCSMPException}-rooted cause. The
-	 *       customer's stack trace shows {@link StaleSessionException} wrapping a
-	 *       {@code JCSMPTransportException("Received unsolicited CloseFlow ... 503:Service
-	 *       Unavailable")}; depending on broker timing and JCSMP buffer state the test
-	 *       sometimes surfaces the inner {@code JCSMPTransportException} directly as the
-	 *       root cause instead. Both forms are manifestations of the same broker-driven
-	 *       flow teardown - we accept either via the common {@link JCSMPException}
-	 *       supertype.</li>
-	 *   <li><b>Recovery</b> - the next publish completes cleanly only after the
-	 *       {@code JCSMPOutboundMessageHandler} recreate-on-stale fix lands.</li>
+	 *   <li><b>Proactive recovery</b> - the first post-shutdown publish must succeed. By
+	 *       the time we reach this assertion JCSMP has fanned the unsolicited CloseFlow
+	 *       into the producer's actor thread (visible as {@code JCSMPTransportException:
+	 *       Received unsolicited CloseFlow ... 503} in test logs) so the binding's
+	 *       producer reference is closed. The handler's proactive
+	 *       {@code producer.isClosed()} pre-check at the top of {@code handleMessage(...)}
+	 *       detects this and rebuilds the producer before {@code send(...)} is ever
+	 *       attempted. On master without the fix this assertion fails with a
+	 *       {@link StaleSessionException}-rooted {@link MessagingException}.</li>
+	 *   <li><b>Steady state</b> - a subsequent publish on the recreated producer also
+	 *       succeeds. Guards against a regression that leaves the producer in a
+	 *       half-built state.</li>
 	 * </ol>
 	 */
 	@Test
@@ -412,37 +412,36 @@ class JCSMPProducerCloseFlowRecoveryIT {
 					"message-spool",
 					"no shutdown");
 			spoolRestored = true;
-			// Same probe again after re-enable - confirms the broker is back to a
-			// queryable / stable state before we attempt the bug-witness publish.
+			// Probe again after re-enable - confirms the broker is back to a queryable /
+			// stable state before we attempt the recovery publish.
 			awaitBrokerSempResponsive(sempV2Api, vpnName);
 
-			// === Phase 2: assertion 1 - bug witness ===
-			// The first post-shutdown publish must surface a JCSMP-rooted MessagingException.
-			// We accept any JCSMPException root cause (StaleSessionException,
-			// ClosedFacilityException, JCSMPTransportException) because the broker's CLI-driven
-			// teardown can surface as either the outer StaleSessionException form (matching
-			// the customer's stack trace verbatim) or the inner JCSMPTransportException form
-			// when JCSMP delivers the CloseFlow event before the producer's stale-marker has
-			// been propagated to the send() caller. Both forms prove the same thing - that
-			// the broker tore down the publisher flow and the binding's local producer is
-			// no longer usable.
-			logger.info("Attempting first post-shutdown publish; expecting a JCSMP-rooted failure");
-			Awaitility.await("post-CLI-shutdown publish surfaces a JCSMP-rooted failure")
-					.atMost(Duration.ofSeconds(20))
-					.pollInterval(Duration.ofMillis(500))
-					.untilAsserted(() -> assertThatThrownBy(() ->
-							moduleOutputChannel.send(MessageBuilder.withPayload("witness-" + System.nanoTime()).build()))
-							.isInstanceOf(MessagingException.class)
-							.hasRootCauseInstanceOf(JCSMPException.class));
+			// === Phase 2: recovery proof ===
+			// The first post-shutdown publish MUST succeed. By this point JCSMP has fanned
+			// the unsolicited CloseFlow into the producer's actor thread (visible in test
+			// logs as "JCSMPTransportException: Received unsolicited CloseFlow ... 503"),
+			// so the binding's producer reference is now closed. The handler's proactive
+			// producer.isClosed() pre-check at the top of handleMessage() detects this and
+			// rebuilds the producer before send() is ever attempted - so the publish
+			// transparently recovers on its first attempt rather than the customer seeing
+			// a JCSMPException through the error channel.
+			//
+			// On master without the fix this assertion fails with a StaleSessionException
+			// rooted in the customer's exact traceback; with only the reactive (catch-block)
+			// half of the fix this would also fail because the catch arms the flag but the
+			// in-flight message itself is still surfaced to the error channel; the proactive
+			// pre-check is what makes this single assertion green.
+			logger.info("Attempting first post-shutdown publish; expecting proactive recovery");
+			assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload("recovery-1").build()))
+					.as("First publish after broker CLI message-spool shutdown must recover via proactive isClosed() pre-check")
+					.doesNotThrowAnyException();
 
-			// === Phase 3: assertion 2 - recovery ===
-			//   Pre-fix (master): handler-local producer is still the dead one, this throws
-			//                     StaleSessionException - assertion fails. That failure IS the bug.
-			//   Post-fix:         handler detects the stale flag, recreates the producer and
-			//                     the publish succeeds.
-			logger.info("Attempting recovery publish; expecting success only with the fix in place");
-			assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload("recovery").build()))
-					.as("Publish after broker message-spool CLI shutdown must recover; on master it stays stale and re-throws StaleSessionException")
+			// === Phase 3: steady-state proof ===
+			// A subsequent publish on the now-recreated producer must also succeed - guards
+			// against a regression where the recreate path inadvertently leaves the producer
+			// in a half-built state.
+			assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload("recovery-2").build()))
+					.as("Steady-state publish after recovery must continue to work")
 					.doesNotThrowAnyException();
 		} finally {
 			// Belt-and-suspenders: if assertion 1 timed out before we re-enabled the spool,
@@ -473,23 +472,19 @@ class JCSMPProducerCloseFlowRecoveryIT {
 	}
 
 	/**
-	 * Repeated bug reproducer (5/5) - persistent queue publisher + N consecutive
+	 * Repeated recovery test (5/5) - persistent queue publisher + N consecutive
 	 * broker-level message-spool shutdown / restore cycles on the <em>same</em> binding.
 	 *
 	 * <p>Test 4 proves that the {@code JCSMPOutboundMessageHandler} fix recovers from a
 	 * single unsolicited {@code CloseFlow}. This test proves the same fix continues to work
 	 * across multiple consecutive stale-flow events on the same binding, without any
-	 * intermediate {@code stop() / start()}. Concretely it asserts the
-	 * {@code recreateProducer} flag is correctly cleared after each successful
-	 * recreation - if it weren't, the second cycle's bug-witness assertion would never see
-	 * a fresh stale exception (the recreated producer from cycle 1 is still considered
-	 * "the new producer" until something tells the handler otherwise).
-	 *
-	 * <p>This is what guards against a class of regression where the flag-reset is moved or
-	 * weakened (e.g. reset only on {@code start()}, or reset on the recreation-attempt
-	 * branch but missed on the recreation-success branch). The unit test
-	 * {@code test_recreationFlagResetAcrossStopStartCycle} covers the lifecycle-driven
-	 * reset; this IT covers the per-event reset against a real broker.
+	 * intermediate {@code stop() / start()}. Each cycle the broker tears down the current
+	 * producer (the original in cycle 1, the recreated one in cycle 2, and so on); the
+	 * proactive {@code producer.isClosed()} pre-check must catch the closed producer at
+	 * the top of every {@code handleMessage(...)} and rebuild it before send. A regression
+	 * that prevented re-detection on the second-or-later cycle (e.g. an accumulated state
+	 * bug, or the recreate flag becoming sticky) would surface here as the first cycle
+	 * passing but later cycles failing.
 	 *
 	 * <p>Three cycles is enough to expose state-accumulation bugs while keeping the test
 	 * runtime bounded: each cycle costs ~1 broker spool restart (~5-10s).
@@ -544,28 +539,24 @@ class JCSMPProducerCloseFlowRecoveryIT {
 				spoolRestored = true;
 				awaitBrokerSempResponsive(sempV2Api, vpnName);
 
-				// Bug witness for THIS cycle. The handler is still holding a producer
-				// (either the original one in cycle 1, or the one recreated by cycle N-1's
-				// recovery publish in later cycles); the broker just tore it down. The
-				// next publish must surface a JCSMP-rooted failure - if it doesn't, the
-				// flag was never re-armed and the handler is no longer noticing
-				// stale-flow events after the first one.
+				// Recovery for THIS cycle. The handler is holding a producer (the original
+				// one in cycle 1, or the one recreated by cycle N-1's recovery publish in
+				// later cycles); the broker just tore that producer down via CloseFlow.
+				// The proactive producer.isClosed() pre-check at the top of handleMessage()
+				// must detect the closed producer and rebuild it BEFORE attempting the send -
+				// so this publish succeeds on its first attempt. A regression in either the
+				// proactive detection or the flag-reset-on-recreate would surface here as a
+				// thrown exception from the first cycle that hits it.
 				final int currentCycle = cycle;
-				Awaitility.await(String.format("cycle %d: post-shutdown publish surfaces JCSMP failure", currentCycle))
-						.atMost(Duration.ofSeconds(20))
-						.pollInterval(Duration.ofMillis(500))
-						.untilAsserted(() -> assertThatThrownBy(() ->
-								moduleOutputChannel.send(MessageBuilder.withPayload(
-										"witness-c" + currentCycle + "-" + System.nanoTime()).build()))
-								.isInstanceOf(MessagingException.class)
-								.hasRootCauseInstanceOf(JCSMPException.class));
-
-				// Recovery for THIS cycle. The fix must take effect on every cycle, not
-				// just the first - any regression that resets the flag only once would
-				// leave the producer permanently dead from cycle 2 onwards.
 				assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload(
 						"recovery-c" + currentCycle).build()))
-						.as("Cycle %d: publish must recover after broker CLI shutdown; recreateProducer flag must reset between cycles", currentCycle)
+						.as("Cycle %d: first publish after broker CLI shutdown must recover via proactive isClosed() pre-check", currentCycle)
+						.doesNotThrowAnyException();
+
+				// Steady-state publish on the now-recreated producer.
+				assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload(
+						"steady-c" + currentCycle).build()))
+						.as("Cycle %d: steady-state publish after recovery must continue to work", currentCycle)
 						.doesNotThrowAnyException();
 			}
 

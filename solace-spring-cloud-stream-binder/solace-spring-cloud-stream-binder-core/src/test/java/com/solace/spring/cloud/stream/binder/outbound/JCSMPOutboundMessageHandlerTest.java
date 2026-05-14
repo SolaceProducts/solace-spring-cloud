@@ -859,6 +859,41 @@ public class JCSMPOutboundMessageHandlerTest {
 	}
 
 	/**
+	 * DATAGO-134580: proactive {@code producer.isClosed()} pre-check. If the broker has
+	 * already fanned out unsolicited CloseFlow to this binding's producer <em>before</em>
+	 * any {@code handleMessage} runs (i.e. the recreate flag is not yet armed because no
+	 * previous send has hit the catch block), the very first inbound message should still
+	 * recreate the producer rather than attempting to send through a known-closed one.
+	 * Without the pre-check the first message after every CloseFlow event would be lost to
+	 * the error channel; with the pre-check that message publishes cleanly.
+	 */
+	@Test
+	void test_producerRecreatedProactivelyWhenIsClosedDetectedBeforeSend(@Mock XMLMessageProducer producerB) throws Exception {
+		Mockito.when(session.createProducer(
+						producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
+				.thenReturn(messageProducer)
+				.thenReturn(producerB);
+
+		// Simulate the broker having torn down the flow asynchronously: producer reports
+		// itself as closed, but no send has yet hit the catch block to arm the flag.
+		Mockito.when(messageProducer.isClosed()).thenReturn(true);
+
+		messageHandler.start();
+
+		Message<?> firstMessage = MessageBuilder.withPayload("payload-1").build();
+		messageHandler.handleMessage(firstMessage);
+
+		// The first message must have triggered recreation (producer was visibly closed
+		// before send) and then succeeded against the fresh producer.
+		Mockito.verify(session, Mockito.times(2))
+				.createProducer(any(ProducerFlowProperties.class), any(JCSMPStreamingPublishCorrelatingEventHandler.class));
+		Mockito.verify(producerB, Mockito.times(1)).send(any(XMLMessage.class), any(Destination.class));
+		// The original (closed) producer must never have been asked to send.
+		Mockito.verify(messageProducer, Mockito.never()).send(any(XMLMessage.class), any(Destination.class));
+		Mockito.verify(messageProducer, Mockito.atLeastOnce()).close();
+	}
+
+	/**
 	 * DATAGO-134580: when {@code session.createProducer(...)} itself fails during recreation
 	 * (e.g. the broker is still mid-restart from the message-spool shutdown), the in-flight
 	 * message must be routed through the error channel via {@code handleMessagingException},

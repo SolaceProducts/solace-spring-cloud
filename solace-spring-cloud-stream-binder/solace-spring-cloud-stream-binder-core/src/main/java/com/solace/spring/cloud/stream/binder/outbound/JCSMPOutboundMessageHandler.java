@@ -292,11 +292,11 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 	}
 
 	private void recreateProducerIfNeeded(ErrorChannelSendingCorrelationKey correlationKey) throws MessagingException {
-		if (!recreateProducer) {
+		if (!recreateProducer && (producer == null || !producer.isClosed())) {
 			return;
 		}
 		synchronized (recreateLock) {
-			if (!recreateProducer) {
+			if (!recreateProducer && (producer == null || !producer.isClosed())) {
 				return;
 			}
 			LOGGER.warn("Recreating JCSMP producer for binding {} after stale-flow detection <message handler ID: {}>",
