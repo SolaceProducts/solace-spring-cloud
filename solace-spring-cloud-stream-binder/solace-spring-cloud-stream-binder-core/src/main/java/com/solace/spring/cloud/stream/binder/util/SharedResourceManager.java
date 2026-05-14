@@ -44,6 +44,31 @@ abstract sealed class SharedResourceManager<T> permits JCSMPSessionProducerManag
 	}
 
 	/**
+	 * Force-replace the shared resource. Closes the existing instance (if any) and
+	 * {@link #create()}s a new one, regardless of how many callers are currently
+	 * registered. Existing registrations are preserved, so subsequent {@link #get(String)}
+	 * calls from any registered caller return the new resource. Intended for recovery
+	 * paths where a caller has detected the shared resource is no longer usable (e.g.
+	 * the underlying broker tore down the flow via unsolicited CloseFlow).
+	 *
+	 * @return the freshly-created shared resource
+	 * @throws Exception whatever exception may be thrown by {@link #create()}
+	 */
+	public T forceRecreate() throws Exception {
+		synchronized (lock) {
+			if (sharedResource != null) {
+				try {
+					close();
+				} catch (Exception e) {
+					LOGGER.debug("Failed to close stale {} during forceRecreate", type, e);
+				}
+			}
+			sharedResource = create();
+			return sharedResource;
+		}
+	}
+
+	/**
 	 * De-register {@code key} from the shared resource.
 	 * <p>If this is the last {@code key} associated to the shared resource, {@link #close()} the resource.
 	 * @param key the registration key of the caller that is using the resource
