@@ -44,28 +44,13 @@ abstract sealed class SharedResourceManager<T> permits JCSMPSessionProducerManag
 	}
 
 	/**
-	 * Conditionally replace the shared resource using compare-and-swap semantics.
+	 * Compare-and-swap the shared resource. If the manager still holds {@code expected},
+	 * close it and {@link #create()} a fresh one; otherwise return the currently-installed
+	 * resource without re-creating.
 	 *
-	 * <p>If the manager still holds the {@code expected} reference, the existing
-	 * resource is closed and a fresh one is {@link #create()}d. If the manager
-	 * already holds a different reference - because a concurrent caller has already
-	 * replaced it - this is a no-op and the currently-installed resource is
-	 * returned. This prevents two callers that observed the same stale resource
-	 * from both recreating: the second caller sees that the resource has already
-	 * changed and uses the replacement rather than closing a potentially in-use
-	 * resource that the first caller installed.
-	 *
-	 * <p>Existing registrations are preserved, so subsequent {@link #get(String)}
-	 * calls from any registered caller return the (possibly newly-installed)
-	 * resource.
-	 *
-	 * @param expected the resource reference the caller observed and considers no
-	 *                 longer usable; pass the value previously returned by
-	 *                 {@link #get(String)} or by an earlier call to this method
-	 * @return the resource currently installed in the manager - either the
-	 *         freshly-created one (if the swap happened) or whatever a concurrent
-	 *         caller installed (if it did not)
-	 * @throws Exception whatever exception may be thrown by {@link #create()}
+	 * @param expected the reference the caller observed and considers no longer usable
+	 * @return the resource currently installed in the manager
+	 * @throws Exception whatever {@link #create()} may throw
 	 */
 	public T forceRecreate(T expected) throws Exception {
 		synchronized (lock) {
