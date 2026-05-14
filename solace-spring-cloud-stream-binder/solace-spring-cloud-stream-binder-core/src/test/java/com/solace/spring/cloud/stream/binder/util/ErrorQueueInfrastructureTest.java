@@ -61,18 +61,20 @@ class ErrorQueueInfrastructureTest {
 	 * attempted, and the fresh producer services the publish.
 	 */
 	@Test
-	void test_errorQueueProducerRecreatedProactivelyOnIsClosed(
+	void testErrorQueueProducerRecreatedProactivelyOnIsClosed(
 			@Mock XMLMessageProducer staleProducer,
 			@Mock XMLMessageProducer freshProducer) throws Exception {
 		Mockito.when(producerManager.get(PRODUCER_KEY)).thenReturn(staleProducer);
 		Mockito.when(staleProducer.isClosed()).thenReturn(true);
-		Mockito.when(producerManager.forceRecreate()).thenReturn(freshProducer);
+		Mockito.when(producerManager.forceRecreate(staleProducer)).thenReturn(freshProducer);
 
 		assertThatCode(() -> errorQueueInfrastructure.send(messageContainer, correlationKey))
 				.as("Proactive recreate must allow the publish to succeed on the fresh producer")
 				.doesNotThrowAnyException();
 
-		Mockito.verify(producerManager).forceRecreate();
+		// CAS contract: caller passes the observed (stale) reference so the manager only
+		// recreates if it still holds that exact instance.
+		Mockito.verify(producerManager).forceRecreate(staleProducer);
 		Mockito.verify(freshProducer).send(any(XMLMessage.class), any(Destination.class));
 		Mockito.verify(staleProducer, Mockito.never()).send(any(XMLMessage.class), any(Destination.class));
 	}
@@ -89,7 +91,7 @@ class ErrorQueueInfrastructureTest {
 	 * stale-flow signals - the recovery contract must apply to all of them.
 	 */
 	@CartesianTest(name = "[{index}] exception={0}")
-	void test_errorQueueProducerRecreatedReactivelyOnStaleSendException(
+	void testErrorQueueProducerRecreatedReactivelyOnStaleSendException(
 			@Values(strings = {"stale", "transport", "closed-facility"}) String exceptionType,
 			@Mock XMLMessageProducer staleProducer) throws Exception {
 		Mockito.when(producerManager.get(PRODUCER_KEY)).thenReturn(staleProducer);
@@ -110,9 +112,10 @@ class ErrorQueueInfrastructureTest {
 				.as("Stale-flow send failure must propagate so the retry caller can re-attempt")
 				.isInstanceOf(sendError.getClass());
 
-		// The manager must have been asked to forceRecreate so the next retry by
-		// ErrorQueueRepublishCorrelationKey gets a fresh producer instead of the dead one.
-		Mockito.verify(producerManager).forceRecreate();
+		// The manager must have been asked to forceRecreate (with the observed stale
+		// producer for CAS semantics) so the next retry by ErrorQueueRepublishCorrelationKey
+		// gets a fresh producer instead of the dead one.
+		Mockito.verify(producerManager).forceRecreate(staleProducer);
 	}
 
 	/**
@@ -122,7 +125,7 @@ class ErrorQueueInfrastructureTest {
 	 * every transient publish error (e.g. a malformed message).
 	 */
 	@Test
-	void test_errorQueueProducerNotRecreatedOnUnrelatedJCSMPException(
+	void testErrorQueueProducerNotRecreatedOnUnrelatedJCSMPException(
 			@Mock XMLMessageProducer producer) throws Exception {
 		Mockito.when(producerManager.get(PRODUCER_KEY)).thenReturn(producer);
 		Mockito.when(producer.isClosed()).thenReturn(false);
@@ -134,6 +137,36 @@ class ErrorQueueInfrastructureTest {
 				.isInstanceOf(JCSMPException.class)
 				.hasMessage("Some unrelated publishing error");
 
-		Mockito.verify(producerManager, Mockito.never()).forceRecreate();
+		Mockito.verify(producerManager, Mockito.never()).forceRecreate(any());
+	}
+
+	/**
+	 * DATAGO-134580: CAS contract verification. When two callers both observe the
+	 * same stale producer and both call {@code forceRecreate(stale)}, the manager
+	 * recreates exactly once - the second call returns the already-recreated
+	 * resource without closing it. {@code ErrorQueueInfrastructure.send(...)} must
+	 * use the value returned by {@code forceRecreate} (rather than its own observed
+	 * reference) so it ends up using whatever the manager currently holds, not a
+	 * resource that another caller has since closed and replaced.
+	 */
+	@Test
+	void testErrorQueueProducerUsesManagerReturnedReferenceAfterForceRecreate(
+			@Mock XMLMessageProducer staleProducer,
+			@Mock XMLMessageProducer alreadyRecreatedByAnotherCaller) throws Exception {
+		Mockito.when(producerManager.get(PRODUCER_KEY)).thenReturn(staleProducer);
+		Mockito.when(staleProducer.isClosed()).thenReturn(true);
+		// Simulate the CAS no-op outcome: another caller already replaced the stale
+		// producer, so the manager's CAS does not recreate again - it returns the
+		// already-installed replacement instead.
+		Mockito.when(producerManager.forceRecreate(staleProducer))
+				.thenReturn(alreadyRecreatedByAnotherCaller);
+
+		assertThatCode(() -> errorQueueInfrastructure.send(messageContainer, correlationKey))
+				.as("send must use the manager-returned reference (the already-installed replacement) " +
+						"and not the locally-observed stale reference")
+				.doesNotThrowAnyException();
+
+		Mockito.verify(alreadyRecreatedByAnotherCaller).send(any(XMLMessage.class), any(Destination.class));
+		Mockito.verify(staleProducer, Mockito.never()).send(any(XMLMessage.class), any(Destination.class));
 	}
 }

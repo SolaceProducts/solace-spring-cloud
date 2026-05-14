@@ -42,7 +42,7 @@ public final class ErrorQueueInfrastructure {
 			if (producer.isClosed()) {
 				LOGGER.warn("Detected closed shared JCSMP producer before sending to error queue {}; recreating",
 						errorQueueName);
-				producer = producerManager.forceRecreate();
+				producer = producerManager.forceRecreate(producer);
 			}
 		} catch (Exception e) {
 			MessagingException wrappedException = new MessagingException(
@@ -63,7 +63,7 @@ public final class ErrorQueueInfrastructure {
 								"recreating for next attempt",
 						errorQueueName, e.getClass().getSimpleName());
 				try {
-					producerManager.forceRecreate();
+					producerManager.forceRecreate(producer);
 				} catch (Exception recreateError) {
 					LOGGER.warn("Failed to recreate shared JCSMP producer after stale-flow detection", recreateError);
 					e.addSuppressed(recreateError);
