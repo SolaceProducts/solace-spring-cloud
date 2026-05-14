@@ -384,14 +384,11 @@ class JCSMPProducerCloseFlowRecoveryIT {
 			// NOTE on command shape: the Solace CLI requires stepping through the config
 			// sub-modes one line at a time (`hardware`, then `message-spool`) - the dotted
 			// form `hardware message-spool` is not reliably accepted. The `shutdown`
-			// command itself is destructive and is guarded by TWO sequential confirmation
-			// prompts:
-			//     All message spooling will be stopped.
-			//     Do you want to continue (y/n)?  <-- first prompt
-			//     Do you want to continue (y/n)?  <-- second prompt
-			// We answer both with `y`. Without those, the exec hangs at the first prompt
-			// and the shutdown never actually takes effect. `no shutdown` (the re-enable)
-			// is non-destructive and does not prompt.
+			// command itself is destructive and is guarded by a single confirmation prompt
+			// ("All message spooling will be stopped. Do you want to continue (y/n)?")
+			// that we answer with `y`. Without that, the exec hangs at the prompt and the
+			// shutdown never actually takes effect. `no shutdown` (the re-enable) is
+			// non-destructive and does not prompt.
 			logger.info("Shutting down broker message-spool via CLI in container '{}'", solaceContainerId);
 			runSolaceCliCommands(solaceContainerId,
 					"enable",
@@ -399,7 +396,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 					"hardware",
 					"message-spool",
 					"shutdown",
-					"y");
+					"y");   // answer the "Do you want to continue (y/n)?" confirmation prompt
 			// Wait until the broker's SEMP API is responsive again before driving the
 			// re-enable CLI command. The shutdown is synchronous from the CLI's perspective,
 			// but the broker's HTTP management surface may briefly stutter as the spool
@@ -535,7 +532,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 						"hardware",
 						"message-spool",
 						"shutdown",
-						"y");
+						"y");  // single "Do you want to continue (y/n)?" confirmation prompt
 				awaitBrokerSempResponsive(sempV2Api, vpnName);
 
 				runSolaceCliCommands(solaceContainerId,
@@ -701,8 +698,18 @@ class JCSMPProducerCloseFlowRecoveryIT {
 	 *
 	 * <p>The commands are fed into the TTY's stdin via docker-java's
 	 * {@link com.github.dockerjava.api.command.ExecStartCmd#withStdIn(java.io.InputStream)}.
-	 * Trailing {@code end} / {@code exit} are appended so the CLI cleanly leaves config
-	 * mode and exits instead of waiting on more interactive input.
+	 * Trailing {@code end} + two {@code exit}s are appended so the CLI walks the mode stack
+	 * back down and actually terminates the {@code cli -A} process:
+	 * <pre>
+	 *   end    : leaves config mode      ((configure/...)# -> #)
+	 *   exit   : leaves privileged exec  (#                  -> >)
+	 *   exit   : closes user-exec session(&gt;                 -> EOF, cli -A exits)
+	 * </pre>
+	 * Without the second {@code exit} the CLI sits at the {@code >} prompt waiting for
+	 * more input and {@code awaitCompletion(...)} below would never observe the process
+	 * terminating, which would (a) silently hang for the full timeout and (b) trip the
+	 * defensive throw below on every call - turning a one-shot CLI invocation into a
+	 * 30s hang per call and (post-defensive-check) an outright test failure.
 	 *
 	 * <p>The CLI binary path {@code /usr/sw/loads/currentload/bin/cli} is the standard
 	 * location inside the {@code solace-pubsub-standard} image.
@@ -717,8 +724,10 @@ class JCSMPProducerCloseFlowRecoveryIT {
 			// own, but appending \r is harmless and avoids ambiguity.
 			script.append(cmd).append("\r\n");
 		}
-		// Terminators so the CLI returns instead of waiting for more interactive input.
-		script.append("end\r\n").append("exit\r\n");
+		// Terminators so the cli -A process actually exits (see method-level Javadoc for
+		// why two `exit`s are needed). Without the second exit, the CLI hangs at the
+		// top-level user-exec '>' prompt and awaitCompletion(...) below trips the throw.
+		script.append("end\r\n").append("exit\r\n").append("exit\r\n");
 
 		ExecCreateCmdResponse exec = docker.execCreateCmd(containerId)
 				.withTty(true)              // pseudo-TTY so the CLI honors confirmation prompts
@@ -731,10 +740,30 @@ class JCSMPProducerCloseFlowRecoveryIT {
 		ByteArrayInputStream stdin = new ByteArrayInputStream(
 				script.toString().getBytes(StandardCharsets.UTF_8));
 
-		docker.execStartCmd(exec.getId())
+		// Capture the CLI's stdout/stderr so a timeout produces a diagnostic message rather
+		// than a silent hang followed by a misleading assertion failure downstream.
+		// docker-java's TTY mode merges stdout+stderr onto a single Frame stream, which is
+		// what `cli -A` produces anyway.
+		final StringBuilder capturedOutput = new StringBuilder();
+		com.github.dockerjava.api.async.ResultCallback.Adapter<com.github.dockerjava.api.model.Frame> callback =
+				new com.github.dockerjava.api.async.ResultCallback.Adapter<>() {
+					@Override
+					public void onNext(com.github.dockerjava.api.model.Frame frame) {
+						capturedOutput.append(new String(frame.getPayload(), StandardCharsets.UTF_8));
+					}
+				};
+
+		boolean completed = docker.execStartCmd(exec.getId())
 				.withTty(true)
 				.withStdIn(stdin)
-				.exec(new com.github.dockerjava.api.async.ResultCallback.Adapter<>())
+				.exec(callback)
 				.awaitCompletion(30, TimeUnit.SECONDS);
+
+		if (!completed) {
+			throw new IllegalStateException(String.format(
+					"Solace CLI exec did not complete within 30s in container '%s'. " +
+							"Script:%n%s%nCaptured output:%n%s",
+					containerId, script, capturedOutput));
+		}
 	}
 }

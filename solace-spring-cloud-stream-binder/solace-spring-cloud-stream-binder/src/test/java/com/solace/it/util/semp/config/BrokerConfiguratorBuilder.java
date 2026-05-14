@@ -280,14 +280,20 @@ public class BrokerConfiguratorBuilder {
     }
 
     /**
-     * Zeroes out the guaranteed-delivery message-spool quota for a VPN, which causes the broker
-     * to send an unsolicited {@code CloseFlow} to every currently-bound publisher and consumer
-     * flow on that VPN. The session itself is left connected; only the GD flows are torn down.
+     * Zeroes out the guaranteed-delivery message-spool quota for a VPN.
      *
-     * <p>Use {@link #restoreMsgSpoolForVpn(String, Long)} (with the previously-captured value)
-     * to put the spool back.
+     * <p>Empirically (see {@code JCSMPProducerCloseFlowRecoveryIT} test 1) this does
+     * <em>not</em> tear down already-bound publisher / consumer flows on the VPN: the
+     * broker keeps the existing flows alive and instead NACKs new GD publishes
+     * asynchronously while the quota is at zero. This is the negative-control mechanism
+     * for the DATAGO-134580 reproducer - the actual unsolicited {@code CloseFlow} fan-out
+     * is driven by a broker-level {@code hardware message-spool shutdown} (CLI), not by
+     * a VPN-level quota change.
      *
-     * @param msgVpnName name of the vpn whose spool to disable
+     * <p>Use {@link #restoreMsgSpoolForVpn(String, Long)} (with the previously-captured
+     * value) to put the spool back.
+     *
+     * @param msgVpnName name of the vpn whose spool quota to zero
      */
     public void disableMsgSpoolForVpn(String msgVpnName) {
       final ConfigMsgVpn vpn = queryVpn(msgVpnName);

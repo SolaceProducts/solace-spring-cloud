@@ -20,6 +20,7 @@ import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.StaleSessionException;
 import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessage;
@@ -197,14 +198,31 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 			}
 
 			// DATAGO-134580: when the broker tears down the publisher flow (unsolicited
-			// CloseFlow on message-spool shutdown, DR failover, etc.), JCSMP marks the
-			// XMLMessageProducer terminally closed and every subsequent send throws
-			// StaleSessionException. ClosedFacilityException is the related
-			// already-closed-locally signal. Both mean the producer reference is dead;
-			// arm the recreation flag so the next handleMessage(...) rebuilds it. The
-			// volatile write must happen before the throw below so a concurrent thread
+			// CloseFlow on message-spool shutdown, DR failover, etc.), JCSMP can surface
+			// the failure on send(...) in three related forms - all of which mean the
+			// per-binding producer reference is dead and must be rebuilt before the next
+			// publish:
+			//   - StaleSessionException ........ the typical form once JCSMP has propagated
+			//                                    its internal stale-marker to the send caller
+			//   - JCSMPTransportException ...... the raw transport-level form, observed when
+			//                                    JCSMP delivers the CloseFlow event before
+			//                                    the stale-marker reaches send() (see
+			//                                    JCSMPProducerCloseFlowRecoveryIT - the
+			//                                    bug-witness assertion accepts either form
+			//                                    via the JCSMPException supertype because
+			//                                    both have been observed against the broker)
+			//   - ClosedFacilityException ...... the already-closed-locally signal, e.g.
+			//                                    a redundant send after the producer has
+			//                                    already been marked closed
+			// Recreating the producer on a non-CloseFlow JCSMPTransportException is harmless:
+			// the new producer inherits the still-good JCSMPSession, and if the transport
+			// fault is at session level the recreate itself will fail and surface through
+			// the error channel via handleMessagingException - same path as a normal failure.
+			// The volatile write must happen before the throw below so a concurrent thread
 			// reading the flag sees the update.
-			if (e instanceof StaleSessionException || e instanceof ClosedFacilityException) {
+			if (e instanceof StaleSessionException
+					|| e instanceof JCSMPTransportException
+					|| e instanceof ClosedFacilityException) {
 				if (!producerNeedsRecreation) {
 					LOGGER.warn("Detected stale JCSMP producer for binding {} (cause: {}); will " +
 									"recreate on next message <message handler ID: {}>",
@@ -314,11 +332,12 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 
 	/**
 	 * DATAGO-134580: if a prior {@code producer.send(...)} surfaced a
-	 * {@link StaleSessionException} or {@link ClosedFacilityException}, the broker has torn
-	 * down our publisher flow (typically via unsolicited CloseFlow) and the local producer
-	 * reference points at a terminally closed instance. Close the dead producer (and the
-	 * dead transacted session, if any) and build fresh ones via
-	 * {@link #createProducerInternal()} so the next publish can succeed.
+	 * {@link StaleSessionException}, {@link JCSMPTransportException}, or
+	 * {@link ClosedFacilityException}, the broker has torn down our publisher flow
+	 * (typically via unsolicited CloseFlow) and the local producer reference points at a
+	 * terminally closed instance. Close the dead producer (and the dead transacted session,
+	 * if any) and build fresh ones via {@link #createProducerInternal()} so the next
+	 * publish can succeed.
 	 *
 	 * <p>Double-checked-locked so concurrent dispatcher threads do not all recreate. The
 	 * lock guards close + create only; once the flag is cleared, subsequent

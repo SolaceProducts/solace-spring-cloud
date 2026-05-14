@@ -22,6 +22,7 @@ import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.ProducerFlowProperties;
 import com.solacesystems.jcsmp.Queue;
 import com.solacesystems.jcsmp.StaleSessionException;
@@ -807,6 +808,46 @@ public class JCSMPOutboundMessageHandlerTest {
 		assertThatThrownBy(() -> messageHandler.handleMessage(firstMessage))
 				.isInstanceOf(MessagingException.class)
 				.hasCauseInstanceOf(ClosedFacilityException.class);
+
+		Message<?> secondMessage = MessageBuilder.withPayload("payload-2").build();
+		messageHandler.handleMessage(secondMessage);
+
+		Mockito.verify(session, Mockito.times(2))
+				.createProducer(any(ProducerFlowProperties.class), any(JCSMPStreamingPublishCorrelatingEventHandler.class));
+		Mockito.verify(producerB, Mockito.times(1)).send(any(XMLMessage.class), any(Destination.class));
+		Mockito.verify(messageProducer, Mockito.atLeastOnce()).close();
+	}
+
+	/**
+	 * DATAGO-134580 (companion of {@link #test_producerRecreatedAfterUnsolicitedCloseFlow}):
+	 * the catch block in {@code handleMessage} also recreates on
+	 * {@link JCSMPTransportException}. The broker IT
+	 * ({@code JCSMPProducerCloseFlowRecoveryIT}) documents that when the broker fans out an
+	 * unsolicited CloseFlow, the send-path failure can surface as either the outer
+	 * {@link StaleSessionException} form (covered by
+	 * {@link #test_producerRecreatedAfterUnsolicitedCloseFlow}) or the raw transport-level
+	 * {@link JCSMPTransportException} form, depending on timing between the broker's flow
+	 * teardown and JCSMP's stale-marker propagation to the send caller. Both must lead to
+	 * recreation; without this coverage a regression that drops the transport-exception arm
+	 * would silently regress the bug for that timing variant.
+	 */
+	@Test
+	void test_producerRecreatedAfterJCSMPTransportException(@Mock XMLMessageProducer producerB) throws Exception {
+		Mockito.when(session.createProducer(
+						producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
+				.thenReturn(messageProducer)
+				.thenReturn(producerB);
+
+		Mockito.doThrow(new JCSMPTransportException(
+						"Received unsolicited CloseFlow for producer (503:Service Unavailable)."))
+				.when(messageProducer).send(any(XMLMessage.class), any(Destination.class));
+
+		messageHandler.start();
+
+		Message<?> firstMessage = MessageBuilder.withPayload("payload-1").build();
+		assertThatThrownBy(() -> messageHandler.handleMessage(firstMessage))
+				.isInstanceOf(MessagingException.class)
+				.hasCauseInstanceOf(JCSMPTransportException.class);
 
 		Message<?> secondMessage = MessageBuilder.withPayload("payload-2").build();
 		messageHandler.handleMessage(secondMessage);
