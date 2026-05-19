@@ -279,36 +279,14 @@ public class BrokerConfiguratorBuilder {
       updateVpn(vpn);
     }
 
-    /**
-     * Zeroes out the guaranteed-delivery message-spool quota for a VPN.
-     *
-     * <p>Empirically (see {@code JCSMPProducerCloseFlowRecoveryIT} test 1) this does
-     * <em>not</em> tear down already-bound publisher / consumer flows on the VPN: the
-     * broker keeps the existing flows alive and instead NACKs new GD publishes
-     * asynchronously while the quota is at zero. This is the negative-control mechanism
-     * for the DATAGO-134580 reproducer - the actual unsolicited {@code CloseFlow} fan-out
-     * is driven by a broker-level {@code hardware message-spool shutdown} (CLI), not by
-     * a VPN-level quota change.
-     *
-     * <p>Use {@link #restoreMsgSpoolForVpn(String, Long)} (with the previously-captured
-     * value) to put the spool back.
-     *
-     * @param msgVpnName name of the vpn whose spool quota to zero
-     */
+    /** Zeroes the VPN's GD message-spool quota. */
     public void disableMsgSpoolForVpn(String msgVpnName) {
       final ConfigMsgVpn vpn = queryVpn(msgVpnName);
       vpn.maxMsgSpoolUsage(0L);
       updateVpn(vpn);
     }
 
-    /**
-     * Restores the guaranteed-delivery message-spool quota for a VPN to the supplied value.
-     * Intended for use after {@link #disableMsgSpoolForVpn(String)} - pass the original quota
-     * captured from {@link #queryVpn(String)} before the disable.
-     *
-     * @param msgVpnName name of the vpn
-     * @param maxMsgSpoolUsageMb the spool quota in megabytes to set
-     */
+    /** Restores the VPN's GD message-spool quota to the supplied value (MB). */
     public void restoreMsgSpoolForVpn(String msgVpnName, Long maxMsgSpoolUsageMb) {
       final ConfigMsgVpn vpn = queryVpn(msgVpnName);
       vpn.maxMsgSpoolUsage(maxMsgSpoolUsageMb);

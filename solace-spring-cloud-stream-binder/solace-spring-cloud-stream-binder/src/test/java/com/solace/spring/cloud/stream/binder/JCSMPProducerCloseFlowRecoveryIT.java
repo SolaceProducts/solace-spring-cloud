@@ -17,7 +17,6 @@ import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.Queue;
-import com.solacesystems.jcsmp.StaleSessionException;
 import com.solacesystems.jcsmp.TextMessage;
 import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessageProducer;
@@ -40,7 +39,6 @@ import org.springframework.cloud.stream.config.BindingProperties;
 import org.springframework.integration.channel.DirectChannel;
 import org.springframework.integration.support.MessageBuilder;
 import org.springframework.messaging.MessageChannel;
-import org.springframework.messaging.MessagingException;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
 import org.testcontainers.DockerClientFactory;
 
@@ -54,67 +52,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
 /**
- * Broker integration tests characterising producer behaviour around the
- * <a href="https://sol-jira.atlassian.net/browse/DATAGO-134580">DATAGO-134580</a> bug: when the
- * broker tears down a publisher flow (DR failover, message-spool maintenance), JCSMP marks the
- * per-binding {@link XMLMessageProducer} as terminally closed and every subsequent
- * {@code send(...)} throws {@link StaleSessionException} until the app is restarted.
- *
- * <p>This class contains five integration tests. Three of them are <b>control / negative
- * cases</b> that exercise broker-side disruptions which - empirically - do <em>not</em>
- * reproduce the bug. They are kept as long-term coverage so that any future broker behaviour
- * change (e.g. a future broker version starts ejecting already-bound publisher flows on a
- * spool-quota change) shows up immediately as a test failure rather than a silent regression.
- * The fourth test drives the customer-reported broker disruption and asserts that the binding
- * transparently recovers via the {@code JCSMPOutboundMessageHandler} fix. The fifth test
- * loops the same disruption across multiple consecutive stale-flow cycles, proving the
- * recreate path stays effective across repeated events on the same binding.
- *
- * <ol>
- *   <li>{@link #test_persistentTopicPublisher_survivesSpoolToggle persistentTopicPublisher_survivesSpoolToggle}
- *       - <b>Control.</b> Persistent (GD) publishing to a topic + VPN-level spool quota
- *       cycled through 0 via SEMPv2. Asserts the publisher continues to publish. The broker
- *       only NACKs new spool writes asynchronously when the quota is 0; it does not eject
- *       already-bound publisher flows.</li>
- *
- *   <li>{@link #test_directTopicPublisher_survivesSpoolToggle directTopicPublisher_survivesSpoolToggle}
- *       - <b>Control.</b> DIRECT (non-persistent) publishing to a topic via raw JCSMP +
- *       the same spool toggle. Asserts the publisher continues to publish. Direct messages
- *       bypass the spool subsystem entirely so the toggle is a no-op for them. The binder
- *       cannot be used for this case because {@code XMLMessageMapper.java:205} unconditionally
- *       promotes outbound messages to {@link DeliveryMode#PERSISTENT}.</li>
- *
- *   <li>{@link #test_persistentQueuePublisher_survivesQueueIngressEgressToggle persistentQueuePublisher_survivesQueueIngressEgressToggle}
- *       - <b>Control.</b> Persistent publishing to a Queue destination + the queue's ingress
- *       and egress disabled and re-enabled via SEMPv2. Asserts the publisher continues to
- *       publish. Toggling ingress/egress causes the broker to NACK incoming publishes
- *       asynchronously while disabled but does <em>not</em> fan out unsolicited
- *       {@code CloseFlow}, so the bound publisher flow stays alive across the cycle.</li>
- *
- *   <li>{@link #test_persistentQueuePublisher_recoversAfterMessageSpoolCliShutdown persistentQueuePublisher_recoversAfterMessageSpoolCliShutdown}
- *       - <b>Recovery test.</b> Persistent publishing to a Queue destination + a broker-level
- *       {@code hardware message-spool shutdown} / {@code no shutdown} cycle driven through
- *       the broker's CLI via {@code docker exec}. This is the only mechanism that actually
- *       fans out unsolicited {@code CloseFlow} (503 Service Unavailable) to every bound
- *       publisher flow without dropping the JCSMP session - matching the customer's
- *       traceback exactly. On master without the fix the post-shutdown publish surfaces
- *       {@link StaleSessionException} and the binding stays stuck. With the fix the handler's
- *       proactive {@code producer.isClosed()} pre-check catches the dead producer at the top
- *       of {@code handleMessage(...)} and rebuilds it before send, so the publish recovers
- *       transparently on its first attempt.</li>
- *
- *   <li>{@link #test_persistentQueuePublisher_recoversAcrossRepeatedMessageSpoolCliShutdowns persistentQueuePublisher_recoversAcrossRepeatedMessageSpoolCliShutdowns}
- *       - <b>Repeated recovery test.</b> Same disruption as (4) but looped across multiple
- *       consecutive shutdown/restore cycles on the same binding. Each cycle the broker tears
- *       down the current producer (the original in cycle 1, the recreated one in cycle 2,
- *       and so on) and the proactive check must catch each closure and rebuild. Guards
- *       against a regression where the recreate path becomes single-use or where state
- *       accumulates across cycles.</li>
- * </ol>
- *
- * <p>All five tests run in {@link ExecutionMode#SAME_THREAD} because each touches shared
- * broker state (VPN-level spool quota, queue ingress/egress, broker-level message-spool)
- * that would briefly disrupt any concurrently-running tests on the same broker.
+ * DATAGO-134580 broker ITs: three control cases (spool toggle, direct publisher, queue
+ * ingress/egress toggle) plus two recovery cases (single + repeated broker-level
+ * {@code hardware message-spool shutdown}) proving the binding recovers from unsolicited
+ * {@code CloseFlow}. Runs SAME_THREAD because each test mutates shared broker state.
  */
 @SpringJUnitConfig(classes = SolaceJavaAutoConfiguration.class,
 		initializers = ConfigDataApplicationContextInitializer.class)
@@ -124,16 +65,7 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 class JCSMPProducerCloseFlowRecoveryIT {
 	private static final Logger logger = LoggerFactory.getLogger(JCSMPProducerCloseFlowRecoveryIT.class);
 
-	/**
-	 * Control test (1/5) - persistent topic publisher + VPN spool toggle.
-	 *
-	 * <p>Documents the empirical broker behaviour: cycling {@code maxMsgSpoolUsage} through
-	 * 0 does <em>not</em> tear down already-bound publisher flows on a topic destination,
-	 * so the binding's producer stays healthy and subsequent persistent topic publishes
-	 * succeed. This is the negative control for the bug reproducer below - if this test
-	 * ever starts seeing {@link StaleSessionException}, the broker behaviour around spool
-	 * quota changes has shifted and the bug surface area is wider than expected.
-	 */
+	/** Control: persistent topic publisher survives a VPN spool quota toggle. */
 	@Test
 	void test_persistentTopicPublisher_survivesSpoolToggle(
 			JCSMPSession jcsmpSession,
@@ -186,15 +118,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 		}
 	}
 
-	/**
-	 * Control test (2/5) - DIRECT topic publisher + VPN spool toggle.
-	 *
-	 * <p>Direct messages bypass the broker's spool subsystem entirely, so a spool quota
-	 * toggle has no effect on a direct publisher. Uses the raw JCSMP session because
-	 * the binder's {@code XMLMessageMapper} unconditionally promotes outbound messages
-	 * to {@link DeliveryMode#PERSISTENT} and there is no producer-property switch for
-	 * direct mode.
-	 */
+	/** Control: direct topic publisher (raw JCSMP) is unaffected by spool toggle. */
 	@Test
 	void test_directTopicPublisher_survivesSpoolToggle(
 			JCSMPSession jcsmpSession,
@@ -245,20 +169,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 		}
 	}
 
-	/**
-	 * Control test (3/5) - persistent queue publisher + queue ingress/egress toggle.
-	 *
-	 * <p>Documents the empirical broker behaviour: disabling and re-enabling a queue's
-	 * ingress and egress does <em>not</em> fan out unsolicited {@code CloseFlow} on
-	 * publisher flows bound to that queue. While ingress is disabled the broker NACKs
-	 * incoming publishes asynchronously; once it is re-enabled the publisher flow remains
-	 * bound and publishes resume cleanly. Asserts the publisher continues to publish
-	 * before, during the cycle (post-restoration), and after.
-	 *
-	 * <p>If this test ever starts surfacing {@link StaleSessionException}, the broker
-	 * behaviour around queue ingress/egress changes has shifted and the bug surface area
-	 * is wider than today.
-	 */
+	/** Control: persistent queue publisher survives a queue ingress/egress toggle. */
 	@Test
 	void test_persistentQueuePublisher_survivesQueueIngressEgressToggle(
 			JCSMPSession jcsmpSession,
@@ -320,38 +231,9 @@ class JCSMPProducerCloseFlowRecoveryIT {
 	}
 
 	/**
-	 * Recovery test (4/5) - persistent queue publisher + broker-level message-spool shutdown.
-	 *
-	 * <p>This drives the precise customer-reported failure scenario for DATAGO-134580. The
-	 * {@code hardware message-spool shutdown} / {@code no shutdown} CLI sequence is the
-	 * only mechanism that fans out an unsolicited {@code CloseFlow} (503 Service
-	 * Unavailable) to every currently-bound publisher flow on the broker <em>without</em>
-	 * dropping the JCSMP session. SEMPv2-only approaches (zeroing the spool quota,
-	 * toggling queue ingress/egress) either NACK publishes asynchronously without
-	 * invalidating the flow, or also drop the session as a side-effect - neither matches
-	 * the customer's actual failure mode.
-	 *
-	 * <p>The CLI is reached by finding the running PubSub+ test container via the docker
-	 * client that testcontainers already exposes, then {@code docker exec}ing the
-	 * {@code /usr/sw/loads/currentload/bin/cli -A} script with the spool commands piped on
-	 * stdin. We cannot avoid this layer of indirection because {@code PubSubPlusExtension}
-	 * does not expose the container as a parameter, and SEMPv2 has no equivalent action.
-	 *
-	 * <p>Assertions:
-	 * <ol>
-	 *   <li><b>Proactive recovery</b> - the first post-shutdown publish must succeed. By
-	 *       the time we reach this assertion JCSMP has fanned the unsolicited CloseFlow
-	 *       into the producer's actor thread (visible as {@code JCSMPTransportException:
-	 *       Received unsolicited CloseFlow ... 503} in test logs) so the binding's
-	 *       producer reference is closed. The handler's proactive
-	 *       {@code producer.isClosed()} pre-check at the top of {@code handleMessage(...)}
-	 *       detects this and rebuilds the producer before {@code send(...)} is ever
-	 *       attempted. On master without the fix this assertion fails with a
-	 *       {@link StaleSessionException}-rooted {@link MessagingException}.</li>
-	 *   <li><b>Steady state</b> - a subsequent publish on the recreated producer also
-	 *       succeeds. Guards against a regression that leaves the producer in a
-	 *       half-built state.</li>
-	 * </ol>
+	 * Recovery: broker-level {@code hardware message-spool shutdown} fans unsolicited
+	 * CloseFlow to the bound producer; the handler's proactive {@code isClosed()} pre-check
+	 * must rebuild and the first post-shutdown publish must succeed.
 	 */
 	@Test
 	void test_persistentQueuePublisher_recoversAfterMessageSpoolCliShutdown(
@@ -376,19 +258,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 		try {
 			moduleOutputChannel.send(MessageBuilder.withPayload("before-shutdown").build());
 
-			// === Phase 1: broker-side disruption via CLI ===
-			// Tear down the broker's spool subsystem so it fans out unsolicited CloseFlow
-			// to every bound publisher / consumer flow. The JCSMP session stays connected;
-			// only the GD flows die.
-			//
-			// NOTE on command shape: the Solace CLI requires stepping through the config
-			// sub-modes one line at a time (`hardware`, then `message-spool`) - the dotted
-			// form `hardware message-spool` is not reliably accepted. The `shutdown`
-			// command itself is destructive and is guarded by a single confirmation prompt
-			// ("All message spooling will be stopped. Do you want to continue (y/n)?")
-			// that we answer with `y`. Without that, the exec hangs at the prompt and the
-			// shutdown never actually takes effect. `no shutdown` (the re-enable) is
-			// non-destructive and does not prompt.
+			// CLI sub-modes are entered one line at a time; the `shutdown` prompt requires `y`.
 			logger.info("Shutting down broker message-spool via CLI in container '{}'", solaceContainerId);
 			runSolaceCliCommands(solaceContainerId,
 					"enable",
@@ -396,12 +266,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 					"hardware",
 					"message-spool",
 					"shutdown",
-					"y");   // answer the "Do you want to continue (y/n)?" confirmation prompt
-			// Wait until the broker's SEMP API is responsive again before driving the
-			// re-enable CLI command. The shutdown is synchronous from the CLI's perspective,
-			// but the broker's HTTP management surface may briefly stutter as the spool
-			// subsystem transitions; awaitBrokerSempResponsive(...) probes that surface
-			// instead of trusting a fixed sleep window.
+					"y");
 			awaitBrokerSempResponsive(sempV2Api, vpnName);
 
 			logger.info("Re-enabling broker message-spool via CLI in container '{}'", solaceContainerId);
@@ -412,40 +277,17 @@ class JCSMPProducerCloseFlowRecoveryIT {
 					"message-spool",
 					"no shutdown");
 			spoolRestored = true;
-			// Probe again after re-enable - confirms the broker is back to a queryable /
-			// stable state before we attempt the recovery publish.
 			awaitBrokerSempResponsive(sempV2Api, vpnName);
 
-			// === Phase 2: recovery proof ===
-			// The first post-shutdown publish MUST succeed. By this point JCSMP has fanned
-			// the unsolicited CloseFlow into the producer's actor thread (visible in test
-			// logs as "JCSMPTransportException: Received unsolicited CloseFlow ... 503"),
-			// so the binding's producer reference is now closed. The handler's proactive
-			// producer.isClosed() pre-check at the top of handleMessage() detects this and
-			// rebuilds the producer before send() is ever attempted - so the publish
-			// transparently recovers on its first attempt rather than the customer seeing
-			// a JCSMPException through the error channel.
-			//
-			// On master without the fix this assertion fails with a StaleSessionException
-			// rooted in the customer's exact traceback; with only the reactive (catch-block)
-			// half of the fix this would also fail because the catch arms the flag but the
-			// in-flight message itself is still surfaced to the error channel; the proactive
-			// pre-check is what makes this single assertion green.
 			logger.info("Attempting first post-shutdown publish; expecting proactive recovery");
 			assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload("recovery-1").build()))
 					.as("First publish after broker CLI message-spool shutdown must recover via proactive isClosed() pre-check")
 					.doesNotThrowAnyException();
 
-			// === Phase 3: steady-state proof ===
-			// A subsequent publish on the now-recreated producer must also succeed - guards
-			// against a regression where the recreate path inadvertently leaves the producer
-			// in a half-built state.
 			assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload("recovery-2").build()))
 					.as("Steady-state publish after recovery must continue to work")
 					.doesNotThrowAnyException();
 		} finally {
-			// Belt-and-suspenders: if assertion 1 timed out before we re-enabled the spool,
-			// turn it back on so subsequent tests / the broker container stay healthy.
 			if (!spoolRestored) {
 				try {
 					runSolaceCliCommands(solaceContainerId,
@@ -471,24 +313,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 		}
 	}
 
-	/**
-	 * Repeated recovery test (5/5) - persistent queue publisher + N consecutive
-	 * broker-level message-spool shutdown / restore cycles on the <em>same</em> binding.
-	 *
-	 * <p>Test 4 proves that the {@code JCSMPOutboundMessageHandler} fix recovers from a
-	 * single unsolicited {@code CloseFlow}. This test proves the same fix continues to work
-	 * across multiple consecutive stale-flow events on the same binding, without any
-	 * intermediate {@code stop() / start()}. Each cycle the broker tears down the current
-	 * producer (the original in cycle 1, the recreated one in cycle 2, and so on); the
-	 * proactive {@code producer.isClosed()} pre-check must catch the closed producer at
-	 * the top of every {@code handleMessage(...)} and rebuild it before send. A regression
-	 * that prevented re-detection on the second-or-later cycle (e.g. an accumulated state
-	 * bug, or the recreate flag becoming sticky) would surface here as the first cycle
-	 * passing but later cycles failing.
-	 *
-	 * <p>Three cycles is enough to expose state-accumulation bugs while keeping the test
-	 * runtime bounded: each cycle costs ~1 broker spool restart (~5-10s).
-	 */
+	/** Recovery: same disruption looped 3x on the same binding to catch state-accumulation regressions. */
 	@Test
 	void test_persistentQueuePublisher_recoversAcrossRepeatedMessageSpoolCliShutdowns(
 			JCSMPSession jcsmpSession,
@@ -515,10 +340,6 @@ class JCSMPProducerCloseFlowRecoveryIT {
 
 			for (int cycle = 1; cycle <= cycles; cycle++) {
 				logger.info("=== Cycle {}/{}: shutdown -> witness-failure -> recover ===", cycle, cycles);
-
-				// Mark the spool as "down" before issuing the destructive CLI; cleared again
-				// once the matching `no shutdown` lands. If the witness assertion below times
-				// out mid-cycle the finally-block sees this flag and re-enables the spool.
 				spoolRestored = false;
 
 				runSolaceCliCommands(solaceContainerId,
@@ -527,7 +348,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 						"hardware",
 						"message-spool",
 						"shutdown",
-						"y");  // single "Do you want to continue (y/n)?" confirmation prompt
+						"y");
 				awaitBrokerSempResponsive(sempV2Api, vpnName);
 
 				runSolaceCliCommands(solaceContainerId,
@@ -539,30 +360,18 @@ class JCSMPProducerCloseFlowRecoveryIT {
 				spoolRestored = true;
 				awaitBrokerSempResponsive(sempV2Api, vpnName);
 
-				// Recovery for THIS cycle. The handler is holding a producer (the original
-				// one in cycle 1, or the one recreated by cycle N-1's recovery publish in
-				// later cycles); the broker just tore that producer down via CloseFlow.
-				// The proactive producer.isClosed() pre-check at the top of handleMessage()
-				// must detect the closed producer and rebuild it BEFORE attempting the send -
-				// so this publish succeeds on its first attempt. A regression in either the
-				// proactive detection or the flag-reset-on-recreate would surface here as a
-				// thrown exception from the first cycle that hits it.
 				final int currentCycle = cycle;
 				assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload(
 						"recovery-c" + currentCycle).build()))
 						.as("Cycle %d: first publish after broker CLI shutdown must recover via proactive isClosed() pre-check", currentCycle)
 						.doesNotThrowAnyException();
 
-				// Steady-state publish on the now-recreated producer.
 				assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload(
 						"steady-c" + currentCycle).build()))
 						.as("Cycle %d: steady-state publish after recovery must continue to work", currentCycle)
 						.doesNotThrowAnyException();
 			}
 
-			// After N cycles the binding's producer should still be servicing plain publishes
-			// without re-triggering the recreate path - i.e. the flag is cleanly cleared and
-			// the handler is in a steady state, not stuck in a perpetual recreate loop.
 			assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload("final-healthy").build()))
 					.as("After %d shutdown/recover cycles, the binding's producer must continue to publish normally", cycles)
 					.doesNotThrowAnyException();
@@ -592,17 +401,9 @@ class JCSMPProducerCloseFlowRecoveryIT {
 		}
 	}
 
-	// === SEMP-driven broker-state poll helpers ===
-	// Each helper Awaits the broker reaching a known state before the test proceeds.
-	// Polls SEMP every 100ms with a 10s ceiling. ignoreExceptions() lets the poll
-	// shrug off transient ApiExceptions during state transitions (e.g. while the
-	// broker is mid-restart from a CLI message-spool shutdown).
+	// SEMP-driven broker-state poll helpers (100ms poll, 10s ceiling, transient errors ignored).
 
-	/**
-	 * Polls SEMPv2 until the VPN's {@code maxMsgSpoolUsage} matches the supplied value.
-	 * Used after {@code BrokerConfigurator.disableMsgSpoolForVpn / restoreMsgSpoolForVpn}
-	 * to confirm the broker has committed the change before the next test step runs.
-	 */
+	/** Polls until {@code maxMsgSpoolUsage} matches {@code expectedMb}. */
 	private static void awaitVpnMaxMsgSpoolUsage(SempV2Api sempV2Api, String vpnName, long expectedMb) {
 		Awaitility.await(String.format("VPN '%s' maxMsgSpoolUsage == %d MB", vpnName, expectedMb))
 				.atMost(Duration.ofSeconds(10))
@@ -615,11 +416,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 						.isEqualTo(expectedMb));
 	}
 
-	/**
-	 * Polls SEMPv2 until a queue's ingress and egress flags match the supplied values.
-	 * Used after {@code BrokerConfigurator.disableIngressOnQueue / disableEgressOnQueue}
-	 * (and their re-enable counterparts) to confirm both broker-side flags have settled.
-	 */
+	/** Polls until the queue's ingress/egress flags match the supplied values. */
 	private static void awaitQueueIngressEgress(SempV2Api sempV2Api, String vpnName, String queueName,
 												boolean expectedIngress, boolean expectedEgress) {
 		Awaitility.await(String.format("queue '%s' ingress=%s, egress=%s",
@@ -636,13 +433,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 				});
 	}
 
-	/**
-	 * Polls SEMPv2 until the broker is responsive on the supplied VPN. Used as a proxy
-	 * "broker is stable" check around the CLI message-spool shutdown / re-enable cycle
-	 * where there is no direct SEMP-level signal for spool-subsystem state - if the
-	 * monitor API answers a {@code MsgVpn} lookup successfully, the broker is at least
-	 * back to a queryable state.
-	 */
+	/** Polls until the broker SEMP API answers a {@code MsgVpn} lookup again. */
 	private static void awaitBrokerSempResponsive(SempV2Api sempV2Api, String vpnName) {
 		Awaitility.await("broker SEMP API responsive for VPN '" + vpnName + "'")
 				.atMost(Duration.ofSeconds(15))
@@ -654,14 +445,9 @@ class JCSMPProducerCloseFlowRecoveryIT {
 						.isNotNull());
 	}
 
-	// === Docker / CLI helpers (only used by the message-spool CLI shutdown test) ===
+	// Docker / CLI helpers (only used by the message-spool CLI shutdown tests).
 
-	/**
-	 * Finds the running PubSub+ test container created by {@link PubSubPlusExtension}. Uses
-	 * the docker-java client that testcontainers exposes (so it works on the same daemon
-	 * testcontainers is using) and filters by image name. The standard Solace PubSub+
-	 * container image identifier always contains {@code solace-pubsub-standard}.
-	 */
+	/** Finds the running {@code solace-pubsub-standard} container via the testcontainers docker client. */
 	private static String findSolaceContainerId() {
 		DockerClient docker = DockerClientFactory.instance().client();
 		List<Container> containers = docker.listContainersCmd().exec();
@@ -675,53 +461,21 @@ class JCSMPProducerCloseFlowRecoveryIT {
 	}
 
 	/**
-	 * Drives the broker container's Solace CLI with the supplied commands.
-	 *
-	 * <p><b>Why this needs a TTY:</b> the Solace CLI detects whether stdin is a real
-	 * terminal and only honours confirmation prompts (the "Do you want to continue
-	 * (y/n)?" guard around destructive commands like {@code shutdown}) when it is. When
-	 * stdin is a plain pipe (e.g. {@code printf '...' | cli -A}), the CLI silently
-	 * cancels the destructive command and continues - which is why earlier attempts at
-	 * piping {@code y} answers through a shell pipeline never actually shut the spool
-	 * down. Allocating a pseudo-TTY on the {@code docker exec} (the docker-java
-	 * equivalent of {@code docker exec -it}) makes the CLI process the prompts the
-	 * same way it does in a real terminal session.
-	 *
-	 * <p>The commands are fed into the TTY's stdin via docker-java's
-	 * {@link com.github.dockerjava.api.command.ExecStartCmd#withStdIn(java.io.InputStream)}.
-	 * Trailing {@code end} + two {@code exit}s are appended so the CLI walks the mode stack
-	 * back down and actually terminates the {@code cli -A} process:
-	 * <pre>
-	 *   end    : leaves config mode      ((configure/...)# -> #)
-	 *   exit   : leaves privileged exec  (#                  -> >)
-	 *   exit   : closes user-exec session(&gt;                 -> EOF, cli -A exits)
-	 * </pre>
-	 * Without the second {@code exit} the CLI sits at the {@code >} prompt waiting for
-	 * more input and {@code awaitCompletion(...)} below would never observe the process
-	 * terminating, which would (a) silently hang for the full timeout and (b) trip the
-	 * defensive throw below on every call - turning a one-shot CLI invocation into a
-	 * 30s hang per call and (post-defensive-check) an outright test failure.
-	 *
-	 * <p>The CLI binary path {@code /usr/sw/loads/currentload/bin/cli} is the standard
-	 * location inside the {@code solace-pubsub-standard} image.
+	 * Runs the Solace CLI inside the broker container. Requires a pseudo-TTY so confirmation
+	 * prompts (e.g. destructive {@code shutdown}) are honoured; trailing {@code end} + two
+	 * {@code exit}s ensure {@code cli -A} terminates instead of hanging at the prompt.
 	 */
 	private static void runSolaceCliCommands(String containerId, String... cliCommands) throws Exception {
 		DockerClient docker = DockerClientFactory.instance().client();
 
 		StringBuilder script = new StringBuilder();
 		for (String cmd : cliCommands) {
-			// Use CRLF so the input is accepted regardless of whether the pty is in
-			// cooked or raw line discipline. Cooked mode treats \n as Enter on its
-			// own, but appending \r is harmless and avoids ambiguity.
 			script.append(cmd).append("\r\n");
 		}
-		// Terminators so the cli -A process actually exits (see method-level Javadoc for
-		// why two `exit`s are needed). Without the second exit, the CLI hangs at the
-		// top-level user-exec '>' prompt and awaitCompletion(...) below trips the throw.
 		script.append("end\r\n").append("exit\r\n").append("exit\r\n");
 
 		ExecCreateCmdResponse exec = docker.execCreateCmd(containerId)
-				.withTty(true)              // pseudo-TTY so the CLI honors confirmation prompts
+				.withTty(true)
 				.withAttachStdin(true)
 				.withAttachStdout(true)
 				.withAttachStderr(true)
@@ -731,10 +485,6 @@ class JCSMPProducerCloseFlowRecoveryIT {
 		ByteArrayInputStream stdin = new ByteArrayInputStream(
 				script.toString().getBytes(StandardCharsets.UTF_8));
 
-		// Capture the CLI's stdout/stderr so a timeout produces a diagnostic message rather
-		// than a silent hang followed by a misleading assertion failure downstream.
-		// docker-java's TTY mode merges stdout+stderr onto a single Frame stream, which is
-		// what `cli -A` produces anyway.
 		final StringBuilder capturedOutput = new StringBuilder();
 		com.github.dockerjava.api.async.ResultCallback.Adapter<com.github.dockerjava.api.model.Frame> callback =
 				new com.github.dockerjava.api.async.ResultCallback.Adapter<>() {
