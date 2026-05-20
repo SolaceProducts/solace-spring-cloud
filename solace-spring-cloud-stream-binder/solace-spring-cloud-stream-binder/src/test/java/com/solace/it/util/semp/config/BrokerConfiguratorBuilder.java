@@ -279,15 +279,13 @@ public class BrokerConfiguratorBuilder {
       updateVpn(vpn);
     }
 
-    /** Zeroes the VPN's GD message-spool quota. */
-    public void disableMsgSpoolForVpn(String msgVpnName) {
-      final ConfigMsgVpn vpn = queryVpn(msgVpnName);
-      vpn.maxMsgSpoolUsage(0L);
-      updateVpn(vpn);
+    /** Returns the VPN's GD message-spool quota (MB). */
+    public Long getMsgVpnSpool(String msgVpnName) {
+      return queryVpn(msgVpnName).getMaxMsgSpoolUsage();
     }
 
-    /** Restores the VPN's GD message-spool quota to the supplied value (MB). */
-    public void restoreMsgSpoolForVpn(String msgVpnName, Long maxMsgSpoolUsageMb) {
+    /** Sets the VPN's GD message-spool quota (MB). Pass 0 to disable. */
+    public void setMsgVpnSpool(String msgVpnName, Long maxMsgSpoolUsageMb) {
       final ConfigMsgVpn vpn = queryVpn(msgVpnName);
       vpn.maxMsgSpoolUsage(maxMsgSpoolUsageMb);
       updateVpn(vpn);
