@@ -689,7 +689,7 @@ public class JCSMPOutboundMessageHandlerTest {
 
 	/** DATAGO-134580: stale producer (CloseFlow) is recreated on the next send. */
 	@CartesianTest(name = "[{index}] transacted={0}")
-	public void test_producerRecreatedAfterUnsolicitedCloseFlow(
+	public void testProducerRecreatedAfterUnsolicitedCloseFlow(
 			@Values(booleans = {false, true}) boolean transacted,
 			@Mock XMLMessageProducer producerB,
 			@Mock TransactedSession transactedSessionB) throws Exception {
@@ -742,7 +742,7 @@ public class JCSMPOutboundMessageHandlerTest {
 
 	/** DATAGO-134580: {@link ClosedFacilityException} on send also triggers recreation. */
 	@Test
-	void test_producerRecreatedAfterClosedFacilityException(@Mock XMLMessageProducer producerB) throws Exception {
+	void testProducerRecreatedAfterClosedFacilityException(@Mock XMLMessageProducer producerB) throws Exception {
 		Mockito.when(session.createProducer(
 						producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
 				.thenReturn(messageProducer)
@@ -769,7 +769,7 @@ public class JCSMPOutboundMessageHandlerTest {
 
 	/** DATAGO-134580: {@link JCSMPTransportException} on send also triggers recreation. */
 	@Test
-	void test_producerRecreatedAfterJCSMPTransportException(@Mock XMLMessageProducer producerB) throws Exception {
+	void testProducerRecreatedAfterJCSMPTransportException(@Mock XMLMessageProducer producerB) throws Exception {
 		Mockito.when(session.createProducer(
 						producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
 				.thenReturn(messageProducer)
@@ -797,7 +797,7 @@ public class JCSMPOutboundMessageHandlerTest {
 
 	/** DATAGO-134580: proactive {@code isClosed()} pre-check rebuilds before the first send. */
 	@Test
-	void test_producerRecreatedProactivelyWhenIsClosedDetectedBeforeSend(@Mock XMLMessageProducer producerB) throws Exception {
+	void testProducerRecreatedProactivelyWhenIsClosedDetectedBeforeSend(@Mock XMLMessageProducer producerB) throws Exception {
 		Mockito.when(session.createProducer(
 						producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
 				.thenReturn(messageProducer)
@@ -819,7 +819,7 @@ public class JCSMPOutboundMessageHandlerTest {
 
 	/** DATAGO-134580: failed recreation surfaces an error and retries on the next message. */
 	@Test
-	void test_producerRecreationFailurePropagatesAndRetriesNext(@Mock XMLMessageProducer producerB) throws Exception {
+	void testProducerRecreationFailurePropagatesAndRetriesNext(@Mock XMLMessageProducer producerB) throws Exception {
 		Mockito.when(session.createProducer(
 						producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
 				.thenReturn(messageProducer)
@@ -855,7 +855,7 @@ public class JCSMPOutboundMessageHandlerTest {
 
 	/** DATAGO-134580: stop/start clears the recreate flag so the next send doesn't rebuild. */
 	@Test
-	void test_recreationFlagResetAcrossStopStartCycle(@Mock XMLMessageProducer producerB) throws Exception {
+	void testRecreationFlagResetAcrossStopStartCycle(@Mock XMLMessageProducer producerB) throws Exception {
 		Mockito.when(session.createProducer(
 						producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
 				.thenReturn(messageProducer)
