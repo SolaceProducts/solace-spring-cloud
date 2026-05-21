@@ -11,6 +11,7 @@ import com.solace.spring.cloud.stream.binder.test.util.SolaceTestBinder;
 import com.solace.spring.cloud.stream.binder.util.DestinationType;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
+import com.solacesystems.jcsmp.CapabilityType;
 import com.solacesystems.jcsmp.DeliveryMode;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPProperties;
@@ -238,6 +239,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 				"no shutdown");
 		brokerSpoolNeedsRestore = false;
 		awaitBrokerSempResponsive(sempV2Api, vpnName);
+		awaitJcsmpGuaranteedPublisherCapability();
 
 		logger.info("Attempting first post-shutdown publish; expecting proactive recovery");
 		assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload("recovery-1").build()))
@@ -281,6 +283,7 @@ class JCSMPProducerCloseFlowRecoveryIT {
 					"no shutdown");
 			brokerSpoolNeedsRestore = false;
 			awaitBrokerSempResponsive(sempV2Api, vpnName);
+			awaitJcsmpGuaranteedPublisherCapability();
 
 			final int currentCycle = cycle;
 			assertThatCode(() -> moduleOutputChannel.send(MessageBuilder.withPayload(
@@ -311,6 +314,16 @@ class JCSMPProducerCloseFlowRecoveryIT {
 		return moduleOutputChannel;
 	}
 
+	/** Polls until JCSMP reports {@link CapabilityType#PUB_GUARANTEED} after broker spool re-enable. */
+	private void awaitJcsmpGuaranteedPublisherCapability() {
+		Awaitility.await("JCSMP session reports PUB_GUARANTEED capability")
+				.atMost(Duration.ofSeconds(30))
+				.pollInterval(Duration.ofMillis(250))
+				.untilAsserted(() -> assertThat(jcsmpSession.isCapable(CapabilityType.PUB_GUARANTEED))
+						.as("session must re-advertise PUB_GUARANTEED after broker message-spool re-enable")
+						.isTrue());
+	}
+
 	/** Polls until the broker SEMP API answers a {@code MsgVpn} lookup again. */
 	private static void awaitBrokerSempResponsive(SempV2Api sempV2Api, String vpnName) {
 		Awaitility.await("broker SEMP API responsive for VPN '" + vpnName + "'")
@@ -325,17 +338,44 @@ class JCSMPProducerCloseFlowRecoveryIT {
 
 	// Docker / CLI helpers (only used by the message-spool CLI shutdown tests).
 
-	/** Finds the running {@code solace-pubsub-standard} container via the testcontainers docker client. */
-	private static String findSolaceContainerId() {
+	/** Finds the broker container this test's JCSMP session is connected to, matched by SMF host port. */
+	private String findSolaceContainerId() {
+		int smfPort = extractSmfPortFromJcsmpSession();
 		DockerClient docker = DockerClientFactory.instance().client();
 		List<Container> containers = docker.listContainersCmd().exec();
 		return containers.stream()
 				.filter(c -> c.getImage() != null && c.getImage().contains("solace-pubsub-standard"))
+				.filter(c -> {
+					com.github.dockerjava.api.model.ContainerPort[] ports = c.getPorts();
+					if (ports == null) return false;
+					for (com.github.dockerjava.api.model.ContainerPort port : ports) {
+						Integer publicPort = port.getPublicPort();
+						if (publicPort != null && publicPort == smfPort) return true;
+					}
+					return false;
+				})
 				.findFirst()
 				.map(Container::getId)
-				.orElseThrow(() -> new IllegalStateException(
-						"No running 'solace-pubsub-standard' container found via the docker client. " +
-								"This test requires the PubSubPlusExtension to have provisioned its container."));
+				.orElseThrow(() -> new IllegalStateException(String.format(
+						"No running 'solace-pubsub-standard' container exposing SMF host port %d found.",
+						smfPort)));
+	}
+
+	private int extractSmfPortFromJcsmpSession() {
+		Object host = jcsmpSession.getProperty(JCSMPProperties.HOST);
+		if (host == null) {
+			throw new IllegalStateException("JCSMP HOST property is not set");
+		}
+		String firstHost = host.toString().split(",")[0].trim();
+		int colonIdx = firstHost.lastIndexOf(':');
+		if (colonIdx < 0 || colonIdx == firstHost.length() - 1) {
+			throw new IllegalStateException("Cannot parse SMF port from JCSMP HOST: " + host);
+		}
+		String portStr = firstHost.substring(colonIdx + 1).replaceAll("[^0-9].*", "");
+		if (portStr.isEmpty()) {
+			throw new IllegalStateException("Cannot parse SMF port from JCSMP HOST: " + host);
+		}
+		return Integer.parseInt(portStr);
 	}
 
 	/**

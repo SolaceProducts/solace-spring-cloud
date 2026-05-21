@@ -30,8 +30,6 @@ public final class ErrorQueueInfrastructure {
 		this.consumerProperties = consumerProperties;
 	}
 
-	// DATAGO-134580: recreate shared JCSMP producer on unsolicited termination from Solace broker.
-
 	public void send(MessageContainer messageContainer, ErrorQueueRepublishCorrelationKey key) throws JCSMPException {
 		XMLMessage xmlMessage = xmlMessageMapper.mapError(messageContainer.getMessage(), consumerProperties);
 		xmlMessage.setCorrelationKey(key);
@@ -59,7 +57,7 @@ public final class ErrorQueueInfrastructure {
 					|| e instanceof JCSMPTransportException
 					|| e instanceof ClosedFacilityException
 					|| producer.isClosed()) {
-				LOGGER.warn("Detected stale shared JCSMP producer while sending to error queue {} (cause: {}); " +
+				LOGGER.debug("Detected stale shared JCSMP producer while sending to error queue {} (cause: {}); " +
 								"recreating for next attempt",
 						errorQueueName, e.getClass().getSimpleName());
 				try {
