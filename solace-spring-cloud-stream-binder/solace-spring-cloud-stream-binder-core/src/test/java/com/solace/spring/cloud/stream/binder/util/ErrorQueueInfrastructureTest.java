@@ -23,14 +23,6 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 
-/**
- * Unit tests for the DATAGO-134580 stale-flow recovery added to {@link ErrorQueueInfrastructure}.
- * The error-queue republish path borrows the session-default producer from
- * {@link JCSMPSessionProducerManager} and historically had no recovery logic when the broker
- * fanned out an unsolicited CloseFlow on that producer (reactive recreation in
- * {@code JCSMPOutboundMessageHandler} only protects per-binding producers, not the shared
- * session-default one).
- */
 @ExtendWith(MockitoExtension.class)
 class ErrorQueueInfrastructureTest {
 	private static final String PRODUCER_KEY = "test-producer-key";
