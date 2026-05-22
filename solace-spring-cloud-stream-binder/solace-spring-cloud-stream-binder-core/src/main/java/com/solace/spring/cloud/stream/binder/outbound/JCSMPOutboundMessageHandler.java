@@ -175,7 +175,7 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 			if (e instanceof StaleSessionException
 					|| e instanceof JCSMPTransportException
 					|| e instanceof ClosedFacilityException
-					|| (producer != null && producer.isClosed())) {
+					|| producer.isClosed()) {
 				if (!recreateProducer) {
 					LOGGER.debug("Detected stale JCSMP producer for binding {} (cause: {}); will " +
 									"recreate on next message <message handler ID: {}>",
@@ -267,45 +267,51 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 						throw exception;
 					}
 				}
+			} catch (Exception e) {
+				String msg = String.format("Unable to get a message producer for session %s", jcsmpSession.getSessionName());
+				LOGGER.warn(msg, e);
+				throw new RuntimeException(msg, e);
+			}
 
+			createProducerInternal();
+			isRunning = true;
+		}
+	}
+
+	private void createProducerInternal() {
+		synchronized (lifecycleLock) {
+			try {
 				producerManager.get(id);
-				createProducerInternal();
+				if (properties.getExtension().isTransacted()) {
+					LOGGER.info("Creating transacted session  <message handler ID: {}>", id);
+					transactedSession = jcsmpSession.createTransactedSession();
+					producer = transactedSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
+							producerEventHandler);
+				} else {
+					producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
+							producerEventHandler);
+				}
 			} catch (Exception e) {
 				String msg = String.format("Unable to get a message producer for session %s", jcsmpSession.getSessionName());
 				LOGGER.warn(msg, e);
 				closeResources();
 				throw new RuntimeException(msg, e);
 			}
-
-			isRunning = true;
-		}
-	}
-
-	private void createProducerInternal() throws JCSMPException {
-		if (properties.getExtension().isTransacted()) {
-			LOGGER.info("Creating transacted session  <message handler ID: {}>", id);
-			transactedSession = jcsmpSession.createTransactedSession();
-			producer = transactedSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
-					producerEventHandler);
-		} else {
-			producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
-					producerEventHandler);
 		}
 	}
 
 	private void recreateProducerIfNeeded(ErrorChannelSendingCorrelationKey correlationKey) throws MessagingException {
-		if (!recreateProducer && (producer == null || !producer.isClosed())) {
+		if (!recreateProducer && !producer.isClosed()) {
 			return;
 		}
 		synchronized (lifecycleLock) {
-			if (!recreateProducer && (producer == null || !producer.isClosed())) {
+			if (!recreateProducer && !producer.isClosed()) {
 				return;
 			}
 			LOGGER.debug("Recreating JCSMP producer for binding {} after stale-flow detection <message handler ID: {}>",
 					properties.getBindingName(), id);
 			closeResources();
 			try {
-				producerManager.get(id);
 				createProducerInternal();
 				recreateProducer = false;
 			} catch (Exception createError) {
@@ -326,17 +332,19 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 	}
 
 	private void closeResources() {
-		LOGGER.info("Stopping producer to {} {} <message handler ID: {}>", configDestinationType, configDestination.getName(), id);
-		recreateProducer = false;
-		if (producer != null) {
-			LOGGER.info("Closing producer <message handler ID: {}>", id);
-			producer.close();
+		synchronized (lifecycleLock) {
+			LOGGER.info("Stopping producer to {} {} <message handler ID: {}>", configDestinationType, configDestination.getName(), id);
+			recreateProducer = false;
+			if (producer != null) {
+				LOGGER.info("Closing producer <message handler ID: {}>", id);
+				producer.close();
+			}
+			if (transactedSession != null) {
+				LOGGER.info("Closing transacted session <message handler ID: {}>", id);
+				transactedSession.close();
+			}
+			producerManager.release(id);
 		}
-		if (transactedSession != null) {
-			LOGGER.info("Closing transacted session <message handler ID: {}>", id);
-			transactedSession.close();
-		}
-		producerManager.release(id);
 	}
 
 	@Override

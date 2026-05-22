@@ -842,7 +842,7 @@ public class JCSMPOutboundMessageHandlerTest {
 		assertThatThrownBy(() -> messageHandler.handleMessage(secondMessage))
 				.isInstanceOf(MessagingException.class)
 				.hasMessageContaining("Failed to recreate JCSMP producer")
-				.hasCauseInstanceOf(JCSMPException.class);
+				.hasRootCauseInstanceOf(JCSMPException.class);
 
 		Message<?> thirdMessage = MessageBuilder.withPayload("payload-3").build();
 		messageHandler.handleMessage(thirdMessage);
