@@ -16,13 +16,16 @@ import com.solace.spring.cloud.stream.binder.util.SmfMessagePayloadWriteCompatib
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageConversionException;
 import com.solace.spring.cloud.stream.binder.util.SolaceMessageHeaderErrorMessageStrategy;
 import com.solacesystems.jcsmp.BytesMessage;
+import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPProperties;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solacesystems.jcsmp.JCSMPTransportException;
 import com.solacesystems.jcsmp.ProducerFlowProperties;
 import com.solacesystems.jcsmp.Queue;
+import com.solacesystems.jcsmp.StaleSessionException;
 import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
@@ -679,6 +682,215 @@ public class JCSMPOutboundMessageHandlerTest {
 	@Test
 	void testGetBindingName() {
 		assertThat(messageHandler.getBindingName()).isNotEmpty().isEqualTo(producerProperties.getBindingName());
+	}
+
+	/** DATAGO-134580: stale producer is recreated on the next send for each stale-flow exception type. */
+	@CartesianTest(name = "[{index}] transacted={0} exception={1}")
+	public void testProducerRecreatedAfterUnsolicitedCloseFlow(
+			@Values(booleans = {false, true}) boolean transacted,
+			@Values(strings = {"stale", "closed-facility", "transport"}) String exceptionType,
+			@Mock XMLMessageProducer producerB,
+			@Mock TransactedSession transactedSessionB) throws Exception {
+		producerProperties.getExtension().setTransacted(transacted);
+
+		if (transacted) {
+			Mockito.when(session.createTransactedSession())
+					.thenReturn(transactedSession)
+					.thenReturn(transactedSessionB);
+			Mockito.when(transactedSessionB.createProducer(any(ProducerFlowProperties.class),
+					any(JCSMPStreamingPublishCorrelatingEventHandler.class))).thenReturn(producerB);
+		} else {
+			Mockito.when(session.createProducer(
+							producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
+					.thenReturn(messageProducer)
+					.thenReturn(producerB);
+		}
+
+		JCSMPException sendError = switch (exceptionType) {
+			case "stale" -> new StaleSessionException(
+					"Tried to perform operation on a closed XML message producer",
+					new JCSMPException("Received unsolicited CloseFlow for producer (503:Service Unavailable)."));
+			case "closed-facility" -> new ClosedFacilityException("Producer is closed");
+			case "transport" -> new JCSMPTransportException(
+					"Received unsolicited CloseFlow for producer (503:Service Unavailable).");
+			default -> throw new IllegalArgumentException("unknown exception type: " + exceptionType);
+		};
+		Mockito.doThrow(sendError).when(messageProducer).send(any(XMLMessage.class), any(Destination.class));
+
+		messageHandler.start();
+
+		Message<?> firstMessage = MessageBuilder.withPayload("payload-1").build();
+		assertThatThrownBy(() -> messageHandler.handleMessage(firstMessage))
+				.isInstanceOf(MessagingException.class)
+				.hasCauseInstanceOf(sendError.getClass());
+		assertThat(messageHandler.isRunning()).isTrue();
+
+		Message<?> secondMessage = MessageBuilder.withPayload("payload-2").build();
+		messageHandler.handleMessage(secondMessage);
+
+		if (transacted) {
+			Mockito.verify(session, Mockito.times(2)).createTransactedSession();
+			Mockito.verify(transactedSession, Mockito.atLeastOnce()).close();
+			Mockito.verify(transactedSessionB, Mockito.times(1))
+					.createProducer(any(ProducerFlowProperties.class),
+							any(JCSMPStreamingPublishCorrelatingEventHandler.class));
+		} else {
+			Mockito.verify(session, Mockito.times(2))
+					.createProducer(any(ProducerFlowProperties.class), any(JCSMPStreamingPublishCorrelatingEventHandler.class));
+		}
+
+		Mockito.verify(producerB, Mockito.times(1)).send(any(XMLMessage.class), any(Destination.class));
+		Mockito.verify(messageProducer, Mockito.times(1)).send(any(XMLMessage.class), any(Destination.class));
+		Mockito.verify(messageProducer, Mockito.atLeastOnce()).close();
+	}
+
+	/** DATAGO-134580: proactive {@code isClosed()} pre-check rebuilds before the first send. */
+	@CartesianTest(name = "[{index}] transacted={0}")
+	void testProducerRecreatedProactivelyWhenIsClosedDetectedBeforeSend(
+			@Values(booleans = {false, true}) boolean transacted,
+			@Mock XMLMessageProducer producerB,
+			@Mock TransactedSession transactedSessionB) throws Exception {
+		producerProperties.getExtension().setTransacted(transacted);
+
+		if (transacted) {
+			Mockito.when(session.createTransactedSession())
+					.thenReturn(transactedSession)
+					.thenReturn(transactedSessionB);
+			Mockito.when(transactedSessionB.createProducer(any(ProducerFlowProperties.class),
+					any(JCSMPStreamingPublishCorrelatingEventHandler.class))).thenReturn(producerB);
+		} else {
+			Mockito.when(session.createProducer(
+							producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
+					.thenReturn(messageProducer)
+					.thenReturn(producerB);
+		}
+
+		Mockito.when(messageProducer.isClosed()).thenReturn(true);
+
+		messageHandler.start();
+
+		Message<?> firstMessage = MessageBuilder.withPayload("payload-1").build();
+		messageHandler.handleMessage(firstMessage);
+
+		if (transacted) {
+			Mockito.verify(session, Mockito.times(2)).createTransactedSession();
+			Mockito.verify(transactedSession, Mockito.atLeastOnce()).close();
+			Mockito.verify(transactedSessionB, Mockito.times(1))
+					.createProducer(any(ProducerFlowProperties.class),
+							any(JCSMPStreamingPublishCorrelatingEventHandler.class));
+		} else {
+			Mockito.verify(session, Mockito.times(2))
+					.createProducer(any(ProducerFlowProperties.class), any(JCSMPStreamingPublishCorrelatingEventHandler.class));
+		}
+		Mockito.verify(producerB, Mockito.times(1)).send(any(XMLMessage.class), any(Destination.class));
+		Mockito.verify(messageProducer, Mockito.never()).send(any(XMLMessage.class), any(Destination.class));
+		Mockito.verify(messageProducer, Mockito.atLeastOnce()).close();
+	}
+
+	/** DATAGO-134580: failed recreation surfaces an error and retries on the next message. */
+	@CartesianTest(name = "[{index}] transacted={0}")
+	void testProducerRecreationFailurePropagatesAndRetriesNext(
+			@Values(booleans = {false, true}) boolean transacted,
+			@Mock XMLMessageProducer producerB,
+			@Mock TransactedSession transactedSessionB) throws Exception {
+		producerProperties.getExtension().setTransacted(transacted);
+
+		if (transacted) {
+			Mockito.when(session.createTransactedSession())
+					.thenReturn(transactedSession)
+					.thenThrow(new JCSMPException("Broker still reconnecting"))
+					.thenReturn(transactedSessionB);
+			Mockito.when(transactedSessionB.createProducer(any(ProducerFlowProperties.class),
+					any(JCSMPStreamingPublishCorrelatingEventHandler.class))).thenReturn(producerB);
+		} else {
+			Mockito.when(session.createProducer(
+							producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
+					.thenReturn(messageProducer)
+					.thenThrow(new JCSMPException("Broker still reconnecting"))
+					.thenReturn(producerB);
+		}
+
+		StaleSessionException stale = new StaleSessionException(
+				"Tried to perform operation on a closed XML message producer",
+				new JCSMPException("Received unsolicited CloseFlow for producer (503:Service Unavailable)."));
+		Mockito.doThrow(stale).when(messageProducer).send(any(XMLMessage.class), any(Destination.class));
+
+		messageHandler.start();
+
+		Message<?> firstMessage = MessageBuilder.withPayload("payload-1").build();
+		assertThatThrownBy(() -> messageHandler.handleMessage(firstMessage))
+				.isInstanceOf(MessagingException.class)
+				.hasCauseInstanceOf(StaleSessionException.class);
+
+		Message<?> secondMessage = MessageBuilder.withPayload("payload-2").build();
+		assertThatThrownBy(() -> messageHandler.handleMessage(secondMessage))
+				.isInstanceOf(MessagingException.class)
+				.hasMessageContaining("Failed to recreate JCSMP producer")
+				.hasRootCauseInstanceOf(JCSMPException.class);
+
+		Message<?> thirdMessage = MessageBuilder.withPayload("payload-3").build();
+		messageHandler.handleMessage(thirdMessage);
+
+		if (transacted) {
+			Mockito.verify(session, Mockito.times(3)).createTransactedSession();
+			Mockito.verify(transactedSessionB, Mockito.times(1))
+					.createProducer(any(ProducerFlowProperties.class),
+							any(JCSMPStreamingPublishCorrelatingEventHandler.class));
+		} else {
+			Mockito.verify(session, Mockito.times(3))
+					.createProducer(any(ProducerFlowProperties.class), any(JCSMPStreamingPublishCorrelatingEventHandler.class));
+		}
+		Mockito.verify(producerB, Mockito.times(1)).send(any(XMLMessage.class), any(Destination.class));
+		assertThat(messageHandler.isRunning()).isTrue();
+	}
+
+	/** DATAGO-134580: stop/start clears the recreate flag so the next send doesn't rebuild. */
+	@CartesianTest(name = "[{index}] transacted={0}")
+	void testRecreationFlagResetAcrossStopStartCycle(
+			@Values(booleans = {false, true}) boolean transacted,
+			@Mock XMLMessageProducer producerB,
+			@Mock TransactedSession transactedSessionB) throws Exception {
+		producerProperties.getExtension().setTransacted(transacted);
+
+		if (transacted) {
+			Mockito.when(session.createTransactedSession())
+					.thenReturn(transactedSession)
+					.thenReturn(transactedSessionB);
+			Mockito.when(transactedSessionB.createProducer(any(ProducerFlowProperties.class),
+					any(JCSMPStreamingPublishCorrelatingEventHandler.class))).thenReturn(producerB);
+		} else {
+			Mockito.when(session.createProducer(
+							producerFlowPropertiesCaptor.capture(), pubEventHandlerCaptor.capture()))
+					.thenReturn(messageProducer)
+					.thenReturn(producerB);
+		}
+
+		StaleSessionException stale = new StaleSessionException(
+				"Tried to perform operation on a closed XML message producer",
+				new JCSMPException("Received unsolicited CloseFlow for producer (503:Service Unavailable)."));
+		Mockito.doThrow(stale).when(messageProducer).send(any(XMLMessage.class), any(Destination.class));
+
+		messageHandler.start();
+		Message<?> firstMessage = MessageBuilder.withPayload("payload-1").build();
+		assertThatThrownBy(() -> messageHandler.handleMessage(firstMessage))
+				.isInstanceOf(MessagingException.class)
+				.hasCauseInstanceOf(StaleSessionException.class);
+
+		messageHandler.stop();
+		messageHandler.start();
+
+		Mockito.clearInvocations(session);
+
+		Message<?> secondMessage = MessageBuilder.withPayload("payload-2").build();
+		messageHandler.handleMessage(secondMessage);
+
+		if (transacted) {
+			Mockito.verify(session, Mockito.never()).createTransactedSession();
+		} else {
+			Mockito.verify(session, Mockito.never())
+					.createProducer(any(ProducerFlowProperties.class), any(JCSMPStreamingPublishCorrelatingEventHandler.class));
+		}
+		Mockito.verify(producerB, Mockito.times(1)).send(any(XMLMessage.class), any(Destination.class));
 	}
 
 	private List<Object> getCorrelationKeys() throws JCSMPException {
