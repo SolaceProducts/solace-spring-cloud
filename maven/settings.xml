@@ -18,16 +18,8 @@
 					</snapshots>
 				</repository>
 				<repository>
-					<id>github-solacedev</id>
-					<url>https://maven.pkg.github.com/SolaceDev/*</url>
-					<releases>
-						<enabled>true</enabled>
-						<updatePolicy>always</updatePolicy>
-					</releases>
-					<snapshots>
-						<enabled>true</enabled>
-						<updatePolicy>always</updatePolicy>
-					</snapshots>
+					<id>github-solace-integration-test-support</id>
+					<url>https://maven.pkg.github.com/solacedev/solace-integration-test-support</url>
 				</repository>
 			</repositories>
 		</profile>
@@ -35,7 +27,7 @@
 
 	<servers>
 		<server>
-			<id>github-solacedev</id>
+			<id>github-solace-integration-test-support</id>
 			<username>${env.GITHUB_ACTOR}</username>
 			<password>${env.GITHUB_TOKEN}</password>
 		</server>
