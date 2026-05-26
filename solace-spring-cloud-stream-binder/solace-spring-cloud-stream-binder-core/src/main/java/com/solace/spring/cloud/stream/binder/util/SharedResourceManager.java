@@ -44,6 +44,32 @@ abstract class SharedResourceManager<T> {
 	}
 
 	/**
+	 * Compare-and-swap the shared resource. If the manager still holds {@code expected},
+	 * close it and {@link #create()} a fresh one; otherwise return the currently-installed
+	 * resource without re-creating.
+	 *
+	 * @param expected the reference the caller observed and considers no longer usable
+	 * @return the resource currently installed in the manager
+	 * @throws Exception whatever {@link #create()} may throw
+	 */
+	public T forceRecreate(T expected) throws Exception {
+		synchronized (lock) {
+			if (sharedResource != expected) {
+				return sharedResource;
+			}
+			if (sharedResource != null) {
+				try {
+					close();
+				} catch (Exception e) {
+					LOGGER.debug("Failed to close current {} during forceRecreate", type, e);
+				}
+			}
+			sharedResource = create();
+			return sharedResource;
+		}
+	}
+
+	/**
 	 * De-register {@code key} from the shared resource.
 	 * <p>If this is the last {@code key} associated to the shared resource, {@link #close()} the resource.
 	 * @param key the registration key of the caller that is using the resource

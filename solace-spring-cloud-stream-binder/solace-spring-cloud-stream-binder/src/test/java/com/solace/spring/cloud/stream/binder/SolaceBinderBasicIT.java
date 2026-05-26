@@ -550,16 +550,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 				.asInstanceOf(InstanceOfAssertFactories.throwable(MessagingException.class))
 				.cause()
 				.isInstanceOf(ClosedFacilityException.class)
-				.satisfies(e -> {
-					if (transacted) {
-						assertThat(e.getSuppressed())
-								.singleElement()
-								.asInstanceOf(InstanceOfAssertFactories.throwable(ClosedFacilityException.class))
-								.hasMessageContaining("Operation ROLLBACK disallowed");
-					} else {
-						assertThat(e).hasNoSuppressedExceptions();
-					}
-				});
+				.hasNoSuppressedExceptions();
 
 		producerBinding.unbind();
 	}

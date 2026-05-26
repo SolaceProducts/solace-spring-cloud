@@ -8,3 +8,6 @@
 
 # Release files
 release.properties
+
+# Local toolchain / IDE files
+.java-version
