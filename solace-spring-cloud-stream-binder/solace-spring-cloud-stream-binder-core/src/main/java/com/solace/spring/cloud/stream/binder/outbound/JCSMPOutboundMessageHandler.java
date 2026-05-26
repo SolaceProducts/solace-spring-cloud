@@ -102,8 +102,6 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 			throw handleMessagingException(correlationKey, msg0, new ClosedChannelBindingException(msg1));
 		}
 
-		recreateProducerIfNeeded(correlationKey);
-
 		try {
 			CorrelationData correlationData = message.getHeaders()
 					.get(SolaceBinderHeaders.CONFIRM_CORRELATION, CorrelationData.class);
@@ -149,6 +147,8 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 			smfMessages = List.of(smfMessage);
 			dynamicDestinations = Collections.singletonList(getDynamicDestination(message.getHeaders(), correlationKey));
 		}
+
+		recreateProducerIfNeeded(correlationKey);
 
 		try {
 			for (int i = 0; i < smfMessages.size(); i++) {
@@ -314,10 +314,13 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 			try {
 				createProducerInternal();
 				recreateProducer = false;
-			} catch (Exception createError) {
+			} catch (RuntimeException createError) {
 				recreateProducer = true;
+				// unwrap createProducerInternal()'s wrapper exception if necessary
+				Exception toReport = (createError.getCause() instanceof Exception unwrapped)
+						? unwrapped : createError;
 				throw handleMessagingException(correlationKey,
-						"Failed to recreate JCSMP producer after stale-flow detection", createError);
+						"Failed to recreate JCSMP producer after stale-flow detection", toReport);
 			}
 		}
 	}
