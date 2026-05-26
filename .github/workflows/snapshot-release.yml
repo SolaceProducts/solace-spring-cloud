@@ -14,28 +14,11 @@ jobs:
     if: ${{ github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
-      contents: read
       packages: write
-      id-token: write
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_branch }}
-
-      - name: Retrieve secrets from Vault
-        id: secrets
-        uses: hashicorp/vault-action@v3
-        continue-on-error: true
-        with:
-          url: "${{ secrets.VAULT_ADDR }}"
-          role: "cicd-workflows-secret-read-role"
-          method: jwt
-          path: jwt-github
-          jwtGithubAudience: https://github.com/${{ github.repository_owner }}
-          exportToken: true
-          secrets:
-            secret/data/tools/githubactions RE_BOT_PACKAGES_READ_ONLY_CLASSIC_USER | PACKAGES_ADMIN_USER ;
-            secret/data/tools/githubactions RE_BOT_PACKAGES_READ_ONLY_CLASSIC_TOKEN | PACKAGES_ADMIN_TOKEN ;
 
       - uses: actions/setup-java@v5
         with:

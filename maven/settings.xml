@@ -36,8 +36,8 @@
 	<servers>
 		<server>
 			<id>github-solacedev</id>
-			<username>${env.PACKAGES_ADMIN_USER}</username>
-			<password>${env.PACKAGES_ADMIN_TOKEN}</password>
+			<username>${env.GITHUB_ACTOR}</username>
+			<password>${env.GITHUB_TOKEN}</password>
 		</server>
 		<server>
 			<id>github</id>
