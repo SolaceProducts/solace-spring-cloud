@@ -550,7 +550,7 @@ public class SolaceBinderBasicIT extends SpringCloudStreamContext {
 				.asInstanceOf(InstanceOfAssertFactories.throwable(MessagingException.class))
 				.cause()
 				.isInstanceOf(ClosedFacilityException.class)
-				.satisfies(e -> assertThat(e).hasNoSuppressedExceptions());
+				.hasNoSuppressedExceptions();
 
 		producerBinding.unbind();
 	}
