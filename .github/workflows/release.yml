@@ -61,3 +61,5 @@ jobs:
           -P releaseCentral \
           -s maven/settings.xml \
           release:prepare release:perform
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

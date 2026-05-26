@@ -41,6 +41,8 @@ jobs:
           cache: maven
       - name: Build and run Tests
         run: mvn clean verify -s maven/settings.xml
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload Test Artifacts
         if: always()
         uses: actions/upload-artifact@v7
