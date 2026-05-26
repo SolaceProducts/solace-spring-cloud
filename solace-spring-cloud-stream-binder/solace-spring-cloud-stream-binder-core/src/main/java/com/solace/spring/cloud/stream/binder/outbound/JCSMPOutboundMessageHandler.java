@@ -318,8 +318,9 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 				recreateProducer = false;
 			} catch (RuntimeException createError) {
 				recreateProducer = true;
-				Throwable cause = createError.getCause();
-				Exception toReport = (cause instanceof Exception unwrapped) ? unwrapped : createError;
+				// unwrap createProducerInternal()'s wrapper exception if necessary
+				Exception toReport = (createError.getCause() instanceof Exception unwrapped)
+						? unwrapped : createError;
 				throw handleMessagingException(correlationKey,
 						"Failed to recreate JCSMP producer after stale-flow detection", toReport);
 			}
