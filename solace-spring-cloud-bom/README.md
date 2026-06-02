@@ -32,7 +32,7 @@ Consult the table below to determine which version of the BOM you need to use:
 | 2024.0.0     | 4.7.0, 4.8.0               | 3.4.x       |
 | 2024.0.2     | 4.9.0                      | 3.4.x       |
 | 2025.0.0     | 4.10.0, 4.11.0             | 3.5.x       |
-| 2025.1.1     | 6.0.0                      | 4.0.x       |
+| 2025.1.1     | 6.0.0, 6.1.0               | 4.0.x       |
 ## Including the BOM
 
 In addition to showing how to include the BOM, the following snippets also shows how to use "version-less" Solace dependencies (`spring-cloud-starter-stream-solace` in this case) when using the BOM.
@@ -44,7 +44,7 @@ In addition to showing how to include the BOM, the following snippets also shows
         <dependency>
             <groupId>com.solace.spring.cloud</groupId>
             <artifactId>solace-spring-cloud-bom</artifactId>
-            <version>6.0.0</version>
+            <version>6.1.0</version>
             <type>pom</type>
             <scope>import</scope>
         </dependency>
@@ -62,7 +62,7 @@ In addition to showing how to include the BOM, the following snippets also shows
 ### Using it with Gradle
 ```groovy
 dependencies {
-    implementation(platform("com.solace.spring.cloud:solace-spring-cloud-bom:6.0.0"))
+    implementation(platform("com.solace.spring.cloud:solace-spring-cloud-bom:6.1.0"))
     implementation("com.solace.spring.cloud:spring-cloud-starter-stream-solace")
 }
 ```
