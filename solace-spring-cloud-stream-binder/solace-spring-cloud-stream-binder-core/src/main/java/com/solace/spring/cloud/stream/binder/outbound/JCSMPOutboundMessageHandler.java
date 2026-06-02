@@ -14,11 +14,14 @@ import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager;
 import com.solace.spring.cloud.stream.binder.util.JCSMPSessionProducerManager.CloudStreamEventHandler;
 import com.solace.spring.cloud.stream.binder.util.StaticMessageHeaderMapAccessor;
 import com.solace.spring.cloud.stream.binder.util.XMLMessageMapper;
+import com.solacesystems.jcsmp.ClosedFacilityException;
 import com.solacesystems.jcsmp.Destination;
 import com.solacesystems.jcsmp.JCSMPException;
 import com.solacesystems.jcsmp.JCSMPFactory;
 import com.solacesystems.jcsmp.JCSMPSession;
 import com.solacesystems.jcsmp.JCSMPStreamingPublishCorrelatingEventHandler;
+import com.solacesystems.jcsmp.JCSMPTransportException;
+import com.solacesystems.jcsmp.StaleSessionException;
 import com.solacesystems.jcsmp.Topic;
 import com.solacesystems.jcsmp.XMLMessage;
 import com.solacesystems.jcsmp.XMLMessageProducer;
@@ -63,6 +66,10 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 	private final XMLMessageMapper xmlMessageMapper = new XMLMessageMapper();
 	private boolean isRunning = false;
 	private ErrorMessageStrategy errorMessageStrategy;
+
+	// DATAGO-134580: recreate JCSMP producer on unsolicited termination from Solace broker.
+	private volatile boolean recreateProducer = false;
+	private final Object lifecycleLock = new Object();
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(JCSMPOutboundMessageHandler.class);
 
@@ -141,6 +148,8 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 			dynamicDestinations = Collections.singletonList(getDynamicDestination(message.getHeaders(), correlationKey));
 		}
 
+		recreateProducerIfNeeded(correlationKey);
+
 		try {
 			for (int i = 0; i < smfMessages.size(); i++) {
 				XMLMessage smfMessage = smfMessages.get(i);
@@ -163,6 +172,18 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 				producerEventHandler.responseReceivedEx(correlationKey);
 			}
 		} catch (JCSMPException e) {
+			if (e instanceof StaleSessionException
+					|| e instanceof JCSMPTransportException
+					|| e instanceof ClosedFacilityException
+					|| producer.isClosed()) {
+				if (!recreateProducer) {
+					LOGGER.debug("Detected stale JCSMP producer for binding {} (cause: {}); will " +
+									"recreate on next message <message handler ID: {}>",
+							properties.getBindingName(), e.getClass().getSimpleName(), id);
+				}
+				recreateProducer = true;
+			}
+
 			if (transactedSession != null) {
 				try {
 					if (!(e instanceof RollbackException)) {
@@ -227,62 +248,106 @@ public final class JCSMPOutboundMessageHandler implements MessageHandler, Lifecy
 	@Override
 	public void start() {
 		LOGGER.info("Creating producer to {} {} <message handler ID: {}>", configDestinationType, configDestination.getName(), id);
-		if (isRunning()) {
-			LOGGER.warn("Nothing to do, message handler {} is already running", id);
+		synchronized (lifecycleLock) {
+			if (isRunning()) {
+				LOGGER.warn("Nothing to do, message handler {} is already running", id);
+				return;
+			}
+			recreateProducer = false;
+
+			try {
+				Map<String, String> headerNameMapping = properties.getExtension().getHeaderNameMapping();
+				if (headerNameMapping != null && !headerNameMapping.isEmpty()) {
+					Set<String> uniqueTargetHeaderNames = new HashSet<>(headerNameMapping.values());
+					if (uniqueTargetHeaderNames.size() < headerNameMapping.size()) {
+						IllegalArgumentException exception = new IllegalArgumentException(String.format(
+								"Two or more headers map to the same header name in headerNameMapping %s <outbound adapter %s>",
+								properties.getExtension().getHeaderNameMapping(), id));
+						LOGGER.warn(exception.getMessage());
+						throw exception;
+					}
+				}
+			} catch (Exception e) {
+				String msg = String.format("Unable to get a message producer for session %s", jcsmpSession.getSessionName());
+				LOGGER.warn(msg, e);
+				throw new RuntimeException(msg, e);
+			}
+
+			createProducerInternal();
+			isRunning = true;
+		}
+	}
+
+	private void createProducerInternal() {
+		synchronized (lifecycleLock) {
+			try {
+				producerManager.get(id);
+				if (properties.getExtension().isTransacted()) {
+					LOGGER.info("Creating transacted session  <message handler ID: {}>", id);
+					transactedSession = jcsmpSession.createTransactedSession();
+					producer = transactedSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
+							producerEventHandler);
+				} else {
+					producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
+							producerEventHandler);
+				}
+			} catch (Exception e) {
+				String msg = String.format("Unable to get a message producer for session %s", jcsmpSession.getSessionName());
+				LOGGER.warn(msg, e);
+				closeResources();
+				throw new RuntimeException(msg, e);
+			}
+		}
+	}
+
+	private void recreateProducerIfNeeded(ErrorChannelSendingCorrelationKey correlationKey) throws MessagingException {
+		if (!recreateProducer && !producer.isClosed()) {
 			return;
 		}
-
-		try {
-			Map<String, String> headerNameMapping = properties.getExtension().getHeaderNameMapping();
-			if (headerNameMapping != null && !headerNameMapping.isEmpty()) {
-				Set<String> uniqueTargetHeaderNames = new HashSet<>(headerNameMapping.values());
-				if (uniqueTargetHeaderNames.size() < headerNameMapping.size()) {
-					IllegalArgumentException exception = new IllegalArgumentException(String.format(
-							"Two or more headers map to the same header name in headerNameMapping %s <outbound adapter %s>",
-							properties.getExtension().getHeaderNameMapping(), id));
-					LOGGER.warn(exception.getMessage());
-					throw exception;
-				}
+		synchronized (lifecycleLock) {
+			if (!recreateProducer && !producer.isClosed()) {
+				return;
 			}
-
-			producerManager.get(id);
-			if (properties.getExtension().isTransacted()) {
-				LOGGER.info("Creating transacted session  <message handler ID: {}>", id);
-				transactedSession = jcsmpSession.createTransactedSession();
-				producer = transactedSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
-						producerEventHandler);
-			} else {
-				producer = jcsmpSession.createProducer(SolaceProvisioningUtil.getProducerFlowProperties(jcsmpSession),
-						producerEventHandler);
-			}
-		} catch (Exception e) {
-			String msg = String.format("Unable to get a message producer for session %s", jcsmpSession.getSessionName());
-			LOGGER.warn(msg, e);
+			LOGGER.debug("Recreating JCSMP producer for binding {} after stale-flow detection <message handler ID: {}>",
+					properties.getBindingName(), id);
 			closeResources();
-			throw new RuntimeException(msg, e);
+			try {
+				createProducerInternal();
+				recreateProducer = false;
+			} catch (RuntimeException createError) {
+				recreateProducer = true;
+				// unwrap createProducerInternal()'s wrapper exception if necessary
+				Exception toReport = (createError.getCause() instanceof Exception unwrapped)
+						? unwrapped : createError;
+				throw handleMessagingException(correlationKey,
+						"Failed to recreate JCSMP producer after stale-flow detection", toReport);
+			}
 		}
-
-		isRunning = true;
 	}
 
 	@Override
 	public void stop() {
-		if (!isRunning()) return;
-		closeResources();
-		isRunning = false;
+		synchronized (lifecycleLock) {
+			if (!isRunning()) return;
+			closeResources();
+			isRunning = false;
+		}
 	}
 
 	private void closeResources() {
-		LOGGER.info("Stopping producer to {} {} <message handler ID: {}>", configDestinationType, configDestination.getName(), id);
-		if (producer != null) {
-			LOGGER.info("Closing producer <message handler ID: {}>", id);
-			producer.close();
+		synchronized (lifecycleLock) {
+			LOGGER.info("Stopping producer to {} {} <message handler ID: {}>", configDestinationType, configDestination.getName(), id);
+			recreateProducer = false;
+			if (producer != null) {
+				LOGGER.info("Closing producer <message handler ID: {}>", id);
+				producer.close();
+			}
+			if (transactedSession != null) {
+				LOGGER.info("Closing transacted session <message handler ID: {}>", id);
+				transactedSession.close();
+			}
+			producerManager.release(id);
 		}
-		if (transactedSession != null) {
-			LOGGER.info("Closing transacted session <message handler ID: {}>", id);
-			transactedSession.close();
-		}
-		producerManager.release(id);
 	}
 
 	@Override
