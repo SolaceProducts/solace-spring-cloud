@@ -256,7 +256,7 @@ public class SolaceSpringCloudStreamAssertions {
 							assertThat(deliveryAttempt)
 									.asInstanceOf(InstanceOfAssertFactories.ATOMIC_INTEGER)
 									.hasValue(PollableSource.class.isAssignableFrom(channelType) ?
-											0 : consumerProperties.getMaxAttempts() > 1 ? (consumerProperties.getMaxAttempts() + 1) : 1)); // 1 initial + maxAttempt retries
+											0 : consumerProperties.getMaxAttempts()));
 
 			if (expectRawMessageHeader) {
 				if (consumerProperties.isBatchMode()) {
