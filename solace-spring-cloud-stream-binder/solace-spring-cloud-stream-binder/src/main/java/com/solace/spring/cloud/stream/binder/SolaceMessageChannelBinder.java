@@ -61,9 +61,14 @@ public class SolaceMessageChannelBinder
 	@Nullable private SolaceBinderHealthAccessor solaceBinderHealthAccessor;
 
 	public SolaceMessageChannelBinder(SolaceSessionManager solaceSessionManager, SolaceEndpointProvisioner solaceEndpointProvisioner) {
+		this(solaceSessionManager, solaceEndpointProvisioner, JCSMPSessionProducerManager.DEFAULT_CLOSE_TIMEOUT_IN_MILLIS);
+	}
+
+	public SolaceMessageChannelBinder(SolaceSessionManager solaceSessionManager, SolaceEndpointProvisioner solaceEndpointProvisioner,
+									  long producerCloseTimeoutInMillis) {
 		super(new String[0], solaceEndpointProvisioner);
 		this.solaceSessionManager = solaceSessionManager;
-		this.sessionProducerManager = new JCSMPSessionProducerManager(solaceSessionManager);
+		this.sessionProducerManager = new JCSMPSessionProducerManager(solaceSessionManager, producerCloseTimeoutInMillis);
 	}
 
 	@Override
@@ -73,9 +78,14 @@ public class SolaceMessageChannelBinder
 
 	@Override
 	public void destroy() {
-		sessionProducerManager.release(errorHandlerProducerKey);
-		consumersRemoteStopFlag.set(true);
-		solaceSessionManager.close();
+		try {
+			sessionProducerManager.release(errorHandlerProducerKey);
+			consumersRemoteStopFlag.set(true);
+			solaceSessionManager.close();
+		} finally {
+			// Always reap the close executor, even if release()/session close throws.
+			sessionProducerManager.shutdown();
+		}
 	}
 
 	@Override

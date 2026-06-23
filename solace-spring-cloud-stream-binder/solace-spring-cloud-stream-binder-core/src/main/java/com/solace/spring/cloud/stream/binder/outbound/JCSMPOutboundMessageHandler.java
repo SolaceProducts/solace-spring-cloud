@@ -303,11 +303,12 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 	}
 
 	private void recreateProducerIfNeeded(ErrorChannelSendingCorrelationKey correlationKey) throws MessagingException {
-		if (!recreateProducer && !producer.isClosed()) {
+		// producer may be null after closeResources() (e.g. a concurrent stop()); null means "recreate".
+		if (!recreateProducer && producer != null && !producer.isClosed()) {
 			return;
 		}
 		synchronized (lifecycleLock) {
-			if (!recreateProducer && !producer.isClosed()) {
+			if (!recreateProducer && producer != null && !producer.isClosed()) {
 				return;
 			}
 			LOGGER.debug("Recreating JCSMP producer for binding {} after stale-flow detection <message handler ID: {}>",
@@ -340,13 +341,23 @@ public class JCSMPOutboundMessageHandler implements MessageHandler, Lifecycle {
 		synchronized (lifecycleLock) {
 			LOGGER.info("Stopping producer to {} {} <message handler ID: {}>", configDestinationType, configDestination.getName(), id);
 			recreateProducer = false;
-			if (producer != null) {
-				LOGGER.info("Closing producer <message handler ID: {}>", id);
-				producer.close();
-			}
-			if (transactedSession != null) {
-				LOGGER.info("Closing transacted session <message handler ID: {}>", id);
-				transactedSession.close();
+			final XMLMessageProducer producerToClose = producer;
+			final TransactedSession transactedSessionToClose = transactedSession;
+			if (producerToClose != null || transactedSessionToClose != null) {
+				// Time-bounded close (DATAGO-137655): one budget for both resources, not 2x.
+				producerManager.closeSafely(() -> {
+					if (producerToClose != null) {
+						LOGGER.info("Closing producer <message handler ID: {}>", id);
+						producerToClose.close();
+					}
+					if (transactedSessionToClose != null) {
+						LOGGER.info("Closing transacted session <message handler ID: {}>", id);
+						transactedSessionToClose.close();
+					}
+				}, "producer/transacted session <message handler ID: " + id + ">");
+				// Drop references even if the close timed out; the handler no longer owns them.
+				producer = null;
+				transactedSession = null;
 			}
 			producerManager.release(id);
 		}

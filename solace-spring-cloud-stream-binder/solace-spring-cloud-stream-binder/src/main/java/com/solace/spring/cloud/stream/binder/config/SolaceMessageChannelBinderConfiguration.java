@@ -57,7 +57,8 @@ public class SolaceMessageChannelBinderConfiguration {
 			@Nullable ProducerMessageHandlerCustomizer<JCSMPOutboundMessageHandler> producerCustomizer,
 			@Nullable SolaceBinderHealthAccessor solaceBinderHealthAccessor,
 			@Nullable SolaceMeterAccessor solaceMeterAccessor) {
-		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(solaceSessionManager, solaceEndpointProvisioner);
+		SolaceMessageChannelBinder binder = new SolaceMessageChannelBinder(solaceSessionManager, solaceEndpointProvisioner,
+				solaceBinderConfigurationProperties.getProducerCloseTimeoutInMillis());
 		binder.setExtendedBindingProperties(solaceExtendedBindingProperties);
 		binder.setProducerMessageHandlerCustomizer(producerCustomizer);
 		binder.setSolaceMeterAccessor(solaceMeterAccessor);
