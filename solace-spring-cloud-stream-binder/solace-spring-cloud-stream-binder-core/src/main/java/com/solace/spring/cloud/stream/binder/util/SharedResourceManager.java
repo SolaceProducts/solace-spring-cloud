@@ -19,7 +19,14 @@ abstract class SharedResourceManager<T> {
 	}
 
 	abstract T create() throws Exception;
-	abstract void close();
+
+	/**
+	 * Close a resource previously returned by {@link #create()}. Invoked after {@link #lock} is
+	 * released, so a blocking {@code close} cannot stall concurrent {@code get()}/{@code release()}.
+	 *
+	 * @param resource the resource to close (never {@code null})
+	 */
+	abstract void close(T resource);
 
 	/**
 	 * Register {@code key} to the shared resource.
@@ -53,39 +60,49 @@ abstract class SharedResourceManager<T> {
 	 * @throws Exception whatever {@link #create()} may throw
 	 */
 	public T forceRecreate(T expected) throws Exception {
+		T toClose;
+		T current;
 		synchronized (lock) {
 			if (sharedResource != expected) {
 				return sharedResource;
 			}
-			if (sharedResource != null) {
-				try {
-					close();
-				} catch (Exception e) {
-					LOGGER.debug("Failed to close current {} during forceRecreate", type, e);
-				}
-			}
+			toClose = sharedResource;
 			sharedResource = create();
-			return sharedResource;
+			current = sharedResource;
 		}
+		// Close the previous resource outside the lock; the replacement is already installed.
+		if (toClose != null) {
+			try {
+				close(toClose);
+			} catch (Exception e) {
+				LOGGER.debug("Failed to close previous {} during forceRecreate", type, e);
+			}
+		}
+		return current;
 	}
 
 	/**
 	 * De-register {@code key} from the shared resource.
-	 * <p>If this is the last {@code key} associated to the shared resource, {@link #close()} the resource.
+	 * <p>If this is the last {@code key} associated to the shared resource, {@link #close(Object)} the resource.
 	 * @param key the registration key of the caller that is using the resource
 	 */
 	public void release(String key) {
+		T toClose = null;
 		synchronized (lock) {
 			if (!registeredIds.contains(key)) return;
 
 			if (registeredIds.size() <= 1) {
 				LOGGER.info("{} is the last user, closing {}...", key, type);
-				close();
+				toClose = sharedResource;
 				sharedResource = null;
 			} else {
 				LOGGER.info("{} is not the last user, persisting {}...", key, type);
 			}
 			registeredIds.remove(key);
+		}
+		// Close the last-user resource outside the lock so a blocking close can't stall other callers.
+		if (toClose != null) {
+			close(toClose);
 		}
 	}
 }

@@ -10,18 +10,50 @@ import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.MessagingException;
 
+import org.springframework.scheduling.concurrent.CustomizableThreadFactory;
+
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessageProducer> {
+	/** Default producer-close timeout used when none is supplied (e.g. by tests). */
+	public static final long DEFAULT_CLOSE_TIMEOUT_IN_MILLIS = 10000L;
+
 	private final SolaceSessionManager solaceSessionManager;
 	private final CloudStreamEventHandler publisherEventHandler = new CloudStreamEventHandler();
+	private final long closeTimeoutInMillis;
+	private final ExecutorService closeExecutor = Executors.newCachedThreadPool(newCloseThreadFactory());
 
 	private static final Logger LOGGER = LoggerFactory.getLogger(JCSMPSessionProducerManager.class);
 
 	public JCSMPSessionProducerManager(SolaceSessionManager solaceSessionManager) {
+		this(solaceSessionManager, DEFAULT_CLOSE_TIMEOUT_IN_MILLIS);
+	}
+
+	public JCSMPSessionProducerManager(SolaceSessionManager solaceSessionManager, long closeTimeoutInMillis) {
 		super("producer");
 		this.solaceSessionManager = solaceSessionManager;
+		if (closeTimeoutInMillis <= 0) {
+			LOGGER.warn("Invalid producer close timeout {} ms; falling back to default {} ms",
+					closeTimeoutInMillis, DEFAULT_CLOSE_TIMEOUT_IN_MILLIS);
+			this.closeTimeoutInMillis = DEFAULT_CLOSE_TIMEOUT_IN_MILLIS;
+		} else {
+			this.closeTimeoutInMillis = closeTimeoutInMillis;
+		}
+	}
+
+	private static ThreadFactory newCloseThreadFactory() {
+		CustomizableThreadFactory threadFactory = new CustomizableThreadFactory("solace-producer-close-");
+		threadFactory.setDaemon(true);
+		return threadFactory;
 	}
 
 	@Override
@@ -30,8 +62,58 @@ public class JCSMPSessionProducerManager extends SharedResourceManager<XMLMessag
 	}
 
 	@Override
-	void close() {
-		sharedResource.close();
+	void close(XMLMessageProducer resource) {
+		// Guard the shared-producer close (last-user close via release()); see closeSafely().
+		closeSafely(resource::close, "shared producer");
+	}
+
+	/**
+	 * Closes a JCSMP producer-side resource with an upper time bound. {@code close()} parks in
+	 * {@code JCSMPBasicSession.waitUntilSessionReconnectDone} while the session is reconnecting
+	 * (DATAGO-137655); the close runs on a daemon thread and is interrupted after
+	 * {@link #closeTimeoutInMillis} so a producer stop cannot wedge the binding lifecycle. Never
+	 * propagates an exception.
+	 *
+	 * @param closeAction the blocking {@code close()} to run (e.g. {@code producer::close})
+	 * @param description human-readable resource description, used in logging
+	 */
+	public void closeSafely(Runnable closeAction, String description) {
+		Future<?> future;
+		try {
+			future = closeExecutor.submit(closeAction);
+		} catch (RejectedExecutionException e) {
+			// Executor already shut down (binder destroyed); nothing left to bound the close against.
+			LOGGER.warn("Close executor unavailable (already shut down); skipping bounded close of {}", description);
+			return;
+		}
+		try {
+			future.get(closeTimeoutInMillis, TimeUnit.MILLISECONDS);
+		} catch (TimeoutException e) {
+			LOGGER.warn("Timed out after {} ms closing {}; interrupting and proceeding "
+					+ "(session is likely reconnecting)", closeTimeoutInMillis, description);
+			future.cancel(true);
+		} catch (ExecutionException e) {
+			LOGGER.warn("Error while closing {}", description, e.getCause());
+		} catch (InterruptedException e) {
+			future.cancel(true);
+			Thread.currentThread().interrupt();
+			LOGGER.warn("Interrupted while closing {}; proceeding", description);
+		}
+	}
+
+	/** Shuts down the close executor. Should be called when the owning binder is destroyed. */
+	public void shutdown() {
+		closeExecutor.shutdownNow();
+		try {
+			if (!closeExecutor.awaitTermination(closeTimeoutInMillis, TimeUnit.MILLISECONDS)) {
+				// A worker still blocked in JCSMP (interrupt ignored) survives as a daemon thread; surface it.
+				LOGGER.warn("Close executor did not terminate within {} ms; one or more producer-close "
+						+ "workers may still be blocked (session likely still reconnecting)", closeTimeoutInMillis);
+			}
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
+			LOGGER.warn("Interrupted while awaiting close-executor termination");
+		}
 	}
 
 	public static class CloudStreamEventHandler implements JCSMPStreamingPublishCorrelatingEventHandler {
