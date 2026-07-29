@@ -43,7 +43,7 @@ public final class SolaceErrorMessageHandler implements MessageHandler {
 				.filter(Objects::nonNull)
 				.collect(Collectors.toUnmodifiableSet());
 
-		LOGGER.atInfo()
+		LOGGER.atDebug()
 				.setMessage("Processing message {} <messaging-exception-message: {}, original-message: {}, source-jcsmp-message: {}>")
 				.addArgument(() -> StaticMessageHeaderAccessor.getId(errorMessage))
 				.addArgument(() -> messagingExceptionFailedMessage != null ?
