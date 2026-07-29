@@ -14,7 +14,20 @@ permissions:
 
 jobs:
   sca_scan:
+    strategy:
+      matrix:
+        include:
+          - path: solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder
+            name: solace-spring-cloud-stream-binder
+          - path: solace-spring-cloud-stream-binder/solace-spring-cloud-stream-binder-core
+            name: solace-spring-cloud-stream-binder-core
+          - path: solace-spring-cloud-stream-binder-opentelemetry/solace-spring-cloud-stream-binder-instrumentation
+            name: solace-spring-cloud-stream-binder-instrumentation
     uses: SolaceDev/solace-public-workflows/.github/workflows/sca-scan-and-guard.yaml@main
+    with:
+      config_file: '.github/workflow-config.json'
+      additional_scan_params: |
+        fossa.only_path=${{ matrix.path }}
     secrets:
       FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
 
@@ -22,6 +35,12 @@ jobs:
     needs: sca_scan
     if: needs.sca_scan.result == 'success' && github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - name: solace-spring-cloud-stream-binder
+          - name: solace-spring-cloud-stream-binder-core
+          - name: solace-spring-cloud-stream-binder-instrumentation
     permissions:
       id-token: write
       contents: read
@@ -43,7 +62,7 @@ jobs:
           ddb_item_to_be_added: |
             {
               "squad": "connectors-core",
-              "repository": "${{ github.event.repository.name }}",
+              "repository": "${{ matrix.name }}",
               "dev": {
                 "sha": "${{ github.sha }}",
                 "version": "${{ github.ref_name }}"
