@@ -10,3 +10,4 @@ updates:
       - dependency-name: "com.solacesystems:*"
       - dependency-name: "org.springframework.*"
       - dependency-name: "io.opentelemetry.*"
+      - dependency-name: "org.sonatype.central:*"
