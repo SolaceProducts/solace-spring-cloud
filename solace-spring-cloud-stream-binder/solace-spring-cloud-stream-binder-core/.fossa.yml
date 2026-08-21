@@ -1,0 +1,21 @@
+version: 3
+project:
+  locator: SolaceProducts_solace-spring-cloud-stream-binder-core
+  id: SolaceProducts_solace-spring-cloud-stream-binder-core
+  name: solace-spring-cloud-stream-binder-core
+  teams: []
+  labels:
+    - java
+vendoredDependencies:
+  forceRescans: false
+  scanMethod: CLILicenseScan
+  licenseScanPathFilters:
+    exclude:
+      - "./.git"
+      - "./.github"
+paths:
+  exclude:
+    - ./.git
+    - ./.github
+telemetry:
+  scope: full
