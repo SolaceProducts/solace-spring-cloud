@@ -22,8 +22,6 @@ jobs:
     uses: SolaceDev/solace-public-workflows/.github/workflows/sca-scan-and-guard.yaml@main
     with:
       config_file: '.github/workflow-config.json'
-      additional_scan_params: |
-        fossa.debug=true
     secrets:
       FOSSA_API_KEY: ${{ secrets.FOSSA_API_KEY }}
 
