@@ -12,10 +12,10 @@ jobs:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Query start.spring.io
         id: checkStartSpringIO
-        uses: fjogeleit/http-request-action@v1.11.1
+        uses: fjogeleit/http-request-action@fd5cf60c69049efb1397207cc8b442709a869685 # v1.11.1
         with:
           url: https://start.spring.io/pom.xml?dependencies=solace,cloud-stream
 #          url: https://start.spring.io/pom.xml?bootVersion=3.0.0-SNAPSHOT&dependencies=solace,cloud-stream
@@ -24,7 +24,7 @@ jobs:
           echo ${{ steps.checkStartSpringIO.outputs.response }}
           echo ${{ steps.checkStartSpringIO.outputs.headers }}
       - name: Create Issue Action
-        uses: JasonEtco/create-an-issue@v2.9.1
+        uses: JasonEtco/create-an-issue@e27dddc79c92bc6e4562f268fffa5ed752639abd # v2.9.1
         if: ${{ failure() }} # only run when this job is failed.
         env:
           GITHUB_JOB: ${{ github.job }}
