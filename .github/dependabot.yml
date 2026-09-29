@@ -11,3 +11,8 @@ updates:
       - dependency-name: "org.springframework.*"
       - dependency-name: "io.opentelemetry.*"
       - dependency-name: "org.sonatype.central:*"
+    cooldown:
+      default-days: 3
+      exclude:
+        - "com.solace.*"
+        - "com.solacesystems:*"
