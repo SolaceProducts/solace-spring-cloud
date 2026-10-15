@@ -51,6 +51,13 @@ public sealed class SolaceCommonProperties permits SolaceConsumerProperties, Sol
 	private Boolean queueRespectsMsgTtl = null;
 	// ------------------------
 
+	/**
+	 * Whether to map the SMF message's native trace context to and from the W3C {@code traceparent},
+	 * {@code tracestate} and {@code baggage} message headers.
+	 * When disabled, those headers are handled like any other header (as SMF user properties).
+	 */
+	private boolean traceContextPropagation = false;
+
 	public boolean isTransacted() {
 		return transacted;
 	}
@@ -129,5 +136,13 @@ public sealed class SolaceCommonProperties permits SolaceConsumerProperties, Sol
 
 	public void setQueueRespectsMsgTtl(Boolean queueRespectsMsgTtl) {
 		this.queueRespectsMsgTtl = queueRespectsMsgTtl;
+	}
+
+	public boolean isTraceContextPropagation() {
+		return traceContextPropagation;
+	}
+
+	public void setTraceContextPropagation(boolean traceContextPropagation) {
+		this.traceContextPropagation = traceContextPropagation;
 	}
 }
