@@ -46,6 +46,14 @@
         <type>pom</type>
         <scope>import</scope>
       </dependency>
+      <!-- Runtime must not be older than opentelemetry-proto's gencode (4.36.2 for 1.11.1-alpha). -->
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-bom</artifactId>
+        <version>4.36.2</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
