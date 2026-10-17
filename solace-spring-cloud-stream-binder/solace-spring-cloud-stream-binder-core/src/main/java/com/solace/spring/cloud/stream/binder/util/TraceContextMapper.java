@@ -8,7 +8,6 @@ import com.solacesystems.jcsmp.XMLMessage;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.integration.support.AbstractIntegrationMessageBuilder;
@@ -25,8 +24,6 @@ final class TraceContextMapper {
   static final Set<String> HEADERS = Set.of(TRACEPARENT, TRACESTATE, BAGGAGE);
 
   private static final Logger LOGGER = LoggerFactory.getLogger(TraceContextMapper.class);
-  private static final Pattern TRACEPARENT_PATTERN = Pattern.compile(
-      "^00-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$");
   private static final HexFormat HEX = HexFormat.of();
 
   private TraceContextMapper() {
@@ -79,14 +76,19 @@ final class TraceContextMapper {
     if (!(headerValue(headers, headerExclusions, TRACEPARENT) instanceof String traceparent)) {
       return;
     }
-    if (!TRACEPARENT_PATTERN.matcher(traceparent).matches()) {
+    // Written by a tracing propagator, so only what the fixed-position parse needs is checked,
+    // plus the W3C rule that the IDs are not all zeros.
+    byte[] traceId = traceparent.length() == 55 ? parseHex(traceparent, 3, 35) : null;
+    byte[] spanId = traceId != null ? parseHex(traceparent, 36, 52) : null;
+    byte[] flags = spanId != null ? parseHex(traceparent, 53, 55) : null;
+    if (!isNonZero(traceId) || !isNonZero(spanId) || flags == null) {
       LOGGER.debug("Ignoring invalid {} header: {}", TRACEPARENT, traceparent);
       return;
     }
     TraceContextSetter setter = tracing.contextSetter();
-    setter.setTraceIdBytes16(HEX.parseHex(traceparent, 3, 35));
-    setter.setSpanIdBytes8(HEX.parseHex(traceparent, 36, 52));
-    setter.setSampled((HexFormat.fromHexDigits(traceparent, 53, 55) & 0x01) != 0);
+    setter.setTraceIdBytes16(traceId);
+    setter.setSpanIdBytes8(spanId);
+    setter.setSampled((flags[0] & 0x01) != 0);
     if (headerValue(headers, headerExclusions, TRACESTATE) instanceof String traceState
         && !traceState.isEmpty()) {
       setter.setTraceState(traceState);
@@ -95,6 +97,15 @@ final class TraceContextMapper {
         && !baggage.isEmpty()
         && tracing.baggage() != null) {
       tracing.baggage().setBaggage(baggage);
+    }
+  }
+
+  // Null when the range is not hex.
+  private static byte[] parseHex(String value, int fromIndex, int toIndex) {
+    try {
+      return HEX.parseHex(value, fromIndex, toIndex);
+    } catch (IllegalArgumentException e) {
+      return null;
     }
   }
 

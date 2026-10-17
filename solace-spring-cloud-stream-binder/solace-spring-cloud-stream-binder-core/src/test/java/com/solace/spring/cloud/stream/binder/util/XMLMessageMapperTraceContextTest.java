@@ -9,6 +9,9 @@ import com.solacesystems.jcsmp.SDTException;
 import com.solacesystems.jcsmp.XMLMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.context.properties.bind.Binder;
@@ -18,6 +21,7 @@ import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.support.MessageBuilder;
 import org.springframework.messaging.Message;
 
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 
@@ -148,10 +152,20 @@ public class XMLMessageMapperTraceContextTest {
 		assertThat(roundTripped.getHeaders()).doesNotContainKeys("traceparent", "tracestate", "baggage");
 	}
 
-	@Test
-	void testInvalidTraceparentIsIgnored() {
+	@ParameterizedTest(name = "[{index}] traceparent={0}")
+	@ValueSource(strings = {
+			"00-not-a-valid-traceparent",
+			"00-0102030405060708090a0b0c0d0e0f10-1112131415161718-01-",
+			"00-0102030405060708090a0b0c0d0e0f1-1112131415161718-01",
+			"00-zz02030405060708090a0b0c0d0e0f10-1112131415161718-01",
+			"00-0102030405060708090a0b0c0d0e0f10-11121314151617zz-01",
+			"00-0102030405060708090a0b0c0d0e0f10-1112131415161718-0g",
+			"00-00000000000000000000000000000000-1112131415161718-01",
+			"00-0102030405060708090a0b0c0d0e0f10-0000000000000000-01",
+			""})
+	void testInvalidTraceparentIsIgnored(String traceparent) {
 		Message<?> springMessage = MessageBuilder.withPayload("bad".getBytes())
-				.setHeader("traceparent", "00-not-a-valid-traceparent")
+				.setHeader("traceparent", traceparent)
 				.setHeader("tracestate", TRACESTATE_1)
 				.setHeader("baggage", BAGGAGE_1)
 				.build();
@@ -161,6 +175,37 @@ public class XMLMessageMapperTraceContextTest {
 		assertThat(((MessageTracingSupport) xmlMessage).creationContext()).isNull();
 		assertThat(((MessageTracingSupport) xmlMessage).baggage().getBaggage()).isNullOrEmpty();
 		assertThat(xmlMessage.getProperties().keySet()).doesNotContain("traceparent", "tracestate");
+	}
+
+	// The header comes from a tracing propagator, so only what the parse needs is checked.
+	@ParameterizedTest(name = "[{index}] traceparent={0}")
+	@ValueSource(strings = {
+			"01-0102030405060708090a0b0c0d0e0f10-1112131415161718-01",
+			"00-0102030405060708090A0B0C0D0E0F10-1112131415161718-01",
+			"00-0102030405060708090a0b0c0d0e0f10_1112131415161718_01"})
+	void testTraceparentFormatIsNotValidated(String traceparent) {
+		Message<?> springMessage = MessageBuilder.withPayload("ok".getBytes())
+				.setHeader("traceparent", traceparent)
+				.build();
+
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(springMessage, writer(true));
+
+		assertThat(((MessageTracingSupport) xmlMessage).creationContext()).isNotNull()
+				.satisfies(context -> assertThat(HexFormat.of().formatHex(context.getTraceIdBytes16()))
+						.isEqualTo("0102030405060708090a0b0c0d0e0f10"));
+	}
+
+	@ParameterizedTest(name = "[{index}] flags={0} sampled={1}")
+	@CsvSource({"01, true", "00, false", "03, true", "fe, false"})
+	void testValidTraceparentFlagsAreMapped(String flags, boolean sampled) {
+		Message<?> springMessage = MessageBuilder.withPayload("ok".getBytes())
+				.setHeader("traceparent", "00-0102030405060708090a0b0c0d0e0f10-1112131415161718-" + flags)
+				.build();
+
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(springMessage, writer(true));
+
+		assertThat(((MessageTracingSupport) xmlMessage).creationContext()).isNotNull()
+				.satisfies(context -> assertThat(context.isSampled()).isEqualTo(sampled));
 	}
 
 	@Test
