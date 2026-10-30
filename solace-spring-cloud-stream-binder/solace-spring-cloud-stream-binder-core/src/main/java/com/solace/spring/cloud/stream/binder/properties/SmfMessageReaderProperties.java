@@ -10,10 +10,12 @@ public final class SmfMessageReaderProperties {
 
   private Set<String> headerExclusions;
   private Map<String, String> headerNameMapping;
+  private final boolean traceContextPropagationEnabled;
 
   public SmfMessageReaderProperties(SolaceConsumerProperties solaceConsumerProperties) {
     this.headerExclusions = new HashSet<>(Objects.requireNonNullElse(solaceConsumerProperties.getHeaderExclusions(), Set.of()));
     this.headerNameMapping = new LinkedHashMap<>(Objects.requireNonNullElse(solaceConsumerProperties.getHeaderNameMapping(), Map.of()));
+    this.traceContextPropagationEnabled = solaceConsumerProperties.isTraceContextPropagation();
   }
 
   public Set<String> getHeaderExclusions() {
@@ -22,5 +24,9 @@ public final class SmfMessageReaderProperties {
 
   public Map<String, String> getHeaderNameMapping() {
     return headerNameMapping;
+  }
+
+  public boolean isTraceContextPropagationEnabled() {
+    return traceContextPropagationEnabled;
   }
 }

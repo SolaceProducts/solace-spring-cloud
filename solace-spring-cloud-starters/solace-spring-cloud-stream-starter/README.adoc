@@ -404,6 +404,13 @@ Default: Empty `Map&lt;String,String&gt;`
 +
 See: <<Header Name Mapping>>
 
+traceContextPropagation::
+When set to `true`, the message's native trace context is exposed as the W3C `traceparent`, `tracestate` and `baggage` message headers.
++
+Default: `false`
++
+See: <<W3C Trace Context Propagation>>
+
 ==== Solace Producer Properties
 
 The following properties are available for Solace producers only and must be prefixed with `spring.cloud.stream.solace.bindings.&lt;bindingName&gt;.producer.` where `bindingName` looks something like `functionName-out-0` as defined in https://docs.spring.io/spring-cloud-stream/reference/{scst-version}/spring-cloud-stream/functional-binding-names.html[Functional Binding Names].
@@ -554,6 +561,13 @@ Mapping from Spring message header names to Solace message user property names. 
 Default: Empty `Map&lt;String,String&gt;`
 +
 See: <<Header Name Mapping>>
+
+traceContextPropagation::
+When set to `true`, the W3C `traceparent`, `tracestate` and `baggage` message headers are written to the published message's native trace context instead of to user properties.
++
+Default: `false`
++
+See: <<W3C Trace Context Propagation>>
 
 ==== Solace Connection Health-Check Properties
 
@@ -1393,6 +1407,35 @@ This is the total size of the messages received (if `name` is a consumer binding
 Starting with link:../../solace-spring-cloud-bom/[Solace Spring Cloud BOM v4.8.0] and link:../solace-spring-cloud-stream-starter/[Solace Binder v5.8.0], the Solace binder supports application tracing. This feature allows you to trace the flow of messages through your application.
 
 Refer to the link:../../solace-spring-cloud-stream-binder-opentelemetry/README.adoc[Solace Binder OpenTelemetry Auto-Instrumentation] documentation in this repo for more information.
+
+=== W3C Trace Context Propagation
+
+As an alternative to the OpenTelemetry Java agent, the binder can carry the message's trace context as the standard W3C headers, so that an application or framework that creates its own spans (for example with Micrometer Tracing) can continue the trace without an agent.
+
+[source,yaml]
+----
+spring:
+  cloud:
+    stream:
+      solace:
+        bindings:
+          input-0:
+            consumer:
+              trace-context-propagation: true
+          output-0:
+            producer:
+              trace-context-propagation: true
+----
+
+Consumer::
+The message's native trace context is exposed as the `traceparent`, `tracestate` and `baggage` headers. The current hop's context, set by the broker when Distributed Tracing is enabled, is preferred over the publisher's context. When the message has a user property with the same name, the native trace context wins. Batch consumers get the headers for each message in `scst_batchHeaders`.
+
+Producer::
+The `traceparent`, `tracestate` and `baggage` headers are written to the published message's native trace context and are no longer sent as user properties. A `traceparent` that is not a valid W3C version `00` value is ignored. Batch producers write each message's own headers.
+
+Both properties are off by default. When disabled, these headers are handled like any other header (as user properties), exactly as in earlier binder versions. Both directions honour `headerExclusions`.
+
+NOTE: Do not combine this mode with the Solace Binder OpenTelemetry Auto-Instrumentation agent extensions on the same binding. Pick one mode.
 
 == Resources
 

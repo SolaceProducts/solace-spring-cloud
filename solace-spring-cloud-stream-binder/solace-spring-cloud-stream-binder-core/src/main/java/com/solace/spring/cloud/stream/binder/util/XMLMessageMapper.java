@@ -201,6 +201,10 @@ public final class XMLMessageMapper {
 			}
 		}
 
+		if (writerProperties.isTraceContextPropagationEnabled()) {
+			TraceContextMapper.writeTraceContext(xmlMessage, headers, writerProperties.getHeaderExclusions());
+		}
+
 		xmlMessage.setProperties(metadata);
 		xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
 		return xmlMessage;
@@ -362,6 +366,10 @@ public final class XMLMessageMapper {
 			}
 		}
 
+		if (smfMessageReaderProperties.isTraceContextPropagationEnabled()) {
+			TraceContextMapper.readTraceContext(xmlMessage, builder, smfMessageReaderProperties.getHeaderExclusions());
+		}
+
 		return builder;
 	}
 
@@ -382,6 +390,10 @@ public final class XMLMessageMapper {
 					header.getKey().equalsIgnoreCase(SolaceBinderHeaders.CONFIRM_CORRELATION) ||
 					SolaceHeaderMeta.META.containsKey(header.getKey()) ||
 					SolaceBinderHeaderMeta.META.containsKey(header.getKey())) {
+				continue;
+			}
+
+			if (writerProperties.isTraceContextPropagationEnabled() && TraceContextMapper.HEADERS.contains(header.getKey())) {
 				continue;
 			}
 
