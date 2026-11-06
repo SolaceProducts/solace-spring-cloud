@@ -41,6 +41,9 @@ final class TraceContextMapper {
     }
     TraceContext context = currentContext(tracing);
     if (context != null) {
+      // Drop user-property values so they can't mix with the native context.
+      removeHeader(builder, headerExclusions, TRACESTATE);
+      removeHeader(builder, headerExclusions, BAGGAGE);
       setHeader(builder, headerExclusions, TRACEPARENT,
           "00-" + HEX.formatHex(context.getTraceIdBytes16()) + "-"
               + HEX.formatHex(context.getSpanIdBytes8()) + "-" + (context.isSampled() ? "01"
@@ -54,13 +57,12 @@ final class TraceContextMapper {
   }
 
   private static TraceContext currentContext(MessageTracingSupport tracing) {
-    if (isValid(tracing.transportContext())) {
-      return tracing.transportContext();
+    TraceContext transportContext = tracing.transportContext();
+    if (isValid(transportContext)) {
+      return transportContext;
     }
-    if (isValid(tracing.creationContext())) {
-      return tracing.creationContext();
-    }
-    return null;
+    TraceContext creationContext = tracing.creationContext();
+    return isValid(creationContext) ? creationContext : null;
   }
 
   /**
@@ -94,9 +96,11 @@ final class TraceContextMapper {
       setter.setTraceState(traceState);
     }
     if (headerValue(headers, headerExclusions, BAGGAGE) instanceof String baggage
-        && !baggage.isEmpty()
-        && tracing.baggage() != null) {
-      tracing.baggage().setBaggage(baggage);
+        && !baggage.isEmpty()) {
+      Baggage nativeBaggage = tracing.baggage();
+      if (nativeBaggage != null) {
+        nativeBaggage.setBaggage(baggage);
+      }
     }
   }
 
@@ -120,6 +124,13 @@ final class TraceContextMapper {
     if (value != null && !value.isEmpty() && (headerExclusions == null
         || !headerExclusions.contains(name))) {
       builder.setHeader(name, value);
+    }
+  }
+
+  private static void removeHeader(AbstractIntegrationMessageBuilder<?> builder,
+      Set<String> headerExclusions, String name) {
+    if (headerExclusions == null || !headerExclusions.contains(name)) {
+      builder.removeHeader(name);
     }
   }
 

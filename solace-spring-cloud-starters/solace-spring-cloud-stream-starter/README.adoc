@@ -1431,7 +1431,7 @@ Consumer::
 The message's native trace context is exposed as the `traceparent`, `tracestate` and `baggage` headers. The current hop's context, set by the broker when Distributed Tracing is enabled, is preferred over the publisher's context. When the message has a user property with the same name, the native trace context wins. Batch consumers get the headers for each message in `scst_batchHeaders`.
 
 Producer::
-The `traceparent`, `tracestate` and `baggage` headers are written to the published message's native trace context and are no longer sent as user properties. A `traceparent` that is not a valid W3C version `00` value is ignored. Batch producers write each message's own headers.
+The `traceparent`, `tracestate` and `baggage` headers are written to the published message's native trace context and are no longer sent as user properties. A `traceparent` whose trace ID, span ID or flags can't be parsed, or whose IDs are all zeros, is ignored. Batch producers write each message's own headers.
 
 Both properties are off by default. When disabled, these headers are handled like any other header (as user properties), exactly as in earlier binder versions. Both directions honour `headerExclusions`.
 

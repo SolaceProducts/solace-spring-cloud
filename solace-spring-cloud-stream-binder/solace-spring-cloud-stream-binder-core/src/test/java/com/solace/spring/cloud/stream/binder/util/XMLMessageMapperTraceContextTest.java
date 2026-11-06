@@ -225,6 +225,50 @@ public class XMLMessageMapperTraceContextTest {
 				.doesNotContainKeys("tracestate", "baggage");
 	}
 
+	@Test
+	void testProducerHeaderNameMappingToTraceparentIsWrittenNatively() {
+		SolaceProducerProperties producerProperties = new SolaceProducerProperties();
+		producerProperties.setTraceContextPropagation(true);
+		producerProperties.setHeaderNameMapping(Map.of("myTrace", "traceparent"));
+		Message<?> springMessage = MessageBuilder.withPayload("hello".getBytes())
+				.setHeader("myTrace", TRACEPARENT_1)
+				.build();
+
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(springMessage, new SmfMessageWriterProperties(producerProperties));
+
+		assertThat(xmlMessage.getProperties().containsKey("myTrace")).isFalse();
+		assertThat(xmlMessage.getProperties().containsKey("traceparent")).isFalse();
+		Message<?> roundTripped = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, reader(true));
+		assertThat(roundTripped.getHeaders()).containsEntry("traceparent", TRACEPARENT_1);
+	}
+
+	@Test
+	void testProducerHeaderNameMappingFromTraceparentIsNotWrittenNatively() throws SDTException {
+		SolaceProducerProperties producerProperties = new SolaceProducerProperties();
+		producerProperties.setTraceContextPropagation(true);
+		producerProperties.setHeaderNameMapping(Map.of("traceparent", "x-trace"));
+
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(tracedMessage(), new SmfMessageWriterProperties(producerProperties));
+
+		assertThat(xmlMessage.getProperties().getString("x-trace")).isEqualTo(TRACEPARENT_1);
+		assertThat(((MessageTracingSupport) xmlMessage).creationContext()).isNull();
+	}
+
+	@Test
+	void testNativeTraceContextDropsUserPropertyTracestateAndBaggage() throws SDTException {
+		Message<?> springMessage = MessageBuilder.withPayload("hello".getBytes())
+				.setHeader("traceparent", TRACEPARENT_1)
+				.build();
+		XMLMessage xmlMessage = xmlMessageMapper.mapToSmf(springMessage, writer(true));
+		xmlMessage.getProperties().putString("tracestate", TRACESTATE_2);
+		xmlMessage.getProperties().putString("baggage", BAGGAGE_2);
+
+		Message<?> roundTripped = xmlMessageMapper.mapToSpring(xmlMessage, acknowledgmentCallback, reader(true));
+
+		assertThat(roundTripped.getHeaders()).containsEntry("traceparent", TRACEPARENT_1)
+				.doesNotContainKeys("tracestate", "baggage");
+	}
+
 	private static Message<?> tracedMessage() {
 		return MessageBuilder.withPayload("hello".getBytes())
 				.setHeader("traceparent", TRACEPARENT_1)
