@@ -42,8 +42,8 @@ final class TraceContextMapper {
     TraceContext context = currentContext(tracing);
     if (context != null) {
       // Drop user-property values so they can't mix with the native context.
-      removeHeader(builder, headerExclusions, TRACESTATE);
-      removeHeader(builder, headerExclusions, BAGGAGE);
+      removeHeaderIfExcluded(builder, headerExclusions, TRACESTATE);
+      removeHeaderIfExcluded(builder, headerExclusions, BAGGAGE);
       setHeader(builder, headerExclusions, TRACEPARENT,
           "00-" + HEX.formatHex(context.getTraceIdBytes16()) + "-"
               + HEX.formatHex(context.getSpanIdBytes8()) + "-" + (context.isSampled() ? "01"
@@ -127,7 +127,7 @@ final class TraceContextMapper {
     }
   }
 
-  private static void removeHeader(AbstractIntegrationMessageBuilder<?> builder,
+  private static void removeHeaderIfExcluded(AbstractIntegrationMessageBuilder<?> builder,
       Set<String> headerExclusions, String name) {
     if (headerExclusions == null || !headerExclusions.contains(name)) {
       builder.removeHeader(name);
