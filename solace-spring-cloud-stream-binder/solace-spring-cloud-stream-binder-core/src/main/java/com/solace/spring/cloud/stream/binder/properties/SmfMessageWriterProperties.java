@@ -19,6 +19,7 @@ public final class SmfMessageWriterProperties {
 	@Deprecated(forRemoval = true, since = "6.0.0")
 	private boolean nonSerializableHeaderConvertToString;
 	private final Map<String, String> headerNameMapping;
+	private final boolean traceContextPropagationEnabled;
 
 	public SmfMessageWriterProperties(SolaceProducerProperties solaceProducerProperties) {
 		this.headerExclusions = new HashSet<>(solaceProducerProperties.getHeaderExclusions());
@@ -26,6 +27,7 @@ public final class SmfMessageWriterProperties {
 		this.payloadTypeCompatibility = solaceProducerProperties.getPayloadTypeCompatibility();
 		this.nonSerializableHeaderConvertToString = solaceProducerProperties.isNonserializableHeaderConvertToString();
 		this.headerNameMapping = new LinkedHashMap<>(Objects.requireNonNullElse(solaceProducerProperties.getHeaderNameMapping(), Map.of()));
+		this.traceContextPropagationEnabled = solaceProducerProperties.isTraceContextPropagation();
 	}
 
 	public Set<String> getHeaderExclusions() {
@@ -68,5 +70,9 @@ public final class SmfMessageWriterProperties {
 
 	public Map<String, String> getHeaderNameMapping() {
 		return headerNameMapping;
+	}
+
+	public boolean isTraceContextPropagationEnabled() {
+		return traceContextPropagationEnabled;
 	}
 }

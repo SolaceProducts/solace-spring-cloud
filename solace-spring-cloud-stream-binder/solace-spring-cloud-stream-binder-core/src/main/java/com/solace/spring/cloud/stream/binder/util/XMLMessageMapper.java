@@ -124,7 +124,8 @@ public final class XMLMessageMapper {
 						UUID messageId,
 						SmfMessageWriterProperties writerProperties) {
 		XMLMessage xmlMessage;
-		SDTMap metadata = mapHeadersToSmf(applyHeaderNameMapping(headers, writerProperties.getHeaderNameMapping()), writerProperties);
+		Map<String, Object> mappedHeaders = applyHeaderNameMapping(headers, writerProperties.getHeaderNameMapping());
+		SDTMap metadata = mapHeadersToSmf(mappedHeaders, writerProperties);
 		if(SmfMessageHeaderWriteCompatibility.SERIALIZE_AND_ENCODE_NON_NATIVE_TYPES.equals(writerProperties.getHeaderTypeCompatibility()) ||
 				SmfMessagePayloadWriteCompatibility.SERIALIZE_NON_NATIVE_TYPES.equals(writerProperties.getPayloadTypeCompatibility())) {
 			rethrowableCall(metadata::putInteger, SolaceBinderHeaders.MESSAGE_VERSION, MESSAGE_VERSION);
@@ -203,6 +204,11 @@ public final class XMLMessageMapper {
 
 		xmlMessage.setProperties(metadata);
 		xmlMessage.setDeliveryMode(DeliveryMode.PERSISTENT);
+
+		if (writerProperties.isTraceContextPropagationEnabled()) {
+			TraceContextMapper.writeTraceContext(xmlMessage, mappedHeaders, writerProperties.getHeaderExclusions());
+		}
+
 		return xmlMessage;
 	}
 
@@ -362,6 +368,10 @@ public final class XMLMessageMapper {
 			}
 		}
 
+		if (smfMessageReaderProperties.isTraceContextPropagationEnabled()) {
+			TraceContextMapper.readTraceContext(xmlMessage, builder, smfMessageReaderProperties.getHeaderExclusions());
+		}
+
 		return builder;
 	}
 
@@ -382,6 +392,10 @@ public final class XMLMessageMapper {
 					header.getKey().equalsIgnoreCase(SolaceBinderHeaders.CONFIRM_CORRELATION) ||
 					SolaceHeaderMeta.META.containsKey(header.getKey()) ||
 					SolaceBinderHeaderMeta.META.containsKey(header.getKey())) {
+				continue;
+			}
+
+			if (writerProperties.isTraceContextPropagationEnabled() && TraceContextMapper.HEADERS.contains(header.getKey())) {
 				continue;
 			}
 
