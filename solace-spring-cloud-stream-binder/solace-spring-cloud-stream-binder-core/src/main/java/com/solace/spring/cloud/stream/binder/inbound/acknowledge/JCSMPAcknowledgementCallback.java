@@ -86,6 +86,9 @@ final class JCSMPAcknowledgementCallback implements AcknowledgmentCallback {
           String.format("Failed to send XMLMessage %s to error queue",
               messageContainer.getMessage().getMessageId()), e);
     }
+    // From now on the ErrorQueueRepublishCorrelationKey settles the message: ACCEPTED once the error queue has the
+    // copy, FAILED (requeue) when all attempts are exhausted. So AckUtils.autoAck must not accept it any more.
+    acknowledged = true;
     return true;
   }
 

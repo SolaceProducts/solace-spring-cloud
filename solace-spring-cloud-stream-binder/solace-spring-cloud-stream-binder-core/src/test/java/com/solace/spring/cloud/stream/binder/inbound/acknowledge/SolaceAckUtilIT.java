@@ -11,6 +11,7 @@ import com.solace.spring.cloud.stream.binder.util.UnboundFlowReceiverContainerEx
 import com.solace.test.integration.junit.jupiter.extension.ExecutorServiceExtension;
 import com.solace.test.integration.junit.jupiter.extension.PubSubPlusExtension;
 import com.solace.test.integration.semp.v2.SempV2Api;
+import com.solace.test.integration.semp.v2.config.model.ConfigMsgVpnQueue;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueMsg;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorMsgVpnQueueMsgsResponse;
 import com.solace.test.integration.semp.v2.monitor.model.MonitorSempMeta;
@@ -33,6 +34,7 @@ import org.junitpioneer.jupiter.cartesian.CartesianTest;
 import org.junitpioneer.jupiter.cartesian.CartesianTest.Values;
 import org.mockito.Mockito;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
+import org.springframework.integration.acks.AckUtils;
 import org.springframework.integration.acks.AcknowledgmentCallback;
 import org.springframework.integration.acks.AcknowledgmentCallback.Status;
 import org.springframework.test.context.junit.jupiter.SpringJUnitConfig;
@@ -125,6 +127,42 @@ class SolaceAckUtilIT {
     validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
     validateNumEnqueuedMessages(sempV2Api, errorQueueInfrastructure.getErrorQueueName(),
         numMessages);
+    validateNumRedeliveredMessages(sempV2Api, errorQueueInfrastructure.getErrorQueueName(), 0);
+  }
+
+  @CartesianTest(name = "[{index}] numMessages={0}, isDurable={1}")
+  public void testRePubToErrorQueueWhenErrorQueueRejectsMsg(@Values(ints = {1, 255}) int numMessages,
+      @Values(booleans = {false, true}) boolean isDurable,
+      JCSMPSession jcsmpSession, Queue durableQueue, SempV2Api sempV2Api) throws Exception {
+    Queue queue = isDurable ? durableQueue : jcsmpSession.createTemporaryQueue();
+    FlowReceiverContainer flowReceiverContainer = initFlowReceiverContainer(jcsmpSession, queue);
+    JCSMPAcknowledgementCallbackFactory acknowledgementCallbackFactory = new JCSMPAcknowledgementCallbackFactory(
+        flowReceiverContainer);
+
+    List<MessageContainer> messageContainers = sendAndReceiveMessages(queue, flowReceiverContainer,
+        numMessages);
+    ErrorQueueInfrastructure errorQueueInfrastructure = initErrorQueueInfrastructure(jcsmpSession,
+        acknowledgementCallbackFactory);
+    AcknowledgmentCallback acknowledgmentCallback = createAcknowledgmentCallback(
+        acknowledgementCallbackFactory, messageContainers);
+
+    sempV2Api.config().updateMsgVpnQueue(new ConfigMsgVpnQueue().ingressEnabled(false), vpnName,
+        errorQueueInfrastructure.getErrorQueueName(), null, null);
+    retryAssert(() -> assertThat(sempV2Api.monitor()
+        .getMsgVpnQueue(vpnName, errorQueueInfrastructure.getErrorQueueName(), null)
+        .getData()
+        .isIngressEnabled())
+        .isFalse());
+
+    // Same sequence as the inbound listeners: the error handler republishes the message, then the
+    // listener auto-acknowledges it. The rejected republish must still requeue the message.
+    assertThat(SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)).isTrue();
+    AckUtils.autoAck(acknowledgmentCallback);
+
+    validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
+    validateNumRedeliveredMessages(sempV2Api, queue.getName(), numMessages);
+    validateQueueBindSuccesses(sempV2Api, queue.getName(), 1);
+    validateNumEnqueuedMessages(sempV2Api, errorQueueInfrastructure.getErrorQueueName(), 0);
     validateNumRedeliveredMessages(sempV2Api, errorQueueInfrastructure.getErrorQueueName(), 0);
   }
 
