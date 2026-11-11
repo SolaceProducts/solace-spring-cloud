@@ -121,6 +121,8 @@ class SolaceAckUtilIT {
 
     assertThat(SolaceAckUtil.isErrorQueueEnabled(acknowledgmentCallback)).isTrue();
     assertThat(SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)).isTrue();
+    assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
+    AckUtils.autoAck(acknowledgmentCallback);
 
     validateNumEnqueuedMessages(sempV2Api, queue.getName(), 0);
     validateNumRedeliveredMessages(sempV2Api, queue.getName(), 0);
@@ -157,6 +159,7 @@ class SolaceAckUtilIT {
     // Same sequence as the inbound listeners: the error handler republishes the message, then the
     // listener auto-acknowledges it. The rejected republish must still requeue the message.
     assertThat(SolaceAckUtil.republishToErrorQueue(acknowledgmentCallback)).isTrue();
+    assertThat(acknowledgmentCallback.isAcknowledged()).isTrue();
     AckUtils.autoAck(acknowledgmentCallback);
 
     validateNumEnqueuedMessages(sempV2Api, queue.getName(), numMessages);
