@@ -25,7 +25,7 @@
 
         <solace.jcsmp.version>10.30.2</solace.jcsmp.version>
         <solace.jms.version>10.30.2</solace.jms.version>
-        <sol-jcsmp-otel-integration.version>1.2.0</sol-jcsmp-otel-integration.version>
+        <sol-jcsmp-otel-integration.version>1.2.1</sol-jcsmp-otel-integration.version>
     </properties>
 
     <dependencyManagement>
